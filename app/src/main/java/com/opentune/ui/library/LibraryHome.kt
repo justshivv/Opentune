@@ -1936,6 +1936,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     }
     // Tagged with the playlist, so smart shuffle can offer to keep a song it mixed in.
     val songs = remember(playlist) { playlist.songs.map { it.toSong().copy(playbackSourceId = playlist.id) } }
+    // The rows' keys, worked out once per change of the list rather than on every pass over it.
+    val songRowKeys = remember(songs) { songKeys(songs) }
     val search = remember(id) { com.opentune.ui.browse.PlaylistSearch() }
     val query = search.query
     val searching = search.open
@@ -2108,7 +2110,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                         }
                     }
                 }
-                val selectKeys = remember(songs) { songKeys(songs) }
+                val selectKeys = songRowKeys
                 com.opentune.ui.components.SongSelectionBar(
                     selection,
                     rows = shown.indices.map { i -> selectKeys[matching[i]] to shown[i] },
@@ -2163,7 +2165,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                     // Keyed by the song (and which copy of it), not its place, so a row taken out pops
                     // alone and the rows below slide up rather than every row after it being redrawn.
                     if (shown.isEmpty()) item { Text(com.opentune.ui.theme.tr("No matching songs"), Modifier.padding(24.dp)) }
-                    val keys = songKeys(songs)
+                    val keys = songRowKeys
                     itemsIndexed(paged, key = { i, _ -> keys[matching[i]] }) { i, song ->
                         SongListItem(
                             song = song,
