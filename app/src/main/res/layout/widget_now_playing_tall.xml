@@ -1,0 +1,121 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+    Tall (2-row) variant of the Now Playing widget.
+    Shown when the widget is resized to ≥ 2 cells tall (API 31+).
+    Uses the same view IDs as widget_now_playing.xml so NowPlayingWidget.applyState()
+    can populate both layouts without duplication.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="12dp">
+
+    <!-- Cover art: square, vertically centred in the widget. -->
+    <ImageView
+        android:id="@+id/widget_cover"
+        android:layout_width="112dp"
+        android:layout_height="112dp"
+        android:background="@drawable/widget_artwork_background"
+        android:clipToOutline="true"
+        android:scaleType="centerCrop"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_widget_cover" />
+
+    <!-- Right column: fills remaining width, splits into two equal rows. -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginStart="12dp"
+        android:orientation="vertical">
+
+        <!-- Top half — song info + like button. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/widget_title"
+                    style="@style/WidgetTitle"
+                    android:textSize="15sp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:text="@string/widget_nothing_playing" />
+
+                <TextView
+                    android:id="@+id/widget_artist"
+                    style="@style/WidgetArtist"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:text="@string/widget_open" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/widget_like"
+                style="@style/WidgetButton"
+                android:src="@drawable/ic_widget_heart"
+                android:contentDescription="@string/widget_like"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Bottom half — playback controls. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageButton
+                android:id="@+id/widget_previous"
+                style="@style/WidgetButton"
+                android:src="@drawable/ic_widget_previous"
+                android:contentDescription="@string/widget_previous" />
+
+            <!-- Spacer -->
+            <TextView
+                android:importantForAccessibility="no"
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/widget_play"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
+                android:scaleType="fitCenter"
+                android:background="@drawable/widget_play_background"
+                android:src="@drawable/ic_widget_play"
+                android:tint="#FF12151C"
+                android:contentDescription="@string/widget_play"
+                tools:ignore="UseAppTint" />
+
+            <!-- Spacer -->
+            <TextView
+                android:importantForAccessibility="no"
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/widget_next"
+                style="@style/WidgetButton"
+                android:src="@drawable/ic_widget_next"
+                android:contentDescription="@string/widget_next" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

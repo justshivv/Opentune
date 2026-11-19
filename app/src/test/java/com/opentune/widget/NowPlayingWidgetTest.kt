@@ -81,6 +81,30 @@ class NowPlayingWidgetTest {
         }
     }
 
+    /**
+     * Resized two rows tall, the widget shows its tall layout, every control in it. On Android 11,
+     * where the widget picks the layout from the height itself; from 12 on it gives the launcher
+     * both and the launcher picks by size, which Robolectric doesn't.
+     */
+    @org.robolectric.annotation.Config(sdk = [30])
+    @Test fun tallWidgetShowsEveryControl() {
+        context.getSharedPreferences("widget", 0).edit().putString("id", "aaaaaaaaaa1")
+            .putString("title", "A saved song").putString("artist", "An artist").commit()
+        val realManager = AppWidgetManager.getInstance(context)
+        val id = manager.createWidget(NowPlayingWidget::class.java, R.layout.widget_now_playing)
+        val options = android.os.Bundle().apply {
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280)
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160)
+        }
+        realManager.updateAppWidgetOptions(id, options)
+        NowPlayingWidget().onAppWidgetOptionsChanged(context, realManager, id, options)
+        val view = manager.getViewFor(id)
+        assertEquals("A saved song", view.findViewById<TextView>(R.id.widget_title).text.toString())
+        for (control in listOf(R.id.widget_previous, R.id.widget_play, R.id.widget_next, R.id.widget_like)) {
+            assertEquals(View.VISIBLE, view.findViewById<View>(control).visibility)
+        }
+    }
+
     // Media3's MediaButtonReceiver drops every key but play from Android 8 on, so the buttons
     // must reach the player service itself; only Play may start it in the foreground.
     @Test fun buttonsGoStraightToThePlayerService() {
