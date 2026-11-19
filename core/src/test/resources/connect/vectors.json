@@ -1,0 +1,6 @@
+{
+ "secret": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+ "tag": "8a70946b4b85c417d9d8de598995cf71",
+ "plain": "hello connect",
+ "sealed": "BwcHBwcHBwcHBwcHB2BINKpvS/fjROeStiRMXgyxY9suTPf5EiqmZr0="
+}

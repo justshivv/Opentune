@@ -126,6 +126,7 @@ private const val SEARCH_ROUTE = "search"
 @Composable
 fun AppRoot(vm: PlayerViewModel) {
     val nav = rememberNavController()
+    // With another of the person's devices playing, its song (see Connect).
     val song by vm.currentSong.collectAsState()
     val isPlaying by vm.isPlaying.collectAsState()
     val playbackError by vm.playbackError.collectAsState()
@@ -225,6 +226,7 @@ fun AppRoot(vm: PlayerViewModel) {
             invite?.let { com.opentune.ui.components.InviteCard(it, onDismiss = { askStar = false }) }
         }
     }
+    if (update == null) com.opentune.ui.connect.AccountSyncAsk()
     update?.let { r ->
         com.opentune.ui.settings.UpdateDialog(
             r,
@@ -411,6 +413,7 @@ fun AppRoot(vm: PlayerViewModel) {
             }
             is LinkTarget.SpotifyImport -> nav.navigate("import?link=${Uri.encode(link.text)}")
             is LinkTarget.Together -> { playerOpen = false; nav.navigate("together?code=${link.code}") }
+            is LinkTarget.Connect -> { playerOpen = false; nav.navigate("connect?join=${Uri.encode(link.secret)}") }
             is LinkTarget.Recognize -> { playerOpen = false; nav.navigate("recognize?listen=true") { launchSingleTop = true } }
             is LinkTarget.Player -> playerOpen = true
             is LinkTarget.PlaySearch -> {
@@ -712,7 +715,14 @@ fun AppRoot(vm: PlayerViewModel) {
                                 onSignIn = { nav.navigate("login") },
                                 onTogether = { nav.navigate("together") },
                                 onRemote = { nav.navigate("tv-remote") },
+                                onConnect = { nav.navigate("connect") },
                             )
+                        }
+                        page(
+                            "connect?join={join}",
+                            arguments = listOf(androidx.navigation.navArgument("join") { nullable = true; defaultValue = null }),
+                        ) { entry ->
+                            com.opentune.ui.connect.ConnectScreen(content, entry.arguments?.getString("join"), onBack = { nav.popBackStack() })
                         }
                         page("tv-remote") {
                             com.opentune.ui.remote.TvRemoteScreen(content, onBack = { nav.popBackStack() })
@@ -925,6 +935,7 @@ fun AppRoot(vm: PlayerViewModel) {
                         onCollapse = { paneCollapsed = true },
                         onTogether = { nav.navigate("together") },
                         onEqualizer = { nav.navigate("equalizer") },
+                        onDevices = { nav.navigate("connect") },
                         docked = true,
                     )
                 }
@@ -955,6 +966,7 @@ fun AppRoot(vm: PlayerViewModel) {
                     onCovering = { still = it },
                     onTogether = { fromPlayer { nav.navigate("together") } },
                     onEqualizer = { fromPlayer { nav.navigate("equalizer") } },
+                    onDevices = { fromPlayer { nav.navigate("connect") } },
                 )
             }
             if (sheetMorph) {

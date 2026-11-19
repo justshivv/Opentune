@@ -90,6 +90,10 @@ class PlayerConnection(private val context: Context) {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
 
+    private val _volume = MutableStateFlow(1f)
+    /** The app player's own volume, 0 to 1, apart from the device's. */
+    val volume = _volume.asStateFlow()
+
     private val _isSounding = MutableStateFlow(false)
     /** Really sounding right now — playing and ready, not merely meant to play while a stream loads. The Canvas follows this, so it waits frozen until the song itself starts. */
     val isSounding = _isSounding.asStateFlow()
@@ -258,6 +262,7 @@ class PlayerConnection(private val context: Context) {
         _shuffleEnabled.value = player.shuffleModeEnabled
         publishShuffle(player)
         _repeatMode.value = player.repeatMode
+        _volume.value = player.volume
         // The same song swapped onto another stream (a quality switch, a recovery) has no
         // length until the new one loads; it keeps the one it had, so the seek bar and
         // times don't empty to "--:--" while it plays on.
@@ -566,6 +571,11 @@ class PlayerConnection(private val context: Context) {
         SmartShuffle.toRemove(upcoming, emptySet(), LibraryStore.hidden.value).forEach { controller.removeMediaItem(from + it) }
     }
 
+    /** Sets repeat straight to [mode] (a Player.REPEAT_MODE_ value). */
+    fun setRepeatMode(mode: Int) {
+        controller?.repeatMode = mode
+    }
+
     /** Off, then repeat the whole queue, then repeat the current track. */
     fun cycleRepeatMode() {
         val controller = controller ?: return
@@ -608,6 +618,12 @@ class PlayerConnection(private val context: Context) {
 
     fun pause() {
         controller?.pause()
+    }
+
+    fun setVolume(volume: Float) {
+        val controller = controller ?: return
+        controller.volume = volume.coerceIn(0f, 1f)
+        _volume.value = controller.volume
     }
 
     /** Stops playback and clears the queue entirely: nothing is left playing. */

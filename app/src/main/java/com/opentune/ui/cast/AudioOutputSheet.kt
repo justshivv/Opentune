@@ -37,11 +37,13 @@ import com.opentune.ui.theme.AppIcons
 
 /**
  * Where the sound goes, in one place: this phone or the headphones plugged
- * into it, a Chromecast or TV to cast to, and the audio pipeline for the
- * full signal path. Cast and the pipeline each open their own sheet.
+ * into it, the person's other devices (Connect) to move the music to, a
+ * Chromecast or TV to cast to, and the audio pipeline for the full signal
+ * path. Cast and the pipeline each open their own sheet; [onDevices] opens
+ * the settings for the person's devices.
  */
 @Composable
-fun AudioOutputSheet(onDismiss: () -> Unit, onCast: () -> Unit, onPipeline: () -> Unit) {
+fun AudioOutputSheet(onDismiss: () -> Unit, onCast: () -> Unit, onPipeline: () -> Unit, onDevices: () -> Unit = {}) {
     val route = rememberOutputRoute()
     val haptics = rememberHaptics()
     // The device itself, not the line about it: that line is in the app's language.
@@ -49,14 +51,38 @@ fun AudioOutputSheet(onDismiss: () -> Unit, onCast: () -> Unit, onPipeline: () -
     val output = rememberOutputDeviceName()
     val deviceName = castSession?.target?.name ?: output.ifBlank { "This phone" }
     val casting = castingTo()
+    val connect = com.opentune.data.connect.Connect.view.collectAsState().value
+    // Another of the person's devices playing: the music is there, not here.
+    val elsewhere = connect?.controlling
     FloatingCard(onDismiss = onDismiss, title = "Audio output", icon = ImageVector.vectorResource(AppIcons.Speaker)) {
         Column(Modifier.padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             OutputRow(
                 icon = if (route == OutputRoute.CAST) ImageVector.vectorResource(AppIcons.Smartphone) else route.icon,
                 title = if (route == OutputRoute.CAST) "This phone" else deviceName,
-                subtitle = if (casting == null) "Playing here" else "Silent here while casting",
-                selected = casting == null,
-            ) { haptics.tick(); onDismiss() }
+                subtitle = when {
+                    elsewhere != null -> "Play it here"
+                    casting == null -> "Playing here"
+                    else -> "Silent here while casting"
+                },
+                selected = casting == null && elsewhere == null,
+            ) {
+                haptics.tick()
+                // Brings the music back from the other device.
+                if (elsewhere != null) com.opentune.data.connect.Connect.transferTo(connect.myId)
+                onDismiss()
+            }
+            connect?.devices?.sortedBy { it.name }?.forEach { d ->
+                OutputRow(
+                    icon = com.opentune.ui.connect.formIcon(d.form),
+                    title = d.name.ifBlank { com.opentune.i18n.Tr.t("Another device") },
+                    subtitle = com.opentune.ui.connect.doing(d) ?: "Ready to play",
+                    selected = connect.activeId == d.id && elsewhere != null,
+                ) {
+                    haptics.tick()
+                    com.opentune.data.connect.Connect.transferTo(d.id)
+                    onDismiss()
+                }
+            }
             OutputRow(
                 icon = ImageVector.vectorResource(AppIcons.Cast),
                 title = "Cast",
@@ -70,6 +96,12 @@ fun AudioOutputSheet(onDismiss: () -> Unit, onCast: () -> Unit, onPipeline: () -
                 subtitle = "Live signal path, decoder to output",
                 chevron = true,
             ) { haptics.tick(); onPipeline() }
+            OutputRow(
+                icon = ImageVector.vectorResource(AppIcons.Devices),
+                title = "Your devices",
+                subtitle = if (connect == null) "Play on your computer from here, and the other way round" else "Add a device or change this one's name",
+                chevron = true,
+            ) { haptics.tick(); onDevices() }
         }
     }
 }

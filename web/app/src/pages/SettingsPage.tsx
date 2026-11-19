@@ -1,4 +1,4 @@
-import { ArrowUpRight, AudioLines, ChevronRight, Info, Mic2, Palette, Play, Plug, Smartphone, Tv, Users, Wrench, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, AudioLines, ChevronRight, Info, Mic2, MonitorSmartphone, Palette, Play, Plug, Smartphone, Tv, Users, Wrench, type LucideIcon } from 'lucide-react';
 import { lazy, Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { MdOutlineExtension } from 'react-icons/md';
 import { SiApplemusic, SiDiscord, SiGithub, SiSpotify, SiYoutubemusic } from 'react-icons/si';
@@ -12,6 +12,7 @@ import { useDiscord } from '@/extension/useDiscord';
 import { useExtension } from '@/extension/useExtension';
 import { useYtAuth } from '@/extension/useYtAuth';
 import { useRoom } from '@/together/room';
+import { useConnect } from '@/connect/connect';
 import { useHistorySettings } from '@/playback/historyReporting';
 import { CROSSFADE_CHOICES, usePlayer } from '@/state/player';
 import { AppleMusicIntegration, AppleMusicToggles, CanvasToggle, LyricSourcesAccess, SpotifyIntegration, Toggle } from './IntegrationSettings';
@@ -64,6 +65,7 @@ const SECTIONS: { id: string; name: string; icon: LucideIcon; color: string }[] 
   { id: 'lyrics', name: 'Lyrics', icon: Mic2, color: '#d6337a' },
   { id: 'appearance', name: 'Appearance', icon: Palette, color: '#8e5bd8' },
   { id: 'accounts', name: 'Accounts', icon: Plug, color: '#3478f6' },
+  { id: 'devices', name: 'Your Devices', icon: MonitorSmartphone, color: '#5e5ce6' },
   { id: 'together', name: 'Listen Together', icon: Users, color: '#f08a24' },
   { id: 'about', name: 'About', icon: Info, color: '#636366' },
 ];
@@ -190,6 +192,7 @@ export default function SettingsPage() {
   const yt = useYtAuth();
   const discord = useDiscord();
   const room = useRoom((s) => s.view);
+  const connectView = useConnect((s) => s.view);
   const autoplay = usePlayer((s) => s.autoplay);
   const crossfadeSec = usePlayer((s) => s.crossfadeSec);
   const shareHistory = useHistorySettings((s) => s.share);
@@ -312,6 +315,17 @@ export default function SettingsPage() {
               <AppleMusicToggles />
             </section>
             <p className={settingsUi.footer}>Animated covers and artist art from Apple Music’s public pages. No Apple Music account needed.</p>
+          </Section>
+
+          <Section id="devices" title="Your Devices">
+            <section className={settingsUi.group}>
+              <LinkRow
+                to="/settings/devices"
+                icon={<Glyph Icon={MonitorSmartphone} color="#5e5ce6" />}
+                title="Phone and computer"
+                value={connectView ? (connectView.devices.length ? connectView.devices.map((d) => d.name).join(', ') : 'No other device here now') : 'Play on one, control from the other'}
+              />
+            </section>
           </Section>
 
           <Section id="together" title="Listen Together">

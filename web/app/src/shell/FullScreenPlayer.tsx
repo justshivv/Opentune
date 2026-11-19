@@ -1,4 +1,8 @@
-import { Maximize, Minimize, X } from 'lucide-react';
+import { Maximize, MonitorSmartphone, Minimize, X } from 'lucide-react';
+import { useControlling } from '@/connect/connect';
+import { DevicesPanel } from '@/connect/DevicesPanel';
+import { RemoteUpNext } from '@/connect/RemoteUpNext';
+import { useShownNowPlaying } from '@/connect/shown';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useLocation } from 'react-router';
 import {
@@ -29,7 +33,7 @@ import { albumPageFor } from './nowPlayingLinks';
 import { UpNext } from './UpNext';
 import { useAppearance } from '@/state/appearance';
 import { useArtworkColor } from '@/lib/artworkColor';
-import { QualityLabel } from './QualityLabel';
+import { QualityLabel, RemoteQualityLabel } from './QualityLabel';
 import { useScrubber } from './useScrubber';
 import { MorphPlayButton } from './MorphPlayButton';
 import { morphPlayer } from './playerMorph';
@@ -51,7 +55,8 @@ function useBrowserFullScreen(): boolean {
  */
 function Scrubber() {
   const { bar, elapsed, remaining, dragging, handlers } = useScrubber();
-  const playing = usePlayer((s) => s.status === 'playing');
+  const remote = useControlling();
+  const playing = usePlayer((s) => s.status === 'playing') || !!remote?.state?.playing;
   return (
     <div className="group/scrub mt-3.5" data-dragging={dragging || undefined} data-no-swipe data-morph-fade>
       {/* A taller hit area than the line it carries. */}
@@ -64,7 +69,7 @@ function Scrubber() {
       </div>
       <div className="ot-quality-row">
         <span ref={elapsed} />
-        <QualityLabel />
+        {remote ? <RemoteQualityLabel text={remote.state?.quality ?? null} /> : <QualityLabel />}
         <span ref={remaining} />
       </div>
     </div>
@@ -79,12 +84,17 @@ const skip = `${transportButton} size-12 text-primary`;
 
 /** Shuffle, previous, play/pause, next, repeat. No volume: the pill keeps that. */
 function Transport() {
-  const hasTrack = usePlayer((s) => s.nowPlaying !== null);
-  const playing = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
-  const buffering = usePlayer((s) => s.status === 'buffering' || s.status === 'loading');
-  const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0));
-  const shuffle = usePlayer((s) => s.shuffle);
-  const repeat = usePlayer((s) => s.repeat);
+  // The person's other device playing (Connect): the buttons act there (state/player.ts sends them).
+  const remote = useControlling();
+  const hasTrack = usePlayer((s) => s.nowPlaying !== null) || !!remote;
+  const playingHere = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
+  const playing = remote ? !!remote.state?.playing : playingHere;
+  const buffering = usePlayer((s) => s.status === 'buffering' || s.status === 'loading') && !remote;
+  const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0)) || !!remote;
+  const localShuffle = usePlayer((s) => s.shuffle);
+  const localRepeat = usePlayer((s) => s.repeat);
+  const shuffle = remote ? !!remote.state?.shuffle : localShuffle;
+  const repeat = remote ? (remote.state?.repeat ?? 'off') : localRepeat;
   const { togglePlay, next, previous, toggleShuffle, cycleRepeat } = usePlayer.getState();
 
   return (
@@ -131,25 +141,30 @@ const IDLE_MS = 3000;
  * beside the lyrics or Up Next, it takes the artwork's place at 16:9.
  */
 export function FullScreenPlayer({ closing = false, onClosed }: { closing?: boolean; onClosed?: () => void }) {
-  const nowPlaying = usePlayer((s) => s.nowPlaying);
+  // Another of the person's devices playing (Connect): this player shows that one, the same way.
+  const remote = useControlling();
+  const nowPlaying = useShownNowPlaying();
   const appearance = useAppearance();
   const coverColor = useArtworkColor(nowPlaying?.artworkUrl);
   // The queue's row for what's playing: it carries the album and each artist's channel.
-  const track = usePlayer((s) => {
+  const localTrack = usePlayer((s) => {
     const entry = s.queue[s.index]?.track;
     return entry && entry.videoId === s.nowPlaying?.videoId ? entry : null;
   });
+  const track = remote ? null : localTrack;
   // Apple's animated sleeve over the cover, as the phone's now-playing shows it.
   const motion = useTrackMotion(nowPlaying?.title, nowPlaying?.artist, track?.album?.name);
   const { pathname } = useLocation();
   const openedAt = useRef(pathname);
-  const playing = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
+  const playingHere = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
+  const playing = remote ? !!remote.state?.playing : playingHere;
   const setFullScreen = useUi((s) => s.setFullScreen);
   const lyrics = useLyrics();
-  const video = useHasVideo(nowPlaying?.videoId);
+  // A music video plays only where the music does.
+  const video = useHasVideo(remote ? undefined : nowPlaying?.videoId);
   // The right-hand column: the lyrics, Up Next, or nothing. Lyrics toggle bottom left, Up Next bottom right.
   // A music video opens on its own, without the lyrics.
-  const [panel, setPanel] = useState<'lyrics' | 'queue' | null>(() =>
+  const [panel, setPanel] = useState<'lyrics' | 'queue' | 'devices' | null>(() =>
     appearance.playerStyle === 'lyrics-first' && !(nowPlaying && useVideo.getState().videoId === nowPlaying.videoId) ? 'lyrics' : null,
   );
   // Once the listener picks a column, a video arriving late doesn't take it away.
@@ -181,7 +196,7 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
   }, [closing]);
 
   const isPanel = (target: EventTarget) =>
-    !!(target as HTMLElement).closest('button, a, input, [data-no-swipe], [aria-label="Lyrics"], [aria-label="Up Next"]');
+    !!(target as HTMLElement).closest('button, a, input, [data-no-swipe], [aria-label="Lyrics"], [aria-label="Up Next"], [aria-label="Devices"]');
   const dragStart = (e: React.PointerEvent<HTMLDivElement>) => {
     wake();
     if (e.pointerType !== 'touch' || closing || isPanel(e.target)) return;
@@ -217,7 +232,8 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
   const hasLyrics = !!lyrics.data || (lyrics.isPending && lyrics.fetchStatus !== 'idle');
   const showLyrics = panel === 'lyrics' && hasLyrics;
   const showQueue = panel === 'queue';
-  const togglePanel = (p: 'lyrics' | 'queue') => {
+  const showDevices = panel === 'devices';
+  const togglePanel = (p: 'lyrics' | 'queue' | 'devices') => {
     picked.current = true;
     setPanel((on) => (on === p ? null : p));
   };
@@ -273,7 +289,7 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
   const { videoId, title, artist } = nowPlaying;
   const album = track?.album ?? null;
   // With a right-hand column; on narrow windows that column fills the screen and the controls sit under it, without the artwork.
-  const column = showLyrics || showQueue;
+  const column = showLyrics || showQueue || showDevices;
   // A music video on its own fills the window.
   const theater = video && !column;
   // ...and hides the controls and the pointer while it plays undisturbed.
@@ -302,7 +318,9 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
       {appearance.playerBackground === 'mesh'
         ? <MeshBackdrop artworkUrl={nowPlaying.artworkUrl} playing={playing && appearance.motion} />
         : <div className={`ot-player-backdrop ot-${appearance.playerBackground}`} style={{ '--cover-color': coverColor?.background ?? '#463231' } as React.CSSProperties} aria-hidden="true" />}
-      <div className="ot-playing-from" data-morph-fade>Playing from<br /><strong>OpenTune</strong></div>
+      <div className="ot-playing-from" data-morph-fade>
+        {remote ? <>Playing on<br /><strong>{remote.name || 'another device'}</strong></> : <>Playing from<br /><strong>OpenTune</strong></>}
+      </div>
       {theater && (
         <div className="absolute inset-0 animate-fade-in bg-black">
           <VideoSurface fit="contain" className="size-full" />
@@ -434,7 +452,12 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
             aria-label="Up Next"
             data-morph-fade
           >
-            <UpNext />
+            {remote ? <RemoteUpNext device={remote} /> : <UpNext />}
+          </section>
+        )}
+        {showDevices && (
+          <section className="flex min-h-0 animate-fade-in flex-col self-stretch" aria-label="Devices" data-morph-fade>
+            <DevicesPanel />
           </section>
         )}
       </div>
@@ -458,6 +481,15 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
         onClick={() => togglePanel('queue')}
       >
         <UpNextIcon size={18} />
+      </button>
+      <button
+        data-morph-fade
+        className={`${corner} ot-toggle right-15 bottom-5 aria-pressed:text-primary ${remote ? 'text-key' : ''}`}
+        aria-label="Devices"
+        aria-pressed={showDevices}
+        onClick={() => togglePanel('devices')}
+      >
+        <MonitorSmartphone size={18} />
       </button>
     </div>
   );

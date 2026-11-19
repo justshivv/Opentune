@@ -78,7 +78,8 @@ object LibraryCache {
                     json.decodeFromString(OWNED, file(key, "owned").readText())
                 }.getOrDefault(emptyMap())
                 if (owner() == key) {
-                    _playlists.value = saved
+                    // Saved before Connect's playlist was left out of the library.
+                    _playlists.value = saved.filterNot(com.opentune.data.connect.ConnectAccountSync::isConnectPlaylist)
                     _owned.value = owned
                 }
             }

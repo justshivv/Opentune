@@ -20,8 +20,8 @@ export function fromHex(s: string): Uint8Array {
   for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(s.slice(i * 2, i * 2 + 2), 16);
   return out;
 }
-const toBase64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
-const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+export const toBase64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+export const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
 export async function sha256(data: Uint8Array | string): Promise<Uint8Array> {
   const bytes = typeof data === 'string' ? enc.encode(data) : data;
@@ -29,7 +29,7 @@ export async function sha256(data: Uint8Array | string): Promise<Uint8Array> {
 }
 
 /** AES-GCM: base64(iv || ciphertext), with [tag] as associated data. */
-async function gcmSeal(key: CryptoKey, tag: string, plain: string): Promise<string> {
+export async function gcmSeal(key: CryptoKey, tag: string, plain: string): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: enc.encode(tag) }, key, enc.encode(plain)));
   const all = new Uint8Array(12 + sealed.length);
@@ -38,7 +38,7 @@ async function gcmSeal(key: CryptoKey, tag: string, plain: string): Promise<stri
   return toBase64(all);
 }
 
-async function gcmOpen(key: CryptoKey, tag: string, sealed: string): Promise<string | null> {
+export async function gcmOpen(key: CryptoKey, tag: string, sealed: string): Promise<string | null> {
   try {
     const all = fromBase64(sealed);
     if (all.length < 12 + 16) return null;
@@ -49,7 +49,7 @@ async function gcmOpen(key: CryptoKey, tag: string, sealed: string): Promise<str
   }
 }
 
-const aesKey = (raw: Uint8Array) => crypto.subtle.importKey('raw', raw as BufferSource, 'AES-GCM', false, ['encrypt', 'decrypt']);
+export const aesKey = (raw: Uint8Array) => crypto.subtle.importKey('raw', raw as BufferSource, 'AES-GCM', false, ['encrypt', 'decrypt']);
 
 export class RoomCode {
   private constructor(

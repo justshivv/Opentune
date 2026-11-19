@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.opentune.data.lyrics.Lyrics
 import com.opentune.data.lyrics.LyricsRepository
 import com.opentune.data.model.Song
+import com.opentune.data.connect.Connect
 import com.opentune.data.together.Together
 import com.opentune.playback.PlayerConnection
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,11 +40,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val betterCover = MutableStateFlow<Pair<String, String>?>(null)
     /** The fuller artist credit the catalogue bills for the playing track, by its id. */
     private val fullerArtist = MutableStateFlow<Pair<String, String>?>(null)
-    val currentSong = combine(player.currentSong, betterCover, fullerArtist) { song, better, fuller ->
-        song?.copy(
-            thumbnailUrl = artwork.choose(song, better?.takeIf { it.first == song.videoId }?.second),
-            artist = fuller?.takeIf { it.first == song.videoId }?.second ?: song.artist,
-        ) ?: run { artwork.clear(); null }
+    /**
+     * Another of the person's devices playing (Connect): the player shows its
+     * song, play state and position, and its buttons act there.
+     */
+    private val remote = Connect.controlling
+    val currentSong = combine(player.currentSong, betterCover, fullerArtist, remote) { song, better, fuller, far ->
+        far?.state?.let { s -> s.track?.toSong() ?: Song("", com.opentune.i18n.Tr.t("Something of its own"), "", null) }
+            ?: song?.copy(
+                thumbnailUrl = artwork.choose(song, better?.takeIf { it.first == song.videoId }?.second),
+                artist = fuller?.takeIf { it.first == song.videoId }?.second ?: song.artist,
+            ) ?: run { artwork.clear(); null }
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
 
     /** Apple's animated cover and Spotify's Canvas found for the playing track, by its id. */
@@ -61,19 +68,40 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val canvasVideo = combine(player.currentSong, canvasFound, AppSettings.ui, com.opentune.ui.spotify.SpotifyConnection.connected) { song, found, ui, connected ->
         found?.takeIf { song != null && it.first == song.videoId && ui.spotifyCanvas && connected && !ui.reduceAnimation }?.second
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
-    val queue = player.queue
-    val currentIndex = player.currentIndex
-    val upNext = player.upNext
-    val hasNext = player.hasNext
-    val isPlaying = player.isPlaying
+    // With another device playing: its song first, then its Up Next.
+    val queue = combine(player.queue, remote) { here, far ->
+        far?.state?.let { st -> listOfNotNull(st.track?.toSong()) + st.queue.map { it.toSong() } } ?: here
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, player.queue.value)
+    val currentIndex = combine(player.currentIndex, remote) { here, far -> if (far?.state != null) 0 else here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, player.currentIndex.value)
+    val upNext = combine(player.upNext, remote) { here, far ->
+        far?.state?.let { st -> val first = if (st.track != null) 1 else 0; st.queue.indices.map { it + first } } ?: here
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, player.upNext.value)
+    val hasNext = combine(player.hasNext, remote) { here, far -> far != null || here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+    val isPlaying = combine(player.isPlaying, remote) { here, far -> far?.state?.playing ?: here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
     val isSounding = player.isSounding
-    val isBuffering = player.isBuffering
+    val isBuffering = combine(player.isBuffering, remote) { here, far -> far == null && here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
     val loadingMessage = player.loadingMessage
-    val shuffleEnabled = player.shuffleEnabled
-    val shuffleMode = player.shuffleMode
-    val smartShuffleAvailable = player.smartShuffleAvailable
-    val repeatMode = player.repeatMode
-    val durationMs = player.durationMs
+    val shuffleEnabled = combine(player.shuffleEnabled, remote) { here, far -> far?.state?.shuffle ?: here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+    val shuffleMode = combine(player.shuffleMode, remote) { here, far ->
+        far?.state?.let { if (it.shuffle) com.opentune.playback.ShuffleMode.ON else com.opentune.playback.ShuffleMode.OFF } ?: here
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, com.opentune.playback.ShuffleMode.OFF)
+    val smartShuffleAvailable = combine(player.smartShuffleAvailable, remote) { here, far -> far == null && here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+    val repeatMode = combine(player.repeatMode, remote) { here, far ->
+        when (far?.state?.repeat) {
+            null -> here
+            "one" -> androidx.media3.common.Player.REPEAT_MODE_ONE
+            "all" -> androidx.media3.common.Player.REPEAT_MODE_ALL
+            else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+        }
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, androidx.media3.common.Player.REPEAT_MODE_OFF)
+    val durationMs = combine(player.durationMs, remote) { here, far -> far?.state?.track?.lengthMs?.takeIf { it > 0 } ?: here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, 0L)
     val playbackError = player.error
     val source = player.source
     val audioFormat = player.audioFormat
@@ -85,6 +113,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         Together.attach(player)
+        com.opentune.data.connect.Connect.qualityLabel = {
+            com.opentune.data.NerdStats.playbackSource.value
+                ?.takeIf { it.mediaId == player.currentSong.value?.videoId }
+                ?.let { com.opentune.ui.player.qualityStatusLabel(it, player.audioFormat.value, false) }
+        }
+        com.opentune.data.connect.Connect.attach(player)
         viewModelScope.launch { player.connect() }
         viewModelScope.launch { watchLyrics() }
         viewModelScope.launch {
@@ -252,26 +286,45 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
     fun playNext(song: Song) { if (!toRoom(song)) player.playNext(song) }
     fun addToQueue(song: Song) { if (!toRoom(song)) player.addToQueue(song) }
-    // In someone else's room these go to the host instead (see Together.intercept).
-    fun togglePlayPause() { if (!Together.intercept(Together.Control.PlayPause)) player.togglePlayPause() }
+    // While another of the person's devices plays, these act on it (see Connect);
+    // in someone else's room they go to the host instead (see Together.intercept).
+    fun togglePlayPause() { if (!Connect.togglePlayPause() && !Together.intercept(Together.Control.PlayPause)) player.togglePlayPause() }
     fun dismiss() = player.dismiss()
-    fun skipNext() { if (!Together.intercept(Together.Control.Next)) player.skipNext() }
-    fun skipPrevious() { if (!Together.intercept(Together.Control.Previous)) player.skipPrevious() }
-    fun toggleShuffle() = player.toggleShuffle()
+    fun skipNext() { if (!Connect.skipNext() && !Together.intercept(Together.Control.Next)) player.skipNext() }
+    fun skipPrevious() { if (!Connect.skipPrevious() && !Together.intercept(Together.Control.Previous)) player.skipPrevious() }
+    fun toggleShuffle() { if (!Connect.toggleShuffle()) player.toggleShuffle() }
     /** Off, shuffle, then smart shuffle for a queue from a list; returns the new mode. */
-    fun cycleShuffle(): com.opentune.playback.ShuffleMode = player.cycleShuffle()
-    fun cycleRepeatMode() = player.cycleRepeatMode()
-    fun playQueueItem(index: Int) = player.playQueueItem(index)
-    fun removeQueueItem(index: Int) = player.removeQueueItem(index)
-    fun moveQueueItem(from: Int, to: Int) = player.moveQueueItem(from, to)
+    fun cycleShuffle(): com.opentune.playback.ShuffleMode {
+        val far = remote.value ?: return player.cycleShuffle()
+        Connect.toggleShuffle()
+        return if (far.state?.shuffle == true) com.opentune.playback.ShuffleMode.OFF else com.opentune.playback.ShuffleMode.ON
+    }
+    fun cycleRepeatMode() { if (!Connect.cycleRepeat()) player.cycleRepeatMode() }
+    /** Entry [index] of [queue] as the other device's Up Next, when one is playing: its place there and its track. */
+    private fun remoteEntry(index: Int): Pair<Int, com.opentune.data.connect.CTrack>? {
+        val st = remote.value?.state ?: return null
+        val at = index - (if (st.track != null) 1 else 0)
+        return st.queue.getOrNull(at)?.let { at to it }
+    }
+    fun playQueueItem(index: Int) {
+        if (remote.value != null) { remoteEntry(index)?.let { (at, t) -> Connect.playQueued(at, t) }; return }
+        player.playQueueItem(index)
+    }
+    fun removeQueueItem(index: Int) {
+        if (remote.value != null) { remoteEntry(index)?.let { (at, t) -> Connect.removeQueued(at, t) }; return }
+        player.removeQueueItem(index)
+    }
+    // Reordering stays on this device's own queue.
+    fun moveQueueItem(from: Int, to: Int) { if (remote.value == null) player.moveQueueItem(from, to) }
     /** A song on its own; the service follows it with radio. */
     fun startRadio(song: Song) { if (!toRoom(song)) player.play(song, com.opentune.i18n.Tr.f("{0} radio", song.title)) }
-    fun seekTo(positionMs: Long) { if (!Together.intercept(Together.Control.Seek(positionMs))) player.seekTo(positionMs) }
-    fun positionMs(): Long = player.currentPositionMs()
+    fun seekTo(positionMs: Long) { if (!Connect.seekTo(positionMs) && !Together.intercept(Together.Control.Seek(positionMs))) player.seekTo(positionMs) }
+    fun positionMs(): Long = remote.value?.positionAt(System.currentTimeMillis()) ?: player.currentPositionMs()
     fun bufferedPositionMs(): Long = player.bufferedPositionMs()
 
     override fun onCleared() {
         Together.detach()
+        Connect.detach()
         player.disconnect()
         super.onCleared()
     }

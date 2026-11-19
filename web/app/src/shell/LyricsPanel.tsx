@@ -11,6 +11,9 @@ import type { SourceState } from '@/lyrics/repository';
 import { enabledSources } from '@/lyrics/settings';
 import { sourceById, type LyricsSourceId } from '@/lyrics/sources';
 import { useLyrics, useLyricsUi } from '@/lyrics/useLyrics';
+import { seekRemote, useControlling } from '@/connect/connect';
+import { positionAt } from '@/connect/session';
+import { useShownNowPlaying } from '@/connect/shown';
 import { getAudio, usePlayer } from '@/state/player';
 import { LyricsSettings } from './LyricsSettings';
 
@@ -97,7 +100,12 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const element = useRef<AmLyricsElement | null>(null);
   const deck = usePlayer((s) => s.deck);
-  const videoId = usePlayer((s) => s.nowPlaying?.videoId);
+  const videoId = useShownNowPlaying()?.videoId;
+  // The person's other device playing (Connect): the lines follow its position, and a click seeks it.
+  const remote = useControlling();
+  const remoteRef = useRef(remote);
+  remoteRef.current = remote;
+  const far = !!remote;
 
   // Created by hand, with its TTML set before it's attached: am-lyrics starts
   // loading the moment it connects, and through React the properties arrive
@@ -114,7 +122,9 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
     el.toggleAttribute('data-full', full);
     const onLineClick = (event: Event) => {
       const timestamp = (event as CustomEvent<{ timestamp: number }>).detail?.timestamp;
-      if (typeof timestamp === 'number') usePlayer.getState().seek(timestamp / 1000);
+      if (typeof timestamp !== 'number') return;
+      if (remoteRef.current) seekRemote(timestamp);
+      else usePlayer.getState().seek(timestamp / 1000);
     };
     el.addEventListener('line-click', onLineClick);
     host.current?.append(el);
@@ -152,6 +162,20 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
   }, [ttml]);
 
   useEffect(() => {
+    const el = element.current;
+    if (!far || !el) return;
+    let frame = 0;
+    const tick = () => {
+      const d = remoteRef.current;
+      if (d) el.currentTime = positionAt(d, Date.now());
+      frame = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => cancelAnimationFrame(frame);
+  }, [far, videoId, ttml]);
+
+  useEffect(() => {
+    if (far) return;
     const audio = getAudio();
     const el = element.current;
     if (!audio || !el) return;
@@ -192,7 +216,7 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
       audio.removeEventListener('pause', hold);
       audio.removeEventListener('play', resume);
     };
-  }, [deck, videoId, ttml]);
+  }, [deck, videoId, ttml, far]);
 
   // am-lyrics renders and scrolls itself; it only needs the space. Full screen fades it out at the top and bottom.
   return (
@@ -217,7 +241,7 @@ const NO_STATES: Partial<Record<LyricsSourceId, SourceState>> = {};
 
 /** The provider picker: which provider these lyrics are from, and the others' answers for this track. */
 function ProviderPicker({ current, full }: { current: LyricsSourceId | null; full: boolean }) {
-  const videoId = usePlayer((s) => s.nowPlaying?.videoId ?? '');
+  const videoId = useShownNowPlaying()?.videoId ?? '';
   const states = useLyricsUi((s) => s.states[videoId]) ?? NO_STATES;
   const picked = useLyricsUi((s) => s.picked[videoId]);
   const pick = useLyricsUi((s) => s.pick);
@@ -356,7 +380,7 @@ const fullSizes =
  */
 export function LyricsPanel({ variant = 'panel' }: { variant?: 'panel' | 'full' }) {
   const lyrics = useLyrics();
-  const hasTrack = usePlayer((s) => s.nowPlaying !== null);
+  const hasTrack = useShownNowPlaying() !== null;
   const ungranted = useUngranted();
   const canvas = useCanvas();
   const fontReady = useLyricFont();

@@ -50,6 +50,9 @@ import com.opentune.ui.theme.AppIcons
 
 @Composable
 internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    // Another of the person's devices playing (Connect): how it sounds there, not here.
+    val remote by com.opentune.data.connect.Connect.controlling.collectAsState()
+    remote?.let { device -> RemoteQualityBadge(device.state?.quality, modifier); return }
     // While two songs blend, "Mixing" stands where the quality is, then gives way to it again.
     val mix by com.opentune.playback.MixState.now.collectAsState()
     var transition by remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -117,6 +120,22 @@ private fun MixBadge(modifier: Modifier, onClick: () -> Unit) {
                         blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
                 }
             })
+    }
+}
+
+@Composable
+private fun RemoteQualityBadge(label: String?, modifier: Modifier) {
+    if (label.isNullOrBlank()) return
+    val lossless = label.contains("Lossless", ignoreCase = true)
+    androidx.compose.foundation.layout.Row(
+        modifier.widthIn(max = 280.dp).heightIn(min = 40.dp).padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+    ) {
+        Icon(if (lossless) ImageVector.vectorResource(AppIcons.GraphicEq) else ImageVector.vectorResource(AppIcons.HighQuality),
+            null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(5.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

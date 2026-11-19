@@ -22,3 +22,6 @@ export function isLibrarySection(value: string): value is LibrarySection {
 
 /** YouTube's "Liked Music" auto-playlist. */
 export const LIKED_MUSIC_PLAYLIST = 'LM';
+
+/** The playlist Connect keeps its secret in (connect/accountSync.ts): never shown in the library. */
+export const CONNECT_PLAYLIST_TITLE = 'OpenTune Connect';

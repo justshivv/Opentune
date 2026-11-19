@@ -695,8 +695,11 @@ object MusicRepository {
         all.values.toList()
     }
 
-    /** The signed-in account's playlists on YouTube Music, without the "New playlist" tile. */
-    suspend fun libraryPlaylists(): List<ShelfItem> = io {
+    /**
+     * The signed-in account's playlists on YouTube Music, without the "New playlist" tile
+     * and, unless [withConnect], without the one Connect keeps its secret in.
+     */
+    suspend fun libraryPlaylists(withConnect: Boolean = false): List<ShelfItem> = io {
         // Whose these are is the session that asked. The account's profile (and so its email, which names
         // the cache) can arrive while this is still running; asking again at the end for who owns the
         // cache finds the right one, and only a different session in between drops the result.
@@ -736,9 +739,12 @@ object MusicRepository {
             if (items.isEmpty() && InnertubeParser.answeredSignedOut(firstJson)) throw LibrarySignedOut()
             if (items.isNotEmpty()) DebugLog.d("Library", "Found ${items.size} playlists in another layout")
         }
-        if (Innertube.cookie != session) return@io items
+        // Connect's playlist is only a place for its secret: never shown, saved or played.
+        val shown = items.filterNot(com.opentune.data.connect.ConnectAccountSync::isConnectPlaylist)
+        val result = if (withConnect) items else shown
+        if (Innertube.cookie != session) return@io result
         val owner = com.opentune.data.library.LibraryCache.owner()
-        items.also {
+        shown.let {
             com.opentune.data.library.LibraryCache.savePlaylists(it, owner)
             // Fill saved playlists one at a time, without blocking the Library screen.
             libraryWarmJob?.cancel()
@@ -752,6 +758,7 @@ object MusicRepository {
                 }
             }
         }
+        result
     }
 
     /**
