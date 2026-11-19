@@ -1240,16 +1240,20 @@ private fun settingsSections(
                     )
                 },
                 Entry("Dock animation", "navigation bar dock fold hide scroll animation motion squash pop") {
-                    // The side rail has no dock to fold, and the Poster layout's dock folds its own way (BottomChrome).
+                    // The side rail has no dock to fold. The Poster dock folds each way in its own shape (PosterChrome).
                     NavRow("Dock animation", { dockMotionDialog = true }, summary = ui.dockMotion.summary, icon = ImageVector.vectorResource(AppIcons.Dock), value = ui.dockMotion.label,
-                        enabled = !railShown && !poster,
-                        disabledReason = if (railShown) "Not with the side rail this wide window uses" else "Only with the Classic page layout. The Poster dock folds its own way")
+                        enabled = !railShown,
+                        disabledReason = "Not with the side rail this wide window uses")
                 },
-                Entry("Dock lens", "navigation bar dock tab highlight selection pill indicator jelly stretch glide") {
-                    // Reduced motion always glides; the Poster dock has a lens of its own (the rail still uses this one).
-                    NavRow("Dock lens", { dockLensDialog = true }, summary = ui.dockLens.summary, icon = ImageVector.vectorResource(AppIcons.Lens), value = ui.dockLens.label,
-                        enabled = !reduced && (railShown || !poster),
-                        disabledReason = if (reduced) "Glides while Reduce animation is on" else "Only with the Classic page layout. The Poster dock has a lens of its own")
+                Entry("Dock lens", "navigation bar dock tab highlight selection pill indicator jelly stretch glide jump hop poster") {
+                    // Reduced motion always glides. The Poster dock's pill takes Jelly and Glide as the
+                    // Classic lens does; its Stretch is the hop it has always made (PosterLens).
+                    val posterStretch = poster && !railShown && ui.dockLens == com.opentune.data.settings.DockLens.STRETCH
+                    NavRow("Dock lens", { dockLensDialog = true },
+                        summary = if (posterStretch) "In the Poster dock the pill hops over: it lifts off and swells, flies across and lands with a small squash" else ui.dockLens.summary,
+                        icon = ImageVector.vectorResource(AppIcons.Lens), value = ui.dockLens.label,
+                        enabled = !reduced,
+                        disabledReason = "Glides while Reduce animation is on")
                 },
                 Entry("Dock slides away", "dock slides away hide navigation bar bottom pages liked playlist artist settings mini player") {
                     ToggleRow("Dock slides away", ui.dockSlidesAway, { v -> AppSettings.updateUi { it.copy(dockSlidesAway = v) } }, summary = "On Liked, playlists, artist pages, Settings and History, the dock and Search slide away and the mini player has the bottom to itself", icon = ImageVector.vectorResource(AppIcons.Dock),
