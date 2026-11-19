@@ -2,12 +2,14 @@ package com.opentune.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.view.TextureView
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.opentune.data.innertube.StreamResolver
@@ -71,6 +73,10 @@ class PlayerConnection(private val context: Context) {
     private val _videoAvailable = MutableStateFlow(false)
     /** Whether the playing song has a music video it can switch to. */
     val videoAvailable = _videoAvailable.asStateFlow()
+
+    private val _videoSize = MutableStateFlow(VideoSize.UNKNOWN)
+    /** The playing stream's picture size, so the video surface can fit itself. */
+    val videoSize = _videoSize.asStateFlow()
 
     private val _shuffleEnabled = MutableStateFlow(false)
     val shuffleEnabled = _shuffleEnabled.asStateFlow()
@@ -165,6 +171,10 @@ class PlayerConnection(private val context: Context) {
     val jumps = _jumps.asSharedFlow()
 
     private val listener = object : Player.Listener {
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            _videoSize.value = videoSize
+        }
+
         override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
             _audioFormat.value = null
         }
@@ -285,6 +295,7 @@ class PlayerConnection(private val context: Context) {
         // (an upgrade, a recovery) settles the toggle on what is actually playing.
         _videoMode.value = (mixing?.item ?: player.currentMediaItem)?.localConfiguration?.uri?.let(::isVideoUri) == true
         _videoAvailable.value = id?.let { StreamResolver.hasVideo(it) } == true
+        _videoSize.value = player.videoSize
         // Buffering on the way, with playback meant to go on (a quality switch
         // loading its stream, a stall), still counts as playing: the button
         // flipped to play and back for that moment at every upgrade.
@@ -420,6 +431,12 @@ class PlayerConnection(private val context: Context) {
         val uri = if (on) videoStreamUri(item.mediaId) else trackUri(item.mediaId)
         controller.replaceMediaItem(controller.currentMediaItemIndex, item.buildUpon().setUri(uri).build())
         _videoMode.value = on
+    }
+
+    /** Gives the player a view to draw the playing song's video picture into, or takes it back. */
+    fun setVideoTextureView(view: TextureView?) {
+        val controller = controller ?: return
+        if (view == null) controller.clearVideoTextureView(null) else controller.setVideoTextureView(view)
     }
 
     fun toggleShuffle() {

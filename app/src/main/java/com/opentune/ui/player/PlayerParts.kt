@@ -801,6 +801,10 @@ fun ArtworkPane(
     canvasShowing: Boolean = false,
     /** How round the cover's corners are. */
     corner: androidx.compose.ui.unit.Dp = 28.dp,
+    /** The song's music video is showing in the cover's place. */
+    musicVideo: Boolean = false,
+    /** The playback player's video picture, drawn over the cover while [musicVideo]. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val coverShown by animateFloatAsState(if (canvasShowing) 0f else 1f, tween(450), label = "coverOverCanvas")
     val scale by animateFloatAsState(
@@ -867,8 +871,12 @@ fun ArtworkPane(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(corner),
                     imageModifier = Modifier.livingArt(isPlaying, moving, artworkMotion),
                 ) {
+                    // The music video takes the cover's place while video mode is on.
+                    if (musicVideo && url == song.thumbnailUrl) {
+                        videoSurface()
+                    }
                     // Only on the playing song's cover, not on one leaving as the song changes.
-                    if (video != null && !canvasShowing && url == song.thumbnailUrl) {
+                    else if (video != null && !canvasShowing && url == song.thumbnailUrl) {
                         val quality = com.opentune.data.settings.AppSettings.ui.collectAsState().value.motionQuality
                         // Keyed on the quality, so a new choice in Settings takes effect at once.
                         androidx.compose.runtime.key(quality) {

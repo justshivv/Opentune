@@ -155,7 +155,7 @@ fun rememberPlaybackPosition(vm: PlayerViewModel): () -> Long {
             if (vm.isPlaying.value) withFrameMillis { } else delay(250)
             // Through a quality switch, where the song is heard rather than the main player's stalled reading.
             position.longValue = if (com.opentune.data.connect.Connect.controlling.value != null) vm.positionMs()
-                else com.opentune.playback.PlaybackRequests.soundingPosition?.invoke() ?: vm.positionMs()
+            else com.opentune.playback.PlaybackRequests.soundingPosition?.invoke() ?: vm.positionMs()
         }
     }
     return { position.longValue }
@@ -190,6 +190,10 @@ data class PlayerUiState(
     /** Spotify's Canvas for the song, to loop behind the player. */
     val canvasVideo: String? = null,
     val loadingMessage: String? = null,
+    /** The playing song is showing its music video in the cover's place. */
+    val videoMode: Boolean = false,
+    /** The playing song has a music video it can switch to. */
+    val videoAvailable: Boolean = false,
 )
 
 class PlayerActions(
@@ -207,6 +211,8 @@ class PlayerActions(
     val openEqualizer: () -> Unit = {},
     /** Settings › Your devices (Connect). */
     val openDevices: () -> Unit = {},
+    /** Switches the playing song between its audio stream and its music video. */
+    val setVideoMode: (Boolean) -> Unit = {},
 )
 
 @Composable
@@ -245,6 +251,8 @@ fun PlayerScreen(
     val audioFormat by vm.audioFormat.collectAsState()
     val coverVideo by vm.coverVideo.collectAsState()
     val canvasVideo by vm.canvasVideo.collectAsState()
+    val videoMode by vm.videoMode.collectAsState()
+    val videoAvailable by vm.videoAvailable.collectAsState()
     val actions = remember(vm, onCollapse) {
         PlayerActions(
             togglePlay = vm::togglePlayPause,
@@ -260,6 +268,7 @@ fun PlayerScreen(
             openTogether = onTogether,
             openEqualizer = onEqualizer,
             openDevices = onDevices,
+            setVideoMode = vm::setVideoMode,
         )
     }
     PlayerLayout(
@@ -267,12 +276,14 @@ fun PlayerScreen(
             shown, isPlaying, isSounding, isBuffering, hasNext, shuffle, repeat, duration,
             lyrics, queue, currentIndex, upNext, sound, theme, ui, source, audioFormat,
             shuffleMode, smartShuffleAvailable, coverVideo, canvasVideo, loadingMessage,
+            videoMode, videoAvailable,
         ),
         position = rememberPlaybackPosition(vm),
         buffered = vm::bufferedPositionMs,
         actions = actions,
         seeks = rememberSeekCount(vm),
         onCovering = onCovering,
+        videoSurface = { VideoSurface(vm.player, Modifier.matchParentSize()) },
         docked = docked,
     )
 }
@@ -320,6 +331,8 @@ fun PlayerLayout(
      * [PlayerActions.collapse] folds the pane away instead of closing a sheet.
      */
     docked: Boolean = false,
+    /** The playback player's video picture, for the cover to show in video mode. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val current = state.song
     val theme = state.theme
@@ -1070,12 +1083,17 @@ fun PlayerLayout(
                                                     onSeekBy = seekBy.takeIf { state.ui.doubleTapSeek },
                                                     glow = state.ui.coverGlow && !state.ui.reduceAnimation && !amoled && !apple,
                                                     video = state.coverVideo,
+                                                    musicVideo = state.videoMode,
+                                                    videoSurface = videoSurface,
                                                     canvasShowing = state.canvasVideo != null,
                                                     corner = state.ui.coverCornerDp.dp,
                                                 )
                                         }
                                     }
                                     if (state.ui.doubleTapSeek && !ownTaps) SeekTaps(seekBy, 1f, Modifier.matchParentSize()) { design() } else design()
+                                }
+                                if (state.videoAvailable) {
+                                    SongVideoToggle(state.videoMode, actions.setVideoMode, Modifier.align(Alignment.CenterHorizontally).padding(top = 14.dp))
                                 }
                                 Spacer(Modifier.height(16.dp))
                                 TitleRow(
@@ -1787,7 +1805,7 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
                 // A wash of the player's own ink, so the song's colour shows through rather than a grey disc.
                 // The Poster layout's clear glass, like the menu beside it.
                 .then(if (com.opentune.ui.components.posterLayout()) Modifier.posterGlass(CircleShape)
-                    else Modifier.clip(CircleShape).background(LocalContentColor.current.copy(alpha = PLAYER_BUTTON_TINT)))
+                else Modifier.clip(CircleShape).background(LocalContentColor.current.copy(alpha = PLAYER_BUTTON_TINT)))
                 .clickable(interactionSource = interactions, indication = com.opentune.ui.components.FocusRing(CircleShape)) {
                     haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE)
                     if (!liked && !still) bursts++
