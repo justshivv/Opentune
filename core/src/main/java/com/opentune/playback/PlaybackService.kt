@@ -281,7 +281,7 @@ class PlaybackService : MediaLibraryService() {
                 val uri = withoutStartup(input)
                 val id = videoIdOf(uri) ?: return sources.createMediaSource(mediaItem)
                 if (!isYouTubeId(id) || Podcasts.isEpisode(id) || externalStreamKeyOf(uri) != null ||
-                    uri.getQueryParameter("fallback") == "youtube") return sources.createMediaSource(mediaItem)
+                    isVideoUri(uri) || uri.getQueryParameter("fallback") == "youtube") return sources.createMediaSource(mediaItem)
                 val token = java.util.UUID.randomUUID().toString()
                 val tagged = uri.buildUpon().appendQueryParameter("startup", token).build()
                 // Lossless for the song playing now, and for the next two readied ahead with Preload
