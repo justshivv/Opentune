@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazyRecovering } from '@/lib/staleBuild';
 import { Toaster } from '@/components/Toast';
 import '@/together/room';
 import { useDiscordPresence } from '@/playback/discordPresence';
@@ -28,7 +29,7 @@ import { Sidebar } from './Sidebar';
 const mobile = isMobileBrowser();
 
 // It carries am-lyrics; loaded the first time it opens, as the side panel's lyrics are.
-const FullScreenPlayer = lazy(() => import('./FullScreenPlayer').then((m) => ({ default: m.FullScreenPlayer })));
+const FullScreenPlayer = lazyRecovering(() => import('./FullScreenPlayer').then((m) => ({ default: m.FullScreenPlayer })));
 
 /**
  * Where the page scrolls on navigation. A new page opens at its top instead of

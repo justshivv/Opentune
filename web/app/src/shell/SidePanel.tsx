@@ -1,10 +1,11 @@
-import { lazy, Suspense, useState } from 'react';
+import { Suspense, useState } from 'react';
+import { lazyRecovering } from '@/lib/staleBuild';
 import { useUi, type SidePanel as Panel } from '@/state/ui';
 import { motionAllowed } from './playerMorph';
 import { UpNext } from './UpNext';
 
 // am-lyrics is large; it loads the first time the panel opens (prompt §3).
-const LyricsPanel = lazy(() => import('./LyricsPanel').then((m) => ({ default: m.LyricsPanel })));
+const LyricsPanel = lazyRecovering(() => import('./LyricsPanel').then((m) => ({ default: m.LyricsPanel })));
 
 /** Up Next / Lyrics glass panel (report §7). */
 export function SidePanel() {
