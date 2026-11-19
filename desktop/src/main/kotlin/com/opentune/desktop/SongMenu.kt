@@ -139,6 +139,8 @@ internal data class SongAction(val label: String, val icon: ImageVector, val gro
 @Composable
 internal fun songActions(song: Song, queueIndex: Int? = null, onAddToPlaylist: () -> Unit): List<SongAction> {
     val open = LocalOpen.current
+    val openArtist = rememberOpenArtist()
+    val openAlbum = rememberOpenAlbum()
     val liked by Library.liked.collectAsState()
     val queue by Player.queue.collectAsState()
     val index by Player.index.collectAsState()
@@ -168,11 +170,12 @@ internal fun songActions(song: Song, queueIndex: Int? = null, onAddToPlaylist: (
             else SongAction("Like", Icons.Rounded.FavoriteBorder, 1) { Library.setLiked(song, true) },
         )
         add(SongAction("Add to playlist…", Icons.AutoMirrored.Rounded.PlaylistAdd, 1, onAddToPlaylist))
-        song.artistId?.takeIf { it.startsWith("UC") }?.let { id ->
-            add(SongAction("Go to artist", Icons.Rounded.Person, 2) { open(ShelfItem(song.artist, "Artist", null, null, id)) })
+        // Found first when the song doesn't carry its artist's or album's id (see SongLinks).
+        if (song.artistId?.startsWith("UC") == true || (youTube && song.artist.isNotBlank())) {
+            add(SongAction("Go to artist", Icons.Rounded.Person, 2) { openArtist(song, null) })
         }
-        song.albumId?.let { id ->
-            add(SongAction("Go to album", Icons.Rounded.Album, 2) { open(ShelfItem(song.albumName ?: song.title, song.artist, song.thumbnailUrl, null, id)) })
+        if (song.albumId != null || youTube) {
+            add(SongAction("Go to album", Icons.Rounded.Album, 2) { openAlbum(song) })
         }
         if (youTube) add(SongAction("Copy link", Icons.Rounded.Link, 3) {
             copyText("https://music.youtube.com/watch?v=${song.videoId}")

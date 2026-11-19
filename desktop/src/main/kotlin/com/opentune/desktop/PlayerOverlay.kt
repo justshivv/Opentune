@@ -63,7 +63,7 @@ internal val LocalPlayerReveal = compositionLocalOf<() -> Float> { { 1f } }
  * down over 300ms, gathering speed, when it turns false. A grab handle at
  * the top centre can be dragged: the sheet follows the pointer, and on
  * release it closes (through [onClose]) if it was pulled far or flung down,
- * or springs back up. Behind it the window dims as it rises.
+ * or springs back up. The page behind isn't dimmed.
  *
  * The sheet waits one frame before it moves, so the player is laid out off
  * screen first, and the small cover the backdrop is made from is asked for
@@ -123,12 +123,14 @@ internal fun PlayerOverlay(open: Boolean, cover: String?, onClose: () -> Unit, c
         },
     ) {
         val height = constraints.maxHeight.toFloat()
-        // The window behind dims as the sheet comes up.
-        Box(Modifier.fillMaxSize().graphicsLayer { alpha = (1f - gone.value).coerceIn(0f, 1f) }.background(Color.Black.copy(alpha = 0.45f)))
+        // The page above the rising sheet stays as it is, with no dimming: a fade over it read as
+        // a grey wash. The sheet is cut at its own edges, so the player's blurred backdrop can't
+        // bleed up past its top while it slides.
         Box(
             Modifier.fillMaxSize().graphicsLayer {
                 if (still) alpha = (1f - gone.value).coerceIn(0f, 1f)
                 else translationY = gone.value.coerceAtLeast(0f) * height
+                clip = true
             },
         ) {
             CompositionLocalProvider(LocalPlayerReveal provides { if (still) 1f else (1f - gone.value).coerceIn(0f, 1f) }) { content() }

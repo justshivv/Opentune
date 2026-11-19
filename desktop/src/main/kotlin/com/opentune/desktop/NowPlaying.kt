@@ -52,6 +52,9 @@ import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.CircularProgressIndicator
@@ -580,11 +583,21 @@ private fun PlayerTitleRow(song: Song) {
                     song.title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 21.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.sp),
                 )
+                val openArtist = rememberOpenArtist()
+                val artistHover = remember { MutableInteractionSource() }
+                val artistHovered by artistHover.collectIsHoveredAsState()
                 Text(
                     error ?: song.artist,
                     fontSize = 16.sp, lineHeight = 21.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    color = if (error != null) MaterialTheme.colorScheme.error else Color.White.copy(alpha = 0.62f),
-                    modifier = Modifier.padding(top = 2.dp),
+                    color = if (error != null) MaterialTheme.colorScheme.error else Color.White.copy(alpha = if (artistHovered) 0.9f else 0.62f),
+                    textDecoration = if (artistHovered && error == null) androidx.compose.ui.text.style.TextDecoration.Underline else null,
+                    // The artist's page, found first when the song doesn't say; it closes the player on the way.
+                    modifier = Modifier.padding(top = 2.dp).then(
+                        if (error == null && song.artist.isNotBlank()) Modifier.hoverable(artistHover)
+                            .then(Modifier.pointerHoverIcon(androidx.compose.ui.input.pointer.PointerIcon.Hand))
+                            .clickable(interactionSource = artistHover, indication = null) { openArtist(song, null) }
+                        else Modifier,
+                    ),
                 )
             }
         }
@@ -624,18 +637,7 @@ private fun PlayerTransport(song: Song) {
     val progress = rememberProgress(song)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { PlayerSleepButton() }
-        PlayerControls(
-            isPlaying = playing,
-            isBuffering = loading,
-            hasNext = index < queue.lastIndex,
-            onTogglePlay = Player::toggle,
-            onNext = Player::next,
-            onPrevious = Player::previous,
-            modifier = Modifier.width(236.dp),
-            style = ui.controlStyle,
-            animate = !ui.reduceAnimation,
-            progress = progress::fraction,
-        )
+        PlayerPlainControls(playing, loading, hasNext = index < queue.lastIndex, Modifier.width(236.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { PlayerVolume() }
     }
 }
@@ -1044,5 +1046,41 @@ private fun MoreButton(song: Song) {
             }
         }
         AddToPlaylistMenu(song, adding) { adding = false }
+    }
+}
+
+/**
+ * Previous, play or pause, and next as clear white glyphs: no shape behind them and nothing
+ * that turns or morphs (the phone's "Player buttons" styles drew their moving shapes poorly
+ * here, with blocks cut out of them). A press gives a little, play and pause cross-fade, and
+ * a thin ring turns round play while the song loads.
+ */
+@Composable
+private fun PlayerPlainControls(playing: Boolean, loading: Boolean, hasNext: Boolean, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        PlayerPlainButton(Icons.Rounded.FastRewind, "Previous", 44.dp, onClick = Player::previous)
+        Box(contentAlignment = Alignment.Center) {
+            PlayerPlainButton(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", 64.dp, onClick = Player::toggle)
+            if (loading) androidx.compose.material3.CircularProgressIndicator(Modifier.size(72.dp), color = Color.White.copy(alpha = 0.6f), strokeWidth = 2.dp)
+        }
+        PlayerPlainButton(Icons.Rounded.FastForward, "Next", 44.dp, enabled = hasNext, onClick = Player::next)
+    }
+}
+
+@Composable
+private fun PlayerPlainButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, size: androidx.compose.ui.unit.Dp, enabled: Boolean = true, onClick: () -> Unit) {
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    Box(
+        Modifier.size(size + 16.dp).pressGive(hover, enabled, to = 0.86f).hoverable(hover)
+            .clickable(interactionSource = hover, indication = FocusRing(CircleShape), enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.animation.Crossfade(icon, animationSpec = androidx.compose.animation.core.tween(160), label = "plain button") { shown ->
+            Icon(
+                shown, label, modifier = Modifier.size(size),
+                tint = Color.White.copy(alpha = when { !enabled -> 0.35f; hovered -> 1f; else -> 0.92f }),
+            )
+        }
     }
 }
