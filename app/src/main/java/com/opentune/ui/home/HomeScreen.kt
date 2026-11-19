@@ -120,8 +120,10 @@ fun HomeScreen(
     val pickScope = androidx.compose.runtime.rememberCoroutineScope()
     // Pulling Home down also shuffles the rows below its top (see HomeLayout).
     var shuffleTurn by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
-    val refreshHome: () -> Unit = {
-        shuffleTurn++
+    // [reorder] for a refresh asked for (a pull, Home tapped again); the quiet one after a
+    // listen keeps the rows where they are, so they don't move about under the finger.
+    val reloadHome: (reorder: Boolean) -> Unit = { reorder ->
+        if (reorder) shuffleTurn++
         freshPicks = null
         picksPending = true
         val picks = MusicRepository.refreshPicks()
@@ -130,6 +132,7 @@ fun HomeScreen(
         }
         loader.reload(keepContent = true)
     }
+    val refreshHome: () -> Unit = { reloadHome(true) }
     val moreAll by MusicRepository.homeMore.collectAsState()
     val library by AppSettings.library.collectAsState()
     val hideExplicit = library.hideExplicit
@@ -146,18 +149,21 @@ fun HomeScreen(
             kotlinx.coroutines.delay(wait)
             shownListen = newestListen
             lastListeningRefresh = android.os.SystemClock.elapsedRealtime()
-            refreshHome()
+            reloadHome(false)
         }
     }
     val recents = rememberHomeDerived("recents", records, hideExplicit, initial = emptyList()) { ContentFilter.songs(History.recents(records, 100), hideExplicit) }
     // Not saved with the page: a page opened from inside it (an artist, from a
     // song's menu) is left with one back press, not one that brings the list up again.
     var historyOpen by remember { mutableStateOf(false) }
-    val first = (state as? UiState.Success<List<HomeShelf>>)?.data?.let { hidden.shelves(ContentFilter.shelves(it, hideExplicit)) }.orEmpty()
-    val allShelves = first + more
+    // Kept, not worked out again on every recomposition (a listen, the clock, a scroll's covers):
+    // a new list each time also made the arrangement below run again each time.
+    val first = remember(state, hidden, hideExplicit) {
+        (state as? UiState.Success<List<HomeShelf>>)?.data?.let { hidden.shelves(ContentFilter.shelves(it, hideExplicit)) }.orEmpty()
+    }
     val feed = remember(first, more) {
-        val firstPage = arrangeHomeShelves(first)
-        arrangeHomeShelves(allShelves).copy(quickPicks = firstPage.quickPicks ?: arrangeHomeShelves(allShelves).quickPicks)
+        val all = arrangeHomeShelves(first + more)
+        all.copy(quickPicks = arrangeHomeShelves(first).quickPicks ?: all.quickPicks)
     }
     // YouTube Music's own Speed dial when it sends one (signed in), else the songs
     // played most on this phone, with what's hidden or filtered left out.
@@ -202,10 +208,13 @@ fun HomeScreen(
     // The artists picked at the welcome count too, so a new install has genres from the start.
     val followed by com.opentune.data.releases.NewReleases.followed.collectAsState()
     LaunchedEffect(records.size / 25, hidden, followed.size) {
-        val top = hidden.records(records).groupBy { com.opentune.data.history.Wrapped.mainArtist(it.artist) }
-            .filterKeys { it.isNotBlank() }.toList().sortedByDescending { it.second.size }.take(GENRE_ARTISTS).map { it.first }
-        val picked = followed.sortedByDescending { it.followedAt }.map { it.name }.filterNot { hidden.hidesArtist(it) }
-        val ask = (top + picked).distinct()
+        // Over the whole history, so off the main thread, as the derived rows are.
+        val ask = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val top = hidden.records(records).groupBy { com.opentune.data.history.Wrapped.mainArtist(it.artist) }
+                .filterKeys { it.isNotBlank() }.toList().sortedByDescending { it.second.size }.take(GENRE_ARTISTS).map { it.first }
+            val picked = followed.sortedByDescending { it.followedAt }.map { it.name }.filterNot { hidden.hidesArtist(it) }
+            (top + picked).distinct()
+        }
         if (ask.isNotEmpty()) com.opentune.data.metadata.ArtistGenres.learn(ask)
     }
     // The daylist, turning over with the part of the day: checked every few minutes, rebuilt
@@ -236,8 +245,11 @@ fun HomeScreen(
     }
     LaunchedEffect(discoverSeeds.keys.toList()) {
         if (discoverSeeds.isEmpty()) return@LaunchedEffect
-        val played = records.mapTo(HashSet()) { it.videoId } + com.opentune.data.library.LibraryStore.liked.value.map { it.videoId }
-        val known = records.mapTo(HashSet()) { com.opentune.data.history.Wrapped.mainArtist(it.artist) } + followed.map { it.name }
+        val liked = com.opentune.data.library.LibraryStore.liked.value
+        val (played, known) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            (records.mapTo(HashSet()) { it.videoId } + liked.map { it.videoId }) to
+                (records.mapTo(HashSet()) { com.opentune.data.history.Wrapped.mainArtist(it.artist) } + followed.map { it.name })
+        }
         com.opentune.data.reco.GenreDiscover.refresh(
             discoverSeeds, played, hidden,
             { a -> com.opentune.data.metadata.ArtistGenres.genreOf(a) }, known,
@@ -261,7 +273,9 @@ fun HomeScreen(
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val savedAccounts by AccountStore.accounts.collectAsState()
-    val homeAccount = signedIn to savedAccounts.firstOrNull { it.active }?.id
+    val listeningAs by AccountStore.listeningAs.collectAsState()
+    // Each profile an account listens as (Settings › Listen as) has its own recommendations too.
+    val homeAccount = Triple(signedIn, savedAccounts.firstOrNull { it.active }?.id, listeningAs)
     // Switching between two signed-in accounts must refresh recommendations too.
     var seenAccount by remember { mutableStateOf(homeAccount) }
     LaunchedEffect(homeAccount) {
