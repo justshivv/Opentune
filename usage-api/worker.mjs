@@ -110,7 +110,7 @@ export async function periodCohorts(db, from, to, timeZone = 'UTC') {
 }
 
 export async function summary(db, now = new Date(), timeZone = 'UTC') {
-  const table = activityTable(timeZone);
+  const table = activityTable(timeZone), zone = reportZone(timeZone);
   const day = calendarDay(now,timeZone);
   const week = new Date(day+'T00:00:00Z');
   week.setUTCDate(week.getUTCDate() - ((week.getUTCDay()+6)%7));
@@ -119,12 +119,14 @@ export async function summary(db, now = new Date(), timeZone = 'UTC') {
   const results = await db.batch([
     // Lifetime figures come from the totals the triggers keep; the first day is an index lookup.
     db.prepare(`SELECT t.installations AS installs, t.plays AS plays,
-      (SELECT MIN(m) FROM (SELECT MIN(day) AS m FROM activity UNION ALL SELECT MIN(day) FROM activity_ist)) AS since
+      (SELECT MIN(day) FROM daily_totals) AS since
       FROM totals t WHERE t.id=1`),
-    db.prepare(`SELECT COUNT(DISTINCT installation) AS active, COALESCE(SUM(plays),0) AS plays FROM ${table} WHERE day=?`).bind(day),
+    // A day's figures are one row of daily_totals (see schema.sql), not every report that day.
+    db.prepare(`SELECT COALESCE((SELECT installations FROM daily_totals WHERE zone=? AND day=?),0) AS active,
+      COALESCE((SELECT plays FROM daily_totals WHERE zone=? AND day=?),0) AS plays`).bind(zone,day,zone,day),
     db.prepare(`SELECT COUNT(DISTINCT installation) AS active FROM ${table} WHERE day>=? AND day<=?`).bind(week.toISOString().slice(0,10),day),
     db.prepare(`SELECT COUNT(DISTINCT installation) AS active FROM ${table} WHERE day>=? AND day<=?`).bind(month,day),
-    db.prepare(`SELECT day,COUNT(DISTINCT installation) AS active,SUM(plays) AS plays FROM ${table} WHERE day>=? AND day<=? GROUP BY day ORDER BY day`).bind(from,day),
+    db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=? AND day>=? AND day<=? ORDER BY day').bind(zone,from,day),
     db.prepare(`SELECT s.version,(SELECT COUNT(*) FROM version_installs v WHERE v.version=s.version) AS installations
       FROM versions_seen s ORDER BY s.last_day DESC`),
     db.prepare('SELECT release,COUNT(*) AS browsers FROM downloads GROUP BY release ORDER BY MAX(first_requested_at) DESC'),
@@ -156,12 +158,12 @@ export function validateRange(params, now = new Date(), timeZone = 'UTC') {
 
 export async function analytics(db, range, now = new Date(), timeZone = 'UTC') {
   const { from, to } = range;
-  const table = activityTable(timeZone);
+  const table = activityTable(timeZone), zone = reportZone(timeZone);
   const results = await db.batch([
     db.prepare(`SELECT COUNT(DISTINCT installation) AS active, COALESCE(SUM(plays),0) AS plays FROM ${table} WHERE day BETWEEN ? AND ?`).bind(from,to),
-    db.prepare(`SELECT day, COUNT(DISTINCT installation) AS active, SUM(plays) AS plays FROM ${table} WHERE day BETWEEN ? AND ? GROUP BY day ORDER BY day`).bind(from,to),
+    db.prepare('SELECT day, installations AS active, plays FROM daily_totals WHERE zone=? AND day BETWEEN ? AND ? ORDER BY day').bind(zone,from,to),
     db.prepare(`SELECT version, COUNT(DISTINCT installation) AS installations, SUM(plays) AS plays FROM ${table} WHERE day BETWEEN ? AND ? GROUP BY version ORDER BY installations DESC, version DESC`).bind(from,to),
-    db.prepare(`SELECT MIN(day) AS since FROM ${table}`),
+    db.prepare('SELECT MIN(day) AS since FROM daily_totals WHERE zone=?').bind(zone),
   ]);
   return { asOf: now.toISOString(), range, timeZone, totals: results[0].results[0],
     split: await periodCohorts(db, from, to, timeZone),
@@ -255,6 +257,32 @@ export async function sharedCounts(db, zone, now = Date.now()) {
   return counts;
 }
 
+// Each installation's day-by-day rows are kept for [KEEP_DAYS] (past the dashboard's longest range
+// of 366 days); the lifetime figures and daily_totals keep everything. Run nightly by the cron in
+// wrangler.jsonc, a few thousand rows at a time so a first clean-up of a long history spreads over
+// some nights instead of spending a day's writes at once. Then the public counts are worked out
+// for the new day, so no visitor's request has to.
+export const KEEP_DAYS = 400;
+const PRUNE_ROWS = 5000, PRUNE_ROUNDS = 2;
+export async function housekeeping(db, now = new Date()) {
+  const cutoff = calendarDay(new Date(now.getTime() - KEEP_DAYS * DAY), 'UTC');
+  let removed = 0;
+  for (const table of ['activity', 'activity_ist']) {
+    for (let round = 0; round < PRUNE_ROUNDS; round++) {
+      const done = await db.prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE day < ? LIMIT ${PRUNE_ROWS})`).bind(cutoff).run();
+      const n = done?.meta?.changes ?? done?.changes ?? 0;
+      removed += n;
+      if (n < PRUNE_ROWS) break;
+    }
+  }
+  await db.batch([
+    db.prepare('DELETE FROM active_weeks WHERE week < ?').bind(cutoff),
+    db.prepare('DELETE FROM active_months WHERE month < ?').bind(cutoff.slice(0, 7)),
+  ]);
+  await sharedCounts(db, 'Asia/Kolkata', now.getTime());
+  return { removed, cutoff };
+}
+
 // Apps before 1.0.x send their totals after every song. The totals are
 // cumulative, so a report that comes soon after the last one from the same
 // installation is turned away unwritten: the app keeps it and sends it, with
@@ -271,6 +299,9 @@ export function tooSoon(db, installation, now = Date.now()) {
 }
 
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(housekeeping(env.DB, new Date(event.scheduledTime)));
+  },
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\/usage\/v1\/(summary|analytics|addons)$/, '/v1/$1');

@@ -160,3 +160,47 @@ INSERT OR IGNORE INTO versions_seen(version, last_day)
   SELECT version, MAX(day) FROM (SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM backfills WHERE name = 'summaries')) AS go
   CROSS JOIN (SELECT version, day FROM activity UNION ALL SELECT version, day FROM activity_ist) GROUP BY version;
 INSERT OR IGNORE INTO backfills(name) VALUES ('summaries');
+
+-- One row per day and reporting zone ('UTC' is the activity table, 'Asia/Kolkata' activity_ist):
+-- how many installations were active and how many plays they had. The dashboard's day-by-day
+-- figures read these few rows instead of every report in the range. Kept for good, so the daily
+-- chart outlives the per-installation rows the nightly clean-up removes after 400 days.
+CREATE TABLE IF NOT EXISTS daily_totals (
+  zone TEXT NOT NULL,
+  day TEXT NOT NULL,
+  installations INTEGER NOT NULL,
+  plays INTEGER NOT NULL,
+  PRIMARY KEY (zone, day)
+);
+-- A new row is a new installation for the day unless that installation already has the day under
+-- another version (an update mid-day): one primary-key lookup.
+CREATE TRIGGER IF NOT EXISTS daily_activity_insert AFTER INSERT ON activity
+BEGIN
+  INSERT OR IGNORE INTO daily_totals(zone, day, installations, plays) VALUES ('UTC', new.day, 0, 0);
+  UPDATE daily_totals SET plays = plays + new.plays,
+    installations = installations + NOT EXISTS (SELECT 1 FROM activity a WHERE a.installation = new.installation AND a.day = new.day AND a.version <> new.version)
+  WHERE zone = 'UTC' AND day = new.day;
+END;
+CREATE TRIGGER IF NOT EXISTS daily_activity_ist_insert AFTER INSERT ON activity_ist
+BEGIN
+  INSERT OR IGNORE INTO daily_totals(zone, day, installations, plays) VALUES ('Asia/Kolkata', new.day, 0, 0);
+  UPDATE daily_totals SET plays = plays + new.plays,
+    installations = installations + NOT EXISTS (SELECT 1 FROM activity_ist a WHERE a.installation = new.installation AND a.day = new.day AND a.version <> new.version)
+  WHERE zone = 'Asia/Kolkata' AND day = new.day;
+END;
+CREATE TRIGGER IF NOT EXISTS daily_activity_plays AFTER UPDATE OF plays ON activity
+BEGIN
+  UPDATE daily_totals SET plays = plays + new.plays - old.plays WHERE zone = 'UTC' AND day = new.day;
+END;
+CREATE TRIGGER IF NOT EXISTS daily_activity_ist_plays AFTER UPDATE OF plays ON activity_ist
+BEGIN
+  UPDATE daily_totals SET plays = plays + new.plays - old.plays WHERE zone = 'Asia/Kolkata' AND day = new.day;
+END;
+-- Built once from the history already recorded, the same way as the summaries above.
+INSERT OR IGNORE INTO daily_totals(zone, day, installations, plays)
+  SELECT 'UTC', day, COUNT(DISTINCT installation), SUM(plays)
+  FROM (SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM backfills WHERE name = 'daily-totals')) AS go CROSS JOIN activity GROUP BY day;
+INSERT OR IGNORE INTO daily_totals(zone, day, installations, plays)
+  SELECT 'Asia/Kolkata', day, COUNT(DISTINCT installation), SUM(plays)
+  FROM (SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM backfills WHERE name = 'daily-totals')) AS go CROSS JOIN activity_ist GROUP BY day;
+INSERT OR IGNORE INTO backfills(name) VALUES ('daily-totals');

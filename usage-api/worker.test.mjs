@@ -435,3 +435,32 @@ test('the yesterday badge shows the whole of the day before', async () => {
   const shield = badge({yesterday: 1234, daily: 5}, new URLSearchParams('metric=yesterday&label=listening%20yesterday'));
   assert.equal(shield.message, '1.2k'); assert.equal(shield.label, 'listening yesterday'); assert.equal(shield.cacheSeconds, 3600);
 });
+
+const { housekeeping, KEEP_DAYS } = await import('./worker.mjs');
+test('a day row counts an installation once, even when it updates that day, and keeps its plays', async () => {
+  const db = database();
+  await ingest(db, body(3, '0.4.2'), now);
+  await ingest(db, body(2, '0.4.3'), now);                         // updated mid-day: same installation
+  await ingest(db, body(5, '0.4.2'), now);                         // more plays on the first version
+  await ingest(db, {...body(1), installationId: id.replace(/1$/, '2')}, now);
+  const s = await summary(db, now);
+  assert.deepEqual({...s.today}, {active: 2, plays: 8});
+  assert.deepEqual(s.daily.map(d => [d.day, d.active, d.plays]), [['2026-10-09', 2, 8]]);
+});
+
+test('the nightly clean-up drops rows past the retention but keeps the lifetime and daily figures', async () => {
+  const db = database();
+  const old = '2025-01-01';
+  await db.prepare('INSERT INTO activity_ist VALUES(?,?,?,?,?)').bind(id, old, '0.4.0', 7, 'x').run();
+  await ingest(db, {installationId:id, days:[{day:'2026-10-09',version:'1.0.1',plays:2,timeZone:'Asia/Kolkata'}]}, now);
+  const done = await housekeeping(db, now);
+  assert.equal(done.removed, 1);
+  assert.equal(KEEP_DAYS, 400);
+  const s = await summary(db, now, 'Asia/Kolkata');
+  assert.equal(s.totals.installs, 1); assert.equal(s.totals.plays, 9);
+  assert.equal(s.totals.since, old);                                // the daily row outlives the detail
+  const [{results: left}] = await db.batch([db.prepare('SELECT COUNT(*) AS n FROM activity_ist').bind()]);
+  assert.equal(left[0].n, 1);
+  // Running it again finds nothing more to remove.
+  assert.equal((await housekeeping(db, now)).removed, 0);
+});
