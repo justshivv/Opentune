@@ -25,11 +25,17 @@ fun ListeningHistoryScreen(contentPadding: PaddingValues, actions: SongActions, 
     val records by History.records.collectAsState()
     // Each song once, at its latest play — like the account's own history —
     // instead of a row for every single play.
-    val ordered = remember(records) { records.sortedByDescending { it.playedAt }.distinctBy { it.videoId } }
+    // Sorted over the whole history, so off the main thread, and kept as Home keeps its rows (see
+    // HomeDerived): coming back to the page has it at once, scrolled where it was. Null only the
+    // first time, while it's worked out.
+    val sorted = com.opentune.ui.home.rememberHomeDerived("history:ordered", records, initial = null as List<com.opentune.data.history.PlayRecord>?) {
+        records.sortedByDescending { it.playedAt }.distinctBy { it.videoId }
+    }
+    val ordered = sorted.orEmpty()
     val songs = remember(ordered) { ordered.map { it.toSong() } }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item { PageHeader("Listening history", onBack = onBack) }
-        if (songs.isEmpty()) item { Text("Your listening history will appear here.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge) }
+        if (sorted != null && songs.isEmpty()) item { Text("Your listening history will appear here.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge) }
         itemsIndexed(ordered, key = { i, record -> "$i:${record.playedAt}:${record.videoId}" }) { i, record ->
             val date = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM)
             val day = date.format(java.util.Date(record.playedAt))
