@@ -4,7 +4,11 @@ import com.opentune.data.download.DownloadEntry
 import com.opentune.data.download.DownloadState
 import com.opentune.data.history.PlayRecord
 import kotlinx.serialization.Serializable
+import java.text.Collator
+import java.text.Normalizer
+import java.util.Locale
 import java.util.Random
+import java.util.TimeZone
 
 /** Where a smart playlist's songs come from before its rules narrow them down. */
 @Serializable
@@ -50,12 +54,19 @@ data class SmartRules(
     val downloadedOnly: Boolean = false,
     /** Downloaded from a lossless source. */
     val losslessOnly: Boolean = false,
-    /** Only songs whose artist contains this, ignoring case; blank for any artist. */
+    /** Only songs whose artist contains this, ignoring case and accents; blank for any artist. */
     val artist: String = "",
     val sort: SmartSort = SmartSort.MOST_PLAYED,
     /** At most this many songs; null for all of them. */
     val limit: Int? = 50,
-)
+) {
+    /**
+     * Rules no song can meet, whatever is played: played within the last
+     * [playedWithinDays] days yet not for [notPlayedForDays], at least as long.
+     */
+    val contradictory: Boolean
+        get() = playedWithinDays != null && notPlayedForDays != null && notPlayedForDays >= playedWithinDays
+}
 
 @Serializable
 data class SmartPlaylist(
@@ -98,8 +109,25 @@ object SmartPlaylists {
         var firstSeen = Long.MAX_VALUE
     }
 
-    /** The songs [rules] pick out of [facts] at [now], in the order they ask for. */
-    fun songs(rules: SmartRules, facts: Facts, now: Long = System.currentTimeMillis(), seed: Long = 0): List<SongRef> {
+    // Only the accents Latin, Greek and Cyrillic letters take: the vowel signs of Devanagari or
+    // Gurmukhi are marks too, but part of the word, and stay.
+    private val MARKS = Regex("\\p{InCombiningDiacriticalMarks}+")
+
+    /** [text] lowercased with its accents taken off, so "Beyoncé" and "BEYONCE" read alike. */
+    internal fun fold(text: String): String =
+        Normalizer.normalize(text, Normalizer.Form.NFKD).replace(MARKS, "").lowercase(Locale.ROOT)
+
+    /**
+     * The songs [rules] pick out of [facts] at [now], in the order they ask for.
+     * A shuffle keeps its order through the day as the clock in [zone] has it.
+     */
+    fun songs(
+        rules: SmartRules,
+        facts: Facts,
+        now: Long = System.currentTimeMillis(),
+        seed: Long = 0,
+        zone: TimeZone = TimeZone.getDefault(),
+    ): List<SongRef> {
         val known = LinkedHashMap<String, Known>()
         fun know(ref: SongRef) = known.getOrPut(ref.videoId) { Known(ref.copy(setVideoId = null)) }
         val recentSince = rules.playedWithinDays?.let { now - it * DAY_MS }
@@ -127,7 +155,7 @@ object SmartPlaylists {
                 SmartSource.DOWNLOADS -> k.ref.videoId in done
             }
         }
-        val needle = rules.artist.trim().lowercase()
+        val needle = fold(rules.artist.trim())
         val picked = pool.filter { k ->
             val id = k.ref.videoId
             (rules.minPlays <= 0 || k.recentPlays >= rules.minPlays) &&
@@ -137,16 +165,22 @@ object SmartPlaylists {
                 (!rules.likedOnly || id in likedIds) &&
                 (!rules.downloadedOnly || id in done) &&
                 (!rules.losslessOnly || done[id]?.bits != null) &&
-                (needle.isEmpty() || k.ref.artist.lowercase().contains(needle))
+                (needle.isEmpty() || fold(k.ref.artist).contains(needle))
         }
+        // Titles and names in the reader's alphabet, accented letters beside their plain ones;
+        // accents, then case, only break ties.
+        val words = Collator.getInstance().apply { strength = Collator.TERTIARY }
+        val byTitle = compareBy(words) { k: Known -> k.ref.title }
         val sorted = when (rules.sort) {
             SmartSort.MOST_PLAYED -> picked.sortedWith(compareByDescending<Known> { it.recentPlays }.thenByDescending { it.lastPlayed })
             SmartSort.RECENTLY_PLAYED -> picked.sortedByDescending { it.lastPlayed }
             SmartSort.LONGEST_UNPLAYED -> picked.sortedBy { it.lastPlayed }
             SmartSort.NEWEST -> picked.sortedByDescending { if (it.firstSeen == Long.MAX_VALUE) Long.MIN_VALUE else it.firstSeen }
-            SmartSort.TITLE -> picked.sortedBy { it.ref.title.lowercase() }
-            SmartSort.ARTIST -> picked.sortedWith(compareBy<Known> { it.ref.artist.lowercase() }.thenBy { it.ref.title.lowercase() })
-            SmartSort.SHUFFLE -> picked.sortedBy { it.ref.videoId }.shuffled(Random(seed xor (now / DAY_MS)))
+            SmartSort.TITLE -> picked.sortedWith(byTitle)
+            SmartSort.ARTIST -> picked.sortedWith(compareBy(words) { k: Known -> k.ref.artist }.then(byTitle))
+            // The day as the clock on the wall has it, so the order turns over at midnight, not at UTC's.
+            SmartSort.SHUFFLE -> picked.sortedBy { it.ref.videoId }
+                .shuffled(Random(seed xor Math.floorDiv(now + zone.getOffset(now), DAY_MS)))
         }
         val refs = sorted.map { it.ref }
         return rules.limit?.takeIf { it > 0 }?.let { refs.take(it) } ?: refs
