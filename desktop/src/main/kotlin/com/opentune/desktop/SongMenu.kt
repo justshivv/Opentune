@@ -260,7 +260,11 @@ internal fun QueueList(queue: List<Song>, index: Int, header: Boolean = true) {
     val rowPx = with(LocalDensity.current) { rowHeight.toPx() }
     var dragging by remember { mutableIntStateOf(-1) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = LocalPageBottom.current)) {
+    // The queue's own selection, whose bar plays songs next, moves them to the end or takes them out.
+    val selection = rememberOwnSelection(forQueue = true)
+    Box(Modifier.fillMaxSize()) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalSongSelection provides selection) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = LocalPageBottom.current + if (selection.active) 88.dp else 0.dp)) {
         if (header) item(key = "head") {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -281,16 +285,22 @@ internal fun QueueList(queue: List<Song>, index: Int, header: Boolean = true) {
             val hover = remember { MutableInteractionSource() }
             val hovered by hover.collectIsHoveredAsState()
             val lifted = dragging == i
+            val pick = rememberRowPick(queue, i)
+            val picked = pick?.picked == true
             SongContextMenu(song, queueIndex = i) {
                 Row(
                     Modifier.zIndex(if (lifted) 1f else 0f)
                         .graphicsLayer { if (lifted) { translationY = dragOffset; shadowElevation = 16f } }
                         .padding(horizontal = 8.dp).fillMaxWidth().height(rowHeight)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (picked) keyColour().copy(alpha = 0.16f) else androidx.compose.ui.graphics.Color.Transparent)
                         .hoverWash(hover, RoundedCornerShape(12.dp))
-                        .clickable(interactionSource = hover, indication = null) { Player.playAt(i) }
+                        .then(pick?.capture ?: Modifier)
+                        .clickable(interactionSource = hover, indication = null) { pick?.click { Player.playAt(i) } ?: Player.playAt(i) }
                         .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (pick != null) PickSlot(pick, song.title, hover)
                     Box(contentAlignment = Alignment.Center) {
                         Cover(song.thumbnailUrl, 48.dp, MaterialTheme.shapes.small)
                         if (isCurrent) Box(Modifier.size(48.dp).clip(MaterialTheme.shapes.small)
@@ -325,6 +335,9 @@ internal fun QueueList(queue: List<Song>, index: Int, header: Boolean = true) {
                 }
             }
         }
+    }
+    }
+    SelectionBar(selection, Modifier.align(Alignment.BottomCenter))
     }
 }
 

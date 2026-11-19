@@ -420,19 +420,28 @@ internal fun CircleLockup(item: ShelfItem, onOpen: () -> Unit, line: String? = n
  * end; the row's faint fill comes up under the pointer.
  */
 @Composable
-internal fun TrackLockup(song: Song, onPlay: () -> Unit, current: Boolean = false, playing: Boolean = false, line: String = song.artist, modifier: Modifier = Modifier) {
+internal fun TrackLockup(
+    song: Song, onPlay: () -> Unit, current: Boolean = false, playing: Boolean = false, line: String = song.artist, modifier: Modifier = Modifier,
+    /** The shelf's songs and this one's place in them, for picking it with the others. */
+    songs: List<Song>? = null, at: Int = -1,
+) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     val focused by hover.collectIsFocusedAsState()
     val lit = hovered || focused
-    val fill by animateColorAsState(if (lit) PageInk.hover else PageInk.hover.copy(alpha = 0f), tween(PAGE_HOVER_MS), label = "row fill")
-    val mark by animateFloatAsState(if (lit) 1f else 0f, tween(PAGE_HOVER_MS), label = "row mark")
+    val pick = if (songs != null && at >= 0) rememberRowPick(songs, at) else null
+    val picked = pick?.picked == true
+    val picking = pick?.selection?.active == true
+    val pickedFill = keyColour().copy(alpha = 0.16f)
+    val fill by animateColorAsState(if (picked) pickedFill else if (lit) PageInk.hover else PageInk.hover.copy(alpha = 0f), tween(PAGE_HOVER_MS), label = "row fill")
+    val mark by animateFloatAsState(if (lit && !picking) 1f else 0f, tween(PAGE_HOVER_MS), label = "row mark")
     val shape = RoundedCornerShape(4.dp)
     SongContextMenu(song) {
         Row(
             modifier.width(LocalColumnWidth.current).height(76.dp).clip(RoundedCornerShape(6.dp)).background(fill)
                 .hoverable(hover)
-                .clickable(interactionSource = hover, indication = null, role = Role.Button, onClick = onPlay)
+                .then(pick?.capture ?: Modifier)
+                .clickable(interactionSource = hover, indication = null, role = Role.Button) { pick?.click(onPlay) ?: onPlay() }
                 .semantics { contentDescription = "Play ${song.title}, ${song.artist}" }
                 .padding(start = 8.dp, end = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -443,6 +452,10 @@ internal fun TrackLockup(song: Song, onPlay: () -> Unit, current: Boolean = fals
                 Box(Modifier.matchParentSize().graphicsLayer { alpha = if (current) 1f else mark }.background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
                     if (current && !lit) PlayingBars(playing) else Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(26.dp))
                 }
+                // Its box: in the cover's corner under the pointer, over the whole cover while picking.
+                if (pick != null && picking) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = if (picked) 0.2f else 0.4f)), contentAlignment = Alignment.Center) {
+                    PickBox(picked, song.title, onToggle = pick::toggle)
+                } else if (pick != null && lit) PickBox(picked, song.title, Modifier.align(Alignment.TopStart), size = 16.dp, onToggle = pick::toggle)
             }
             Column(Modifier.weight(1f).padding(start = 14.dp, end = 4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -497,7 +510,7 @@ internal fun TrackShelf(
                             Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                                 line.forEachIndexed { c, song ->
                                     val at = r * n + c
-                                    TrackLockup(song, onPlay = { Player.playAll(songs, at) }, current = song.videoId == playingId, playing = playing)
+                                    TrackLockup(song, onPlay = { Player.playAll(songs, at) }, current = song.videoId == playingId, playing = playing, songs = songs, at = at)
                                 }
                             }
                         }
@@ -511,7 +524,7 @@ internal fun TrackShelf(
                     Column(Modifier.width(LocalColumnWidth.current).riseIn(delayMs = col.coerceAtMost(7) * 35, distance = 12.dp, since = if (col < 10) since else -1L)) {
                         group.forEachIndexed { r, song ->
                             val at = col * perColumn + r
-                            TrackLockup(song, onPlay = { Player.playAll(songs, at) }, current = song.videoId == playingId, playing = playing)
+                            TrackLockup(song, onPlay = { Player.playAll(songs, at) }, current = song.videoId == playingId, playing = playing, songs = songs, at = at)
                         }
                     }
                 }

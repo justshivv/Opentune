@@ -86,7 +86,10 @@ internal object Shortcuts {
             "Q" to "Up next",
             "/  or  $mod F" to "Search",
             "$mod ," to "Settings",
-            "Esc" to "Close the full player",
+            "$mod A" to "Select every song in the list",
+            "$mod click" to "Select a song",
+            "Shift click" to "Select a run of songs",
+            "Esc" to "Clear the selection, or close the full player",
             "?" to "These shortcuts",
         )
     }
@@ -103,7 +106,10 @@ internal object Shortcuts {
             mod && e.key == Key.DirectionDown -> Player.setVolume(Player.volume.value - 0.05)
             mod && e.key == Key.F -> search()
             mod && e.key == Key.Comma -> _commands.tryEmit(Command.SETTINGS)
+            // The list's songs picked, as the phone's Select all; a text field takes its own Ctrl+A first.
+            mod && !e.isShiftPressed && e.key == Key.A -> return Selections.selectAll()
             !plain -> return false
+            e.key == Key.Escape && Selections.clearAll() -> Unit
             e.isShiftPressed && e.key == Key.DirectionRight -> Player.seekBy(10_000)
             e.isShiftPressed && e.key == Key.DirectionLeft -> Player.seekBy(-10_000)
             e.isShiftPressed && e.key == Key.Slash -> _commands.tryEmit(Command.HELP)

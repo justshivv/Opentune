@@ -366,8 +366,13 @@ internal fun TrackRow(i: Int, song: Song, songs: List<Song>, onRemove: ((Song) -
     val isLiked = liked.any { it.videoId == song.videoId }
     val current = queue.getOrNull(index)?.videoId == song.videoId
     val stripe = if (i % 2 == 0) PageInk.stripe else PageInk.stripe.copy(alpha = 0f)
+    // Its part in the list's selection: a box in place of its number under the pointer and while picking.
+    val pick = rememberRowPick(songs, i)
+    val picked = pick?.picked == true
+    val picking = pick?.selection?.active == true
+    val pickedFill = keyColour().copy(alpha = 0.16f)
     val fill by animateColorAsState(
-        when { current -> PageInk.current; lit -> PageInk.hover; else -> stripe },
+        when { picked -> pickedFill; current -> PageInk.current; lit -> PageInk.hover; else -> stripe },
         tween(PAGE_HOVER_MS), label = "row fill",
     )
     val gutter = LocalGutter.current
@@ -379,20 +384,26 @@ internal fun TrackRow(i: Int, song: Song, songs: List<Song>, onRemove: ((Song) -
             Modifier.padding(horizontal = gutter).fillMaxWidth().height(70.dp)
                 .clip(RoundedCornerShape(4.dp)).background(fill)
                 .hoverable(source)
-                .clickable(interactionSource = source, indication = null, role = Role.Button, onClick = play)
+                .then(pick?.capture ?: Modifier)
+                .clickable(interactionSource = source, indication = null, role = Role.Button) { pick?.click(play) ?: play() }
                 .semantics { contentDescription = "${song.title}, ${song.artist}" },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.width(40.dp), contentAlignment = Alignment.Center) {
                 when {
+                    pick != null && (lit || picking) -> PickBox(picked, song.title, onToggle = pick::toggle)
                     lit -> Icon(if (current && playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (current && playing) "Pause" else "Play", tint = PageInk.text, modifier = Modifier.size(20.dp))
                     current -> PlayingBars(playing)
                     else -> Text("${i + 1}", style = PageType.small.copy(fontFeatureSettings = "tnum"), color = PageInk.grey, maxLines = 1)
                 }
             }
             Spacer(Modifier.width(8.dp))
-            Box(Modifier.size(56.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
+            Box(Modifier.size(56.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
                 CoverFill(song.thumbnailUrl, Modifier.fillMaxSize())
+                // The number's place holds the box then, so the play mark comes up over the cover.
+                if (pick != null && lit && !picking) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+                    Icon(if (current && playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                }
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.width(cols.title)) {
@@ -492,6 +503,8 @@ internal fun CollectionLayout(
         if (query.isEmpty() || songs == null) songs
         else songs.filter { s -> listOfNotNull(s.title, s.artist, s.albumName).any { it.contains(query, ignoreCase = true) } }
     }
+    // On your own playlist, the picked rows can be taken out of it from the selection bar.
+    PageSelectionRemover(onRemove)
     BoxWithConstraints(Modifier.fillMaxSize().background(base)) {
         // A faint wash of the cover's colour behind the head only; the page itself stays flat.
         Box(Modifier.fillMaxWidth().height(520.dp).background(Brush.verticalGradient(0f to tint(accent, base, 0.16f), 1f to base)))

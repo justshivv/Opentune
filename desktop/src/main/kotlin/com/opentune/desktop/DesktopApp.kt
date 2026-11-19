@@ -321,6 +321,8 @@ fun DesktopApp(startPanel: SidePanel? = null, startAccountMenu: Boolean = false,
                                 onAccount = { accountOpen = !accountOpen },
                                 accountOpen = accountOpen,
                             )
+                            // Songs picked on the page: what can be done with them, over its foot.
+                            PageSelectionBar(page, Modifier.align(Alignment.BottomCenter))
                         }
                     }
                     val shown = rememberLast(panel)
@@ -714,12 +716,15 @@ internal fun SongList(songs: List<Song>, current: Int = -1, onRemove: ((Song) ->
             val isCurrent = if (current >= 0) i == current else song.videoId == playingId
             var adding by remember { mutableStateOf(false) }
             val hover = remember { MutableInteractionSource() }
+            val pick = rememberRowPick(songs, i)
             SongContextMenu(song) {
             Row(
                 Modifier.appear(i, since).padding(horizontal = 8.dp).fillMaxWidth().hoverWash(hover, RoundedCornerShape(12.dp))
-                    .clickable(interactionSource = hover, indication = null) { onPlay(songs, i) }.padding(horizontal = 8.dp, vertical = 6.dp),
+                    .then(pick?.capture ?: Modifier)
+                    .clickable(interactionSource = hover, indication = null) { pick?.click { onPlay(songs, i) } ?: onPlay(songs, i) }.padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (pick != null) PickSlot(pick, song.title, hover)
                 Box(contentAlignment = Alignment.Center) {
                     Cover(song.thumbnailUrl, 52.dp, MaterialTheme.shapes.small)
                     androidx.compose.animation.AnimatedVisibility(isCurrent, enter = fadeIn(Motion.fade()), exit = fadeOut(Motion.fade())) {

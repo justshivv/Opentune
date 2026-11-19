@@ -159,20 +159,30 @@ private fun ChromeResultRow(
     source: MutableInteractionSource = remember { MutableInteractionSource() },
     playable: Boolean = false,
     trailing: (@Composable () -> Unit)? = null,
+    pick: RowPick? = null,
     onClick: () -> Unit,
 ) {
     val hovered by source.collectIsHoveredAsState()
     val shade by animateFloatAsState(if (hovered && playable) 1f else 0f, tween(150), label = "result play")
     val shape = if (round) CircleShape else RoundedCornerShape(6.dp)
+    val picked = pick?.picked == true
+    val picking = pick?.selection?.active == true
     Row(
-        Modifier.fillMaxWidth().height(80.dp).clip(ROW_SHAPE).background(rowWash(source)).hoverable(source)
-            .clickable(interactionSource = source, indication = FocusRing(ROW_SHAPE), role = Role.Button, onClickLabel = label, onClick = onClick)
+        Modifier.fillMaxWidth().height(80.dp).clip(ROW_SHAPE)
+            .background(if (picked) keyColour().copy(alpha = 0.16f) else Color.Transparent)
+            .background(rowWash(source)).hoverable(source)
+            .then(pick?.capture ?: Modifier)
+            .clickable(interactionSource = source, indication = FocusRing(ROW_SHAPE), role = Role.Button, onClickLabel = label) { pick?.click(onClick) ?: onClick() }
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // A song's box, at the row's start under the pointer and on every row while picking.
+        if (pick != null) Box(Modifier.width(36.dp), contentAlignment = Alignment.CenterStart) {
+            if (hovered || picking) PickBox(picked, title, onToggle = pick::toggle)
+        }
         Box(Modifier.size(64.dp)) {
             Cover(url, 64.dp, shape)
-            if (shade > 0f) Box(
+            if (shade > 0f && !picking) Box(
                 Modifier.size(64.dp).clip(shape).graphicsLayer { alpha = shade }.background(Color.Black.copy(alpha = 0.45f)),
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp)) }
@@ -197,11 +207,12 @@ internal fun ChromeSongResultRow(song: Song, songs: List<Song>, index: Int, kind
     val at by Player.index.collectAsState()
     val current = queue.getOrNull(at)?.videoId == song.videoId
     val line = listOfNotNull(kind, song.artist.takeIf { it.isNotBlank() }, song.albumName?.takeIf { it.isNotBlank() && kind == null }).joinToString(" • ")
+    val pick = if (index >= 0) rememberRowPick(songs, index) else null
     SongContextMenu(song) {
         ChromeResultRow(
             song.thumbnailUrl, round = false,
             title = song.title, subtitle = line, label = "Play ${song.title}",
-            source = source, playable = true,
+            source = source, playable = true, pick = pick,
             trailing = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (current) Box(Modifier.padding(end = 12.dp)) { PlayingBars(Player.playing.collectAsState().value) }
