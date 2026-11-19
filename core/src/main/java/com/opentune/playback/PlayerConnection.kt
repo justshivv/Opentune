@@ -10,6 +10,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.opentune.data.innertube.StreamResolver
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.model.QueueTier
 import com.opentune.data.model.Song
@@ -62,6 +63,14 @@ class PlayerConnection(private val context: Context) {
 
     private val _hasNext = MutableStateFlow(false)
     val hasNext = _hasNext.asStateFlow()
+
+    private val _videoMode = MutableStateFlow(false)
+    /** True while the playing song is on its music video instead of its audio stream. */
+    val videoMode = _videoMode.asStateFlow()
+
+    private val _videoAvailable = MutableStateFlow(false)
+    /** Whether the playing song has a music video it can switch to. */
+    val videoAvailable = _videoAvailable.asStateFlow()
 
     private val _shuffleEnabled = MutableStateFlow(false)
     val shuffleEnabled = _shuffleEnabled.asStateFlow()
@@ -272,6 +281,10 @@ class PlayerConnection(private val context: Context) {
             ?: 0L
         _durationMs.value = duration
         _durationOf.value = id to duration
+        // Video mode follows the item's own address, so a swap the service makes
+        // (an upgrade, a recovery) settles the toggle on what is actually playing.
+        _videoMode.value = (mixing?.item ?: player.currentMediaItem)?.localConfiguration?.uri?.let(::isVideoUri) == true
+        _videoAvailable.value = id?.let { StreamResolver.hasVideo(it) } == true
         // Buffering on the way, with playback meant to go on (a quality switch
         // loading its stream, a stall), still counts as playing: the button
         // flipped to play and back for that moment at every upgrade.
@@ -398,6 +411,15 @@ class PlayerConnection(private val context: Context) {
                 kotlinx.coroutines.delay(QUEUE_CHUNK_MS)
             }
         }
+    }
+
+    /** Switches the playing song between its audio stream and its music video, in place. */
+    fun setVideoMode(on: Boolean) {
+        val controller = controller ?: return
+        val item = controller.currentMediaItem ?: return
+        val uri = if (on) videoStreamUri(item.mediaId) else trackUri(item.mediaId)
+        controller.replaceMediaItem(controller.currentMediaItemIndex, item.buildUpon().setUri(uri).build())
+        _videoMode.value = on
     }
 
     fun toggleShuffle() {
