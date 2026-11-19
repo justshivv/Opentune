@@ -407,7 +407,7 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
         PlayerMorph.collapsing -> {
             val from = PlayerMorph.closeFrom() ?: return
             val to = PlayerMorph.miniCover ?: return
-            MorphBox(url, smallUrl, from, to, if (sheet != null) ({ 1f - sheet().coerceIn(0f, 1f) }) else ({ closeT.value }), startCornerDp = coverCorner, endCornerDp = 12f)
+            MorphBox(url, smallUrl, from, to, if (sheet != null) ({ 1f - sheet().coerceIn(0f, 1f) }) else ({ closeT.value }), startCornerDp = coverCorner, endCornerDp = roundStart(to))
         }
         pulled -> {
             val from = PlayerMorph.miniCover ?: return
@@ -417,7 +417,7 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
         dragged -> {
             val from = PlayerMorph.dragRest() ?: return
             val to = PlayerMorph.miniCover ?: return
-            MorphBox(url, smallUrl, from, to, { PlayerMorph.dragging }, startCornerDp = coverCorner, endCornerDp = 12f)
+            MorphBox(url, smallUrl, from, to, { PlayerMorph.dragging }, startCornerDp = coverCorner, endCornerDp = roundStart(to))
         }
     }
 }
