@@ -100,3 +100,23 @@ class Haptics {
 
 @Composable
 fun rememberHaptics(): Haptics = remember { Haptics() }
+
+/**
+ * The phone's Poster layout, as far as the shared chrome (BottomChrome.kt) reaches for it.
+ * The desktop has its own window and pages and no Poster layout, so it's always off here.
+ */
+@Composable
+internal fun posterLayout(): Boolean = false
+
+/** The Poster layout's smoked glass; on the desktop, the frosted glass. */
+@Composable
+internal fun Modifier.posterSmoke(shape: Shape): Modifier = glass(shape)
+
+/** What's drawn on the Poster layout's smoked glass. */
+internal object PosterInk {
+    val on = Color.White
+    val off = Color.White.copy(alpha = 0.62f)
+}
+
+/** How far the Poster chrome is folded by a scroll; never on the desktop. */
+internal val LocalPosterFold = staticCompositionLocalOf<() -> Float> { { 0f } }
