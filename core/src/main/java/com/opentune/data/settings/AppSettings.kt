@@ -392,7 +392,14 @@ data class PlaybackSettings(
     val qualityUpgrade: Boolean = true,
     /** Community FLAC lookup runs after playback starts. Downloads remain YouTube audio. */
     val losslessStreaming: Boolean = false,
+    /** No longer read: its default let FLAC stream on mobile data. See [losslessWifiOnly]. */
     val losslessUnmeteredOnly: Boolean = false,
+    /**
+     * Mobile data plays YouTube's own stream even with Lossless chosen; FLAC and JioSaavn wait
+     * for Wi-Fi. A hi-res FLAC is 5 to 20 times the data and kept the radio busy, which drained
+     * batteries. A new name, so everyone starts with it on; it can be turned off in Settings.
+     */
+    val losslessWifiOnly: Boolean = true,
     val losslessHiRes: Boolean = false,
     val jioSaavnQuality: Boolean = false,
     /** Optional base URL implementing Meld's /api/get-music and /api/download-music protocol. */

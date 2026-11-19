@@ -1,5 +1,6 @@
 package com.opentune.data.innertube
 
+import kotlinx.coroutines.flow.first
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.SystemClock
@@ -77,6 +78,8 @@ object InnerTubeXResolver {
         playerDir = File(app.filesDir, "innertubex_players").apply { mkdirs() }
         scope.launch {
             cipherService.setPreprocessedPlayerCache(::readPlayer, ::writePlayer)
+            // Not in a process started only for a background job: the BotGuard WebView is heavy.
+            com.opentune.data.AppInUse.started.first { it }
             warm(WARM_DELAY_MS)
         }
     }

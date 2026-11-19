@@ -33,6 +33,7 @@ class SettingsDefaultsTest {
             assertFalse(settings.playback.pauseListeningHistory)
             assertEquals(com.opentune.data.history.ListeningHistoryTarget.YOUTUBE_MUSIC, settings.playback.listeningHistoryTarget)
             assertFalse(settings.playback.losslessUnmeteredOnly)
+            assertTrue(settings.playback.losslessWifiOnly)
             assertTrue(settings.playback.preloadUpcoming)
             assertFalse(settings.playback.preloadBoostOnWifi)
             assertTrue(settings.lyrics.preferWordSynced)
@@ -91,5 +92,11 @@ class SettingsDefaultsTest {
         assertEquals(500L, settings.lyrics.offsets["4NRXx6U8ABQ"])
         assertEquals(LyricsSource.SIMPMUSIC, settings.lyrics.chosen["4NRXx6U8ABQ"])
         assertEquals(settings, json.decodeFromString<SettingsState>(json.encodeToString(settings)))
+    }
+
+    @Test fun settingsSavedBeforeTheWifiOnlyDefaultKeepFlacOffMobileData() {
+        // An older version saved its old "Unmetered networks only" off; the new switch starts on all the same.
+        val settings = json.decodeFromString<SettingsState>("""{"playback":{"losslessUnmeteredOnly":false}}""")
+        assertTrue(settings.playback.losslessWifiOnly)
     }
 }

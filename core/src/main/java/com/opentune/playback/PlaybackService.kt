@@ -234,6 +234,7 @@ class PlaybackService : MediaLibraryService() {
     private fun analysisUri(item: MediaItem): Uri? = item.localConfiguration?.uri?.let { withoutStartup(selectedUri(it)) }
 
     override fun onCreate() {
+        com.opentune.data.AppInUse.started.value = true
         super.onCreate()
         val context: Context = this
 
@@ -452,7 +453,7 @@ class PlaybackService : MediaLibraryService() {
         }
         scope.launch { trackListening(player) }
         scope.launch {
-            AppSettings.playback.map { listOf(it.losslessStreaming, it.losslessUnmeteredOnly, it.losslessHiRes, it.jioSaavnQuality, it.qobuzRelayUrl, it.wifiQuality, it.mobileQuality) }
+            AppSettings.playback.map { listOf(it.losslessStreaming, it.losslessWifiOnly, it.losslessHiRes, it.jioSaavnQuality, it.qobuzRelayUrl, it.wifiQuality, it.mobileQuality) }
                 .distinctUntilChanged().collect {
                     val item = player.currentMediaItem
                     val uri = item?.localConfiguration?.uri?.let(::selectedUri)
@@ -660,6 +661,26 @@ class PlaybackService : MediaLibraryService() {
 
         restoreQueue(player)
         scope.launch { keepQueueSaved(player) }
+        scope.launch { releaseWhenIdle(player) }
+    }
+
+    /**
+     * Paused for a while, the player is stopped: it stops buffering ahead, lets go of its
+     * decoders and connections, and the checks in this service have nothing to do. The queue
+     * and the position stay, and Play prepares it again. Left prepared, a paused player kept
+     * fetching audio and the app stayed busy in the background for hours after listening.
+     */
+    private suspend fun releaseWhenIdle(player: ExoPlayer) {
+        playWhenReadyFlow(player).collectLatest { wanted ->
+            if (wanted) return@collectLatest
+            delay(IDLE_RELEASE_MS)
+            val state = player.playbackState
+            if (!player.playWhenReady && (state == Player.STATE_READY || state == Player.STATE_BUFFERING)) {
+                Log.i(TAG, "Paused for ${IDLE_RELEASE_MS / 60_000} minutes; stopping the player until Play")
+                upgradeJob?.cancel()
+                player.stop()
+            }
+        }
     }
 
     /**
@@ -1515,6 +1536,9 @@ class PlaybackService : MediaLibraryService() {
          */
         suspend fun started() {
             if (asked) return
+            // Paused, nothing is fetched for a swap until Play: a better copy of a song
+            // nobody is listening to was data spent for nothing.
+            playWhenReadyFlow(player).first { it }
             kotlinx.coroutines.withTimeoutOrNull(UPGRADE_START_WAIT_MS) {
                 while (!(player.isPlaying && player.currentPosition >= UPGRADE_SETTLE_MS && player.totalBufferedDuration >= UPGRADE_BUFFERED_MS)) delay(50)
             }
@@ -2645,8 +2669,8 @@ class PlaybackService : MediaLibraryService() {
                 }
                 val count = player.mediaItemCount
                 if (!radioWanted(player) || count == 0 || player.getMediaItemAt(count - 1).mediaId != seed) return@launch
-                // Paused a long while: stop asking; playing again asks afresh.
-                if (round >= Autoplay.EAGER_ROUNDS && !player.playWhenReady) return@launch
+                // Paused a long while, or the last song over: stop asking; playing again asks afresh.
+                if (round >= Autoplay.EAGER_ROUNDS && (!player.playWhenReady || player.playbackState == Player.STATE_ENDED)) return@launch
                 ready = Autoplay.readyRadios(ask(), ::usable)
                 if (ready.any { it.isNotEmpty() }) break
                 round++
@@ -2772,12 +2796,19 @@ class PlaybackService : MediaLibraryService() {
      * staying on the fallback to its end.
      */
     private fun upgradeAgainSoon(mediaId: String) {
+        // A few tries a song: a link that keeps failing on a weak signal otherwise went round
+        // fetch, fall back and fetch again for as long as the song played.
+        val tries = if (againSoon.first == mediaId) againSoon.second + 1 else 1
+        againSoon = mediaId to tries
+        if (tries > AGAIN_SOON_TRIES) { Log.i(TAG, "Not upgrading $mediaId again: it fell back $AGAIN_SOON_TRIES times"); return }
         scope.launch {
-            delay(FALLBACK_RETRY_MS)
+            delay(FALLBACK_RETRY_MS * (1L shl (tries - 1)))
             val player = mediaSession?.player ?: return@launch
             if (player.currentMediaItem?.mediaId == mediaId && upgradeJob?.isActive != true) scheduleUpgrade(quiet = true)
         }
     }
+
+    private var againSoon: Pair<String, Int> = "" to 0
 
     private var offlineRecovery: Job? = null
 
@@ -2928,6 +2959,10 @@ class PlaybackService : MediaLibraryService() {
         const val GUARD_TRIES = 4
         /** After a fallback, how long the song sounds before the upgrade runs again. */
         const val FALLBACK_RETRY_MS = 3_000L
+        /** Fallbacks a song may have before it stays on the stream that works. */
+        const val AGAIN_SOON_TRIES = 3
+        /** Paused this long, the player is stopped until Play (see [releaseWhenIdle]). */
+        const val IDLE_RELEASE_MS = 10 * 60_000L
         /** Songs ahead looked up at once; the nearest go first. */
         const val PREFETCH_AT_ONCE = 2
         /** How long the queue has to rest on a song before the ones after it are looked up. */

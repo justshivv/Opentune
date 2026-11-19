@@ -23,6 +23,7 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.guava.await
@@ -229,6 +230,9 @@ class PlayerConnection(private val context: Context) {
             // A mix starting or ending changes the song shown.
             launch { MixState.showing.collect { if (controller === newController) refresh(newController) } }
             while (controller === newController) {
+                // Only while the app is on screen: this drives the buffering spinner, and with
+                // the screen off it kept the phone working four times a second all listen long.
+                if (!AppOnScreen.shown.value) { AppOnScreen.shown.first { it }; continue }
                 refreshLoading(newController)
                 kotlinx.coroutines.delay(LOADING_TICK_MS)
             }
@@ -760,4 +764,9 @@ fun dolbyName(info: AudioFormatInfo?): String? {
         mime == "audio/ac3" || codec.startsWith("ac-3") || codec == "ac3" -> "Dolby Digital"
         else -> null
     }
+}
+
+/** Whether the app is on screen, set by the activity that shows it: off it, the UI's polling waits. */
+object AppOnScreen {
+    val shown = MutableStateFlow(true)
 }

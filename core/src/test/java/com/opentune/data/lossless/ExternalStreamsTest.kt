@@ -14,7 +14,7 @@ import org.robolectric.annotation.Config
 class ExternalStreamsTest {
     @Test fun lateSaavnKeepsVerifiedFlacPreferredAndRemainsAvailableAsFallback() {
         AppSettings.init(RuntimeEnvironment.getApplication())
-        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessUnmeteredOnly = false, jioSaavnQuality = true) }
+        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessWifiOnly = false, jioSaavnQuality = true) }
         val flac = ExternalStreams.Rendition("preferred-flac", "https://cdn.example/flac", "FLAC", true,
             System.nanoTime() / 1_000_000, mimeType = "audio/flac")
         val saavn = flac.copy(key = "late-saavn", url = "https://cdn.example/aac", lossless = false, mimeType = null, provider = "JioSaavn")
@@ -31,7 +31,7 @@ class ExternalStreamsTest {
 
     @Test fun verifiedFlacReturnsImmediatelyWithoutRepeatingMaximumQualitySearch() = kotlinx.coroutines.runBlocking {
         AppSettings.init(RuntimeEnvironment.getApplication())
-        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessUnmeteredOnly = false) }
+        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessWifiOnly = false) }
         val flac = ExternalStreams.Rendition("ready-flac", "https://cdn.example/ready", "FLAC", true,
             System.nanoTime() / 1_000_000, maximumSearch = false, mimeType = "audio/flac")
         ExternalStreams.remember("ready-song", flac)
@@ -44,7 +44,7 @@ class ExternalStreamsTest {
 
     @Test fun startupCacheRejectsExpiredFailedAndDisabledRenditions() {
         AppSettings.init(RuntimeEnvironment.getApplication())
-        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessUnmeteredOnly = false, jioSaavnQuality = true) }
+        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessWifiOnly = false, jioSaavnQuality = true) }
         val fresh = ExternalStreams.Rendition("startup-fresh", "https://cdn.example/audio", "FLAC", true, System.nanoTime() / 1_000_000)
         assertNull(ExternalStreams.cached("not-looked-up"))
         ExternalStreams.remember("startup-cache", fresh)
@@ -60,7 +60,7 @@ class ExternalStreamsTest {
 
     @Test fun replacingAResultDoesNotInvalidateBytesThePlayerIsStillReading() {
         AppSettings.init(RuntimeEnvironment.getApplication())
-        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessUnmeteredOnly = false, jioSaavnQuality = true) }
+        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessWifiOnly = false, jioSaavnQuality = true) }
         val before = ExternalStreams.Rendition("old", "https://cdn.example/old", "JioSaavn", false, System.nanoTime() / 1_000_000)
         val after = before.copy(key = "new", url = "https://cdn.example/new", lossless = true)
         ExternalStreams.remember("song", before)
@@ -76,7 +76,7 @@ class ExternalStreamsTest {
     }
     @Test fun failureOfOldStreamKeepsTheNewCandidate() {
         AppSettings.init(RuntimeEnvironment.getApplication())
-        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessUnmeteredOnly = false, jioSaavnQuality = true) }
+        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessWifiOnly = false, jioSaavnQuality = true) }
         val old = ExternalStreams.Rendition("race-old", "https://cdn.example/old", "JioSaavn", false, System.nanoTime() / 1_000_000)
         val next = old.copy(key = "race-new", lossless = true)
         ExternalStreams.remember("race", old)
@@ -99,5 +99,25 @@ class ExternalStreamsTest {
         // The same JioSaavn line from the FLAC search's own ask isn't shown twice.
         ExternalStreams.report("both-answer", "FLAC: no verified matching stream available\nJioSaavn: no matching 320 kbps recording (title, artists, album and duration)")
         assertEquals(2, ExternalStreams.selectionDetail("both-answer")!!.lines().size)
+    }
+
+    @Test fun theSameAddonTrackKeepsItsKeySoTheCachedCopyIsPlayedAgain() {
+        val first = ExternalStreams.keyFor("song", "addon", "track-1", "LOSSLESS")
+        assertEquals(first, ExternalStreams.keyFor("song", "addon", "track-1", "LOSSLESS"))
+        assertNotEquals(first, ExternalStreams.keyFor("song", "addon", "track-1", "HI_RES_LOSSLESS"))
+        assertNotEquals(first, ExternalStreams.keyFor("video", "addon", "track-1", "LOSSLESS"))
+        assertNotEquals(first, ExternalStreams.keyFor("song", "other", "track-1", "LOSSLESS"))
+        // A file nothing identifies gets a key of its own each time.
+        assertNotEquals(ExternalStreams.keyFor("song", null, null, null), ExternalStreams.keyFor("song", null, null, null))
+    }
+
+    @Test fun mobileDataPlaysNoFlacUnlessAllowed() {
+        AppSettings.init(RuntimeEnvironment.getApplication())
+        // Robolectric's network is mobile data.
+        assertTrue(AppSettings.onMeteredNetwork())
+        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessWifiOnly = true) }
+        assertFalse(ExternalStreams.allowed(true))
+        AppSettings.updatePlayback { it.copy(losslessWifiOnly = false) }
+        assertTrue(ExternalStreams.allowed(true))
     }
 }

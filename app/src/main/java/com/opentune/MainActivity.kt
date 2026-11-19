@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        com.opentune.playback.AppOnScreen.shown.value = false
         com.opentune.ui.components.GlassPerformance.unwatch(this)
         // Off the screen, the app can be closed at any moment: a like or a playlist change made
         // just before was still waiting for its save, and was lost.
@@ -146,6 +147,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        com.opentune.playback.AppOnScreen.shown.value = true
+        com.opentune.data.AppInUse.started.value = true
         com.opentune.ui.components.GlassPerformance.watch(this)
         com.opentune.data.history.AccountHistory.syncSoon()
         // The process may have started in the background, offline (after an update, say).

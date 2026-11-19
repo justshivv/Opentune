@@ -1,5 +1,6 @@
 package com.opentune.data.library
 
+import kotlinx.coroutines.flow.first
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.MusicRepository
 import com.opentune.data.account.AccountStore
@@ -62,6 +63,7 @@ object LikedSync {
     /** Watches for sign-in from the start; each one is a chance to sync. */
     fun init() {
         scope.launch {
+            com.opentune.data.AppInUse.started.first { it }
             AccountStore.accounts.collect { if (owner() != null) sync() }
         }
     }

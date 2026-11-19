@@ -156,7 +156,7 @@ object ExternalStreams {
         val maximum = AppSettings.effectiveAudioQuality == AudioQuality.MAX
         val enabled = when (lossless) { true -> maximum || it.losslessStreaming; false -> it.jioSaavnQuality; null -> maximum || it.losslessStreaming || it.jioSaavnQuality }
         enabled && (lossless != false || AppSettings.effectiveAudioQuality.maxKbps >= 320) &&
-            (!it.losslessUnmeteredOnly || !AppSettings.onMeteredNetwork())
+            (!it.losslessWifiOnly || !AppSettings.onMeteredNetwork())
     }
 
     private val losslessInFlight = ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Rendition?>>()
@@ -228,7 +228,7 @@ object ExternalStreams {
             return null
         }
         if (!allowed()) {
-            report(videoId, if (AppSettings.playback.value.losslessUnmeteredOnly && AppSettings.onMeteredNetwork())
+            report(videoId, if (AppSettings.playback.value.losslessWifiOnly && AppSettings.onMeteredNetwork())
                 "External sources skipped: Unmetered networks only is on. Turn it off in Settings to try FLAC and JioSaavn on mobile data."
                 else "External sources disabled for the current quality settings.")
             return null
@@ -268,7 +268,7 @@ object ExternalStreams {
             if (heard.size > 256) heard.clear()
             heard[videoId] = Heard(revision, heardAt, settledNow.toSet(), erredNow.toSet(), addonLines(detail))
         }
-        fun losslessRendition(track: LosslessSource.Track) = Rendition(java.util.UUID.randomUUID().toString(), track.url,
+        fun losslessRendition(track: LosslessSource.Track) = Rendition(keyFor(videoId, track.addonId, track.trackId, track.tier), track.url,
             "${track.provider} · lossless requested", true, now(), provider = track.provider, bits = track.bits, sampleRate = track.sampleRate,
             maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType,
             trackId = track.trackId.ifEmpty { null }, tier = track.tier.ifEmpty { null }, codec = track.codec)
@@ -333,7 +333,7 @@ object ExternalStreams {
         }
         if (track == null && saavn == null) return null
         // Even two FLACs of the same recording can have different byte offsets.
-        val rendition = Rendition(java.util.UUID.randomUUID().toString(), track?.url ?: saavn!!,
+        val rendition = Rendition(keyFor(videoId, track?.addonId, track?.trackId, track?.tier), track?.url ?: saavn!!,
             track?.let { "${it.provider} · lossless requested" } ?: "JioSaavn · 320 kbps (lossy)", track != null, now(),
             provider = track?.provider ?: "JioSaavn", bits = track?.bits, sampleRate = track?.sampleRate,
             kbps = if (track == null) 320 else null, maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track?.addonId, mimeType = track?.mimeType,
@@ -379,7 +379,7 @@ object ExternalStreams {
      * are allowed (see [cached]).
      */
     fun offer(videoId: String, stream: com.opentune.data.addons.AddonStream): Rendition {
-        val rendition = Rendition(java.util.UUID.randomUUID().toString(), stream.url,
+        val rendition = Rendition(keyFor(videoId, stream.addonId, stream.trackId, stream.tier), stream.url,
             "${stream.provider} · ${if (stream.lossless) "lossless requested" else stream.codec}", stream.lossless, now(),
             provider = stream.provider, bits = stream.bits, sampleRate = stream.sampleRate, kbps = stream.kbps,
             maximumSearch = true, sessionRevision = com.opentune.data.addons.AddonStore.revision.value,
@@ -501,7 +501,21 @@ object ExternalStreams {
 
     private fun now(): Long = System.nanoTime() / 1_000_000
 
-    /** A definite miss for [videoId] in [misses], for a minute. */
+    /**
+     * A file's key, the same each time the same add-on offers the same track for the song. The
+     * song cache is keyed by it, so a song played again comes from the cache instead of being
+     * downloaded whole once more; a fresh key every search meant every replay after a few
+     * minutes fetched the FLAC again. A file nothing identifies gets a key of its own.
+     */
+    internal fun keyFor(videoId: String, addonId: String?, trackId: String?, tier: String?): String =
+        if (addonId.isNullOrEmpty() || trackId.isNullOrEmpty()) java.util.UUID.randomUUID().toString()
+        else java.util.UUID.nameUUIDFromBytes("$videoId\u0000$addonId\u0000$trackId\u0000${tier.orEmpty()}".toByteArray()).toString()
+
+    /**
+     * A definite miss for [videoId] in [misses], for some hours: add-on catalogues don't change
+     * by the minute, and asking every add-on again on each replay or rebuffer cost data. A change
+     * of add-ons clears these, and Upgrade quality asks again regardless.
+     */
     private fun remember(misses: ConcurrentHashMap<String, Long>, videoId: String) {
         if (misses.size > 256) misses.clear()
         misses[videoId] = now() + MISS_MS
@@ -513,7 +527,7 @@ object ExternalStreams {
     /** Whether a FLAC search for [videoId] has run to the end. */
     fun losslessSearched(videoId: String): Boolean = videoId in losslessSearched
 
-    private const val MISS_MS = 60_000L
+    private const val MISS_MS = 6 * 60 * 60_000L
     private const val VERIFIED_FRESH_MS = 120_000L
     /** New links asked for one file at most this many times, this far apart, each waited on this long. */
     private const val LINK_ASKS = 4

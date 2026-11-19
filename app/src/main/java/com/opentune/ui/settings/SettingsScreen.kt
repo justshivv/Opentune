@@ -923,7 +923,7 @@ private fun settingsSections(
                     ToggleRow("Lossless at other quality levels", pb.losslessStreaming, { v -> AppSettings.updatePlayback { it.copy(losslessStreaming = v) } }, summary = "Also check your audio add-ons after playback starts at other quality levels. Lossless checks them automatically in your chosen order.", icon = ImageVector.vectorResource(AppIcons.HighQuality))
                 },
                 Entry("Unmetered networks only", "flac saavn mobile wifi data") {
-                    ToggleRow("Unmetered networks only", pb.losslessUnmeteredOnly, { v -> AppSettings.updatePlayback { it.copy(losslessUnmeteredOnly = v) } }, summary = "When on, mobile data uses YouTube even with Lossless selected. Turn off to try FLAC and JioSaavn on mobile data", icon = ImageVector.vectorResource(AppIcons.Wifi))
+                    ToggleRow("Unmetered networks only", pb.losslessWifiOnly, { v -> AppSettings.updatePlayback { it.copy(losslessWifiOnly = v) } }, summary = "When on, mobile data uses YouTube even with Lossless selected. Turn off to try FLAC and JioSaavn on mobile data", icon = ImageVector.vectorResource(AppIcons.Wifi))
                 },
                 // On the main Settings page; here only so searching finds it.
                 Entry("Audio sources", "audio add-ons addons source URL manifest order priority lossless flac high res") {

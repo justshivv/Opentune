@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var remote: TvRemote
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        com.opentune.data.AppInUse.started.value = true
         super.onCreate(savedInstanceState)
         voice.value = spokenQuery(intent)
         // Paired phones find this TV and control it for as long as OpenTune is open here.

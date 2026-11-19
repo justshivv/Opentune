@@ -1,5 +1,6 @@
 package com.opentune.data.releases
 
+import kotlinx.coroutines.flow.first
 import android.content.Context
 import android.content.SharedPreferences
 import com.opentune.data.DebugLog as Log
@@ -82,7 +83,7 @@ object ArtistSync {
     fun init(context: Context) {
         appContext = context.applicationContext
         prefs = context.getSharedPreferences("artist_sync", Context.MODE_PRIVATE)
-        scope.launch { AccountStore.accounts.collect { _status.value = _status.value.copy(signedIn = owner() != null); if (owner() != null) sync() } }
+        scope.launch { com.opentune.data.AppInUse.started.first { it }; AccountStore.accounts.collect { _status.value = _status.value.copy(signedIn = owner() != null); if (owner() != null) sync() } }
     }
 
     private fun agreed(account: String): Set<String>? = prefs?.getStringSet("agreed:$account", null)?.toSet()
