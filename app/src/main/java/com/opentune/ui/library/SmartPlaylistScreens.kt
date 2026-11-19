@@ -69,6 +69,8 @@ import com.opentune.ui.components.ToggleRow
 import com.opentune.ui.components.menuClickable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -78,7 +80,12 @@ import com.opentune.ui.theme.AppIcons
 @Composable
 private fun rememberSmartFacts(): SmartPlaylists.Facts? {
     val flow = remember {
-        combine(History.records, LibraryStore.liked, Downloads.entries, LibraryStore.playlists) { h, l, d, p ->
+        // Only finished downloads count, so one on its way (whose progress ticks many times
+        // a second) doesn't work the whole list out again with every tick.
+        val finished = Downloads.entries
+            .map { all -> all.filterValues { it.state == com.opentune.data.download.DownloadState.DONE } }
+            .distinctUntilChanged()
+        combine(History.records, LibraryStore.liked, finished, LibraryStore.playlists) { h, l, d, p ->
             SmartPlaylists.Facts(h, l, d, p)
         }
     }
@@ -94,6 +101,13 @@ private fun rememberSmartSongs(rules: SmartRules, seed: Long): List<SongRef>? {
         value = withContext(Dispatchers.Default) { SmartPlaylists.songs(rules, f, seed = seed) }
     }.value
 }
+
+/** Rules kept through a turn of the phone or the app being put away, as the JSON they're saved in. */
+private val rulesJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+private val RulesSaver = androidx.compose.runtime.saveable.Saver<SmartRules, String>(
+    save = { rulesJson.encodeToString(SmartRules.serializer(), it) },
+    restore = { runCatching { rulesJson.decodeFromString(SmartRules.serializer(), it) }.getOrNull() },
+)
 
 private fun SmartSource.label() = when (this) {
     SmartSource.EVERYTHING -> "Everything on this phone"
@@ -112,28 +126,32 @@ private fun SmartSort.label() = when (this) {
     SmartSort.SHUFFLE -> "Shuffled each day"
 }
 
+/** A span of days in words, in the reader's language: it's also put inside other lines. */
 private fun days(n: Int?): String = when (n) {
-    null -> "Off"
-    7 -> "A week"
-    30 -> "A month"
-    90 -> "3 months"
-    180 -> "6 months"
-    365 -> "A year"
+    null -> com.opentune.i18n.Tr.t("Off")
+    7 -> com.opentune.i18n.Tr.t("A week")
+    30 -> com.opentune.i18n.Tr.t("A month")
+    90 -> com.opentune.i18n.Tr.t("3 months")
+    180 -> com.opentune.i18n.Tr.t("6 months")
+    365 -> com.opentune.i18n.Tr.t("A year")
     else -> com.opentune.i18n.Tr.f("{0} days", n)
 }
 
 /** The rules in one short line, for under the playlist's name. */
 internal fun smartSummary(rules: SmartRules): String = buildList {
-    add(rules.from.label())
+    // Joined into one line, so each piece is put in the reader's language on its own.
+    val t = com.opentune.i18n.Tr::t
+    add(t(rules.from.label()))
     if (rules.minPlays > 0) add(if (rules.playedWithinDays != null) com.opentune.i18n.Tr.f("played {0}+ times in {1}", rules.minPlays, days(rules.playedWithinDays).lowercase()) else com.opentune.i18n.Tr.f("played {0}+ times", rules.minPlays))
     else if (rules.playedWithinDays != null) add(com.opentune.i18n.Tr.f("played in the last {0}", days(rules.playedWithinDays).lowercase()))
     rules.notPlayedForDays?.let { add(com.opentune.i18n.Tr.f("not played for {0}", days(it).lowercase())) }
     rules.newWithinDays?.let { add(com.opentune.i18n.Tr.f("new in the last {0}", days(it).lowercase())) }
-    if (rules.likedOnly && rules.from != SmartSource.LIKED) add("liked")
-    if (rules.downloadedOnly && rules.from != SmartSource.DOWNLOADS) add("downloaded")
-    if (rules.losslessOnly) add("lossless")
+    if (rules.likedOnly && rules.from != SmartSource.LIKED) add(com.opentune.i18n.Tr.t("liked"))
+    // A lossless download is a download: "downloaded" beside "lossless" says nothing more.
+    if (rules.downloadedOnly && rules.from != SmartSource.DOWNLOADS && !rules.losslessOnly) add(com.opentune.i18n.Tr.t("downloaded"))
+    if (rules.losslessOnly) add(com.opentune.i18n.Tr.t("lossless"))
     if (rules.artist.isNotBlank()) add(com.opentune.i18n.Tr.f("by {0}", rules.artist.trim()))
-    add(rules.sort.label().lowercase())
+    add(t(rules.sort.label()).lowercase())
     rules.limit?.let { add(com.opentune.i18n.Tr.f("up to {0}", it)) }
 }.joinToString(" · ")
 
@@ -199,8 +217,14 @@ fun SmartPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 if (refs == null) return@LazyColumn
                 if (songs.isEmpty()) {
                     item {
-                        MessageState(ImageVector.vectorResource(AppIcons.AutoAwesome), "Nothing matches yet", Modifier.padding(top = 24.dp),
-                            message = "Songs appear here once they fit the rules. Keep listening, or edit the rules.")
+                        MessageState(
+                            ImageVector.vectorResource(AppIcons.AutoAwesome),
+                            if (playlist.rules.contradictory) "These rules can't both hold" else "Nothing matches yet",
+                            Modifier.padding(top = 24.dp),
+                            message = if (playlist.rules.contradictory) CONTRADICTION
+                            else "Songs appear here once they fit the rules. Keep listening, or edit the rules.",
+                            action = { androidx.compose.material3.OutlinedButton(onClick = onEdit) { Text("Edit rules") } },
+                        )
                     }
                     return@LazyColumn
                 }
@@ -249,6 +273,10 @@ fun SmartPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
 /** Which choice sheet is open in the editor. */
 private enum class SmartChoice { SOURCE, MIN_PLAYS, PLAYED_WITHIN, NOT_PLAYED, NEW_WITHIN, SORT, LIMIT }
 
+/** Why rules that ask for a song both played and not played over the same days match nothing. */
+private const val CONTRADICTION =
+    "No song can be played within a span and not played for one as long or longer. Shorten Not played for, or lengthen Played within."
+
 /**
  * Making a smart playlist ([id] null) or changing one: a name, a place to start from,
  * the rules, and how many songs match them right now.
@@ -257,27 +285,46 @@ private enum class SmartChoice { SOURCE, MIN_PLAYS, PLAYED_WITHIN, NOT_PLAYED, N
 @Composable
 fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -> Unit, onSaved: (String) -> Unit) {
     val existing: SmartPlaylist? = remember(id) { id?.let(LibraryStore::smartPlaylist) }
-    var name by rememberSaveable { mutableStateOf(existing?.name ?: SmartPlaylists.presets.first().first) }
-    var rules by remember { mutableStateOf(existing?.rules ?: SmartPlaylists.presets.first().second) }
+    if (id != null && existing == null) {
+        // Deleted while the editor was on its way: there's nothing left to change.
+        LaunchedEffect(Unit) { onBack() }
+        return
+    }
+    val context = LocalContext.current
+    val startName = existing?.name ?: SmartPlaylists.presets.first().first
+    val startRules = existing?.rules ?: SmartPlaylists.presets.first().second
+    // Both kept through a turn of the phone, so the name and its rules never come apart.
+    var name by rememberSaveable { mutableStateOf(startName) }
+    var rules by rememberSaveable(stateSaver = RulesSaver) { mutableStateOf(startRules) }
     var choice by remember { mutableStateOf<SmartChoice?>(null) }
     var deleting by remember { mutableStateOf(false) }
-    val matches = rememberSmartSongs(rules, existing?.id?.hashCode()?.toLong() ?: 0L)
+    var leaving by remember { mutableStateOf(false) }
+    // Counted without the limit, so the count can say how many the limit keeps.
+    val matches = rememberSmartSongs(rules.copy(limit = null), existing?.id?.hashCode()?.toLong() ?: 0L)
+    val cleaned = rules.copy(artist = rules.artist.trim())
+    val changed = name.trim() != startName || cleaned != startRules
+    val presetNames = remember { SmartPlaylists.presets.map { it.first }.toSet() }
 
     fun save() {
-        val saved = if (existing == null) LibraryStore.createSmartPlaylist(name, rules)
-        else existing.id.also { LibraryStore.updateSmartPlaylist(it, name, rules) }
+        val saved = if (existing == null) LibraryStore.createSmartPlaylist(name, cleaned)
+        else existing.id.also { LibraryStore.updateSmartPlaylist(it, name, cleaned) }
         onSaved(saved)
     }
+    // Leaving with changes asks first, by the back button and by the back gesture alike.
+    val leave = { if (changed) leaving = true else onBack() }
+    androidx.activity.compose.BackHandler(enabled = changed) { leaving = true }
 
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item {
-            PageHeader(if (existing == null) "New smart playlist" else "Edit smart playlist", onBack = onBack, actions = {
+            PageHeader(if (existing == null) "New smart playlist" else "Edit smart playlist", onBack = leave, actions = {
                 TextButton(onClick = ::save, enabled = name.isNotBlank()) { Text("Save", fontWeight = FontWeight.SemiBold) }
             })
         }
         item {
             OutlinedTextField(
                 name, { name = it }, singleLine = true, label = { Text("Name") },
+                isError = name.isBlank(),
+                supportingText = if (name.isBlank()) { { Text("Give it a name to save it") } } else null,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
             )
@@ -287,7 +334,11 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
             item {
                 FlowRow(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmartPlaylists.presets.forEach { (presetName, preset) ->
-                        FilterChip(selected = rules == preset, onClick = { name = presetName; rules = preset }, label = { Text(presetName) })
+                        FilterChip(selected = rules == preset, onClick = {
+                            // A name of your own stays; one a preset gave follows the preset.
+                            if (name.isBlank() || name.trim() in presetNames) name = presetName
+                            rules = preset
+                        }, label = { Text(presetName) })
                     }
                 }
             }
@@ -303,15 +354,33 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
                 RowDivider()
                 NavRow("Not played for", { choice = SmartChoice.NOT_PLAYED }, value = days(rules.notPlayedForDays))
                 RowDivider()
-                NavRow("New to you within", { choice = SmartChoice.NEW_WITHIN }, value = days(rules.newWithinDays))
+                NavRow("New to you within", { choice = SmartChoice.NEW_WITHIN }, value = days(rules.newWithinDays),
+                    summary = "First played or downloaded")
             }
+        }
+        if (rules.contradictory) item {
+            Text(
+                CONTRADICTION, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp),
+            )
         }
         item { GroupLabel("Only") }
         item {
             GroupCard {
-                ToggleRow("Liked songs", rules.likedOnly, { rules = rules.copy(likedOnly = it) })
+                // What the songs come from may already say it: shown on, and greyed with why.
+                ToggleRow(
+                    "Liked songs", rules.likedOnly || rules.from == SmartSource.LIKED, { rules = rules.copy(likedOnly = it) },
+                    enabled = rules.from != SmartSource.LIKED,
+                    disabledReason = "Every song here is liked: they come from Liked songs",
+                )
                 RowDivider()
-                ToggleRow("Downloaded songs", rules.downloadedOnly, { rules = rules.copy(downloadedOnly = it) })
+                ToggleRow(
+                    "Downloaded songs", rules.downloadedOnly || rules.from == SmartSource.DOWNLOADS || rules.losslessOnly,
+                    { rules = rules.copy(downloadedOnly = it) },
+                    enabled = rules.from != SmartSource.DOWNLOADS && !rules.losslessOnly,
+                    disabledReason = if (rules.from == SmartSource.DOWNLOADS) "Every song here is downloaded: they come from Downloads"
+                    else "Lossless downloads are downloaded already",
+                )
                 RowDivider()
                 ToggleRow("Lossless downloads", rules.losslessOnly, { rules = rules.copy(losslessOnly = it) }, summary = "Downloaded from a lossless add-on")
             }
@@ -320,6 +389,7 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
             OutlinedTextField(
                 rules.artist, { rules = rules.copy(artist = it) }, singleLine = true,
                 label = { Text("Artist") }, placeholder = { Text("Any artist") },
+                supportingText = { Text("Part of the name is enough. Case and accents don't matter") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
             )
@@ -333,12 +403,14 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
             }
         }
         item {
+            val limit = rules.limit
             Text(
                 when (val n = matches?.size) {
                     null -> "Counting…"
-                    0 -> "No songs match right now"
+                    0 -> if (rules.contradictory) "No song can match these rules" else "No songs match right now"
                     1 -> "1 song matches right now"
-                    else -> com.opentune.i18n.Tr.f("{0} songs match right now", n)
+                    else -> if (limit != null && n > limit) com.opentune.i18n.Tr.f("{0} songs match right now. The playlist keeps the first {1}", n, limit)
+                    else com.opentune.i18n.Tr.f("{0} songs match right now", n)
                 },
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
@@ -357,8 +429,28 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
             onDismissRequest = { deleting = false },
             title = { Text(com.opentune.i18n.Tr.f("Delete {0}?", existing.name)) },
             text = { Text("Only the rules go. Your songs, likes and history stay as they are.") },
-            confirmButton = { com.opentune.ui.components.SheetButton("Delete", onClick = { deleting = false; LibraryStore.deleteSmartPlaylist(existing.id); onBack() }) },
+            confirmButton = {
+                com.opentune.ui.components.SheetButton("Delete", tone = com.opentune.ui.components.SheetTone.Danger, onClick = {
+                    deleting = false
+                    LibraryStore.deleteSmartPlaylist(existing.id)
+                    com.opentune.data.Pills.done("Smart playlist deleted", context)
+                    // Its page, under the editor, sees it gone and leaves too.
+                    onBack()
+                })
+            },
             dismissButton = { com.opentune.ui.components.SheetButton("Cancel", onClick = { deleting = false }, closes = true) },
+        )
+    }
+
+    if (leaving) {
+        com.opentune.ui.components.FloatingDialog(
+            onDismissRequest = { leaving = false },
+            title = { Text(if (existing == null) "Discard this smart playlist?" else "Discard your changes?") },
+            text = { Text(if (existing == null) "It hasn't been saved yet." else "The playlist keeps the rules it had.") },
+            confirmButton = {
+                com.opentune.ui.components.SheetButton("Discard", tone = com.opentune.ui.components.SheetTone.Danger, onClick = { leaving = false; onBack() })
+            },
+            dismissButton = { com.opentune.ui.components.SheetButton("Keep editing", onClick = { leaving = false }, closes = true) },
         )
     }
 

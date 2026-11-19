@@ -744,7 +744,9 @@ fun AppRoot(vm: PlayerViewModel) {
                         }
                         page("smart/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                             val id = e.arguments?.getString("id").orEmpty()
-                            com.opentune.ui.library.SmartPlaylistScreen(id, content, actions, onBack = { nav.popBackStack() },
+                            // Only while it's the page showing: one deleted from its editor leaves on its own
+                            // once uncovered, and mustn't take the editor still sliding away with it.
+                            com.opentune.ui.library.SmartPlaylistScreen(id, content, actions, onBack = { if (nav.currentBackStackEntry == e) nav.popBackStack() },
                                 onEdit = { nav.navigate("smart-edit?id=${Uri.encode(id)}") },
                                 onOpenPlaylist = { copy -> nav.navigate("playlist/${Uri.encode(copy)}") })
                         }

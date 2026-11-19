@@ -291,7 +291,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     val spotifyRows = remember(rows) { rows.filter { it.source == "Spotify" } }
     var playlistsOrder by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PlaylistOrder.LIBRARY) }
     var playlistsSorting by remember { mutableStateOf(false) }
-    var smartOrder by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(SmartOrder.CREATED) }
+    var smartOrder by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(SmartOrder.NEWEST) }
     var smartSorting by remember { mutableStateOf(false) }
     val allRows = remember(rows) { rows.filter { it.source != "Spotify" } }
     val shownPlaylists = remember(allRows, playlistsOrder, libraryUi.pinnedPlaylists) {
@@ -574,6 +574,13 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 if (first != null) SmartTile(first.name, smartSummary(first.rules), { nav.smart(first.id) }, Modifier.weight(1f)) else Box(Modifier.weight(1f))
             }
         }
+        if (shownSmart.isEmpty()) item(key = "smart-empty") {
+            Text(
+                "Smart playlists fill themselves from rules: what's on repeat, favourites you haven't played in a while, what's new to you. They change as you listen.",
+                Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         items(shownSmart.drop(1).chunked(2), key = { it.first().id }) { pair ->
             Row(Modifier.animateItem().padding(horizontal = 10.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 pair.forEach { p -> SmartTile(p.name, smartSummary(p.rules), { nav.smart(p.id) }, Modifier.weight(1f)) }
@@ -782,10 +789,12 @@ private enum class PlaylistOrder(val label: String) {
 
 /** The orders the smart face can put its playlists in. */
 private enum class SmartOrder(val label: String) {
-    CREATED("As created"), NEWEST("Newest first"), NAME("A to Z"), NAME_REVERSED("Z to A");
+    // The store keeps the newest first, so "as created" was Newest first under another name:
+    // it's the other way round now. (Its name stays, for an order kept from before.)
+    NEWEST("Newest first"), CREATED("Oldest first"), NAME("A to Z"), NAME_REVERSED("Z to A");
 
     fun sort(lists: List<com.opentune.data.library.SmartPlaylist>): List<com.opentune.data.library.SmartPlaylist> = when (this) {
-        CREATED -> lists
+        CREATED -> lists.sortedBy { it.createdAt }
         NEWEST -> lists.sortedByDescending { it.createdAt }
         NAME -> lists.sortedBy { it.name.lowercase() }
         NAME_REVERSED -> lists.sortedByDescending { it.name.lowercase() }
