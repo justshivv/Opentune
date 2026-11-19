@@ -138,6 +138,7 @@ fun QueuePane(
     val order = remember { mutableStateListOf<Int>() }
     var dragging by remember { mutableStateOf<Int?>(null) }
     var dragStartPos by remember { mutableIntStateOf(0) }
+    var dragStartOrder by remember { mutableStateOf(emptyList<Int>()) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     // Drag gestures outlive the list they started with (a row keeps its key
     // when the song ends and the queue moves on), so they read the latest.
@@ -200,12 +201,20 @@ fun QueuePane(
                                     haptics.press()
                                     dragging = index
                                     dragStartPos = order.indexOf(index)
+                                    dragStartOrder = order.toList()
                                     dragOffset = 0f
                                 },
                                 onDragEnd = {
                                     val from = dragStartPos
                                     val to = order.indexOf(index)
-                                    if (from >= 0 && to >= 0 && from != to) currentOnMove(currentUpNext[from], currentUpNext[to])
+                                    // Rows as they were when the drag began: the queue can move on under the
+                                    // finger (the song ends, a row goes), and read from it as it is now, the row
+                                    // went to the wrong place, or past the end of the list and the app closed.
+                                    val target = dragStartOrder.getOrNull(to)
+                                    if (from >= 0 && to >= 0 && from != to) {
+                                        if (target != null && index in currentUpNext && target in currentUpNext) currentOnMove(index, target)
+                                        else { order.clear(); order.addAll(currentUpNext) }
+                                    }
                                     dragging = null
                                     dragOffset = 0f
                                 },
