@@ -258,9 +258,11 @@
 @container (min-width: 1020px) {
   .ot-set-frame { max-width: calc(204px + 48px + 680px + 2 * var(--body-gutter)); }
   .ot-set-layout { grid-template-columns: 204px minmax(0, 680px); column-gap: 48px; }
-  .ot-set-side { position: sticky; top: 24px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
+  /* The list of sections stays where it is as the rows scroll, below the frosted edge at the
+     page's top (.ot-scroll-edge, 64px) rather than under it; a section jumped to lands there too. */
+  .ot-set-side { position: sticky; top: 76px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
   .ot-set-jump { display: none !important; }
-  .ot-set-section { scroll-margin-top: 24px; }
+  .ot-set-section { scroll-margin-top: 76px; }
 }
 .ot-set-side button { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius-nav-item); font: var(--title-3); text-align: start; transition: background-color .15s; }
 .ot-set-side button:hover { background: var(--systemQuinary); }
@@ -344,8 +346,10 @@
   .ot-side[data-folded='true'] .ot-side-wordmark { min-width: 32px; padding-left: 3px; }
   .ot-side[data-folded='true'] .ot-side-wordmark-text { opacity: 0; transition: opacity .12s ease; }
   .ot-side[data-folded='true'] .ot-side-fold { position: absolute; left: 20px; top: 50%; translate: 0 -50%; opacity: 0; transition: opacity .15s ease, background-color .15s ease, color .15s ease; }
-  .ot-side[data-folded='true'] .ot-side-top:is(:hover, :focus-within) .ot-side-fold { opacity: 1; background: var(--systemQuinary); }
-  .ot-side[data-folded='true'] .ot-side-top:is(:hover, :focus-within) .ot-side-mark { opacity: 0; }
+  /* Keyboard focus only: a click leaves focus on the button, and :focus-within kept it showing
+     (and the mark hidden) until a click somewhere else. */
+  .ot-side[data-folded='true'] .ot-side-top:is(:hover, :has(:focus-visible)) .ot-side-fold { opacity: 1; background: var(--systemQuinary); }
+  .ot-side[data-folded='true'] .ot-side-top:is(:hover, :has(:focus-visible)) .ot-side-mark { opacity: 0; }
   /* Section names become a hairline between the groups of icons. */
   .ot-side[data-folded='true'] .ot-side-header { height: 1px; margin: 12px 4px; padding: 0; color: transparent; background: var(--labelDivider); transition: height .38s var(--ot-ease-settle), margin .38s var(--ot-ease-settle), padding .38s var(--ot-ease-settle), color .1s ease, background-color .2s ease .15s; }
   .ot-side[data-folded='true'] :is(.ot-side-extra, .ot-side-full) { max-height: 0; opacity: 0; transition: max-height .38s var(--ot-ease-settle), opacity .12s ease; }
