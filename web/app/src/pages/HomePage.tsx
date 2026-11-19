@@ -1,6 +1,6 @@
 import { useRemoteConfig } from '@/config/remote';
 import { syncPublished } from '@/addons/client';
-import { Clock, RefreshCw, Settings, Sparkles, ListMusic, X } from 'lucide-react';
+import { Clock, RefreshCw, Sparkles, ListMusic, X } from 'lucide-react';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { queryClient } from '@/lib/queryClient';
 import { homeSections } from './homeSections';
@@ -64,7 +64,6 @@ export default function HomePage() {
       void queryClient.resetQueries({ queryKey: ['music', 'home'] });
       void queryClient.invalidateQueries({ queryKey: ['music', 'library'] });
     }}><RefreshCw size={20} className={home.isFetching ? 'animate-spin' : ''} /></button>
-    <PrefetchLink className="ot-circle-button" to="/settings" aria-label="Settings"><Settings size={20} /></PrefetchLink>
   </div></header>;
   // From the control dashboard, each closable here (and kept closed in this browser), as on the phone.
   const banners = openBanners(runtime.banners, closedBanners).map(b => (
