@@ -7,7 +7,6 @@ export const activitySql = `INSERT INTO activity(installation,day,version,plays,
  ON CONFLICT(installation,day,version) DO UPDATE SET plays=excluded.plays,received_at=excluded.received_at
  WHERE excluded.plays > activity.plays`;
 const istActivitySql = activitySql.replaceAll('activity', 'activity_ist');
-const allActivity = '(SELECT * FROM activity UNION ALL SELECT * FROM activity_ist)';
 export function calendarDay(now, timeZone = 'UTC') {
   return new Intl.DateTimeFormat('en-CA', {timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
 }
@@ -24,9 +23,17 @@ const currentVersionSql = `INSERT INTO installation_versions(installation,versio
 // numeric version order for same-day upgrades (0.4.13 must sort after 0.4.9).
 // Explicit version revisions from newer clients also support downgrades and
 // cannot be rolled back by delayed reports or retries.
-const currentVersionsSql = `WITH parts AS (
- SELECT installation,day,version,substr(version,instr(version,'.')+1) AS tail FROM ${allActivity} AS a
- WHERE NOT EXISTS (SELECT 1 FROM installation_versions v WHERE v.installation=a.installation)
+// Only each legacy installation's newest day can rank first, so only that day's rows are read
+// (found through the primary key), never the whole history.
+const currentVersionsSql = `WITH legacy AS MATERIALIZED (
+ SELECT i.installation,MAX(COALESCE((SELECT MAX(day) FROM activity a WHERE a.installation=i.installation),''),
+ COALESCE((SELECT MAX(day) FROM activity_ist a WHERE a.installation=i.installation),'')) AS day
+ FROM installations i WHERE NOT EXISTS (SELECT 1 FROM installation_versions v WHERE v.installation=i.installation)
+), parts AS (
+ SELECT a.installation,a.day,a.version,substr(a.version,instr(a.version,'.')+1) AS tail FROM legacy l
+ CROSS JOIN activity a ON a.installation=l.installation AND a.day=l.day
+ UNION ALL SELECT a.installation,a.day,a.version,substr(a.version,instr(a.version,'.')+1) AS tail FROM legacy l
+ CROSS JOIN activity_ist a ON a.installation=l.installation AND a.day=l.day
 ), ranked AS (
  SELECT installation,version,ROW_NUMBER() OVER (PARTITION BY installation ORDER BY day DESC,
  CAST(version AS INTEGER) DESC,CAST(tail AS INTEGER) DESC,
@@ -68,9 +75,8 @@ export async function ingest(db, body, now = new Date()) {
 /** First observed activity, not APK downloads or unverifiable unique people. */
 export async function cohorts(db, from, to, timeZone = 'UTC') {
   const table = activityTable(timeZone);
-  const [result] = await db.batch([db.prepare(`WITH first_seen AS (
-    SELECT installation, MIN(day) AS first_day FROM ${allActivity} GROUP BY installation
-  ), daily_install AS (
+  // installations holds each one's first day, kept by triggers: no scan of all history.
+  const [result] = await db.batch([db.prepare(`WITH daily_install AS (
     SELECT installation, day, SUM(plays) AS plays FROM ${table}
     WHERE day BETWEEN ? AND ? GROUP BY installation, day
   ) SELECT d.day,
@@ -79,7 +85,7 @@ export async function cohorts(db, from, to, timeZone = 'UTC') {
     SUM(CASE WHEN f.first_day=d.day THEN d.plays ELSE 0 END) AS newPlays,
     SUM(CASE WHEN f.first_day<d.day THEN d.plays ELSE 0 END) AS returningPlays,
     SUM(CASE WHEN d.plays>0 THEN 1 ELSE 0 END) AS listeners
-    FROM daily_install d JOIN first_seen f USING(installation)
+    FROM daily_install d JOIN installations f USING(installation)
     GROUP BY d.day ORDER BY d.day`).bind(from, to)]);
   return result.results;
 }
@@ -91,9 +97,7 @@ export async function cohorts(db, from, to, timeZone = 'UTC') {
  */
 export async function periodCohorts(db, from, to, timeZone = 'UTC') {
   const table = activityTable(timeZone);
-  const [result] = await db.batch([db.prepare(`WITH first_seen AS (
-    SELECT installation, MIN(day) AS first_day FROM ${allActivity} GROUP BY installation
-  ), period AS (
+  const [result] = await db.batch([db.prepare(`WITH period AS (
     SELECT installation, SUM(plays) AS plays FROM ${table}
     WHERE day BETWEEN ? AND ? GROUP BY installation
   ) SELECT
@@ -101,7 +105,7 @@ export async function periodCohorts(db, from, to, timeZone = 'UTC') {
     COALESCE(SUM(CASE WHEN f.first_day<? THEN 1 ELSE 0 END),0) AS returningInstallations,
     COALESCE(SUM(CASE WHEN f.first_day>=? THEN p.plays ELSE 0 END),0) AS newPlays,
     COALESCE(SUM(CASE WHEN f.first_day<? THEN p.plays ELSE 0 END),0) AS returningPlays
-    FROM period p JOIN first_seen f USING(installation)`).bind(from, to, from, from, from, from)]);
+    FROM period p JOIN installations f USING(installation)`).bind(from, to, from, from, from, from)]);
   return result.results[0];
 }
 
@@ -113,12 +117,16 @@ export async function summary(db, now = new Date(), timeZone = 'UTC') {
   const month = day.slice(0,7)+'-01';
   const from = calendarDay(new Date(now.getTime()-29*DAY),timeZone);
   const results = await db.batch([
-    db.prepare(`SELECT COUNT(DISTINCT installation) AS installs, COALESCE(SUM(plays),0) AS plays, MIN(day) AS since FROM ${allActivity}`),
+    // Lifetime figures come from the totals the triggers keep; the first day is an index lookup.
+    db.prepare(`SELECT t.installations AS installs, t.plays AS plays,
+      (SELECT MIN(m) FROM (SELECT MIN(day) AS m FROM activity UNION ALL SELECT MIN(day) FROM activity_ist)) AS since
+      FROM totals t WHERE t.id=1`),
     db.prepare(`SELECT COUNT(DISTINCT installation) AS active, COALESCE(SUM(plays),0) AS plays FROM ${table} WHERE day=?`).bind(day),
     db.prepare(`SELECT COUNT(DISTINCT installation) AS active FROM ${table} WHERE day>=? AND day<=?`).bind(week.toISOString().slice(0,10),day),
     db.prepare(`SELECT COUNT(DISTINCT installation) AS active FROM ${table} WHERE day>=? AND day<=?`).bind(month,day),
     db.prepare(`SELECT day,COUNT(DISTINCT installation) AS active,SUM(plays) AS plays FROM ${table} WHERE day>=? AND day<=? GROUP BY day ORDER BY day`).bind(from,day),
-    db.prepare(`SELECT version,COUNT(DISTINCT installation) AS installations FROM ${allActivity} GROUP BY version ORDER BY MAX(day) DESC`),
+    db.prepare(`SELECT s.version,(SELECT COUNT(*) FROM version_installs v WHERE v.version=s.version) AS installations
+      FROM versions_seen s ORDER BY s.last_day DESC`),
     db.prepare('SELECT release,COUNT(*) AS browsers FROM downloads GROUP BY release ORDER BY MAX(first_requested_at) DESC'),
     db.prepare('SELECT COUNT(DISTINCT browser) AS browsers FROM downloads'),
     db.prepare(currentVersionsSql),
@@ -167,18 +175,18 @@ export async function analytics(db, range, now = new Date(), timeZone = 'UTC') {
 // (activity_ist), older ones in UTC (activity), and an installation is
 // active if either has it. The windows follow [timeZone]'s calendar, the
 // app's own by default; an old client's UTC day is at most 5.5 hours off it.
+// Each figure reads only the rows it counts: the lifetime total is one row, and the week and
+// month are the installations listed under them (kept by triggers as reports arrive).
 export async function publicCounts(db, now = new Date(), timeZone = 'Asia/Kolkata') {
   reportZone(timeZone);
-  const table = allActivity;
   const day = calendarDay(now, timeZone);
   const week = new Date(day + 'T00:00:00Z');
   week.setUTCDate(week.getUTCDate() - ((week.getUTCDay() + 6) % 7));
-  const month = day.slice(0, 7) + '-01';
   const results = await db.batch([
-    db.prepare(`SELECT COUNT(DISTINCT installation) AS n FROM ${allActivity}`),
-    db.prepare(`SELECT COUNT(DISTINCT installation) AS n FROM ${table} WHERE day=?`).bind(day),
-    db.prepare(`SELECT COUNT(DISTINCT installation) AS n FROM ${table} WHERE day>=? AND day<=?`).bind(week.toISOString().slice(0, 10), day),
-    db.prepare(`SELECT COUNT(DISTINCT installation) AS n FROM ${table} WHERE day>=? AND day<=?`).bind(month, day),
+    db.prepare('SELECT installations AS n FROM totals WHERE id=1').bind(),
+    db.prepare('SELECT COUNT(*) AS n FROM (SELECT installation FROM activity WHERE day=? UNION SELECT installation FROM activity_ist WHERE day=?)').bind(day, day),
+    db.prepare('SELECT COUNT(*) AS n FROM active_weeks WHERE week=?').bind(week.toISOString().slice(0, 10)),
+    db.prepare('SELECT COUNT(*) AS n FROM active_months WHERE month=?').bind(day.slice(0, 7)),
   ]);
   return { asOf: now.toISOString(), timeZone,
     installations: results[0].results[0].n, daily: results[1].results[0].n,
@@ -218,6 +226,25 @@ export async function rememberFor(db, key, ttl, read, now = Date.now()) {
   return value;
 }
 export function forget(db, key) { remembered.get(db)?.delete(key); }
+
+// The memory above is per instance, and Cloudflare starts new ones all the time, so on
+// its own it let nearly every badge request count again. This copy lives in D1 and is
+// shared by every instance: a request reads one row, and once it's [SNAPSHOT_MS] old,
+// one instance claims the refresh and counts again while the rest serve the copy.
+export const SNAPSHOT_MS = 10 * 60_000;
+const changed = result => (result?.meta?.changes ?? result?.changes ?? 0) > 0;
+export async function sharedCounts(db, zone, now = Date.now()) {
+  const [{results: [row]}] = await db.batch([db.prepare('SELECT payload, computed_at FROM public_snapshot WHERE zone=?').bind(zone)]);
+  const saved = row?.payload ? JSON.parse(row.payload) : null;
+  if (saved && now - row.computed_at < SNAPSHOT_MS) return saved;
+  const claim = row
+    ? await db.prepare('UPDATE public_snapshot SET computed_at=? WHERE zone=? AND computed_at=?').bind(now, zone, row.computed_at).run()
+    : await db.prepare("INSERT OR IGNORE INTO public_snapshot(zone,payload,computed_at) VALUES(?,'',?)").bind(zone, now).run();
+  if (!changed(claim) && saved) return saved;
+  const counts = await publicCounts(db, new Date(now), zone);
+  await db.prepare('UPDATE public_snapshot SET payload=?, computed_at=? WHERE zone=?').bind(JSON.stringify(counts), now, zone).run();
+  return counts;
+}
 
 // Apps before 1.0.x send their totals after every song. The totals are
 // cumulative, so a report that comes soon after the last one from the same
@@ -289,10 +316,10 @@ export default {
       }
       if (request.method==='GET' && path==='/v1/public') {
         let zone;try { zone=reportZone(url.searchParams.get('timeZone') || 'Asia/Kolkata'); } catch(e) {return json({error:e.message},400);}
-        return json(await rememberFor(env.DB, 'public:'+zone, 300_000, () => publicCounts(env.DB,new Date(),zone)));
+        return json(await rememberFor(env.DB, 'public:'+zone, 300_000, () => sharedCounts(env.DB,zone)));
       }
       if (request.method==='GET' && path==='/v1/badge') {
-        return json(badge(await rememberFor(env.DB, 'public:Asia/Kolkata', 300_000, () => publicCounts(env.DB,new Date())),url.searchParams));
+        return json(badge(await rememberFor(env.DB, 'public:Asia/Kolkata', 300_000, () => sharedCounts(env.DB,'Asia/Kolkata')),url.searchParams));
       }
       if (request.method!=='POST' || !['/v1/activity','/v1/download'].includes(path)) return json({error:'Not found'},404);
       if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'JSON required'},415);

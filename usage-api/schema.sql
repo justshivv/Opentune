@@ -58,3 +58,94 @@ BEGIN
   INSERT INTO version_transitions(installation, from_version, to_version, changed_at)
   VALUES (new.installation, old.version, new.version, new.received_at);
 END;
+
+-- ---------------------------------------------------------------------------
+-- Summaries kept up to date as reports arrive, so the public counts, the README
+-- badges and the dashboard read a handful of rows instead of scanning every
+-- activity row each time. D1's free plan allows 5 million rows read a day, and
+-- full scans of both activity tables on every badge request used it all.
+-- Everything below is additive and safe to run again on each deploy.
+
+-- Each installation and the first day it reported: lifetime installations and
+-- new-versus-returning splits come from here.
+CREATE TABLE IF NOT EXISTS installations (
+  installation TEXT PRIMARY KEY,
+  first_day TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS installations_first_day ON installations(first_day);
+
+-- Lifetime totals, one row.
+CREATE TABLE IF NOT EXISTS totals (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  installations INTEGER NOT NULL,
+  plays INTEGER NOT NULL
+);
+-- First created with the plays already recorded; after that the triggers keep it.
+INSERT OR IGNORE INTO totals(id, installations, plays) VALUES (1, 0,
+  (SELECT COALESCE(SUM(plays), 0) FROM activity) + (SELECT COALESCE(SUM(plays), 0) FROM activity_ist));
+
+-- Who was active in each calendar week (by its Monday) and month, across both tables.
+CREATE TABLE IF NOT EXISTS active_weeks (week TEXT NOT NULL, installation TEXT NOT NULL, PRIMARY KEY (week, installation));
+CREATE TABLE IF NOT EXISTS active_months (month TEXT NOT NULL, installation TEXT NOT NULL, PRIMARY KEY (month, installation));
+
+-- Each version an installation has reported, and the last day each version was seen.
+CREATE TABLE IF NOT EXISTS version_installs (version TEXT NOT NULL, installation TEXT NOT NULL, PRIMARY KEY (version, installation));
+CREATE TABLE IF NOT EXISTS versions_seen (version TEXT PRIMARY KEY, last_day TEXT NOT NULL);
+
+-- A cached copy of the public counts, shared by every Worker instance.
+CREATE TABLE IF NOT EXISTS public_snapshot (
+  zone TEXT PRIMARY KEY,
+  payload TEXT NOT NULL,
+  computed_at INTEGER NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS count_installation AFTER INSERT ON installations
+BEGIN
+  UPDATE totals SET installations = installations + 1 WHERE id = 1;
+END;
+
+CREATE TRIGGER IF NOT EXISTS summarize_activity_insert AFTER INSERT ON activity
+BEGIN
+  INSERT OR IGNORE INTO installations(installation, first_day) VALUES (new.installation, new.day);
+  UPDATE installations SET first_day = new.day WHERE installation = new.installation AND first_day > new.day;
+  UPDATE totals SET plays = plays + new.plays WHERE id = 1;
+  INSERT OR IGNORE INTO active_weeks(week, installation) VALUES (date(new.day, '-6 days', 'weekday 1'), new.installation);
+  INSERT OR IGNORE INTO active_months(month, installation) VALUES (substr(new.day, 1, 7), new.installation);
+  INSERT OR IGNORE INTO version_installs(version, installation) VALUES (new.version, new.installation);
+  INSERT OR IGNORE INTO versions_seen(version, last_day) VALUES (new.version, new.day);
+  UPDATE versions_seen SET last_day = new.day WHERE version = new.version AND last_day < new.day;
+END;
+CREATE TRIGGER IF NOT EXISTS summarize_activity_ist_insert AFTER INSERT ON activity_ist
+BEGIN
+  INSERT OR IGNORE INTO installations(installation, first_day) VALUES (new.installation, new.day);
+  UPDATE installations SET first_day = new.day WHERE installation = new.installation AND first_day > new.day;
+  UPDATE totals SET plays = plays + new.plays WHERE id = 1;
+  INSERT OR IGNORE INTO active_weeks(week, installation) VALUES (date(new.day, '-6 days', 'weekday 1'), new.installation);
+  INSERT OR IGNORE INTO active_months(month, installation) VALUES (substr(new.day, 1, 7), new.installation);
+  INSERT OR IGNORE INTO version_installs(version, installation) VALUES (new.version, new.installation);
+  INSERT OR IGNORE INTO versions_seen(version, last_day) VALUES (new.version, new.day);
+  UPDATE versions_seen SET last_day = new.day WHERE version = new.version AND last_day < new.day;
+END;
+-- A report raises a day's plays (never lowers them): the difference goes on the total.
+CREATE TRIGGER IF NOT EXISTS summarize_activity_plays AFTER UPDATE OF plays ON activity
+BEGIN
+  UPDATE totals SET plays = plays + new.plays - old.plays WHERE id = 1;
+END;
+CREATE TRIGGER IF NOT EXISTS summarize_activity_ist_plays AFTER UPDATE OF plays ON activity_ist
+BEGIN
+  UPDATE totals SET plays = plays + new.plays - old.plays WHERE id = 1;
+END;
+
+-- Backfill from what was recorded before these tables existed. INSERT OR IGNORE
+-- leaves rows already there alone, so running this again changes nothing; the
+-- count_installation trigger counts each installation as it's added.
+INSERT OR IGNORE INTO installations(installation, first_day)
+  SELECT installation, MIN(day) FROM (SELECT installation, day FROM activity UNION ALL SELECT installation, day FROM activity_ist) GROUP BY installation;
+INSERT OR IGNORE INTO active_weeks(week, installation)
+  SELECT date(day, '-6 days', 'weekday 1'), installation FROM activity UNION SELECT date(day, '-6 days', 'weekday 1'), installation FROM activity_ist;
+INSERT OR IGNORE INTO active_months(month, installation)
+  SELECT substr(day, 1, 7), installation FROM activity UNION SELECT substr(day, 1, 7), installation FROM activity_ist;
+INSERT OR IGNORE INTO version_installs(version, installation)
+  SELECT version, installation FROM activity UNION SELECT version, installation FROM activity_ist;
+INSERT OR IGNORE INTO versions_seen(version, last_day)
+  SELECT version, MAX(day) FROM (SELECT version, day FROM activity UNION ALL SELECT version, day FROM activity_ist) GROUP BY version;
