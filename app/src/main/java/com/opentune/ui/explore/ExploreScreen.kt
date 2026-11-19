@@ -375,6 +375,11 @@ fun MoodScreen(
                 ErrorState(s.message, onRetry = { loader.reload() })
             }
             is UiState.Success -> LazyColumn(contentPadding = contentPadding) {
+                // A page YouTube Music sends with nothing on it says so, rather than staying blank.
+                if (s.data.isEmpty()) item {
+                    MessageState(ImageVector.vectorResource(AppIcons.Explore), "Nothing here yet", Modifier.padding(top = 32.dp),
+                        message = "YouTube Music didn't send anything for this.")
+                }
                 items(s.data) { HomeShelfView(it, onItemClick) }
             }
         }

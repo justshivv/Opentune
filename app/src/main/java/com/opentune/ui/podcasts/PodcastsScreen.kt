@@ -415,6 +415,9 @@ fun PodcastShowScreen(browseId: String, contentPadding: PaddingValues, actions: 
     var more by remember(browseId) { mutableStateOf<List<PodcastEpisode>>(emptyList()) }
     var token by remember(browseId) { mutableStateOf<String?>(null) }
     var loadingMore by remember { mutableStateOf(false) }
+    // The next page didn't load: it waits for a tap on Retry. Asked for again at once, as the
+    // last row coming back asked, a page that kept failing was asked for over and over.
+    var moreFailed by remember(browseId) { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
     val page = (state as? UiState.Success)?.data
     LaunchedEffect(page) { if (page != null && more.isEmpty()) token = page.continuation }
@@ -424,11 +427,18 @@ fun PodcastShowScreen(browseId: String, contentPadding: PaddingValues, actions: 
         val show = page?.show ?: return@LaunchedEffect
         if (wantMore == 0) return@LaunchedEffect
         loadingMore = true
-        runCatching { Podcasts.moreEpisodes(show, t) }.onSuccess { (list, next) ->
+        try {
+            val (list, next) = Podcasts.moreEpisodes(show, t)
             more = (more + list).distinctBy { it.videoId }
-            token = next
+            // The same token again would only bring the same page back.
+            token = next?.takeIf { it != t }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            moreFailed = true
+        } finally {
+            loadingMore = false
         }
-        loadingMore = false
     }
 
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -480,9 +490,15 @@ fun PodcastShowScreen(browseId: String, contentPadding: PaddingValues, actions: 
                 item { SectionHeader("Episodes", subtitle = com.opentune.i18n.Tr.f("{0}{1} episodes", all.size, if (token != null) "+" else "")) }
                 items(all.size, key = { all[it].videoId }) { i ->
                     EpisodeRow(all[i], actions, showShow = false, onOpenShow = onOpenShow) { actions.playEpisodes(all, i, show.title) }
-                    if (i == all.lastIndex && token != null && !loadingMore) LaunchedEffect(all.size) { wantMore++ }
+                    if (i == all.lastIndex && token != null && !loadingMore && !moreFailed) LaunchedEffect(all.size) { wantMore++ }
                 }
                 if (loadingMore) item { SongRowPlaceholder() }
+                else if (moreFailed && token != null) item(key = "more-failed") {
+                    // Back in view, the last row asks for the page again.
+                    TextButton(onClick = { moreFailed = false }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Text("Couldn't load more episodes. Retry")
+                    }
+                }
             }
         }
     }
