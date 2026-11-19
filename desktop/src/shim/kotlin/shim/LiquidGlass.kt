@@ -55,7 +55,7 @@ internal fun Modifier.liquidGlass(haze: HazeState, shape: Shape, film: Color): M
     val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
     var at by remember { mutableStateOf(Offset.Zero) }
     val lens = remember { LensCache() }
-    androidx.compose.runtime.DisposableEffect(lens) { onDispose { lens.close() } }
+    androidx.compose.runtime.DisposableEffect(lens) { onDispose { lens.drop() } }
     return this
         .onGloballyPositioned { at = it.positionOnScreen() }
         .drawBehind {
@@ -91,20 +91,26 @@ private fun cornerOf(outline: Outline): Float = when (outline) {
 }
 
 /**
- * One glass's lens filter and paint, made once and again only when its size or corners change,
- * and released with the glass. Made afresh on every draw, a window of glass redrawing as the page
- * scrolled left a trail of native Skia objects behind it, and many of them crashed Skia.
+ * One glass's lens filter and paint, made once and again only when its size or corners change.
+ * Made afresh on every draw, a window of glass redrawing as the page scrolled left a trail of
+ * native Skia objects behind it, and many of them crashed Skia.
+ *
+ * The ones it no longer needs are let go, never closed by hand: Skia frees each through its own
+ * cleaner once nothing holds it. Closed at once, a frame still being drawn could reach a freed
+ * filter, and the app crashed outright. On Windows that happened when the window's material was
+ * changed, as the frame changing size had every glass make new ones at the same moment.
  */
 private class LensCache {
     private var key: Long = 0
     var paint: org.jetbrains.skia.Paint? = null
         private set
+    // Held so they live as long as the paint built from them.
     private val parts = mutableListOf<org.jetbrains.skia.impl.Managed>()
 
     fun paintFor(w: Float, h: Float, corner: Float, bezel: Float, sigma: Float): org.jetbrains.skia.Paint {
         val k = (w.toInt().toLong() shl 40) xor (h.toInt().toLong() shl 20) xor (corner.toInt().toLong() shl 8) xor bezel.toInt().toLong()
         paint?.let { if (k == key) return it }
-        close()
+        drop()
         key = k
         val builder = RuntimeShaderBuilder(LENS).apply {
             uniform("size", w, h)
@@ -122,8 +128,8 @@ private class LensCache {
         return made
     }
 
-    fun close() {
-        parts.asReversed().forEach { runCatching { it.close() } }
+    /** Lets go of the filters and paint, for Skia's cleaner to free once no frame draws with them. */
+    fun drop() {
         parts.clear()
         paint = null
     }
