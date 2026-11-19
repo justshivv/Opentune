@@ -1237,7 +1237,8 @@ private fun settingsSections(
                     NavRow("Song change", { coverChangeDialog = true }, summary = ui.coverChange.summary, icon = Icons.Rounded.SwapHoriz, value = ui.coverChange.label)
                 },
                 Entry("Player opening", "now playing sheet open close animation spring smooth bouncy snappy") {
-                    NavRow("Player opening", { playerMotionDialog = true }, summary = ui.playerMotion.summary, icon = Icons.Rounded.UnfoldMore, value = ui.playerMotion.label)
+                    // With Reduce animation the player only fades, whatever is picked here.
+                    NavRow("Player opening", { playerMotionDialog = true }, summary = ui.playerMotion.summary, icon = Icons.Rounded.UnfoldMore, value = ui.playerMotion.label, enabled = !ui.reduceAnimation)
                 },
                 Entry("Player background", "cover blur blurred mesh gradient echo glow colours pure black oled amoled") {
                     SettingRow("Player background", icon = Icons.Rounded.Wallpaper, below = {

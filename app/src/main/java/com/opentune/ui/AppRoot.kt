@@ -957,6 +957,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 com.opentune.ui.components.PlayerSheet(
                     open = sheetOpen && song != null,
                     onSettled = { sheetSettled = it },
+                    motion = chromeUi.playerMotion,
                     face = { round -> MiniPlayerBar(vm, onExpand = {}, modifier = Modifier.fillMaxSize(), inline = round, replica = true) },
                 ) {
                     playerSheet(sheetSettled)

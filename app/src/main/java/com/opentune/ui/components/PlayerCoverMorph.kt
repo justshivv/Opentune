@@ -349,12 +349,18 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
             var frames = 0
             while (PlayerMorph.awaitingPlayer() && frames++ < 12) withFrameNanos { }
             if (PlayerMorph.playerCover == null && PlayerMorph.lastPlayerCover == null) return@LaunchedEffect
-            val left = 1f - openT.value
-            // On the card's own timing and curve (see PlayerSheet), so the cover and the card move as one.
-            openT.animateTo(1f, tween((SHEET_OPEN_MS * left).roundToInt().coerceAtLeast(180), easing = SHEET_EASING))
-            // Riding the card (below), it lands when the card does, not before.
-            var waited = 0
-            while (PlayerMorph.sheetMorph && (PlayerMorph.sheetProgress?.invoke() ?: 1f) < 0.999f && waited++ < 60) withFrameNanos { }
+            if (PlayerMorph.sheetMorph) {
+                // Riding the card (below), it lands when the card does, on whatever
+                // timing "Player opening" gives the card, not on a clock of its own.
+                var waited = 0
+                // The card may not have put up its progress yet on the first frames.
+                while (PlayerMorph.sheetMorph && PlayerMorph.sheetProgress == null && waited++ < 12) withFrameNanos { }
+                waited = 0
+                while (PlayerMorph.sheetMorph && (PlayerMorph.sheetProgress?.invoke() ?: 1f) < 0.999f && waited++ < SHEET_WAIT_FRAMES) withFrameNanos { }
+            } else {
+                val left = 1f - openT.value
+                openT.animateTo(1f, tween((SHEET_OPEN_MS * left).roundToInt().coerceAtLeast(180), easing = SHEET_EASING))
+            }
         } finally {
             PlayerMorph.endOpen()
         }
@@ -365,10 +371,13 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
         try {
             // From wherever a drag down left it.
             closeT.snapTo(PlayerMorph.closeAt())
-            val left = 1f - closeT.value
-            closeT.animateTo(1f, tween((SHEET_CLOSE_MS * left).roundToInt().coerceAtLeast(160), easing = SHEET_EASING))
-            var waited = 0
-            while (PlayerMorph.sheetMorph && (PlayerMorph.sheetProgress?.invoke() ?: 0f) > 0.001f && waited++ < 60) withFrameNanos { }
+            if (PlayerMorph.sheetMorph) {
+                var waited = 0
+                while (PlayerMorph.sheetMorph && (PlayerMorph.sheetProgress?.invoke() ?: 0f) > 0.001f && waited++ < SHEET_WAIT_FRAMES) withFrameNanos { }
+            } else {
+                val left = 1f - closeT.value
+                closeT.animateTo(1f, tween((SHEET_CLOSE_MS * left).roundToInt().coerceAtLeast(160), easing = SHEET_EASING))
+            }
         } finally {
             PlayerMorph.endClose()
         }
@@ -424,6 +433,9 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
 
 /** The last stretch of the card's way (0..1) over which it hands over to the real mini player. */
 internal const val MINI_HANDOVER = 0.06f
+
+/** At most this many frames for the card to land before the flying cover hands over anyway (a slow glide at 120 Hz is about 65). */
+private const val SHEET_WAIT_FRAMES = 150
 
 /** How dark the full-screen cover's shade along the top is, where the status bar sits. */
 internal const val FULL_COVER_TOP_SHADE = 0.35f

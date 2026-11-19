@@ -1,6 +1,9 @@
 package com.opentune.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -28,6 +31,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.layout
 import androidx.compose.runtime.DisposableEffect
+import com.opentune.data.settings.PlayerMotion
 
 /**
  * The full player growing out of the mini player as one card, and shrinking
@@ -38,6 +42,11 @@ import androidx.compose.runtime.DisposableEffect
  * finger ([PlayerMorph.pulling]); a drag down on the player hands over where
  * the card was ([PlayerMorph.handOff]) and the shrink carries on from there.
  *
+ * [motion] is the "Player opening" setting: Smooth keeps the card's own even
+ * glide ([SHEET_EASING]); the others open on the same springs as the sliding
+ * player ([com.opentune.ui.PageMotion]), Bouncy overshooting the top a little,
+ * and close on the same stiffness without the bounce.
+ *
  * [content] is laid out once at full size. Each frame only moves, scales and
  * clips its layer, on the render thread: nothing is measured or composed
  * again while the card moves.
@@ -46,11 +55,15 @@ import androidx.compose.runtime.DisposableEffect
 fun PlayerSheet(
     open: Boolean,
     onSettled: (Boolean) -> Unit,
+    motion: PlayerMotion = PlayerMotion.SMOOTH,
     /** The mini player, still: the card's face as it lands on the real one ([round] for the folded one). */
     face: @Composable (round: Boolean) -> Unit = {},
     content: @Composable () -> Unit,
 ) {
-    val t = remember { Animatable(if (open) 1f else 0f) }
+    // Never below the mini player: a spring closing after a hard flick would
+    // swing past it, and at 0 the card is taken off the screen.
+    val t = remember { Animatable(if (open) 1f else 0f, visibilityThreshold = 0.0005f).apply { updateBounds(lowerBound = 0f) } }
+    val curMotion by rememberUpdatedState(motion)
     // Where the mini player's top was when last drawn, to turn a drag in pixels into the card's progress.
     val miniTop = remember { floatArrayOf(0f) }
     LaunchedEffect(open) {
@@ -58,8 +71,6 @@ fun PlayerSheet(
             if (PlayerMorph.sheetAt > t.value) t.snapTo(PlayerMorph.sheetAt)
             PlayerMorph.sheetAt = 0f
             PlayerMorph.cardFrom = null
-            // The first frames build the player (out of sight, or under the
-            // finger): the card starts moving once they're done, not through them.
             // The first frames build the player (out of sight, or under the
             // finger): the card starts moving once they're done, not through them.
             withFrameNanos { }
@@ -70,8 +81,13 @@ fun PlayerSheet(
             val flingPx = PlayerMorph.pullFlingPx
             PlayerMorph.pullFlingPx = 0f
             val travel = (PlayerMorph.miniBar?.top ?: 0f).coerceAtLeast(1f)
-            val byFling = if (flingPx > 1f) ((1f - t.value) / (flingPx / travel) * 1_000f * FLING_STRETCH).toInt() else Int.MAX_VALUE
-            t.animateTo(1f, tween(minOf(sheetMs(1f - t.value, SHEET_OPEN_MS), byFling).coerceAtLeast(SHEET_MIN_MS), easing = SHEET_EASING))
+            val spring = sheetSpring(curMotion, opening = true)
+            if (spring != null) {
+                t.animateTo(1f, spring, initialVelocity = if (flingPx > 1f) flingPx / travel else t.velocity)
+            } else {
+                val byFling = if (flingPx > 1f) ((1f - t.value) / (flingPx / travel) * 1_000f * FLING_STRETCH).toInt() else Int.MAX_VALUE
+                t.animateTo(1f, tween(minOf(sheetMs(1f - t.value, SHEET_OPEN_MS), byFling).coerceAtLeast(SHEET_MIN_MS), easing = SHEET_EASING))
+            }
         } else {
             // Dragged down part of the way already: the shrink goes on from where the finger let go, at its speed.
             val dragged = PlayerMorph.sheetDrag
@@ -85,8 +101,13 @@ fun PlayerSheet(
             withFrameNanos { }
             // An even glide down to the mini player; after a quick flick, no slower than the finger was going.
             val left = t.value
-            val byFling = if (fling < -0.01f) (left / -fling * 1_000f * FLING_STRETCH).toInt() else Int.MAX_VALUE
-            t.animateTo(0f, tween(minOf(sheetMs(left, SHEET_CLOSE_MS), byFling).coerceAtLeast(SHEET_MIN_MS), easing = SHEET_EASING))
+            val spring = sheetSpring(curMotion, opening = false)
+            if (spring != null) {
+                t.animateTo(0f, spring, initialVelocity = if (fling < -0.01f) fling else t.velocity)
+            } else {
+                val byFling = if (fling < -0.01f) (left / -fling * 1_000f * FLING_STRETCH).toInt() else Int.MAX_VALUE
+                t.animateTo(0f, tween(minOf(sheetMs(left, SHEET_CLOSE_MS), byFling).coerceAtLeast(SHEET_MIN_MS), easing = SHEET_EASING))
+            }
             PlayerMorph.cardFrom = null
         }
     }
@@ -122,7 +143,8 @@ fun PlayerSheet(
                 val mini = PlayerMorph.miniBar?.translate(0f, -pageTop)
                     ?: Rect(w * 0.04f, h - fallbackLift - fallbackHeight, w * 0.96f, h - fallbackLift)
                 miniTop[0] = mini.top
-                val k = p().coerceIn(0f, 1f)
+                val raw = p()
+                val k = raw.coerceIn(0f, 1f)
                 val card = PlayerMorph.cardFrom?.translate(0f, -pageTop)
                 val from = card ?: Rect(0f, 0f, w, h)
                 fun lerp(a: Float, b: Float) = a + (b - a) * k
@@ -135,7 +157,8 @@ fun PlayerSheet(
                 val s = width / w
                 transformOrigin = TransformOrigin(0f, 0f)
                 translationX = left
-                translationY = top
+                // A bouncy open goes past full: the card rises that much over the top, as the sliding player does.
+                translationY = top - (raw - 1f).coerceAtLeast(0f) * mini.top
                 scaleX = s
                 scaleY = s
                 val miniCorner = if (PlayerMorph.miniBarRound) mini.height / 2f else barCorner
@@ -208,6 +231,24 @@ internal const val SHEET_CLOSE_MS = 460
 private const val SHEET_MIN_MS = 180
 /** The eased start is slower than a straight line; this keeps a flick's speed through it. */
 private const val FLING_STRETCH = 1.6f
+
+/**
+ * The spring [m] moves the card on, or null for the card's own glide. The
+ * stiffness and damping are [com.opentune.ui.PageMotion]'s for the sliding
+ * player; the card's progress runs 0..1, so a spring takes the same time here.
+ * Closing never bounces: past the mini player the card would vanish.
+ */
+private fun sheetSpring(m: PlayerMotion, opening: Boolean): AnimationSpec<Float>? {
+    val (damping, stiffness) = when (m) {
+        PlayerMotion.SMOOTH -> return null
+        PlayerMotion.SPRING -> 0.86f to 380f
+        PlayerMotion.BOUNCY -> 0.62f to 300f
+        PlayerMotion.SNAPPY -> Spring.DampingRatioNoBouncy to 1100f
+        // Echo Music BottomSheet's soft spring; see THIRD_PARTY_NOTICES.md.
+        PlayerMotion.ECHO -> Spring.DampingRatioNoBouncy to Spring.StiffnessMediumLow
+    }
+    return spring(dampingRatio = if (opening) damping else Spring.DampingRatioNoBouncy, stiffness = stiffness, visibilityThreshold = 0.0005f)
+}
 
 /** The time for [left] of the whole way (0..1), out of [full] for all of it. */
 private fun sheetMs(left: Float, full: Int): Int = (full * left.coerceIn(0f, 1f)).toInt().coerceAtLeast(SHEET_MIN_MS)
