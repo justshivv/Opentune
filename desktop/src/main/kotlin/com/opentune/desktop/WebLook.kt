@@ -93,3 +93,54 @@ internal fun Modifier.chromeGlass(haze: HazeState?): Modifier {
 @Composable
 @ReadOnlyComposable
 internal fun glassEdge(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (darkTheme()) 0.08f else 0.10f)
+
+/*
+ * The window's chrome as the sidebar-and-bar layout draws it: flat greys off the theme's ink, a
+ * 1px hairline between the sidebar and the page, white text with a 60% grey under it.
+ */
+internal object ChromeInk {
+    /** The ink of a row or icon that isn't chosen: a grey-white, not the full white. */
+    @Composable @ReadOnlyComposable
+    fun idle(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (darkTheme()) 0.78f else 0.74f)
+
+    /** Second lines: an artist, a handle. */
+    @Composable @ReadOnlyComposable
+    fun secondary(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+
+    /** The search field's fill and the now-playing box's. */
+    @Composable @ReadOnlyComposable
+    fun field(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (darkTheme()) 0.07f else 0.06f)
+
+    @Composable @ReadOnlyComposable
+    fun lcd(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (darkTheme()) 0.06f else 0.05f)
+
+    /** The grey pill under the page showing. */
+    @Composable @ReadOnlyComposable
+    fun pill(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (darkTheme()) 0.10f else 0.08f)
+
+    /** The faint fill under the pointer. */
+    @Composable @ReadOnlyComposable
+    fun hover(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (darkTheme()) 0.05f else 0.045f)
+
+    /** Hairlines: the sidebar's edge, its dividers, the line over Settings. */
+    @Composable @ReadOnlyComposable
+    fun hairline(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (darkTheme()) 0.09f else 0.11f)
+}
+
+/**
+ * The sidebar's own surface: the page's grey a shade darker, nearly solid, so the cover's
+ * colour behind the window barely tints it. Thinner over Windows' material, which then shows.
+ */
+@Composable
+internal fun Modifier.chromeSidebarSurface(haze: HazeState?): Modifier {
+    val ui by AppSettings.ui.collectAsState()
+    val material by WindowsFrame.activeMaterial.collectAsState()
+    val over = material != WindowsFrame.Material.OFF
+    val page = MaterialTheme.colorScheme.background
+    val base = if (darkTheme()) lerp(page, Color.Black, 0.12f) else lerp(page, Color.Black, 0.025f)
+    if (haze == null || ui.reduceBlur) return background(base.copy(alpha = if (over) 0.4f else 1f))
+    return hazeEffect(
+        haze,
+        HazeStyle(backgroundColor = page, tint = HazeTint(base.copy(alpha = if (over) 0.4f else 0.9f)), blurRadius = 36.dp, noiseFactor = 0f),
+    )
+}

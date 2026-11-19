@@ -182,12 +182,12 @@ private data class Page(val tab: Tab, val shelf: Shelf? = null, val opened: Any?
  * pictures). Clicking the song in the bar opens the full player.
  */
 @Composable
-fun DesktopApp(startPanel: SidePanel? = null) {
-    var page by remember { mutableStateOf(Page(Tab.HOME)) }
+fun DesktopApp(startPanel: SidePanel? = null, startAccountMenu: Boolean = false, startSearch: String? = null, startSearched: Boolean = false) {
+    var page by remember { mutableStateOf(Page(if (startSearch != null) Tab.SEARCH else Tab.HOME)) }
     // Back goes through what was opened, the way it came.
     val history = remember { mutableStateListOf<Page>() }
-    var query by remember { mutableStateOf("") }
-    var searches by remember { mutableStateOf(0) }
+    var query by remember { mutableStateOf(startSearch.orEmpty()) }
+    var searches by remember { mutableStateOf(if (startSearched) 1 else 0) }
     var playerOpen by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(startPanel) }
     // The sidebar folded or opened by hand; until then it follows the window's width.
@@ -204,6 +204,7 @@ fun DesktopApp(startPanel: SidePanel? = null) {
     }
     val back: () -> Unit = { history.removeLastOrNull()?.let { page = it } }
     var helpOpen by remember { mutableStateOf(false) }
+    var accountOpen by remember { mutableStateOf(startAccountMenu) }
     // What a room has to say ("Only the host can skip"), as a notice.
     LaunchedEffect(Unit) { com.opentune.data.together.Together.notices.collect { Notice.show(it) } }
     LaunchedEffect(Unit) {
@@ -213,7 +214,7 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                 Shortcuts.Command.SETTINGS -> { playerOpen = false; go(Page(Tab.SETTINGS)) }
                 Shortcuts.Command.LYRICS -> panel = if (panel == SidePanel.LYRICS) null else SidePanel.LYRICS
                 Shortcuts.Command.QUEUE -> panel = if (panel == SidePanel.QUEUE) null else SidePanel.QUEUE
-                Shortcuts.Command.CLOSE -> if (helpOpen) helpOpen = false else playerOpen = false
+                Shortcuts.Command.CLOSE -> if (helpOpen) helpOpen = false else if (accountOpen) accountOpen = false else playerOpen = false
                 Shortcuts.Command.HELP -> helpOpen = true
             }
         }
@@ -264,7 +265,13 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                 // as well as the page; a source for the top bar's blur under the page's own.
                 Box(Modifier.fillMaxSize().hazeSource(haze, zIndex = 0f)) { WindowBackdrop(song?.thumbnailUrl, clear) }
                 Row(Modifier.fillMaxSize()) {
-                    Sidebar(sideSelected, folded = folded, fold = fold, haze = haze.takeIf { !ui.reduceBlur }, onFold = { foldPick = !folded }) { key ->
+                    Sidebar(
+                        sideSelected, folded = folded, fold = fold, haze = haze.takeIf { !ui.reduceBlur }, onFold = { foldPick = !folded },
+                        query = query,
+                        // Typing in the sidebar's field opens the Search page and drives it.
+                        onQuery = { query = it; if (it.isNotBlank() && (page.tab != Tab.SEARCH || page.opened != null)) { playerOpen = false; go(Page(Tab.SEARCH)) } },
+                        onSearch = { if (page.tab != Tab.SEARCH || page.opened != null) go(Page(Tab.SEARCH)); searches++ },
+                    ) { key ->
                         when (key) {
                             is Tab -> go(Page(key))
                             is Shelf -> go(Page(Tab.LIBRARY, key))
@@ -299,6 +306,7 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                                     onShelf = { go(Page(Tab.LIBRARY, it)) },
                                     onPlaylist = { go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, PlaylistKey(it))) },
                                     onBack = { back() },
+                                    fieldInSidebar = !folded,
                                 )
                             }
                             TopBar(
@@ -308,6 +316,10 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                                 onOpenPlayer = { playerOpen = true },
                                 modifier = Modifier.align(Alignment.TopCenter),
                                 panelRoom = roomForPanel,
+                                onHome = { go(Page(Tab.HOME)) },
+                                onQueuePage = { go(Page(Tab.QUEUE)) },
+                                onAccount = { accountOpen = !accountOpen },
+                                accountOpen = accountOpen,
                             )
                         }
                     }
@@ -326,6 +338,13 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                         )
                     }
                 }
+
+                // The account menu, under the picture at the top bar's right end.
+                ChromeAccountMenu(
+                    accountOpen, haze.takeIf { !ui.reduceBlur }, onDismiss = { accountOpen = false },
+                    onSettings = { go(Page(Tab.SETTINGS)) },
+                    onAccounts = { ChromeSettingsJump.accounts.value = true; go(Page(Tab.SETTINGS)) },
+                )
 
                 // The full player rises over everything.
                 val full = rememberLast(song)
@@ -362,6 +381,7 @@ private fun Pages(
     onShelf: (Shelf) -> Unit,
     onPlaylist: (String) -> Unit,
     onBack: () -> Unit,
+    fieldInSidebar: Boolean = false,
 ) {
     val pxPerDp = androidx.compose.ui.platform.LocalDensity.current.density
     AnimatedContent(
@@ -386,7 +406,7 @@ private fun Pages(
             opened is PlaylistKey -> PlaylistPage(opened.id, onBack = onBack)
             opened is MoodKey -> MoodPage(opened, onOpen)
             opened is DailyMixes.Mix -> MixPage(opened)
-            shown.tab == Tab.SEARCH -> SearchPage(query, onQuery, searches, onSearch, onOpenAny)
+            shown.tab == Tab.SEARCH -> SearchPage(query, onQuery, searches, onSearch, onOpenAny, fieldInSidebar)
             shown.tab == Tab.NEW -> NewPage(onOpen)
             shown.tab == Tab.HOME -> HomePage(onOpen = onOpen, onOpenAny = onOpenAny)
             shown.tab == Tab.LIBRARY -> shown.shelf?.let { LibraryPage(it, onShelf, onPlaylist) }
@@ -417,55 +437,94 @@ private const val MATERIAL_PAGE_ALPHA = 0.45f
 // ---- Pages -------------------------------------------------------------------
 
 /**
- * Search: a big field at the top. Before a search, what you searched for
- * lately as chips and every mood and genre as coloured tiles to browse; after
- * it, the best match as a large card beside the first few songs, then every
- * song found.
+ * Search. The query is typed in the sidebar's field (on a folded sidebar, in a field at the top
+ * of the page). Before a search, what you searched for lately as chips and every mood and genre
+ * as coloured tiles to browse. While typing, YouTube Music's suggestions, then a few results for
+ * what's typed so far; after Enter, every kind found (songs, artists, albums, playlists,
+ * videos) as flat rows under their headings.
  */
 @Composable
-internal fun SearchPage(query: String, onQuery: (String) -> Unit, searches: Int, onSearch: () -> Unit, onOpenAny: (Any) -> Unit) {
-    var results by remember { mutableStateOf<Pages.Found?>(null) }
+internal fun SearchPage(
+    query: String,
+    onQuery: (String) -> Unit,
+    searches: Int,
+    onSearch: () -> Unit,
+    onOpenAny: (Any) -> Unit,
+    fieldInSidebar: Boolean = false,
+) {
+    // What was found last, so coming back to Search shows it again rather than asking afresh.
+    var results by remember { mutableStateOf(SearchMemory.found.takeIf { SearchMemory.shownFor == query.trim() }) }
+    var shownFor by remember { mutableStateOf(if (results != null) SearchMemory.shownFor else "") }
     var searching by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
-    var shownFor by remember { mutableStateOf("") }
     val recentSearches by AppSettings.recentSearches.collectAsState()
     val moods by produceState(emptyList<com.opentune.data.model.MoodGenre>()) { value = runCatching { Pages.moods() }.getOrDefault(emptyList()) }
     LaunchedEffect(searches) {
+        // Each Enter once: opening the page again doesn't search again.
+        if (searches == 0 || searches == SearchMemory.handled) return@LaunchedEffect
+        SearchMemory.handled = searches
         val q = query.trim().takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
         AppSettings.addRecentSearch(q)
         searching = true
         failed = false
-        runCatching { Pages.searchAll(q) }.onSuccess { results = it; shownFor = q }.onFailure { failed = true }
+        runCatching { Pages.searchAll(q) }
+            .onSuccess { results = it; shownFor = q; SearchMemory.found = it; SearchMemory.shownFor = q }
+            .onFailure { failed = true }
         searching = false
     }
-    // What YouTube Music suggests while typing, until Enter searches.
+    // While typing, until Enter searches: YouTube Music's suggestions, and a few of its results.
+    val typed = query.trim()
+    val typing = typed.isNotEmpty() && typed != shownFor && !searching
     var suggestions by remember { mutableStateOf(emptyList<String>()) }
-    LaunchedEffect(query, shownFor) {
-        val q = query.trim()
-        if (q.isEmpty() || q == shownFor) { suggestions = emptyList(); return@LaunchedEffect }
-        kotlinx.coroutines.delay(220)
-        suggestions = runCatching { Pages.suggestions(q) }.getOrDefault(emptyList()).filterNot { it.equals(q, ignoreCase = true) }
+    var quick by remember { mutableStateOf(emptyList<ChromeSearchHit>()) }
+    LaunchedEffect(typed, shownFor) {
+        if (typed.isEmpty() || typed == shownFor) { suggestions = emptyList(); return@LaunchedEffect }
+        kotlinx.coroutines.delay(200)
+        suggestions = runCatching { Pages.suggestions(typed) }.getOrDefault(emptyList()).filterNot { it.equals(typed, ignoreCase = true) }.take(6)
+    }
+    LaunchedEffect(typed, shownFor) {
+        if (typed.isEmpty() || typed == shownFor) { quick = emptyList(); return@LaunchedEffect }
+        kotlinx.coroutines.delay(380)
+        quick = runCatching { ChromeSearchHits.quick(typed) }.getOrDefault(emptyList())
     }
     // Cleared: back to browsing.
     LaunchedEffect(query) { if (query.isBlank()) { results = null; shownFor = "" } }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     val askedForFocus by Shortcuts.searchFocus.collectAsState()
-    LaunchedEffect(askedForFocus) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(askedForFocus, fieldInSidebar) { if (!fieldInSidebar) runCatching { focus.requestFocus() } }
     val found = results
-    ScrollPage("Search", spacing = 22.dp) {
-        item(key = "field") {
-            Column {
-                SearchField(query, onQuery, onSearch, focus)
-                if (suggestions.isNotEmpty() && !searching) Suggestions(suggestions) { onQuery(it); onSearch() }
-            }
-        }
+    // Which kinds are showing all they found rather than the first few.
+    val expanded = remember(shownFor) { mutableStateMapOf<String, Boolean>() }
+    ScrollPage("Search", spacing = 8.dp) {
+        if (!fieldInSidebar) item(key = "field") { SearchField(query, onQuery, onSearch, focus) }
         when {
+            typing -> {
+                if (suggestions.isNotEmpty()) item(key = "suggestions") {
+                    Column(Modifier.padding(horizontal = GUTTER - 12.dp)) {
+                        suggestions.forEach { s ->
+                            ChromeSuggestionRow(s, onPick = { onQuery(s); onSearch() }, onFill = { onQuery(s) })
+                        }
+                    }
+                }
+                if (quick.isNotEmpty()) {
+                    if (suggestions.isNotEmpty()) item(key = "quick-line") { ChromeSearchHairline() }
+                    val songs = quick.mapNotNull { (it as? ChromeSearchHit.Track)?.song }
+                    items(quick, key = { "q:" + it.key }) { hit ->
+                        Box(Modifier.padding(horizontal = GUTTER - 12.dp)) {
+                            when (hit) {
+                                is ChromeSearchHit.Track -> ChromeSongResultRow(hit.song, songs, songs.indexOf(hit.song), kind = "Song")
+                                is ChromeSearchHit.Item -> ChromeItemResultRow(hit.item, kind = hit.kind) { ChromeSearchHits.open(hit.item, onOpenAny) }
+                            }
+                        }
+                    }
+                }
+            }
             searching -> item(key = "loading") { Loading() }
             failed -> item(key = "failed") { Message("Couldn't search", "Check your connection and try again.") }
             found == null -> {
-                if (recentSearches.isNotEmpty()) item(key = "recent") { RecentSearches(recentSearches) { onQuery(it); onSearch() } }
+                if (recentSearches.isNotEmpty()) item(key = "recent") { Box(Modifier.padding(top = 14.dp)) { RecentSearches(recentSearches) { onQuery(it); onSearch() } } }
                 if (moods.isNotEmpty()) item(key = "browse") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Browse all", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = GUTTER))
                         BrowseTiles(moods) { onOpenAny(MoodKey(it.title, it.browseId, it.params)) }
                     }
@@ -474,128 +533,69 @@ internal fun SearchPage(query: String, onQuery: (String) -> Unit, searches: Int,
             }
             found.isEmpty -> item(key = "none") { Message("No results for “$shownFor”", "Try different words.", icon = Icons.Rounded.SearchOff) }
             else -> {
-                if (found.songs.isNotEmpty()) item(key = "top") { TopResult(found.songs) }
-                // Each kind on a row of its own, as the web player shows them.
-                listOf("Artists" to found.artists, "Albums" to found.albums, "Playlists" to found.playlists, "Videos" to found.videos)
-                    .filter { it.second.isNotEmpty() }
-                    .forEach { (title, items) -> item(key = "shelf:$title") { ShelfRow(Pages.Shelf(title, items)) { onOpenAny(it) } } }
-                if (found.songs.size > 5) {
-                    item(key = "all-head") {
-                        Text("Songs", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = GUTTER, vertical = 4.dp))
+                // Each kind under its heading, the first few at once and the rest on asking.
+                fun section(title: String, count: Int, few: Int, row: androidx.compose.foundation.lazy.LazyListScope.(Int) -> Unit) {
+                    if (count == 0) return
+                    item(key = "head:$title") {
+                        ChromeResultsHead(title, more = count > few, open = expanded[title] == true) { expanded[title] = expanded[title] != true }
                     }
-                    tracks(found.songs)
+                    val shown = if (expanded[title] == true) count else minOf(count, few)
+                    for (i in 0 until shown) row(i)
+                }
+                section("Songs", found.songs.size, 5) { i ->
+                    item(key = "song:$i:${found.songs[i].videoId}") {
+                        Box(Modifier.padding(horizontal = GUTTER - 12.dp)) { ChromeSongResultRow(found.songs[i], found.songs, i) }
+                    }
+                }
+                listOf("Artists" to found.artists, "Albums" to found.albums, "Playlists" to found.playlists, "Videos" to found.videos).forEach { (title, list) ->
+                    section(title, list.size, 4) { i ->
+                        item(key = "$title:$i:${list[i].browseId ?: list[i].videoId}") {
+                            Box(Modifier.padding(horizontal = GUTTER - 12.dp)) { ChromeItemResultRow(list[i]) { ChromeSearchHits.open(list[i], onOpenAny) } }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-/** The search box: wide, rounded and frosted, with a clear button once there's something in it. */
+/** The last search shown, kept while the app runs, so Search opens on it again. */
+private object SearchMemory {
+    var handled = -1
+    var shownFor = ""
+    var found: Pages.Found? = null
+}
+
+/** The search box on the page itself, while the sidebar is folded to its rail: flat, rounded, with a clear button once there's something in it. */
 @Composable
 private fun SearchField(query: String, onQuery: (String) -> Unit, onSearch: () -> Unit, focus: androidx.compose.ui.focus.FocusRequester) {
     val onSurface = MaterialTheme.colorScheme.onSurface
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val shape = RoundedCornerShape(16.dp)
+    val muted = ChromeInk.secondary()
+    val shape = RoundedCornerShape(10.dp)
     Row(
-        Modifier.padding(horizontal = GUTTER).widthIn(max = 720.dp).fillMaxWidth().height(56.dp)
-            .glass(shape, onSurface.copy(alpha = 0.08f)).padding(horizontal = 18.dp),
+        Modifier.padding(horizontal = GUTTER).padding(top = 16.dp, bottom = 8.dp).widthIn(max = 720.dp).fillMaxWidth().height(48.dp)
+            .clip(shape).background(ChromeInk.field()).padding(start = 16.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Search, null, tint = muted, modifier = Modifier.size(22.dp))
+        Icon(Icons.Rounded.Search, null, tint = muted, modifier = Modifier.size(20.dp))
         Box(Modifier.weight(1f).padding(start = 12.dp), contentAlignment = Alignment.CenterStart) {
-            if (query.isEmpty()) Text("What do you want to listen to?", color = muted, style = MaterialTheme.typography.bodyLarge)
+            if (query.isEmpty()) Text("Search", color = muted, style = MaterialTheme.typography.bodyLarge)
             androidx.compose.foundation.text.BasicTextField(
                 query, onQuery, singleLine = true,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = onSurface),
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(onSurface),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                modifier = Modifier.fillMaxWidth().focusRequester(focus).onPreviewKeyEvent { e ->
-                    if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
-                        (e.key == androidx.compose.ui.input.key.Key.Enter || e.key == androidx.compose.ui.input.key.Key.NumPadEnter)
-                    ) { onSearch(); true } else false
-                },
+                modifier = Modifier.fillMaxWidth().focusRequester(focus)
+                    .then(androidx.compose.ui.Modifier.chromeLabel("Search"))
+                    .onPreviewKeyEvent { e ->
+                        if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                            (e.key == androidx.compose.ui.input.key.Key.Enter || e.key == androidx.compose.ui.input.key.Key.NumPadEnter)
+                        ) { onSearch(); true } else false
+                    },
             )
         }
         if (query.isNotEmpty()) HoverIcon(Icons.Rounded.Close, "Clear", size = 30.dp, iconSize = 18.dp) { onQuery("") }
-    }
-}
-
-/** YouTube Music's suggestions for what's typed, under the box; a click searches for one. */
-@Composable
-private fun Suggestions(suggestions: List<String>, onPick: (String) -> Unit) {
-    Column(
-        Modifier.padding(horizontal = GUTTER).padding(top = 6.dp).widthIn(max = 720.dp).fillMaxWidth()
-            .glass(RoundedCornerShape(14.dp), MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)).padding(vertical = 6.dp),
-    ) {
-        suggestions.forEach { s ->
-            val hover = remember { MutableInteractionSource() }
-            Row(
-                Modifier.fillMaxWidth().hoverWash(hover, RoundedCornerShape(10.dp)).clickable(interactionSource = hover, indication = null) { onPick(s) }
-                    .padding(horizontal = 18.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Rounded.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                Text(s, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-}
-
-/** The best match, large, beside the next four songs. */
-@Composable
-private fun TopResult(found: List<Song>) {
-    val top = found.first()
-    val base = MaterialTheme.colorScheme.surfaceContainer
-    val colour = rememberCoverColor(top.thumbnailUrl, base)
-    val hover = remember { MutableInteractionSource() }
-    val hovered by hover.collectIsHoveredAsState()
-    Row(Modifier.padding(horizontal = GUTTER).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        Column(Modifier.width(400.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Top result", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Box(
-                Modifier.fillMaxWidth().height(232.dp).hoverLift(hover, 1.01f).clip(RoundedCornerShape(16.dp))
-                    .background(Brush.linearGradient(listOf(tint(colour, base, 0.55f), tint(colour, base, 0.2f))))
-                    .clickable(interactionSource = hover, indication = null) { Player.playAll(found, 0) }.padding(20.dp),
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Cover(top.thumbnailUrl, 104.dp, RoundedCornerShape(12.dp), Modifier.shadow(16.dp, RoundedCornerShape(12.dp)))
-                    Text(top.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(top.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            "Song", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).padding(horizontal = 10.dp, vertical = 3.dp),
-                        )
-                    }
-                }
-                androidx.compose.animation.AnimatedVisibility(
-                    hovered, enter = fadeIn(Motion.fade(160)) + slideInVertically(Motion.soft()) { it / 2 }, exit = fadeOut(Motion.fade(120)),
-                    modifier = Modifier.align(Alignment.BottomEnd),
-                ) {
-                    Box(Modifier.size(52.dp).shadow(14.dp, CircleShape).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.PlayArrow, "Play", tint = Color.Black, modifier = Modifier.size(30.dp))
-                    }
-                }
-            }
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Songs", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-            found.drop(1).take(4).forEachIndexed { i, s ->
-                val h = remember { MutableInteractionSource() }
-                Row(
-                    Modifier.fillMaxWidth().hoverWash(h, RoundedCornerShape(10.dp)).clickable(interactionSource = h, indication = null) { Player.playAll(found, i + 1) }.padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Cover(s.thumbnailUrl, 44.dp, RoundedCornerShape(8.dp))
-                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                        Text(s.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(s.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Text(s.durationText.orEmpty(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
     }
 }
 

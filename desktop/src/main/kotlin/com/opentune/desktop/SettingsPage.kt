@@ -133,6 +133,11 @@ internal fun SettingsPage() {
     val top = LocalPageTop.current
     val haze = dev.chrisbanes.haze.rememberHazeState()
     val blur = !AppSettings.ui.collectAsState().value.reduceBlur
+    // Asked for from the account menu: the Accounts section.
+    val toAccounts by ChromeSettingsJump.accounts.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(toAccounts) {
+        if (toAccounts) { ChromeSettingsJump.accounts.value = false; list.animateScrollToItem(Group.ACCOUNTS.ordinal + 1, 0) }
+    }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 1020.dp
         androidx.compose.foundation.lazy.LazyColumn(
