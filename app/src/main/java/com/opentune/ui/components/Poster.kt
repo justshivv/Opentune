@@ -60,20 +60,13 @@ internal fun PosterCaps(
 }
 
 /**
- * The Poster layout's glass: the app's real glass (see [glass]), so on phones with Liquid Glass
- * the page behind is blurred, bent at the edges and lit along the top, with a clear film rather
- * than the theme's colour, and a thin rim brighter along the top so it reads on any page.
+ * The Poster layout's glass: the web player's Liquid Glass ([webLiquidGlass]), the page behind
+ * bent at the rim and only lightly blurred, under a clear film (a light one on a light theme).
  */
 @Composable
 internal fun Modifier.posterGlass(shape: androidx.compose.ui.graphics.Shape): Modifier {
-    val ink = MaterialTheme.colorScheme.onSurface
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val rimTop = if (dark) Color.White.copy(alpha = 0.34f) else ink.copy(alpha = 0.16f)
-    val rimFoot = if (dark) Color.White.copy(alpha = 0.06f) else ink.copy(alpha = 0.08f)
-    return this
-        .glass(shape, tint = if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.28f), alwaysLiquid = true)
-        .clip(shape)
-        .border(1.dp, Brush.verticalGradient(listOf(rimTop, rimFoot)), shape)
+    return this.webLiquidGlass(shape, if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.3f)).clip(shape)
 }
 
 /** The Poster layout's Play: a wide glass pill with the word in it. */
@@ -110,15 +103,13 @@ internal val POSTER_ROUND = 52.dp
 internal val POSTER_SMOKE = Color(0xFF2A2D32)
 
 /**
- * The Poster layout's smoked glass, for the dock and the mini player: the same real glass as
- * its buttons, the page behind blurred and bent at the edges, under a dark film whatever the
- * theme, with a thin light rim. What's on it is drawn light (see [PosterInk]).
+ * The Poster layout's smoked glass, for the dock and the mini player: the same Liquid Glass as
+ * its buttons under a dark film, about half strength as the web player's dock has, whatever the
+ * theme. What's on it is drawn light (see [PosterInk]).
  */
 @Composable
-internal fun Modifier.posterSmoke(shape: androidx.compose.ui.graphics.Shape): Modifier = this
-    .glass(shape, tint = POSTER_SMOKE.copy(alpha = 0.5f), swell = false, alwaysLiquid = true)
-    .clip(shape)
-    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.05f))), shape)
+internal fun Modifier.posterSmoke(shape: androidx.compose.ui.graphics.Shape): Modifier =
+    this.webLiquidGlass(shape, POSTER_SMOKE.copy(alpha = 0.42f)).clip(shape)
 
 /** What's drawn on [posterSmoke]: white, and a softer white for what's not picked. */
 internal object PosterInk {

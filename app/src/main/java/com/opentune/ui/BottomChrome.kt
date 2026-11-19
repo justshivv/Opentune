@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.layout
 import androidx.compose.animation.core.CubicBezierEasing
@@ -253,11 +255,11 @@ fun BottomChrome(
         { awayProgress.value },
         CHROME_TAB_HEIGHT + navBottom + 32.dp,
     )
-    // The Poster layout has a chrome of its own. Scrolling down a page, its dock slides away
-    // and the now-playing card drops into its place, as on pages where the dock goes away.
+    // The Poster layout has a chrome of its own. Scrolling down a page it folds as the Classic
+    // dock's Minimize does: the dock closes into a circle and the now-playing card drops beside it.
     if (com.opentune.ui.components.posterLayout()) {
         val fold = animateFloatAsState(if (inline) 1f else 0f,
-            if (reduceMotion) androidx.compose.animation.core.snap() else spring(dampingRatio = 0.9f, stiffness = 380f), label = "posterFold")
+            if (reduceMotion) androidx.compose.animation.core.snap() else motionSpring(DockMotion.MINIMIZE), label = "posterFold")
         PosterChrome(c, { fold.value }, onExpand, reduceMotion, modifier)
         return
     }
@@ -317,50 +319,74 @@ private class ChromeContent(
 private fun PosterChrome(c: ChromeContent, fold: () -> Float, onExpand: () -> Unit, reduceMotion: Boolean, modifier: Modifier) {
     val haptics = com.opentune.ui.components.rememberHaptics()
     val pill = RoundedCornerShape(percent = 50)
-    // How far the dock has gone: slid away on destination pages, or folded by a scroll.
-    val gone = { maxOf(c.away(), fold()) }
-    Box(modifier.fillMaxWidth().padding(horizontal = 12.dp)
-        .height(if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT)) {
-        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalPosterFold provides fold) {
-            c.mini?.invoke(false, Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CHROME_MINI_HEIGHT)
-                .graphicsLayer { translationY = (CHROME_TAB_HEIGHT + CARD_GAP).toPx() * gone() })
-        }
-        BoxWithConstraints(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(CHROME_TAB_HEIGHT)
-                .graphicsLayer {
-                    translationY = c.drop.toPx() * gone()
-                    alpha = 1f - (fold() * 1.4f).coerceIn(0f, 1f)
-                }
-                .posterSmoke(pill)
-                .padding(DOCK_INSET),
-        ) {
-            val count = c.tabs.size + 1
-            val slot = maxWidth / count
-            // Search is the last place; nothing open lets the lens fade where it last was.
-            val shown = when {
-                c.searchSelected -> c.tabs.size
-                c.selected != null && c.selected in c.tabs.indices -> c.selected
-                else -> null
+    // Search is the dock's last place; nothing open lets the pill fade where it last was.
+    val shown = when {
+        c.searchSelected -> c.tabs.size
+        c.selected != null && c.selected in c.tabs.indices -> c.selected
+        else -> null
+    }
+    var resting by remember { mutableIntStateOf(shown ?: 0) }
+    if (shown != null) resting = shown
+    val folded by remember { derivedStateOf { fold() > 0.5f } }
+    BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        val width = maxWidth
+        val openHeight = if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT
+        val slot = (width - DOCK_INSET * 2) / (c.tabs.size + 1)
+        val row = { t: Float -> lerp(CHROME_TAB_HEIGHT, MINI_ROW, t) }
+        Box(Modifier.fillMaxWidth().chromeHeight(fold, openHeight, MINI_ROW, c.away, openHeight - CHROME_TAB_HEIGHT - CARD_GAP)) {
+            // The now-playing card drops into the room beside the folded dock.
+            androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalPosterFold provides fold) {
+                c.mini?.invoke(
+                    false,
+                    Modifier.placed(
+                        fold,
+                        x = { t -> lerp(0.dp, MINI_ROW + SEARCH_GAP, t) },
+                        bottom = { t -> lerp(CHROME_TAB_HEIGHT + CARD_GAP, 0.dp, t) },
+                        w = { t -> lerp(width, width - (MINI_ROW + SEARCH_GAP), t) },
+                        h = { t -> lerp(CHROME_MINI_HEIGHT, MINI_ROW, t) },
+                        away = c.away,
+                        awayDrop = CHROME_TAB_HEIGHT + CARD_GAP,
+                    ),
+                )
             }
-            var resting by remember { mutableIntStateOf(shown ?: 0) }
-            if (shown != null) resting = shown
-            PosterLens(resting, slot, visible = shown != null, still = reduceMotion)
-            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                c.tabs.forEachIndexed { i, tab ->
-                    val open = i == shown
-                    PosterDockItem(if (open) tab.selectedIcon else tab.icon, tab.label, open, Modifier.width(slot)) {
-                        if (i != c.selected) haptics.tick()
-                        c.onSelect(i)
+            // The dock, contracting toward its left end into a circle: the open place glides to the
+            // circle's middle while the others slip under the closing edge, as the Classic dock does.
+            Box(
+                Modifier
+                    .placed(fold, x = { 0.dp }, bottom = { 0.dp }, w = { t -> lerp(width, MINI_ROW, t) }, h = row, away = c.away, awayDrop = c.drop)
+                    .posterSmoke(pill),
+            ) {
+                Box(
+                    Modifier
+                        .wrapContentWidth(Alignment.Start, unbounded = true)
+                        .requiredWidth(width)
+                        .fillMaxHeight()
+                        .graphicsLayer {
+                            val t = fold()
+                            val centre = (DOCK_INSET + slot * (resting + 0.5f)).toPx()
+                            translationX = -(centre - (MINI_ROW / 2).toPx()) * t
+                        }
+                        .padding(DOCK_INSET),
+                ) {
+                    PosterLens(resting, slot, visible = shown != null, still = reduceMotion, fold = fold)
+                    Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                        c.tabs.forEachIndexed { i, tab ->
+                            val open = i == shown
+                            PosterDockItem(if (open) tab.selectedIcon else tab.icon, tab.label, open, Modifier.width(slot), fold) {
+                                if (i != c.selected) haptics.tick()
+                                c.onSelect(i)
+                            }
+                        }
+                        PosterDockItem(ImageVector.vectorResource(AppIcons.Search), "Search", c.searchSelected, Modifier.width(slot), fold,
+                            onLongClick = { haptics.tick(); c.onSearchLongPress() }) {
+                            if (!c.searchSelected) haptics.tick()
+                            c.onSearch()
+                        }
                     }
                 }
-                PosterDockItem(ImageVector.vectorResource(AppIcons.Search), "Search", c.searchSelected, Modifier.width(slot),
-                    onLongClick = { haptics.tick(); c.onSearchLongPress() }) {
-                    if (!c.searchSelected) haptics.tick()
-                    c.onSearch()
-                }
+                // Folded, the circle is the way back to the whole dock.
+                if (folded) Box(Modifier.matchParentSize().clickable(onClickLabel = "Show navigation", onClick = onExpand))
             }
-            // Folded away by a scroll, a tap where it was brings it back.
-            if (fold() > 0.5f) Box(Modifier.matchParentSize().clickable(onClickLabel = "Show navigation", onClick = onExpand))
         }
     }
 }
@@ -376,7 +402,7 @@ private fun PosterChrome(c: ChromeContent, fold: () -> Float, onExpand: () -> Un
  * drawn, so it seemed to appear there. This way it waits, then makes the whole jump.
  */
 @Composable
-private fun PosterLens(index: Int, slot: Dp, visible: Boolean, still: Boolean) {
+private fun PosterLens(index: Int, slot: Dp, visible: Boolean, still: Boolean, fold: () -> Float = { 0f }) {
     val pill = remember { PillMotion(index.toFloat()) }
     LaunchedEffect(index) {
         val target = index.toFloat()
@@ -406,7 +432,13 @@ private fun PosterLens(index: Int, slot: Dp, visible: Boolean, still: Boolean) {
     val shape = RoundedCornerShape(percent = 50)
     Box(
         Modifier
-            .width(slot)
+            // Folding into the circle, the pill narrows to fit it, so no straight edge shows inside.
+            .layout { measurable, constraints ->
+                val full = slot.roundToPx()
+                val w = lerp(slot, MINI_ROW - DOCK_INSET * 2, fold().coerceIn(0f, 1f)).roundToPx().coerceAtMost(full)
+                val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+                layout(full, placeable.height) { placeable.place((full - w) / 2, 0) }
+            }
             .fillMaxHeight()
             .graphicsLayer {
                 this.alpha = alpha
@@ -483,7 +515,7 @@ private class PillMotion(start: Float) {
 
 /** One of the Poster dock's destinations: its icon over its name, a soft pill behind the open one. */
 @Composable
-private fun PosterDockItem(icon: ImageVector, label: String, open: Boolean, modifier: Modifier, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+private fun PosterDockItem(icon: ImageVector, label: String, open: Boolean, modifier: Modifier, fold: () -> Float = { 0f }, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val ink = com.opentune.ui.components.PosterInk
     val fg by animateColorAsState(if (open) ink.on else ink.off, tween(260), label = "posterDock")
     val shape = RoundedCornerShape(percent = 50)
@@ -495,8 +527,16 @@ private fun PosterDockItem(icon: ImageVector, label: String, open: Boolean, modi
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(icon, null, Modifier.size(24.dp), tint = fg)
+        // Folding into the circle, the name fades and gives up its room, so the icon sits in the middle.
         Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1,
-            modifier = Modifier.padding(top = 3.dp))
+            modifier = Modifier
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    val h = (placeable.height * (1f - fold()).coerceIn(0f, 1f)).roundToInt()
+                    layout(placeable.width, h) { placeable.place(0, 0) }
+                }
+                .graphicsLayer { alpha = (1f - fold() * 2f).coerceIn(0f, 1f) }
+                .padding(top = 3.dp))
     }
 }
 

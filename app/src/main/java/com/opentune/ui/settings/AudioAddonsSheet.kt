@@ -57,7 +57,8 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
     var addError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(adding) { if (adding) addError = null }
     LaunchedEffect(Unit) { AddonRefresh.refresh() }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    // Edge to edge: the page pads itself for the system bars, and nothing behind shows under them.
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         AudioAddonsPage(onDismiss, onAdd = { adding = true }, notice = notice, onNotice = { notice = it })
     }
     if (adding) AddSourceCard(
@@ -206,7 +207,13 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
                             shape = RoundedCornerShape(20.dp)
                             clip = false
                         }
-                        .background(if (dragging) c.surfaceContainerHighest else c.surfaceContainer, RoundedCornerShape(20.dp))) {
+                        .background(
+                            // Only a row being dragged has a card of its own, lifted off the list. At rest
+                            // the rows sit on the group's card (on the page itself in the Poster layout),
+                            // so no row shows its own rounded corners against the next.
+                            if (dragging || lift > 0f) c.surfaceContainerHighest.copy(alpha = lift.coerceIn(0f, 1f)) else Color.Transparent,
+                            RoundedCornerShape(20.dp),
+                        )) {
                         if (index > 0) com.opentune.ui.components.RowDivider()
                         Row(
                             Modifier.fillMaxWidth().clickable { expanded = if (expanded == addon.key) null else addon.key }.padding(start = 20.dp, end = 4.dp, top = 14.dp, bottom = 14.dp),

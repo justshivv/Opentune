@@ -386,6 +386,51 @@ private fun DrawScope.touchLight(touch: LiquidTouch, press: Float, dark: Boolean
 /** How deep a lens may bend at the edge: [wanted], kept to under half the shape's short side. */
 private fun lensDepth(wanted: Float, shortSide: Float): Float = minOf(wanted, shortSide * 0.42f).coerceAtLeast(0f)
 
+/**
+ * The web player's Liquid Glass, for the Poster layout (web/app/src/lib/liquidGlass.ts and the
+ * `.glass-pill[data-liquid]` rules): what's behind is bent strongly at the rim by a lens about
+ * 22 dp deep, blurred only lightly (5 dp, so the bent colours stay sharp enough to read as
+ * glass rather than frost), its colours lifted (saturation 1.8, a touch brighter), under a thin
+ * [film] with a soft light across the top, and lit along the rim brightest at the top left.
+ * Where the phone can't bend the backdrop it falls back to the app's own [glass].
+ */
+@Composable
+fun Modifier.webLiquidGlass(shape: Shape, film: Color): Modifier {
+    val ui by AppSettings.ui.collectAsState()
+    val backdrop = LocalBackdrop.current
+    if (backdrop == null || !liquidGlassSupported || ui.reduceBlur) return this.glass(shape, tint = film, swell = false)
+    val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
+    val lite = GlassPerformance.lite
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        GlassPerformance.glassShowing++
+        onDispose { GlassPerformance.glassShowing-- }
+    }
+    return this.drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            colorControls(brightness = 0.04f, saturation = 1.8f)
+            blur(5.dp.toPx())
+            val depth = lensDepth(22.dp.toPx(), size.minDimension)
+            lens(depth, depth * 2f, depthEffect = true, chromaticAberration = !lite)
+        },
+        highlight = { Highlight.Default },
+        shadow = { Shadow.Default },
+        onDrawSurface = {
+            drawRect(film)
+            drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.10f else 0.16f), 0.45f to Color.Transparent))
+        },
+    ).border(
+        1.dp,
+        Brush.linearGradient(
+            0f to Color.White.copy(alpha = if (dark) 0.6f else 0.95f),
+            0.5f to Color.White.copy(alpha = if (dark) 0.08f else 0.2f),
+            1f to Color.White.copy(alpha = if (dark) 0.3f else 0.6f),
+        ),
+        shape,
+    )
+}
+
 /** The numbers behind a [GlassStyle], for frosted glass and for Liquid Glass. */
 internal data class GlassLook(
     val blur: Dp,
