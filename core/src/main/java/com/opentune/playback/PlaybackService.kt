@@ -766,18 +766,23 @@ class PlaybackService : MediaLibraryService() {
                 }
                 continue
             }
-            val items = (0 until player.mediaItemCount).map { player.getMediaItemAt(it) }
-            val tiers = items.map { it.queueTier }
-            val saved = QueueStore.Saved(
-                items.map { SongRef.of(it.toSong()) }, player.currentMediaItemIndex, player.currentPosition,
-                tiers = tiers.takeIf { t -> t.any { it != QueueTier.CONTEXT } },
-                shuffle = player.shuffleModeEnabled,
-                repeat = player.repeatMode,
-            )
+            val saved = savedQueue(player)
             if (saved == last) continue
             last = saved
             withContext(Dispatchers.IO) { QueueStore.save(saved) }
         }
+    }
+
+    /** The queue as [QueueStore] keeps it: the songs, each one's part of the queue, the place, shuffle and repeat. */
+    private fun savedQueue(player: Player): QueueStore.Saved {
+        val items = (0 until player.mediaItemCount).map { player.getMediaItemAt(it) }
+        val tiers = items.map { it.queueTier }
+        return QueueStore.Saved(
+            items.map { SongRef.of(it.toSong()) }, player.currentMediaItemIndex, player.currentPosition,
+            tiers = tiers.takeIf { t -> t.any { it != QueueTier.CONTEXT } },
+            shuffle = player.shuffleModeEnabled,
+            repeat = player.repeatMode,
+        )
     }
 
     /**
@@ -926,9 +931,9 @@ class PlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         PlayingHereNotice.cancel(this)
         ExternalStreams.playing(null, null)
-        (mediaSession?.player as? ExoPlayer)?.takeIf { it.mediaItemCount > 0 }?.let { p ->
-            QueueStore.save(QueueStore.Saved((0 until p.mediaItemCount).map { SongRef.of(p.getMediaItemAt(it).toSong()) }, p.currentMediaItemIndex, p.currentPosition))
-        }
+        // As the queue is saved while it plays, with shuffle, repeat and the songs queued by hand:
+        // saved bare here, the last save before the app closed lost them all.
+        (mediaSession?.player as? ExoPlayer)?.takeIf { it.mediaItemCount > 0 }?.let { p -> QueueStore.save(savedQueue(p)) }
         com.opentune.data.AppHooks.onPlayerStopped(this)
         crossfade?.release()
         crossfade = null

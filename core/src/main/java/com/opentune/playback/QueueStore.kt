@@ -41,9 +41,26 @@ object QueueStore {
         val f = file ?: return
         runCatching {
             val tmp = File(f.parentFile, "queue.json.tmp")
-            tmp.writeText(json.encodeToString(Saved.serializer(), saved.copy(songs = saved.songs.take(MAX_SONGS), tiers = saved.tiers?.take(MAX_SONGS))))
+            tmp.writeText(json.encodeToString(Saved.serializer(), trimmed(saved)))
             tmp.renameTo(f)
         }
+    }
+
+    /**
+     * [saved] cut to [max] songs around the one playing, its index moved with them. Cut from
+     * the front, a long playlist left past its 200th song reopened on the 200th, at the
+     * place reached in another song.
+     */
+    internal fun trimmed(saved: Saved, max: Int = MAX_SONGS): Saved {
+        if (saved.songs.size <= max) return saved
+        val index = saved.index.coerceIn(saved.songs.indices)
+        // A few of the songs already played stay before it, for Previous; the rest are the ones to come.
+        val start = (index - PLAYED_KEPT).coerceIn(0, saved.songs.size - max)
+        return saved.copy(
+            songs = saved.songs.subList(start, start + max).toList(),
+            index = index - start,
+            tiers = saved.tiers?.drop(start)?.take(max),
+        )
     }
 
     /** Forgets the saved queue: the next start opens with no player. */
@@ -52,4 +69,6 @@ object QueueStore {
     }
 
     private const val MAX_SONGS = 200
+    /** Songs already played kept before the current one when a long queue is cut. */
+    private const val PLAYED_KEPT = 20
 }
