@@ -213,7 +213,7 @@ describe('sessions', () => {
     const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
     a!.s.queue = [track('p'), track('q'), track('r')];
     play(a!, track('x'));
-    await eventually('b sees the queue', () => b!.view?.devices[0]?.state?.queue.length === 3);
+    await eventually('b sees the queue', () => b!.view?.devices[0]?.state?.queue?.length === 3);
     b!.session.removeOn('a', 0, track('p'));
     await eventually('p gone', () => a!.s.queue.map((t) => t.id[0]).join('') === 'qr');
     // b may still show p first; r is entry 2 there, and is found by its id.
