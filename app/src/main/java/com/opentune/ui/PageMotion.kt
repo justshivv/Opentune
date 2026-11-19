@@ -4,7 +4,6 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.VisibilityThreshold
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -17,7 +16,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.ui.unit.IntOffset
 import com.opentune.data.settings.PageTransition
-import com.opentune.data.settings.PlayerMotion
 
 /**
  * How pages come and go for each [PageTransition]: the page opened, the one
@@ -65,31 +63,12 @@ internal object PageMotion {
         else -> fadeOut(tween(220)) + slideOutVertically(tween(280, easing = ease)) { it / 3 }
     }
 
-    /** The full player rising over the page. */
-    fun playerIn(m: PlayerMotion, still: Boolean): EnterTransition = when {
-        still -> fadeIn(tween(160))
-        else -> slideInVertically(playerRise(m)) { it } + fadeIn()
-    }
-
-    /** The full player dropping away. */
-    fun playerOut(m: PlayerMotion, still: Boolean): ExitTransition {
-        if (still) return fadeOut(tween(140))
-        if (m == PlayerMotion.ECHO) return slideOutVertically(playerRise(m)) { it } + fadeOut(tween(220))
-        val ms = when (m) {
-            PlayerMotion.SMOOTH -> 260
-            PlayerMotion.SNAPPY -> 170
-            else -> 220
-        }
-        return slideOutVertically(tween(ms, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(ms))
-    }
-
-    private fun playerRise(m: PlayerMotion) = when (m) {
-        // Echo Music BottomSheet's soft spring; see THIRD_PARTY_NOTICES.md.
-        PlayerMotion.ECHO -> spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)
-        PlayerMotion.SPRING -> spring(dampingRatio = 0.86f, stiffness = 380f, visibilityThreshold = IntOffset.VisibilityThreshold)
-        // Apple Music's sheet: no bounce, short and responsive.
-        PlayerMotion.SMOOTH -> spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 550f, visibilityThreshold = IntOffset.VisibilityThreshold)
-        PlayerMotion.BOUNCY -> spring(dampingRatio = 0.62f, stiffness = 300f, visibilityThreshold = IntOffset.VisibilityThreshold)
-        PlayerMotion.SNAPPY -> spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 1100f, visibilityThreshold = IntOffset.VisibilityThreshold)
-    }
+    /**
+     * The full player coming in and going, with motion reduced. Otherwise it grows out of the
+     * mini player as one card (PlayerSheet), which has its own spring; the phone's choice of
+     * how the player opens (PlayerMotion, still the desktop's) was only ever read here, where
+     * reduced motion made it a fade whatever it said, so it's no longer offered.
+     */
+    val playerIn: EnterTransition = fadeIn(tween(160))
+    val playerOut: ExitTransition = fadeOut(tween(140))
 }

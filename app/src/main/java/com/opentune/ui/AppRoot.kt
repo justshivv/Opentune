@@ -982,10 +982,11 @@ fun AppRoot(vm: PlayerViewModel) {
                     playerSheet(sheetSettled)
                 }
             } else {
+                // Motion reduced (what turns the card off): the player fades in and out.
                 AnimatedVisibility(
                     visible = sheetOpen && song != null,
-                    enter = PageMotion.playerIn(chromeUi.playerMotion, chromeUi.reduceAnimation),
-                    exit = PageMotion.playerOut(chromeUi.playerMotion, chromeUi.reduceAnimation),
+                    enter = PageMotion.playerIn,
+                    exit = PageMotion.playerOut,
                 ) {
                     playerSheet(transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible)
                 }

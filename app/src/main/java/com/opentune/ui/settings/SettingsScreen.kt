@@ -99,7 +99,6 @@ import com.opentune.data.settings.LyricsAnimation
 import com.opentune.data.settings.PageTransition
 import com.opentune.data.settings.PaletteStyleOption
 import com.opentune.data.settings.PlayerBackground
-import com.opentune.data.settings.PlayerMotion
 import com.opentune.data.settings.PlayerStyle
 import com.opentune.data.settings.Recommender
 import com.opentune.data.settings.SEED_COLORS
@@ -486,7 +485,6 @@ private fun settingsSections(
     var listBackgroundDialog by remember { mutableStateOf(false) }
     var pageButtonsDialog by remember { mutableStateOf(false) }
     var pageTransitionDialog by remember { mutableStateOf(false) }
-    var playerMotionDialog by remember { mutableStateOf(false) }
     var coverChangeDialog by remember { mutableStateOf(false) }
     var controlStyleDialog by remember { mutableStateOf(false) }
     val lastFm by LastFm.account.collectAsState()
@@ -777,16 +775,6 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { c -> AppSettings.updateUi { it.copy(coverChange = c) } },
             onDismiss = { coverChangeDialog = false },
-        )
-    }
-    if (playerMotionDialog) {
-        ChoiceSheet(
-            title = "Player opening",
-            options = PlayerMotion.entries,
-            selected = ui.playerMotion,
-            label = { "${it.label} · ${it.summary}" },
-            onSelect = { m -> AppSettings.updateUi { it.copy(playerMotion = m) } },
-            onDismiss = { playerMotionDialog = false },
         )
     }
     if (lyricsAnimationDialog) {
@@ -1306,10 +1294,6 @@ private fun settingsSections(
                 Entry("Song change", "cover change next song skip animation flip carousel deck fade") {
                     NavRow("Song change", { coverChangeDialog = true }, summary = ui.coverChange.summary, icon = ImageVector.vectorResource(AppIcons.SwapHoriz), value = ui.coverChange.label,
                         enabled = !reduced, disabledReason = "Always a fade while Reduce animation is on")
-                },
-                Entry("Player opening", "now playing sheet open close animation spring smooth bouncy snappy") {
-                    NavRow("Player opening", { playerMotionDialog = true }, summary = ui.playerMotion.summary, icon = ImageVector.vectorResource(AppIcons.UnfoldMore), value = ui.playerMotion.label,
-                        enabled = !reduced, disabledReason = "A short fade while Reduce animation is on")
                 },
                 Entry("Player background", "cover blur blurred mesh gradient echo glow colours pure black oled amoled") {
                     SettingRow("Player background", icon = ImageVector.vectorResource(AppIcons.Wallpaper), below = {
