@@ -12,8 +12,6 @@ import '@/styles/global.css';
 installStaleBuildRecovery();
 const router = createHashRouter(routes);
 
-// The opening, as on the phone, once per load: left out with motion off in Settings or reduced by the system.
-if (useAppearance.getState().motion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) playOpening();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -22,3 +20,7 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// The opening's dive into the mark, once the player is up (index.html shows the mark meanwhile):
+// left out with motion off in Settings or reduced by the system.
+playOpening(useAppearance.getState().motion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
