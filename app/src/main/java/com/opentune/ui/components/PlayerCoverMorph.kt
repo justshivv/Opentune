@@ -385,7 +385,7 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
     }
     // The player cover's own corner, as set in Appearance (the full-screen cover keeps the usual one).
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
-    val coverCorner = if (ui.fullScreenCover) 28f else ui.coverCornerDp.toFloat()
+    val coverCorner = if (ui.fullScreenCover || ui.pageLayout == com.opentune.data.settings.PageLayout.POSTER) 28f else ui.coverCornerDp.toFloat()
     fun roundStart(from: Rect) = if (PlayerMorph.round()) with(density) { from.width.toDp().value / 2f } else 12f
     // Only whether a finger is on it decides what's drawn; how far it has gone
     // is read in the layer alone, so a swipe doesn't recompose this every frame.

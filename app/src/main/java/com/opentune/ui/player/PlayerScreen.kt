@@ -98,6 +98,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opentune.data.LogExport
@@ -138,6 +139,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
+import com.opentune.ui.components.posterGlass
 
 /**
  * The playback position, refreshed every frame while playing and the caller
@@ -462,14 +464,16 @@ fun PlayerLayout(
     val landscape = !docked && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Full-screen cover only fits the layouts built around a plain square cover.
     // The Full-screen cover art switch decides, in the Apple-inspired style too (choosing that style turns it on).
-    val fullCover = !landscape && !amoled && state.ui.fullScreenCover && pane == Pane.COVER && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    // The Poster layout always gives the player its cover edge to edge, as its pages have.
+    val posterPlayer = state.ui.pageLayout == com.opentune.data.settings.PageLayout.POSTER
+    val fullCover = !landscape && !amoled && (state.ui.fullScreenCover || posterPlayer) && pane == Pane.COVER && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     // Where the cover area ends, measured from the top of the player, so a
     // full-screen cover can run down to the title on any screen height.
     var playerCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     var coverBottomPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     // The plain cover flies, square or edge to edge; the vinyl, cassette and other designs just change view.
-    val fullStyle = !landscape && !amoled && state.ui.fullScreenCover && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    val fullStyle = !landscape && !amoled && (state.ui.fullScreenCover || posterPlayer) && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     val flies = !state.ui.reduceAnimation && !docked && !landscape &&
             style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
             style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST
@@ -1582,6 +1586,8 @@ private fun LyricsOffsetDialog(videoId: String, autoMs: Long, onDismiss: () -> U
 @Composable
 private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () -> Unit, compact: Boolean = false) {
     val apple = AppSettings.ui.collectAsState().value.playerStyle == PlayerStyle.APPLE_MUSIC
+    // The Poster layout: the title heavy, who it's by in spaced capitals, the menu in clear glass.
+    val poster = com.opentune.ui.components.posterLayout()
     Column(Modifier.weight(1f)) {
         // Tapping the title opens its album, and the artist opens their page.
         val menu = LocalSongMenu.current
@@ -1596,6 +1602,7 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
             song.title,
             Modifier.fillMaxWidth().then(if (openAlbum != null) Modifier.clickable(onClickLabel = "Open album", onClick = openAlbum) else Modifier),
             style = when {
+                poster && !compact -> MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black, letterSpacing = (-0.3).sp)
                 apple -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 compact -> MaterialTheme.typography.titleLarge
                 else -> MaterialTheme.typography.headlineSmall
@@ -1603,7 +1610,18 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
         )
         // Each artist's name opens their own page.
         val named = menu?.viewArtistNamed?.takeIf { !song.videoId.startsWith("local:") }
-        com.opentune.ui.components.ArtistLinks(
+        if (poster && !compact) {
+            // In capitals; a tapped name is matched back to how the song spells it.
+            com.opentune.ui.components.ArtistLinks(
+                song.artist.uppercase(),
+                onArtist = named?.let { open -> { name: String ->
+                    open(song, Regex(Regex.escape(name), RegexOption.IGNORE_CASE).find(song.artist)?.value ?: name)
+                } },
+                explicit = song.isExplicit == true,
+                style = MaterialTheme.typography.titleSmall.copy(letterSpacing = 2.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant),
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        } else com.opentune.ui.components.ArtistLinks(
             song.artist,
             onArtist = named?.let { open -> { name: String -> open(song, name) } },
             explicit = song.isExplicit == true,
@@ -1615,8 +1633,11 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
     if (apple) StarButton(liked, onLike) else HeartButton(liked, onLike)
     Spacer(Modifier.width(10.dp))
     Box(
-        Modifier.size(46.dp).clip(CircleShape)
-            .background(if (apple) Color.White.copy(alpha = 0.14f) else LocalContentColor.current.copy(alpha = PLAYER_BUTTON_TINT))
+        Modifier.size(46.dp)
+            .then(
+                if (poster) Modifier.posterGlass(CircleShape)
+                else Modifier.clip(CircleShape).background(if (apple) Color.White.copy(alpha = 0.14f) else LocalContentColor.current.copy(alpha = PLAYER_BUTTON_TINT)),
+            )
             .clickable(onClick = onMore),
         contentAlignment = Alignment.Center,
     ) {
@@ -1733,7 +1754,9 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
         Box(
             Modifier.size(46.dp).graphicsLayer { scaleX = scale; scaleY = scale }
                 // A wash of the player's own ink, so the song's colour shows through rather than a grey disc.
-                .clip(CircleShape).background(LocalContentColor.current.copy(alpha = PLAYER_BUTTON_TINT))
+                // The Poster layout's clear glass, like the menu beside it.
+                .then(if (com.opentune.ui.components.posterLayout()) Modifier.posterGlass(CircleShape)
+                    else Modifier.clip(CircleShape).background(LocalContentColor.current.copy(alpha = PLAYER_BUTTON_TINT)))
                 .clickable(interactionSource = interactions, indication = com.opentune.ui.components.FocusRing(CircleShape)) {
                     haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE)
                     if (!liked && !still) bursts++
