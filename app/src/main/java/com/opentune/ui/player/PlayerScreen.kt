@@ -479,7 +479,8 @@ fun PlayerLayout(
     var coverBottomPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     // The plain cover flies, square or edge to edge; the vinyl, cassette and other designs just change view.
-    val fullStyle = !landscape && !amoled && (state.ui.fullScreenCover || posterPlayer) && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    // (The same test as Settings' and the flying cover's, playerCoverEdgeToEdge.)
+    val fullStyle = !landscape && com.opentune.ui.components.playerCoverEdgeToEdge(state.ui, theme)
     val flies = !state.ui.reduceAnimation && !docked && !landscape &&
             style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
             style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST

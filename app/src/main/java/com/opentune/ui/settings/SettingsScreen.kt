@@ -1153,7 +1153,10 @@ private fun settingsSections(
                     ToggleRow("Color from artwork", theme.colorFromArtwork, { v -> AppSettings.updateTheme { it.copy(colorFromArtwork = v) } }, summary = "Tint the app with the playing song's cover", icon = ImageVector.vectorResource(AppIcons.AutoAwesome))
                 },
                 Entry("Mini player takes the cover's colour", "mini player pill tint colour artwork plain") {
-                    ToggleRow("Mini player takes the cover's colour", ui.miniPlayerTint, { v -> AppSettings.updateUi { it.copy(miniPlayerTint = v) } }, summary = "Off keeps the small player's glass plain, whatever is playing", icon = ImageVector.vectorResource(AppIcons.AutoAwesome))
+                    // The Poster mini player is smoked glass under light ink (posterSmoke), which a cover's
+                    // colour would wash out, so the tint is the Classic layout's alone.
+                    ToggleRow("Mini player takes the cover's colour", ui.miniPlayerTint, { v -> AppSettings.updateUi { it.copy(miniPlayerTint = v) } }, summary = "Off keeps the small player's glass plain, whatever is playing", icon = ImageVector.vectorResource(AppIcons.AutoAwesome),
+                        enabled = !poster, disabledReason = "Only with the Classic page layout. The Poster mini player is smoked glass")
                 },
                 Entry("Artist pages take the photo's colour", "artist page tint colour photo background") {
                     ToggleRow("Artist pages take the photo's colour", ui.artistPageTint, { v -> AppSettings.updateUi { it.copy(artistPageTint = v) } }, summary = "Off keeps artist pages in the app's own colours", icon = ImageVector.vectorResource(AppIcons.AutoAwesome))
@@ -1336,6 +1339,13 @@ private fun settingsSections(
                         enabled = !poster, disabledReason = "Only with the Classic page layout. The Poster player's cover is always full-screen")
                 },
                 Entry("Cover corners", "artwork corner radius round square sharp shape thumbnail") {
+                    val cornersWhyNot = when {
+                        ui.playerStyle in listOf(PlayerStyle.VINYL, PlayerStyle.CASSETTE, PlayerStyle.HALO, PlayerStyle.POLAROID) ->
+                            com.opentune.i18n.Tr.f("Not with the {0} player, which draws its own cover", com.opentune.ui.theme.tr(ui.playerStyle.label))
+                        !com.opentune.ui.components.playerCoverEdgeToEdge(ui, theme) -> null
+                        ui.fullScreenCover -> "Turn off Full-screen cover art to shape the cover"
+                        else -> "Only with the Classic page layout. The Poster player's cover is always full-screen"
+                    }
                     SettingRow(
                         "Cover corners",
                         summary = when {
@@ -1343,8 +1353,11 @@ private fun settingsSections(
                             else -> com.opentune.i18n.Tr.f("Rounded by {0} dp", ui.coverCornerDp)
                         },
                         icon = ImageVector.vectorResource(AppIcons.RoundedCorner),
-                        enabled = !ui.fullScreenCover,
-                        disabledReason = "Turn off Full-screen cover art to shape the cover",
+                        // Only the plain square cover is shaped (ArtworkPane): not an edge-to-edge one,
+                        // which the Poster layout always gives those players, nor the record, tape,
+                        // halo or instant photo the other players draw.
+                        enabled = cornersWhyNot == null,
+                        disabledReason = cornersWhyNot,
                         below = {
                             Slider(
                                 value = ui.coverCornerDp.toFloat(),

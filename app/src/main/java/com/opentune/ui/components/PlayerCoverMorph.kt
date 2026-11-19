@@ -31,6 +31,23 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
 /**
+ * Whether the player (upright) runs its cover edge to edge: with Full-screen cover art, or in the
+ * Poster layout, for the players built around a plain square cover (Apple Music inspired, Classic,
+ * Minimal), and never over AMOLED black. Then Settings › Cover corners doesn't shape it.
+ */
+internal fun playerCoverEdgeToEdge(
+    ui: com.opentune.data.settings.InterfaceSettings,
+    theme: com.opentune.data.settings.ThemeSettings,
+): Boolean =
+    theme.playerBackground != com.opentune.data.settings.PlayerBackground.AMOLED &&
+        (ui.fullScreenCover || ui.pageLayout == com.opentune.data.settings.PageLayout.POSTER) &&
+        ui.playerStyle in listOf(
+            com.opentune.data.settings.PlayerStyle.APPLE_MUSIC,
+            com.opentune.data.settings.PlayerStyle.CLASSIC,
+            com.opentune.data.settings.PlayerStyle.MINIMAL,
+        )
+
+/**
  * The now-playing cover growing out of the mini player into the full player as
  * it opens, and shrinking back into it on close. The mini player reports where
  * its cover sits ([miniLanding]); the player reports where its own cover lands
@@ -385,7 +402,8 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
     }
     // The player cover's own corner, as set in Appearance (the full-screen cover keeps the usual one).
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
-    val coverCorner = if (ui.fullScreenCover || ui.pageLayout == com.opentune.data.settings.PageLayout.POSTER) 28f else ui.coverCornerDp.toFloat()
+    val theme by com.opentune.data.settings.AppSettings.theme.collectAsState()
+    val coverCorner = if (playerCoverEdgeToEdge(ui, theme)) 28f else ui.coverCornerDp.toFloat()
     fun roundStart(from: Rect) = if (PlayerMorph.round()) with(density) { from.width.toDp().value / 2f } else 12f
     // Only whether a finger is on it decides what's drawn; how far it has gone
     // is read in the layer alone, so a swipe doesn't recompose this every frame.
