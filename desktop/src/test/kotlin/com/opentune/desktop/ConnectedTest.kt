@@ -33,6 +33,34 @@ class ConnectedTest {
     }
 
     @Test
+    fun thePhonesLastFmSignInIsKeptOnlyWithTheKeyThatMadeIt() {
+        val dir = Files.createTempDirectory("lastfm").toFile()
+        val file = java.io.File(dir, "lastfm.json")
+        LastFmDesktop.useFile(file)
+        try {
+            val key = "b".repeat(32)
+            if (!LastFmDesktop.buildHasKeys) {
+                // Another application's session, and no secret for it here: not kept.
+                assertFalse(LastFmDesktop.adopt(com.opentune.data.account.PairingExtras.LastFm("s3ss", "shiv", key)))
+                assertEquals(null, LastFmDesktop.state.value.session)
+            }
+            // The person's own application, its secret with it: kept, and shown as signed in.
+            assertTrue(LastFmDesktop.adopt(com.opentune.data.account.PairingExtras.LastFm("s3ss", "shiv", key, "c".repeat(32))))
+            val session = LastFmDesktop.state.value.session!!
+            assertEquals("shiv", session.user)
+            assertEquals(key, session.apiKey)
+            if (java.nio.file.FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+                assertEquals("rw-------", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(file.toPath())))
+            }
+            // Signing out here forgets it here.
+            LastFmDesktop.signOut()
+            assertEquals(null, LastFmDesktop.state.value.session)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun aListenIsHalfTheSongOrFourMinutes() {
         assertFalse(LastFmDesktop.isListen(89.0, 180.0))
         assertTrue(LastFmDesktop.isListen(90.0, 180.0))

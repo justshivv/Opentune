@@ -2,6 +2,7 @@ package com.opentune.desktop
 
 import com.opentune.core.BuildConfig
 import com.opentune.data.Http
+import com.opentune.data.account.PairingExtras
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -131,6 +132,28 @@ object LastFmDesktop {
             }
             done(problem)
         }
+    }
+
+    /**
+     * The phone's Last.fm sign-in, which the person chose to hand over when the phone signed
+     * this computer in. A session key works only with the application key that made it: this
+     * build's own (OpenTune's), whose secret it has, or the person's own application, whose
+     * secret came with it (or was typed here). With neither it's left alone: false. Signing out
+     * here later forgets it here only; the phone stays signed in.
+     */
+    fun adopt(shared: PairingExtras.LastFm): Boolean {
+        val apiKey = shared.apiKey ?: BuildConfig.LASTFM_API_KEY.takeIf { buildHasKeys } ?: return false
+        val own = _state.value
+        val secret = when {
+            buildHasKeys && apiKey == BuildConfig.LASTFM_API_KEY -> BuildConfig.LASTFM_API_SECRET
+            shared.secret != null -> shared.secret
+            apiKey == own.ownKey && own.ownSecret.isNotBlank() -> own.ownSecret
+            else -> return false
+        }
+        cancelSignIn()
+        update { it.copy(session = Session(shared.session, shared.username, apiKey, secret), queue = if (it.session?.user == shared.username) it.queue else emptyList()) }
+        flush()
+        return true
     }
 
     fun cancelSignIn() {
@@ -285,6 +308,11 @@ object LastFmDesktop {
         runCatching {
             file.parentFile.mkdirs()
             val tmp = File(file.parentFile, file.name + ".tmp")
+            // The session key and secret are for this user only (where the system has POSIX
+            // permissions), made so before anything is written into the file.
+            tmp.delete()
+            tmp.createNewFile()
+            runCatching { java.nio.file.Files.setPosixFilePermissions(tmp.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rw-------")) }
             tmp.writeText(json.encodeToString(State.serializer(), _state.value))
             if (!tmp.renameTo(file)) { file.delete(); tmp.renameTo(file) }
         }

@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.opentune.data.account.AccountStore
+import com.opentune.data.account.PairingExtras
 import com.opentune.data.account.PairingReceiver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -128,12 +129,21 @@ private fun SignInWithPhone(onClose: () -> Unit) {
     LaunchedEffect(attempt) {
         receiver = null; done = false; failed = false
         try {
-            val current = withContext(Dispatchers.IO) { PairingReceiver() }
+            // Last.fm too, if the person ticks it on the phone. Not Discord: the card here goes
+            // through the Discord app on this computer, which needs no token.
+            val current = withContext(Dispatchers.IO) { PairingReceiver(take = setOf(PairingExtras.LASTFM)) }
             receiver = current
-            status = "On your phone, open OpenTune, go to Settings, then Link a device, then TV, and scan this code. Approve it on the phone. Both must be on the same Wi-Fi; the code lasts two minutes."
-            withContext(Dispatchers.IO) { current.receive { cookie -> AccountStore.signIn(cookie); true } }
+            status = "On your phone, open OpenTune, go to Settings, then Link a device, then TV, and scan this code. Approve it on the phone, where you can sign this computer in to Last.fm too. Both must be on the same Wi-Fi; the code lasts two minutes."
+            var lastFm = false
+            withContext(Dispatchers.IO) {
+                current.receive(extras = { shared ->
+                    lastFm = shared.lastFm?.let(LastFmDesktop::adopt) == true
+                    if (lastFm) setOf(PairingExtras.LASTFM) else emptySet()
+                }) { cookie -> AccountStore.signIn(cookie); true }
+            }
             done = true
-            status = "Signed in. Your YouTube Music account is on this computer."
+            status = if (lastFm) "Signed in. Your YouTube Music account and Last.fm are on this computer."
+            else "Signed in. Your YouTube Music account is on this computer."
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
