@@ -21,6 +21,10 @@ internal class RenewingDataSource(
     private val renew: (failed: String) -> String?,
     private val patient: (url: String) -> Boolean = { true },
 ) : DataSource by upstream {
+    // Passed on by hand: Kotlin's `by` skips DataSource's Java default for this one, which
+    // answers an empty map, and the FLAC's length in Content-Range went missing (see ChunkedDataSource).
+    override fun getResponseHeaders(): Map<String, List<String>> = upstream.responseHeaders
+
     override fun open(dataSpec: DataSpec): Long {
         var waits = 0
         while (true) {

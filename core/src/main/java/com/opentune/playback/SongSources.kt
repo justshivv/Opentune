@@ -93,6 +93,10 @@ internal fun resolveTrack(dataSpec: DataSpec): DataSpec {
 private class RefusalReportingDataSource(
     private val upstream: HttpDataSource,
 ) : DataSource by upstream {
+    // Passed on by hand: Kotlin's `by` skips DataSource's Java default for this one, which
+    // answers an empty map, and the FLAC's length in Content-Range went missing (see ChunkedDataSource).
+    override fun getResponseHeaders(): Map<String, List<String>> = upstream.responseHeaders
+
     override fun open(dataSpec: DataSpec): Long = try {
         upstream.open(dataSpec)
     } catch (e: HttpDataSource.InvalidResponseCodeException) {
