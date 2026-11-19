@@ -27,6 +27,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.Button
@@ -69,13 +77,33 @@ import com.opentune.data.subsonic.Subsonic
 import kotlinx.coroutines.launch
 
 /** The groups of settings, in the bar at the top and down the page. */
-private enum class Group(val label: String) { LOOK("Look"), PLAYBACK("Playback"), SOURCES("Sources"), SOUND("Equalizer"), LYRICS("Lyrics"), ACCOUNTS("Accounts"), SERVER("Your server"), ABOUT("About") }
+private enum class Group(val label: String, val colour: Color) {
+    LOOK("Appearance", Color(0xFF8E5BD8)),
+    PLAYBACK("Playback", Color(0xFF2FA84F)),
+    SOURCES("Audio sources", Color(0xFFE5483A)),
+    SOUND("Equalizer", Color(0xFFF08A24)),
+    LYRICS("Lyrics", Color(0xFFD6337A)),
+    ACCOUNTS("Accounts", Color(0xFF3478F6)),
+    SERVER("Your server", Color(0xFF5E5CE6)),
+    ABOUT("About", Color(0xFF636366)),
+}
+
+/** Each group's glyph, white on its colour, as the web player's settings list has them. */
+private val Group.icon: androidx.compose.ui.graphics.vector.ImageVector get() = when (this) {
+    Group.LOOK -> androidx.compose.material.icons.Icons.Rounded.Palette
+    Group.PLAYBACK -> androidx.compose.material.icons.Icons.Rounded.PlayArrow
+    Group.SOURCES -> androidx.compose.material.icons.Icons.Rounded.GraphicEq
+    Group.SOUND -> androidx.compose.material.icons.Icons.Rounded.Equalizer
+    Group.LYRICS -> androidx.compose.material.icons.Icons.Rounded.Lyrics
+    Group.ACCOUNTS -> androidx.compose.material.icons.Icons.Rounded.Link
+    Group.SERVER -> androidx.compose.material.icons.Icons.Rounded.Storage
+    Group.ABOUT -> androidx.compose.material.icons.Icons.Rounded.Info
+}
 
 /**
- * Settings, grouped into cards down a centred column, with a bar of the
- * groups that glides to each. The bar sits under the window's player bar
- * and is frosted over the cards sliding under it: it blurs a layer of its
- * own, since glass can't blur the layer it's drawn in.
+ * Settings, as the web player lays them out: on a wide window the list of groups stays at the
+ * left while their cards scroll beside it, a click gliding to one; on a narrow one the groups are
+ * a frosted bar of chips over the cards. Each group is a heading over a soft card of its rows.
  */
 @Composable
 internal fun SettingsPage() {
@@ -85,25 +113,26 @@ internal fun SettingsPage() {
     val top = LocalPageTop.current
     val haze = dev.chrisbanes.haze.rememberHazeState()
     val blur = !AppSettings.ui.collectAsState().value.reduceBlur
-    Box(Modifier.fillMaxSize()) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth >= 1020.dp
         androidx.compose.foundation.lazy.LazyColumn(
             state = list,
-            contentPadding = PaddingValues(top = top + GROUP_BAR + 24.dp, bottom = LocalPageBottom.current),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+            contentPadding = PaddingValues(top = top + (if (wide) 28.dp else GROUP_BAR + 24.dp), bottom = LocalPageBottom.current),
+            verticalArrangement = Arrangement.spacedBy(26.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxSize().then(if (blur) Modifier.hazeSource(haze) else Modifier),
         ) {
-            item { Column(Modifier.column()) { Text("Settings", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold) } }
+            item { Column(Modifier.column(wide)) { Text("Settings", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold) } }
             Group.entries.forEach { g ->
                 item(key = g) {
-                    Box(Modifier.column()) {
+                    Box(Modifier.column(wide)) {
                         when (g) {
                             Group.LOOK -> AppearanceSection()
                             Group.PLAYBACK -> PlaybackSection()
                             Group.SOURCES -> SourcesSection()
                             Group.SOUND -> EqualizerSection()
                             Group.LYRICS -> LyricsSection()
-                            Group.ACCOUNTS -> Column(verticalArrangement = Arrangement.spacedBy(18.dp)) { AccountSection(); ConnectedSection() }
+                            Group.ACCOUNTS -> Column(verticalArrangement = Arrangement.spacedBy(26.dp)) { AccountSection(); ConnectedSection() }
                             Group.SERVER -> ServerSection()
                             Group.ABOUT -> Section("About") {
                                 Text("OpenTune ${BuildConfig.VERSION_NAME} for computers", style = MaterialTheme.typography.bodyLarge)
@@ -118,44 +147,86 @@ internal fun SettingsPage() {
                 }
             }
         }
-        // The groups, frosted over the cards, each gliding to its card.
-        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalHazeState provides haze.takeIf { blur }) {
-            Box(
-                Modifier.padding(top = top).fillMaxWidth().height(GROUP_BAR)
-                    .glass(androidx.compose.ui.graphics.RectangleShape, MaterialTheme.colorScheme.background.copy(alpha = 0.72f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(
-                    Modifier.column().horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Group.entries.forEachIndexed { i, g ->
-                        Segment(g.label, at == i) { scope.launch { list.animateScrollToItem(i + 1, 0) } }
+        if (wide) {
+            // The groups at the left of the frame, staying put while the cards scroll beside them.
+            Box(Modifier.fillMaxWidth().padding(top = top + 28.dp), contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.padding(horizontal = 32.dp).widthIn(max = FRAME).fillMaxWidth()) {
+                    Column(Modifier.width(SIDE).padding(top = 64.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Group.entries.forEachIndexed { i, g ->
+                            SideGroup(g, at == i) { scope.launch { list.animateScrollToItem(i + 1, 0) } }
+                        }
                     }
                 }
-                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)))
+            }
+        } else {
+            // The groups, frosted over the cards, each gliding to its card.
+            androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalHazeState provides haze.takeIf { blur }) {
+                Box(
+                    Modifier.padding(top = top).fillMaxWidth().height(GROUP_BAR)
+                        .glass(androidx.compose.ui.graphics.RectangleShape, MaterialTheme.colorScheme.background.copy(alpha = 0.72f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        Modifier.column(false).horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Group.entries.forEachIndexed { i, g ->
+                            Segment(g.label, at == i) { scope.launch { list.animateScrollToItem(i + 1, 0) } }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-/** How tall the bar of setting groups is. */
+/** One group in the settings list: its glyph on a tile of its colour, its name; the one in view is lit. */
+@Composable
+private fun SideGroup(g: Group, current: Boolean, onClick: () -> Unit) {
+    val fill by androidx.compose.animation.animateColorAsState(
+        if (current) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f) else Color.Transparent, label = "sideGroup",
+    )
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(fill).clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(26.dp).clip(RoundedCornerShape(7.dp)).background(g.colour), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.Icon(g.icon, null, Modifier.size(16.dp), tint = Color.White)
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(g.label, style = MaterialTheme.typography.titleMedium, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal)
+    }
+}
+
+/** How tall the bar of setting groups is, on a narrow window. */
 private val GROUP_BAR = 56.dp
 
-/** The settings column: as wide as the page allows, up to a comfortable reading width, in the middle. */
-private fun Modifier.column(): Modifier = this.padding(horizontal = 32.dp).widthIn(max = 880.dp).fillMaxWidth()
+/** The list of groups beside the cards on a wide window, and the frame the two share. */
+private val SIDE = 204.dp
+private val FRAME = 204.dp + 48.dp + 680.dp
 
+/** The settings column: beside the list of groups on a wide window, centred in the page on a narrow one. */
+private fun Modifier.column(wide: Boolean): Modifier =
+    if (wide) this.padding(horizontal = 32.dp).widthIn(max = FRAME).fillMaxWidth().padding(start = SIDE + 48.dp)
+    else this.padding(horizontal = 32.dp).widthIn(max = 880.dp).fillMaxWidth()
+
+/** A group of settings as the web player draws one: its name above, its rows on a soft card. */
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(horizontal = 24.dp, vertical = 22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            content()
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
+        )
+        Surface(
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f), shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                content()
+            }
         }
     }
 }
@@ -368,10 +439,12 @@ private fun AppearanceSection() {
                 )
             }
         }
-        Choices("Font", com.opentune.data.settings.AppFont.entries.filter { it != com.opentune.data.settings.AppFont.CUSTOM }, theme.font, { it.label }) { v -> AppSettings.updateTheme { it.copy(font = v) } }
+        // The first choice is DM Sans here, the web player's typeface, rather than the system's own sans.
+        Choices("Font", com.opentune.data.settings.AppFont.entries.filter { it != com.opentune.data.settings.AppFont.CUSTOM }, theme.font, { if (it == com.opentune.data.settings.AppFont.SYSTEM) "DM Sans" else it.label }) { v -> AppSettings.updateTheme { it.copy(font = v) } }
         Choices("Text weight", com.opentune.data.settings.TextWeight.entries, theme.textWeight, { it.label }) { v -> AppSettings.updateTheme { it.copy(textWeight = v) } }
         SwitchRow("Blur effects", "Frosted glass on the player, the bars and the search box, blurring what scrolls under them", !ui.reduceBlur) { on -> AppSettings.updateUi { it.copy(reduceBlur = !on) } }
-        if (!ui.reduceBlur) Choices("Glass", com.opentune.data.settings.GlassStyle.entries.filter { it != com.opentune.data.settings.GlassStyle.LIQUID }, ui.glassStyle, { it.label }) { v -> AppSettings.updateUi { it.copy(glassStyle = v) } }
+        // Liquid Glass first, as the web player draws it (the default); the others are frosted.
+        if (!ui.reduceBlur) Choices("Glass", com.opentune.data.settings.GlassStyle.entries.sortedBy { if (it == com.opentune.data.settings.GlassStyle.LIQUID) 0 else 1 }, ui.glassStyle, { if (it == com.opentune.data.settings.GlassStyle.LIQUID) "Liquid Glass" else it.label }) { v -> AppSettings.updateUi { it.copy(glassStyle = v) } }
         SwitchRow("Smooth motion", "Pages glide in, covers lift under the pointer, rows rise into place", !ui.reduceAnimation) { on -> AppSettings.updateUi { it.copy(reduceAnimation = !on) } }
         SwitchRow("Colour from the song", "A soft wash of the playing cover's colour behind the pages", theme.colorFromArtwork) { on -> AppSettings.updateTheme { it.copy(colorFromArtwork = on) } }
         SwitchRow("Artist signatures (beta)", "An artist's handwritten signature over their photo, in place of their name, when there's one", ui.artistSignatures) { on ->

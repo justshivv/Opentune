@@ -162,7 +162,9 @@ private fun rememberType(settings: com.opentune.data.settings.ThemeSettings): Ty
         AppFont.OUTFIT -> Outfit
         AppFont.SERIF -> FontFamily.Serif
         AppFont.MONO -> FontFamily.Monospace
-        else -> FontFamily.SansSerif
+        // The web player's typeface, so the two read alike: the system's own sans (DejaVu on
+        // Linux, Segoe on Windows) made the desktop look unlike the rest of OpenTune.
+        else -> DmSans
     }
     return remember(family, settings.textWeight) { readableType(family, settings.textWeight.minimum) }
 }
@@ -252,6 +254,16 @@ private val Outfit: FontFamily by lazy {
     FontFamily(
         listOf(400, 500, 600, 700, 800).map { w ->
             Font("Outfit-$w", outfitData, FontWeight(w), variationSettings = FontVariation.Settings(FontVariation.weight(w)))
+        },
+    )
+}
+
+/** DM Sans, the web player's typeface (SIL Open Font License; see third_party/dm-sans), in its five weights. */
+private val DmSans: FontFamily by lazy {
+    FontFamily(
+        listOf(400, 500, 600, 700, 800).map { w ->
+            val bytes = Thread.currentThread().contextClassLoader.getResourceAsStream("font/dmsans_$w.ttf")!!.use { it.readBytes() }
+            Font("DMSans-$w", bytes, FontWeight(w))
         },
     )
 }

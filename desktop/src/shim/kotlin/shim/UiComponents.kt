@@ -52,6 +52,11 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
     val look = glassLook(ui.glassStyle)
     val colour = if (tint.alpha < 1f) tint else styleTint(ui.glassStyle, tint, MaterialTheme.colorScheme.primary, dark)
+    // Liquid Glass, as the web player's (the Liquid style, the default): with blur on, under the glass's own film.
+    if (haze != null && !ui.reduceBlur && ui.glassStyle == GlassStyle.LIQUID) {
+        val film = if (tint.alpha < 1f) tint.copy(alpha = minOf(tint.alpha, 0.55f)) else colour.copy(alpha = if (dark) 0.42f else 0.5f)
+        return this.liquidGlass(haze, shape, film).clip(shape)
+    }
     val base = this.clip(shape)
     val filled = if (haze == null || ui.reduceBlur) {
         base.background(if (tint.alpha < 1f) tint else colour.copy(alpha = 0.96f))
