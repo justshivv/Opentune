@@ -244,8 +244,15 @@ let canonical: Map<string, number> | null = null;
 const SESSION_KEY = 'opentune:session';
 /** Where the restored track was left, until it is played again. */
 let resumeSec = 0;
-/** The restored track's place, for the seek line before anything has loaded. */
+/** The restored track's place, for the seek line before anything has loaded; while one loads, where it starts. */
 export const resumePosition = () => resumeSec;
+/**
+ * The track being loaded, until its stream is in the audio element: where it
+ * starts (seconds) and whether it plays then. Meanwhile the element still has
+ * the last track's time in it, which isn't this one's.
+ */
+let loading: { startSec: number; plays: boolean } | null = null;
+export const loadingTrack = () => loading;
 
 interface SavedSession {
   queue: QueueEntry[];
@@ -552,8 +559,10 @@ async function startAt(at: number, { startSec = 0, auto = false, autoplay = true
   const token = ++loadToken;
   // Where this load starts; kept if it fails, so Try Again starts there too.
   resumeSec = startSec;
+  loading = { startSec, plays: autoplay };
 
   if (!extensionReady()) {
+    loading = null;
     usePlayer.setState({
       index: at,
       nowPlaying: { ...hintOf(entry.track), title: entry.track.title || 'Can’t play this here yet' },
@@ -574,11 +583,13 @@ async function startAt(at: number, { startSec = 0, auto = false, autoplay = true
     const track = await deck.engine.load(entry.track.videoId, { startSec, autoplay, hint: searchHintOf(entry.track) });
     if (token !== loadToken) return;
     resumeSec = 0;
+    loading = null;
     applyTrack(track, entry.track);
     if (!autoplay) usePlayer.setState({ status: 'paused' });
     afterTrackStarted();
   } catch (error) {
     if (token !== loadToken || (error instanceof Error && error.name === 'SupersededError')) return;
+    loading = null;
     const message = error instanceof Error ? error.message : String(error);
     usePlayer.setState({ status: 'error', error: message });
     // A track the player reached on its own that can't play is skipped, as on the phone.

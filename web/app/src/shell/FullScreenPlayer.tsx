@@ -1,5 +1,6 @@
 import { Maximize, MonitorSmartphone, Minimize, X } from 'lucide-react';
 import { useControlling } from '@/connect/connect';
+import { meant } from '@/connect/session';
 import { DevicesPanel } from '@/connect/DevicesPanel';
 import { RemoteUpNext } from '@/connect/RemoteUpNext';
 import { useShownNowPlaying } from '@/connect/shown';
@@ -88,7 +89,7 @@ function Transport() {
   const remote = useControlling();
   const hasTrack = usePlayer((s) => s.nowPlaying !== null) || !!remote;
   const playingHere = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
-  const playing = remote ? !!remote.state?.playing : playingHere;
+  const playing = remote ? meant(remote.state) : playingHere;
   const buffering = usePlayer((s) => s.status === 'buffering' || s.status === 'loading') && !remote;
   const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0)) || !!remote;
   const localShuffle = usePlayer((s) => s.shuffle);
@@ -157,7 +158,7 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
   const { pathname } = useLocation();
   const openedAt = useRef(pathname);
   const playingHere = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
-  const playing = remote ? !!remote.state?.playing : playingHere;
+  const playing = remote ? meant(remote.state) : playingHere;
   const setFullScreen = useUi((s) => s.setFullScreen);
   const lyrics = useLyrics();
   // A music video plays only where the music does.
