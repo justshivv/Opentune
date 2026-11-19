@@ -557,11 +557,18 @@ private fun WindowRows() {
         own,
         { WindowsFrame.setOwnFrame(it) },
     )
-    // A material needs the window made see-through, which happens only with the app's own title bar on Windows 11.
-    if (WindowsFrame.transparent) {
+    // A material needs the window made see-through, which happens only with the app's own title bar
+    // on Windows 11, and only when the window opened with a material chosen.
+    if (WindowsFrame.materialsPossible) {
         val material by WindowsFrame.material.collectAsState()
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-        SegmentedRow("Window material", choices = WindowsFrame.Material.entries, selected = material, label = { it.label }) { WindowsFrame.setMaterial(it, dark) }
+        val restart = (material != WindowsFrame.Material.OFF) != WindowsFrame.transparent
+        SegmentedRow(
+            "Window material",
+            detail = "Mica or Acrylic shows the desktop's colour through the window. Off is the plain window, the steadiest on every computer." +
+                if (restart) " Takes effect when OpenTune next opens." else "",
+            choices = WindowsFrame.Material.entries, selected = material, label = { it.label },
+        ) { WindowsFrame.setMaterial(it, dark) }
     }
 }
 

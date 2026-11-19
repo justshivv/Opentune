@@ -45,8 +45,10 @@ internal object WindowsFrame {
     /** Whether the next start draws its own title bar. Read once at start; changing it needs a restart. */
     val ownFrame: StateFlow<Boolean> = _ownFrame.asStateFlow()
 
+    // Off unless chosen: a see-through window, which Mica and Acrylic need, stalled Direct3D for
+    // seconds as it opened and then closed the app on some Windows 11 computers.
     private val _material = MutableStateFlow(
-        runCatching { Material.valueOf(saved().optString("material", Material.MICA.name)) }.getOrDefault(Material.MICA),
+        runCatching { Material.valueOf(saved().optString("material", Material.OFF.name)) }.getOrDefault(Material.OFF),
     )
     /** The material asked for in Settings. */
     val material: StateFlow<Material> = _material.asStateFlow()
@@ -79,8 +81,50 @@ internal object WindowsFrame {
      */
     val drawn: Boolean by lazy { isWindows && _ownFrame.value && Native.POINTER_SIZE == 8 && api != null }
 
-    /** Whether the window is made see-through, for a material to show through it. Also fixed at creation. */
-    val transparent: Boolean by lazy { drawn && isWindows11 }
+    /**
+     * Whether the window is made see-through, for a material to show through it: only when one is
+     * chosen, and not after a see-through start that didn't last (see [settleCheck]). Also fixed
+     * at creation, so a change between Off and a material takes effect at the next start.
+     */
+    val transparent: Boolean by lazy {
+        val wanted = drawn && isWindows11 && _material.value != Material.OFF
+        val ok = wanted && settleCheck()
+        startGuard(ok)
+        ok
+    }
+
+    private val startFile = File(System.getProperty("user.home"), ".opentune/window-start.json")
+
+    /**
+     * False when the last start opened a see-through window and never settled: the app closed
+     * within its first moments. The material then goes back to Off, saved, so a setting this
+     * computer can't draw never keeps the app from opening.
+     */
+    private fun settleCheck(): Boolean {
+        val last = runCatching { JSONObject(startFile.readText()) }.getOrNull() ?: return true
+        if (last.optBoolean("pending") && last.optBoolean("transparent")) {
+            System.err.println("OpenTune: the last start with a see-through window didn't settle; the window material is Off now")
+            _material.value = Material.OFF
+            save()
+            return false
+        }
+        return true
+    }
+
+    /** Marks this start as not yet settled, then settled after [SETTLE_MS] of running. */
+    private fun startGuard(transparent: Boolean) = runCatching {
+        startFile.parentFile.mkdirs()
+        startFile.writeText(JSONObject().put("pending", true).put("transparent", transparent).toString())
+        Thread({
+            Thread.sleep(SETTLE_MS)
+            runCatching { startFile.writeText(JSONObject().put("pending", false).put("transparent", transparent).toString()) }
+        }, "window-settle").apply { isDaemon = true; start() }
+    }
+
+    private const val SETTLE_MS = 20_000L
+
+    /** Whether this computer can have a material at all (Windows 11 with OpenTune's own title bar). */
+    val materialsPossible: Boolean get() = drawn && isWindows11
 
     private var hwnd: Pointer? = null
     private var previous: Pointer? = null
