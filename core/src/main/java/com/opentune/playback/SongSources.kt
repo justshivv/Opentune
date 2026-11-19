@@ -42,10 +42,15 @@ internal class SongSources(context: Context) {
         RenewingDataSource(refusing.createDataSource(), renew = ExternalStreams::refreshLinkFor, patient = ExternalStreams::isAddonLink)
     }
     private val resolving = ResolvingDataSource.Factory(http, ::resolveTrack)
+    // A FLAC from an external source is fetched in pieces, each as playback nears it (see
+    // ChunkedDataSource); YouTube's own streams are read as before.
+    private val pieces = DataSource.Factory {
+        ChunkedDataSource(resolving.createDataSource()) { spec -> externalStreamKeyOf(spec.uri) != null }
+    }
 
     val cached: CacheDataSource.Factory = CacheDataSource.Factory()
         .setCache(AudioCache.get(context))
-        .setUpstreamDataSourceFactory(resolving)
+        .setUpstreamDataSourceFactory(pieces)
         .setCacheKeyFactory { spec -> cacheKeyOf(spec.uri) ?: spec.key ?: spec.uri.toString() }
         .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 

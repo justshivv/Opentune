@@ -264,9 +264,11 @@ class PlaybackService : MediaLibraryService() {
                     // Kept in the song cache under the add-on stream's own address (not the
                     // short-lived URL it resolves to), so an upgrade can be fetched ahead
                     // by a silent player and then played from what's already here.
+                    // In pieces, each asked for only as playback nears it (see ChunkedDataSource).
+                    val pieces = androidx.media3.datasource.DataSource.Factory { ChunkedDataSource(resolving.createDataSource()) { true } }
                     val data = androidx.media3.datasource.cache.CacheDataSource.Factory()
                         .setCache(AudioCache.get(context))
-                        .setUpstreamDataSourceFactory(resolving)
+                        .setUpstreamDataSourceFactory(pieces)
                         .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
                     return DefaultMediaSourceFactory(data).createMediaSource(mediaItem.buildUpon().setMimeType(addon.mimeType).build())
                 }
@@ -379,7 +381,11 @@ class PlaybackService : MediaLibraryService() {
 
         val player = ExoPlayer.Builder(context, renderers)
             .setMediaSourceFactory(qualitySources)
-            .setLoadControl(LossyHoldBack(loadControl, LOSSY_AHEAD_MS * 1_000L) { lossyHeldBack?.isActive == true })
+            .setLoadControl(
+                LossyHoldBack(loadControl, LOSSY_AHEAD_MS * 1_000L, FLAC_AHEAD_MS * 1_000L,
+                    flac = { item -> item.localConfiguration?.uri?.let { externalStreamKeyOf(selectedUri(it)) } != null },
+                ) { lossyHeldBack?.isActive == true },
+            )
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -3058,6 +3064,8 @@ class PlaybackService : MediaLibraryService() {
         const val FAR_BUFFER_BYTES = 48 * 1024 * 1024
         /** How far ahead a stream that a FLAC may replace is fetched; past the 30 s the player wants at least. */
         const val LOSSY_AHEAD_MS = 60_000L
+        /** How far ahead a FLAC is fetched: a skip partway costs the part heard and this much. */
+        const val FLAC_AHEAD_MS = 60_000L
         const val BACK_BUFFER_MS = 30_000
         const val MIN_LOUDNESS_GAIN_MB = -1500
         const val MAX_LOUDNESS_GAIN_MB = 900
