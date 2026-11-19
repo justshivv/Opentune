@@ -579,6 +579,7 @@ class PlaybackService : MediaLibraryService() {
                     NerdStats.onUpgrade(null)
                 }
             },
+            held = { castMirror?.active == true },
         ).also { it.start() }
         dsp.meter = true
         // Casting: the device follows this player while one is connected.

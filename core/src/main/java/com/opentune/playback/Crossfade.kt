@@ -63,6 +63,13 @@ internal class Crossfade(
     private val durationOf: (MediaItem) -> Long? = { null },
     /** Called as a mix starts: a search for a better stream for the ending song is called off, as it can't help now. */
     private val beforeMix: () -> Unit = {},
+    /**
+     * True while songs aren't to be mixed for now: casting, where another device makes the
+     * sound and follows this player's every seek, so a mix's line-up seeks made it skip the
+     * first seconds of each song and jump about, and the next song showed while it still
+     * played the last.
+     */
+    private val held: () -> Boolean = { false },
 ) {
     /**
      * A second player and what to do when it's finished with. [level] gives it the
@@ -107,7 +114,7 @@ internal class Crossfade(
     val blending: Boolean get() = tail != null
 
     private val settings get() = AppSettings.playback.value
-    private val enabled get() = settings.automix || settings.crossfadeSeconds > 0
+    private val enabled get() = (settings.automix || settings.crossfadeSeconds > 0) && !held()
 
     private val listener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
