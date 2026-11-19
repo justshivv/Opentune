@@ -182,8 +182,13 @@ object History {
     }
 
     /** Each track once, most recent listen first. */
+    /**
+     * The newest [limit] songs played, each once. Read only as far as it takes to find them:
+     * Library's shelf asks for twelve as it's drawn, and going through the whole history to
+     * pick out every song first held up the main thread on a long one.
+     */
     fun recents(list: List<PlayRecord>, limit: Int = 40): List<Song> =
-        list.distinctBy { it.videoId }.take(limit).map { it.toSong() }
+        list.asSequence().distinctBy { it.videoId }.take(limit).map { it.toSong() }.toList()
 
     fun replay(list: List<PlayRecord>, sinceMs: Long): ReplaySummary {
         val window = list.filter { it.playedAt >= sinceMs }
