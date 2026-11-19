@@ -95,10 +95,11 @@ private fun cornerOf(outline: Outline): Float = when (outline) {
  * Made afresh on every draw, a window of glass redrawing as the page scrolled left a trail of
  * native Skia objects behind it, and many of them crashed Skia.
  *
- * The ones it no longer needs are let go, never closed by hand: Skia frees each through its own
- * cleaner once nothing holds it. Closed at once, a frame still being drawn could reach a freed
- * filter, and the app crashed outright. On Windows that happened when the window's material was
- * changed, as the frame changing size had every glass make new ones at the same moment.
+ * The ones it no longer needs are closed a moment later, not at once (see [RetiredLenses]).
+ * Closed at once, a frame still being drawn could reach a freed filter, and the app crashed
+ * outright: on Windows when the window's material was changed, as the frame changing size had
+ * every glass make new ones at the same moment. Left to Skia's cleaner instead, glass resized on
+ * every frame of an animation piled them up faster than it freed them.
  */
 private class LensCache {
     private var key: Long = 0
@@ -110,6 +111,7 @@ private class LensCache {
     fun paintFor(w: Float, h: Float, corner: Float, bezel: Float, sigma: Float): org.jetbrains.skia.Paint {
         val k = (w.toInt().toLong() shl 40) xor (h.toInt().toLong() shl 20) xor (corner.toInt().toLong() shl 8) xor bezel.toInt().toLong()
         paint?.let { if (k == key) return it }
+        RetiredLenses.sweep()
         drop()
         key = k
         val builder = RuntimeShaderBuilder(LENS).apply {
@@ -128,10 +130,39 @@ private class LensCache {
         return made
     }
 
-    /** Lets go of the filters and paint, for Skia's cleaner to free once no frame draws with them. */
+    /** Hands the filters and paint over to be closed once no frame can still be drawing with them. */
     fun drop() {
+        if (parts.isNotEmpty()) RetiredLenses.retire(parts.toList())
         parts.clear()
         paint = null
+    }
+}
+
+/**
+ * Lens filters and paints a glass no longer uses, closed [AFTER_MS] after it let them go: long
+ * after the last frame drawn with them is on screen, and soon enough that an animation resizing
+ * glass every frame doesn't pile them up. Swept as new ones are made, and by a timer between.
+ */
+private object RetiredLenses {
+    private const val AFTER_MS = 1_500L
+    private val waiting = java.util.ArrayDeque<Pair<Long, List<org.jetbrains.skia.impl.Managed>>>()
+    private val timer = javax.swing.Timer(AFTER_MS.toInt()) { sweep() }.apply { isRepeats = true }
+
+    fun retire(parts: List<org.jetbrains.skia.impl.Managed>) {
+        synchronized(waiting) { waiting.addLast(System.currentTimeMillis() to parts) }
+        if (!timer.isRunning) timer.start()
+    }
+
+    fun sweep() {
+        val now = System.currentTimeMillis()
+        while (true) {
+            val due = synchronized(waiting) {
+                val head = waiting.peekFirst() ?: return@synchronized null
+                if (now - head.first < AFTER_MS) null else waiting.pollFirst()
+            } ?: break
+            due.second.asReversed().forEach { runCatching { it.close() } }
+        }
+        if (synchronized(waiting) { waiting.isEmpty() }) timer.stop()
     }
 }
 

@@ -21,6 +21,7 @@ internal val appContext by lazy { android.content.Context(File(System.getPropert
 
 fun main(args: Array<String>) {
     if ("--self-check" in args) return selfCheck()
+    CrashLog.install()
     // The shared settings and music server, as the phone starts them.
     AppSettings.init(appContext)
     // A setting changed in the last moment before closing is written on its way out.
@@ -56,6 +57,14 @@ fun main(args: Array<String>) {
         val trayed = inTray && TrayPrefs.supported
         val close: () -> Unit = { if (trayed) shown = false else exitApplication() }
         if (TrayPrefs.supported) TrayMenu(onShow = { shown = true }, onQuit = ::exitApplication)
+        // An error inside the window (Compose's own layout has a bug in this version that throws
+        // "LayoutNode … not found in RectList" now and then) is written to crash.log and the window
+        // carries on drawing from the next frame, instead of closing the app. Only a flood of them
+        // still ends it, with the error shown, so a window that can't draw at all doesn't sit there.
+        @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.ui.window.LocalWindowExceptionHandlerFactory provides CrashLog.windowHandler,
+        ) {
         Window(
             onCloseRequest = close,
             visible = shown,
@@ -80,6 +89,7 @@ fun main(args: Array<String>) {
                 }
             }
             DesktopApp()
+        }
         }
     }
 }
@@ -106,4 +116,60 @@ private fun selfCheck() {
         println("$name: " + result.fold({ "ok, $it" }, { failed = true; "FAILED, $it" }))
     }
     kotlin.system.exitProcess(if (failed) 1 else 0)
+}
+
+/**
+ * What took the app down, kept in ~/.opentune/crash.log: the error, where it was thrown, the
+ * version, the system and the memory in use, so a crash on someone's computer can be read
+ * afterwards. A crash in native code (Skia, the audio) is written by Java itself, as
+ * hs_err_pid….log in the folder the app was started from.
+ */
+internal object CrashLog {
+    private val file = File(File(System.getProperty("user.home"), ".opentune"), "crash.log")
+
+    fun install() {
+        val before = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            write(thread, error)
+            before?.uncaughtException(thread, error)
+        }
+    }
+
+    /** Times of the window's recent errors, for telling one now and then from a flood. */
+    private val recent = java.util.ArrayDeque<Long>()
+
+    /**
+     * The window's own errors: written down and let go while they're rare; past [FLOOD] in ten
+     * seconds, the window can't be drawing, so Compose's own handling (an error box, then closing) takes over.
+     */
+    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+    val windowHandler = androidx.compose.ui.window.WindowExceptionHandlerFactory { window ->
+        androidx.compose.ui.window.WindowExceptionHandler { error ->
+            write(Thread.currentThread(), error)
+            val now = System.currentTimeMillis()
+            val flood = synchronized(recent) {
+                recent.addLast(now)
+                while (recent.isNotEmpty() && now - recent.peekFirst() > 10_000) recent.pollFirst()
+                recent.size > FLOOD
+            }
+            if (flood) androidx.compose.ui.window.DefaultWindowExceptionHandlerFactory.exceptionHandler(window).onException(error)
+        }
+    }
+
+    private const val FLOOD = 30
+
+    private fun write(thread: Thread, error: Throwable) = runCatching {
+        file.parentFile.mkdirs()
+        // The newest at the end, the file kept small.
+        if (file.length() > 512 * 1024) file.writeText("")
+        val rt = Runtime.getRuntime()
+        val text = buildString {
+            appendLine("---- ${java.time.ZonedDateTime.now()} ----")
+            appendLine("OpenTune ${System.getProperty("jpackage.app-version") ?: "dev"} on ${System.getProperty("os.name")} ${System.getProperty("os.version")} (${System.getProperty("os.arch")}), Java ${System.getProperty("java.version")}")
+            appendLine("Memory: ${(rt.totalMemory() - rt.freeMemory()) / 1_048_576} MB used of ${rt.maxMemory() / 1_048_576} MB")
+            appendLine("Thread: ${thread.name}")
+            appendLine(error.stackTraceToString())
+        }
+        file.appendText(text)
+    }
 }
