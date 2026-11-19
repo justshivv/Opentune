@@ -142,10 +142,10 @@ internal fun songActions(song: Song, queueIndex: Int? = null, onAddToPlaylist: (
     val open = LocalOpen.current
     val openArtist = rememberOpenArtist()
     val openAlbum = rememberOpenAlbum()
-    val liked by Library.liked.collectAsState()
+    val liked by LikedSongs.ids.collectAsState()
     val queue by Player.queue.collectAsState()
     val index by Player.index.collectAsState()
-    val isLiked = liked.any { it.videoId == song.videoId }
+    val isLiked = song.videoId in liked
     val youTube = isYouTubeId(song.videoId)
     val room by com.opentune.data.together.Together.room.collectAsState()
     return buildList {

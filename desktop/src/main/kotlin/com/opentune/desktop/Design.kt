@@ -362,8 +362,8 @@ internal fun TrackRow(i: Int, song: Song, songs: List<Song>, onRemove: ((Song) -
     val queue by Player.queue.collectAsState()
     val index by Player.index.collectAsState()
     val playing by Player.playing.collectAsState()
-    val liked by Library.liked.collectAsState()
-    val isLiked = liked.any { it.videoId == song.videoId }
+    val liked by LikedSongs.ids.collectAsState()
+    val isLiked = song.videoId in liked
     val current = queue.getOrNull(index)?.videoId == song.videoId
     val stripe = if (i % 2 == 0) PageInk.stripe else PageInk.stripe.copy(alpha = 0f)
     // Its part in the list's selection: a box in place of its number under the pointer and while picking.

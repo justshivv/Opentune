@@ -564,9 +564,9 @@ private fun PlayerCover(song: Song, playing: Boolean, side: Dp) {
 @Composable
 private fun PlayerTitleRow(song: Song) {
     val error by Player.error.collectAsState()
-    val liked by Library.liked.collectAsState()
+    val liked by LikedSongs.ids.collectAsState()
     val ui by AppSettings.ui.collectAsState()
-    val isLiked = liked.any { it.videoId == song.videoId }
+    val isLiked = song.videoId in liked
     val rise = with(LocalDensity.current) { 6.dp.toPx() }.toInt()
     Row(Modifier.fillMaxWidth().padding(top = 22.dp), verticalAlignment = Alignment.CenterVertically) {
         AnimatedContent(

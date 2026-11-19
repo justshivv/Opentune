@@ -246,7 +246,10 @@ internal fun Sidebar(
     onSearch: () -> Unit = {},
     onPick: (Any) -> Unit,
 ) {
-    val playlists by Library.playlists.collectAsState()
+    // Every playlist, as the Library lists them: yours, then the account's on YouTube Music.
+    val local by Library.playlists.collectAsState()
+    val account by AccountLibrary.state.collectAsState()
+    val playlists = remember(local, account.playlists) { libraryPlaylists(local, account.playlists) }
     val ui by AppSettings.ui.collectAsState()
     // The names come back once the sidebar has mostly opened, and go at once when it folds.
     val names by animateFloatAsState(
@@ -319,13 +322,19 @@ internal fun Sidebar(
                     Modifier.weight(1f).fillMaxWidth().selectableGroup().onGloballyPositioned { track.list = it.boundsInWindow() },
                     contentPadding = PaddingValues(horizontal = CHROME_SIDE_INSET, vertical = 2.dp),
                 ) {
-                    items(playlists, key = { it.id }) { p ->
+                    items(playlists, key = { it.key }) { p ->
                         if (fold < 1f) Box(
                             Modifier.fillMaxWidth().height(lerp(CHROME_ROW + CHROME_ROW_GAP, 0.dp, fold)).clipToBounds().graphicsLayer { alpha = 1f - fold },
                         ) {
                             ChromeNavRow(
-                                Icons.AutoMirrored.Rounded.QueueMusic, p.name, PlaylistKey(p.id), selected == PlaylistKey(p.id), folded, names, track, iconSize = 18.dp,
-                            ) { onPick(PlaylistKey(p.id)) }
+                                Icons.AutoMirrored.Rounded.QueueMusic, p.title, p.key, selected == p.key, folded, names, track, iconSize = 18.dp,
+                            ) {
+                                when (p) {
+                                    is LibPlaylist.Local -> onPick(p.key)
+                                    // The account's opens as its page on YouTube Music.
+                                    is LibPlaylist.OnAccount -> onPick(p.item)
+                                }
+                            }
                         }
                     }
                 }
@@ -387,7 +396,7 @@ private fun ChromePill(track: ChromePillTrack, selected: Any?, still: Boolean) {
             val local = rect.translate(-track.origin)
             val r = CornerRadius(8.dp.toPx())
             val ink = fill.copy(alpha = fill.alpha * shown)
-            val cut = track.list?.takeIf { selected is PlaylistKey }?.translate(-track.origin)
+            val cut = track.list?.takeIf { selected is PlaylistKey || selected is AccountPlaylistKey }?.translate(-track.origin)
             if (cut != null) clipRect(cut.left, cut.top, cut.right, cut.bottom) { drawRoundRect(ink, local.topLeft, local.size, r) }
             else drawRoundRect(ink, local.topLeft, local.size, r)
         },
@@ -807,7 +816,7 @@ private fun ChromeLcd(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier)
     val error by Player.error.collectAsState()
     val loading by Player.loading.collectAsState()
     val ui by AppSettings.ui.collectAsState()
-    val liked by Library.liked.collectAsState()
+    val liked by LikedSongs.ids.collectAsState()
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     val onLine = remember { MutableInteractionSource() }
@@ -829,7 +838,7 @@ private fun ChromeLcd(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier)
         val timed = lineHovered || scrub != null
         val soften by animateFloatAsState(if (timed) 1f else 0f, tween(150), label = "names soften")
         val dim by animateFloatAsState(if (hovered) 1f else 0f, tween(200), label = "cover dim")
-        val isLiked = liked.any { it.videoId == song.videoId }
+        val isLiked = song.videoId in liked
         // A small box keeps its names, without the room either side for the heart.
         val roomy = maxWidth >= 300.dp
         val heart by animateFloatAsState(if (roomy && (hovered || isLiked)) 1f else 0f, tween(150), label = "lcd heart")
@@ -1163,8 +1172,8 @@ private fun UpNextRow(song: Song, at: Int, modifier: Modifier, lifted: Boolean) 
 private fun NowPlayingCards(song: Song, queue: List<Song>, index: Int, onLyrics: () -> Unit, onOpenArtist: (ShelfItem) -> Unit) {
     val base = MaterialTheme.colorScheme.surfaceContainer
     val colour = rememberCoverColor(song.thumbnailUrl, base)
-    val liked by Library.liked.collectAsState()
-    val isLiked = liked.any { it.videoId == song.videoId }
+    val liked by LikedSongs.ids.collectAsState()
+    val isLiked = song.videoId in liked
     val card = RoundedCornerShape(20.dp)
     LazyColumn(
         contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 40.dp),

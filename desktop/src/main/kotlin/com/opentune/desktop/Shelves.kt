@@ -274,6 +274,8 @@ internal fun LockupArt(
     onPlay: (() -> Unit)? = null,
     playLabel: String = "Play",
     art: (@Composable (Modifier) -> Unit)? = null,
+    /** False when the card around it takes the click (an artist's photo and name are one). */
+    clickable: Boolean = true,
 ) {
     val still = stillMotion()
     val lift by animateFloatAsState(if (hovered && !still) 1f else 0f, tween(160, easing = Web.Settle), label = "lift")
@@ -286,8 +288,11 @@ internal fun LockupArt(
             .shadow(12.dp * lift, shape, ambientColor = WebInk.radiosity, spotColor = WebInk.radiosity)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onOpen)
-            .semantics { contentDescription = openLabel },
+            .then(
+                if (clickable) Modifier.clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onOpen)
+                    .semantics { contentDescription = openLabel }
+                else Modifier,
+            ),
     ) {
         val zoomed = Modifier.fillMaxSize().graphicsLayer { scaleX = zoom; scaleY = zoom }
         if (art != null) art(zoomed) else CoverFill(url, zoomed)
@@ -395,17 +400,20 @@ internal fun SquareLockup(
 
 /**
  * An artist's round card: the photo, lifting under the pointer as a cover does, and under it the
- * name in bold, centred, underlined under the pointer, with [line] in grey beneath.
+ * name in bold, centred, underlined under the pointer, with [line] in grey beneath. The whole card
+ * opens the artist, photo and name alike, under one hover.
  */
 @Composable
 internal fun CircleLockup(item: ShelfItem, onOpen: () -> Unit, line: String? = null, fill: Boolean = false) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     Column(
-        (if (fill) Modifier.fillMaxWidth() else Modifier.width(LocalColumnWidth.current)).hoverable(hover),
+        (if (fill) Modifier.fillMaxWidth() else Modifier.width(LocalColumnWidth.current)).hoverable(hover)
+            .clickable(interactionSource = hover, indication = null, role = Role.Button, onClick = onOpen)
+            .semantics(mergeDescendants = true) { contentDescription = item.title },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        LockupArt(item.thumbnailUrl, CircleShape, hovered, onOpen, item.title)
+        LockupArt(item.thumbnailUrl, CircleShape, hovered, onOpen, item.title, clickable = false)
         Text(
             item.title, style = PageType.cardTitle, color = PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             textDecoration = if (hovered) TextDecoration.Underline else null, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(),
