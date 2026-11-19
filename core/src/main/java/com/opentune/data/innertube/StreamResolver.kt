@@ -346,7 +346,12 @@ object StreamResolver {
     suspend fun resolveVideo(videoId: String): String? {
         init
         unplayableReason(videoId)?.let { return null }
-        return playerStream(videoId, select = { response -> rankVideoFormats(response).filter { !it.muxed } })?.url
+        // Off the caller's thread, for the same reason as [videoAvailable]:
+        // the walk's probes are raw network calls, and a main-thread caller
+        // would have every one of them killed and conclude nothing is usable.
+        return withContext(Dispatchers.IO) {
+            playerStream(videoId, select = { response -> rankVideoFormats(response).filter { !it.muxed } })?.url
+        }
     }
 
     // ---- Quality upgrade ------------------------------------------------------
@@ -1249,6 +1254,13 @@ object StreamResolver {
         if (videos.containsKey(videoId)) return true
         if (videoId in noVideo) return false
         if (!com.opentune.data.isYouTubeId(videoId)) return false
+        // The walk is network work; a caller on the main thread (the player
+        // connection is one) would have its probes killed by the platform's
+        // main-thread network ban and conclude every video is unusable.
+        return withContext(Dispatchers.IO) { checkVideo(videoId) }
+    }
+
+    private suspend fun checkVideo(videoId: String): Boolean {
         unplayableReason(videoId)?.let { return false }
         var answered = false
         var offered = false

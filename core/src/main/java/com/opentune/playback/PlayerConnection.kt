@@ -74,6 +74,9 @@ class PlayerConnection(private val context: Context) {
     /** Whether the playing song has a music video it can switch to. */
     val videoAvailable = _videoAvailable.asStateFlow()
 
+    /** The song a video-availability walk is currently running for, if any. */
+    private var videoCheckId: String? = null
+
     private val _videoSize = MutableStateFlow(VideoSize.UNKNOWN)
     /** The playing stream's picture size, so the video surface can fit itself. */
     val videoSize = _videoSize.asStateFlow()
@@ -297,9 +300,11 @@ class PlayerConnection(private val context: Context) {
         _videoAvailable.value = id?.let { StreamResolver.hasVideo(it) } == true
         // A song served without its response ever being parsed (from the cache,
         // a download) has no answer yet: ask, and light the toggle if it has one.
-        if (id != null && !_videoAvailable.value) {
+        if (id != null && !_videoAvailable.value && videoCheckId != id) {
+            videoCheckId = id
             scope.launch {
                 if (StreamResolver.videoAvailable(id) && _currentSong.value?.videoId == id) _videoAvailable.value = true
+                if (videoCheckId == id) videoCheckId = null
             }
         }
         _videoSize.value = player.videoSize
