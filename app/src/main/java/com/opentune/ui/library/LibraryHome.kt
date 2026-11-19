@@ -1284,7 +1284,7 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
 
 /**
  * A downloaded song's quality as a small label: Hi-Res Lossless, Lossless or Dolby in the
- * accent colour, with the lossless wave, a lossy file's tier quietly in outline.
+ * accent colour, with the lossless wave or Dolby's logo, a lossy file's tier quietly in outline.
  */
 @Composable
 internal fun DownloadQualityTag(entry: com.opentune.data.download.DownloadEntry) {
@@ -1302,8 +1302,13 @@ internal fun DownloadQualityTag(entry: com.opentune.data.download.DownloadEntry)
             .padding(horizontal = 5.dp, vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (tier == com.opentune.data.download.DownloadedCopy.Tier.HI_RES || tier == com.opentune.data.download.DownloadedCopy.Tier.LOSSLESS) {
-            Icon(ImageVector.vectorResource(AppIcons.GraphicEq), null, Modifier.size(11.dp).padding(end = 1.dp), tint = colors.primary)
+        val dolby = tier == com.opentune.data.download.DownloadedCopy.Tier.DOLBY || tier == com.opentune.data.download.DownloadedCopy.Tier.DOLBY_ATMOS
+        if (dolby || tier == com.opentune.data.download.DownloadedCopy.Tier.HI_RES || tier == com.opentune.data.download.DownloadedCopy.Tier.LOSSLESS) {
+            // Dolby's own logo for a Dolby file, the lossless wave for a lossless one.
+            Icon(
+                ImageVector.vectorResource(if (dolby) AppIcons.Dolby else AppIcons.GraphicEq), null,
+                Modifier.size(if (dolby) 13.dp else 11.dp).padding(end = 1.dp), tint = colors.primary,
+            )
             Spacer(Modifier.width(2.dp))
         }
         Text(
