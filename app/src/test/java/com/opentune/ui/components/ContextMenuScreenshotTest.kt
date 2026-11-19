@@ -83,7 +83,7 @@ class ContextMenuScreenshotTest {
         compose.onNodeWithText("Wake Up").performTouchInput { longClick() }
         compose.mainClock.advanceTimeBy(800)
         compose.waitForIdle()
-        compose.onNodeWithText("Pin").assertIsDisplayed()
+        compose.onNodeWithText("Add to Library").assertIsDisplayed()
         shot("context-album")
     }
 }
