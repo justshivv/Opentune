@@ -34,7 +34,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -95,9 +99,16 @@ fun RowDivider() {
     )
 }
 
+/** How much of a setting's colour shows while it is off because another setting makes it do nothing. */
+const val DISABLED_ROW_ALPHA = 0.38f
+
 /**
  * One setting: optional icon, title, summary, and whatever sits on the
  * right (a switch, a value and chevron, nothing).
+ *
+ * With [enabled] false the row is greyed out and doesn't respond, the controls
+ * under it ([below]) included, and [disabledReason], when given, stands in for
+ * the summary: what turns the setting on. What it's set to is left as it was.
  */
 @Composable
 fun SettingRow(
@@ -113,8 +124,11 @@ fun SettingRow(
     leading: (@Composable () -> Unit)? = null,
     /** Still being worked on: marked with a small "Beta" tag after the title. */
     beta: Boolean = false,
+    /** Shown in the summary's place while [enabled] is false, saying what turns the setting on. */
+    disabledReason: String? = null,
 ) {
-    val alpha = if (enabled) 1f else 0.45f
+    val alpha = if (enabled) 1f else DISABLED_ROW_ALPHA
+    val shownSummary = if (!enabled && disabledReason != null) disabledReason else summary
     Column(
         modifier
             .fillMaxWidth()
@@ -132,11 +146,11 @@ fun SettingRow(
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(com.opentune.ui.theme.tr(title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha), modifier = Modifier.weight(1f, fill = false))
-                    if (beta) BetaTag(Modifier.padding(start = 8.dp))
+                    if (beta) BetaTag(Modifier.padding(start = 8.dp).alpha(alpha))
                 }
-                if (!summary.isNullOrBlank()) {
+                if (!shownSummary.isNullOrBlank()) {
                     Text(
-                        com.opentune.ui.theme.tr(summary),
+                        com.opentune.ui.theme.tr(shownSummary),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
                         modifier = Modifier.padding(top = 2.dp),
@@ -148,7 +162,11 @@ fun SettingRow(
             }
         }
         if (below != null) {
-            Column(Modifier.padding(start = if (icon != null || leading != null) 52.dp else 0.dp, top = 12.dp), content = below)
+            Column(
+                Modifier.padding(start = if (icon != null || leading != null) 52.dp else 0.dp, top = 12.dp)
+                    .then(if (enabled) Modifier else Modifier.inert()),
+                content = below,
+            )
         }
     }
 }
@@ -162,8 +180,10 @@ fun ToggleRow(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     beta: Boolean = false,
+    /** See [SettingRow]: what turns the setting on, shown while it's off. */
+    disabledReason: String? = null,
 ) {
-    SettingRow(title, summary = summary, icon = icon, enabled = enabled, beta = beta, onClick = { onChange(!checked) }, trailing = {
+    SettingRow(title, summary = summary, icon = icon, enabled = enabled, beta = beta, disabledReason = disabledReason, onClick = { onChange(!checked) }, trailing = {
         AppSwitch(checked, onChange, enabled)
     })
 }
@@ -183,9 +203,11 @@ fun NavRow(
     badge: String? = null,
     /** Working: a small spinner stands where the arrow goes, and the row doesn't open until it is done. */
     busy: Boolean = false,
+    /** See [SettingRow]: what turns the setting on, shown while it's off. */
+    disabledReason: String? = null,
 ) {
-    val alpha = if (enabled) 1f else 0.45f
-    SettingRow(title, summary = summary, icon = icon, enabled = enabled, onClick = if (busy) null else onClick, leading = leading, trailing = {
+    val alpha = if (enabled) 1f else DISABLED_ROW_ALPHA
+    SettingRow(title, summary = summary, icon = icon, enabled = enabled, disabledReason = disabledReason, onClick = if (busy) null else onClick, leading = leading, trailing = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (dot) UpdateDot(Modifier.padding(end = 6.dp))
             if (badge != null) {
@@ -211,6 +233,20 @@ fun NavRow(
         }
     })
 }
+
+/**
+ * The controls under a setting that's off: greyed with the row, and out of reach of touch and
+ * of TalkBack (the row's summary says why), so a slider or a choice there can't be moved.
+ */
+private fun Modifier.inert(): Modifier = this
+    .alpha(DISABLED_ROW_ALPHA)
+    .clearAndSetSemantics { }
+    .pointerInput(Unit) {
+        awaitPointerEventScope {
+            // Taken on the way down, before the controls under it see it.
+            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+        }
+    }
 
 /** The small "Beta" tag on a setting that still has rough edges. */
 @Composable
