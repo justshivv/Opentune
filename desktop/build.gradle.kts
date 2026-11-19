@@ -86,6 +86,8 @@ val sharedFromCore = listOf(
     "com/opentune/data/together/RoomSession.kt",
     "com/opentune/data/together/VoiceFrames.kt",
     "com/opentune/data/radio/Radio.kt",
+    // A song's comments from YouTube, read as the phone reads them.
+    "com/opentune/data/comments/SongComments.kt",
     // NewPipe's patched helper, see that file.
     "org/schabi/newpipe/extractor/utils/Utils.java",
 )

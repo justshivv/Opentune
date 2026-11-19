@@ -362,6 +362,7 @@ fun DesktopApp(startPanel: SidePanel? = null, startAccountMenu: Boolean = false,
 
                 NoticePill(Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp))
                 if (helpOpen) ShortcutsDialog { helpOpen = false }
+                CommentsHost()
             }
             }
         }

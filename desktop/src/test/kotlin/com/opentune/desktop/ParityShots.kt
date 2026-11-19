@@ -97,6 +97,11 @@ class ParityShots {
         PageSelection.clear()
     }
 
+    /** A song's comments, read from YouTube: it needs the network. */
+    @Test fun comments() {
+        shoot("parity-comments", 1100, 900, 12_000) { Page { CommentsDialog(songs(1).first()) {} } }
+    }
+
     private val code = RoomCode.parse("ABCDEFGHJKLM") ?: RoomCode.generate()
     private val track = Track("4NRXx6U8ABQ", "Blinding Lights", "The Weeknd", "https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg", "3:20")
     private val people = listOf(Member("me", "Asha", host = true), Member("r", "Ravi"), Member("m", "Meera"))

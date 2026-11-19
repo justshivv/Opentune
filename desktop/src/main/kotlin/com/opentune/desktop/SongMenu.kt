@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Comment
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -177,6 +178,7 @@ internal fun songActions(song: Song, queueIndex: Int? = null, onAddToPlaylist: (
         if (song.albumId != null || youTube) {
             add(SongAction("Go to album", Icons.Rounded.Album, 2) { openAlbum(song) })
         }
+        if (youTube) add(SongAction("Comments", Icons.AutoMirrored.Rounded.Comment, 3) { Comments.open(song) })
         if (youTube) add(SongAction("Copy link", Icons.Rounded.Link, 3) {
             copyText("https://music.youtube.com/watch?v=${song.videoId}")
             Notice.show("Link copied")
