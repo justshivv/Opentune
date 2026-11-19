@@ -333,6 +333,19 @@ object StreamResolver {
         return stream.url
     }
 
+    /**
+     * The playable URL of [videoId]'s best muxed video format, or null when no
+     * client offers one that unlocks. Muxed only, for now: a video-only format
+     * carries no audio of its own, and merging one in is a playback change,
+     * not a resolver one. The walk is the same one [resolve] makes, so an age
+     * gate or a burned visitor id costs a video switch no more than a song start.
+     */
+    suspend fun resolveVideo(videoId: String): String? {
+        init
+        unplayableReason(videoId)?.let { return null }
+        return playerStream(videoId, select = { response -> rankVideoFormats(response).filter { it.muxed } })?.url
+    }
+
     // ---- Quality upgrade ------------------------------------------------------
 
     /** The stream each track started on, so a better one can be recognised. */
@@ -710,7 +723,7 @@ object StreamResolver {
      */
     private suspend fun authenticatedWebRemixStream(
         videoId: String,
-        select: (JsonObject) -> List<Audio>,
+        select: (JsonObject) -> List<Format>,
     ): Stream? {
         if (Innertube.cookie == null) return null
         // Every format this client returns is ciphered, so with the solver
@@ -727,7 +740,7 @@ object StreamResolver {
             }
             val candidates = select(response)
             if (candidates.isEmpty()) return null
-            var format: Audio? = null
+            var format: Format? = null
             var url: String? = null
             timed("$videoId WEB_REMIX streamUrl") {
                 for (candidate in candidates) {
@@ -937,7 +950,7 @@ object StreamResolver {
      */
     private suspend fun playerStream(
         videoId: String,
-        select: (JsonObject) -> List<Audio>,
+        select: (JsonObject) -> List<Format>,
         responses: MutableMap<PlayerClient, JsonObject> = mutableMapOf(),
     ): Stream? {
         // Before anything asks. Without one, the good clients refuse outright
@@ -1033,7 +1046,7 @@ object StreamResolver {
                 // bitrate alone is blind to which is which — so a broken
                 // signature solver threw away whole clients that were offering a
                 // perfectly serviceable unciphered rung one step down.
-                var format: Audio? = null
+                var format: Format? = null
                 var url: String? = null
                 timed("$videoId ${client.clientName} streamUrl") {
                     for (candidate in candidates) {
@@ -1143,13 +1156,21 @@ object StreamResolver {
 
     // ---- Format selection ---------------------------------------------------
 
+    /** What the client walk needs of a format, audio or video, to unlock it. */
+    private interface Format {
+        val url: String?
+        val signatureCipher: String?
+        val kbps: Int
+        val mimeType: String
+    }
+
     /** One audio entry of a player response, before its URL has been unlocked. */
     private class Audio(
-        val url: String?,
-        val signatureCipher: String?,
-        val kbps: Int,
-        val mimeType: String,
-    ) {
+        override val url: String?,
+        override val signatureCipher: String?,
+        override val kbps: Int,
+        override val mimeType: String,
+    ) : Format {
         /**
          * YouTube's Opus is always carried in WebM and its AAC always in MP4 —
          * there is no Opus-in-MP4 on this endpoint — so the container the mime
@@ -1169,14 +1190,14 @@ object StreamResolver {
      * the rest are video-only and need an audio track merged in to play.
      */
     internal class Video(
-        val url: String?,
-        val signatureCipher: String?,
-        val kbps: Int,
-        val mimeType: String,
+        override val url: String?,
+        override val signatureCipher: String?,
+        override val kbps: Int,
+        override val mimeType: String,
         val width: Int,
         val height: Int,
         val muxed: Boolean,
-    )
+    ) : Format
 
     private const val OPUS_EFFICIENCY = 1.5
 
@@ -1371,7 +1392,7 @@ object StreamResolver {
     // ---- Unlocking ----------------------------------------------------------
 
     /** The playable URL behind a format, or null if it can't be unlocked. */
-    private suspend fun streamUrl(videoId: String, format: Audio): String? {
+    private suspend fun streamUrl(videoId: String, format: Format): String? {
         val direct = format.url
         if (direct != null) return deobfuscate(videoId, direct)
 
