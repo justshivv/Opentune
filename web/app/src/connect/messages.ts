@@ -33,6 +33,8 @@ export type ConnectMsg =
       since?: number | null;
       // How it sounds there, in that device's words ("Lossless", "Good Quality").
       quality?: string | null;
+      // Meant to play, stalled or not; [playing] is whether it moves. Missing from devices too old to say.
+      wants?: boolean | null;
     })
   // [mode], for repeat: "off", "all" or "one".
   | (Base & { type: 'command'; to: string; id: string; action: string; pos?: number; value?: number; track?: CTrack | null; tracks?: CTrack[]; mode?: string | null })

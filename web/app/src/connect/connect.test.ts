@@ -3,8 +3,8 @@ import { toHex } from '@/together/crypto';
 import type { NostrEvent } from '@/together/nostr';
 import type { TransportFactory } from '@/together/session';
 import { ConnectGroup, fromBase64Url, hkdf } from './group';
-import { decode, encode, fit, MAX_QUEUE, MAX_SEALED, type CTrack } from './messages';
-import { ConnectSession, type ConnectPlayer, type ConnectView, type Snapshot, type Timings } from './session';
+import { decode, encode, fit, MAX_QUEUE, MAX_SEALED, type ConnectMsg, type CTrack } from './messages';
+import { ConnectSession, meant, positionAt, type ConnectPlayer, type ConnectView, type Snapshot, type Timings } from './session';
 import vectors from './vectors.json';
 
 describe('group key, as the phone makes it', () => {
@@ -53,14 +53,32 @@ describe('messages, as the phone writes them', () => {
 
 // ---- Sessions against each other ---------------------------------------------------------------
 
-/** Relays in memory. Like real ones, nothing goes out until a transport has connected, [connectMs] after it starts. */
-function bus(connectMs = 0): TransportFactory {
+/**
+ * How relays treat each message: the delays its copies arrive after. Empty
+ * drops it, two copies duplicate it, a longer delay than the next message's
+ * reorders them.
+ */
+type Rule = (m: ConnectMsg) => number[];
+
+/**
+ * Relays in memory. Like real ones, nothing goes out until a transport has connected, [connectMs] after it starts.
+ * With [chaos], each message is opened with its group and delivered as chaos.rule says.
+ */
+function bus(connectMs = 0, chaos?: { group?: ConnectGroup; rule: Rule }): TransportFactory {
   const listeners = new Set<(e: NostrEvent) => void>();
+  const deliver = (e: NostrEvent) => {
+    const group = chaos?.group;
+    if (!group) return listeners.forEach((l) => setTimeout(() => l(e), 2));
+    void group.open(e.content).then((plain) => {
+      const m = plain ? decode(plain) : null;
+      for (const d of m ? chaos.rule(m) : [0]) listeners.forEach((l) => setTimeout(() => l(e), 2 + d));
+    });
+  };
   return (_filter, onEvent, onConnected) => {
     let open = false;
     return {
       start: () => { listeners.add(onEvent); setTimeout(() => { open = true; onConnected(1); }, connectMs); },
-      publish: (e) => { if (!open) return false; listeners.forEach((l) => setTimeout(() => l(e), 2)); return true; },
+      publish: (e) => { if (!open) return false; deliver(e); return true; },
       close: () => listeners.delete(onEvent),
     };
   };
@@ -70,12 +88,14 @@ const fast: Timings = { presenceMs: 200, goneMs: 700, stateMs: 100, commandMs: 4
 const track = (c: string): CTrack => ({ id: c.repeat(11), title: `Song ${c}`, artist: 'Artist' });
 
 function fakePlayer(playable = true) {
-  const s = { track: null as CTrack | null, queue: [] as CTrack[], playing: false, pos: 0, volume: 1, calls: [] as string[], needsTap: false };
+  // [stalled]: meant to play, but stalled to load and not moving.
+  const s = { track: null as CTrack | null, queue: [] as CTrack[], playing: false, stalled: false, pos: 0, volume: 1, calls: [] as string[], needsTap: false };
   const player: ConnectPlayer = {
-    snapshot: (): Snapshot | null => (s.track ? { track: s.track, private: false, playing: s.playing, pos: s.pos, queue: s.queue, volume: s.volume, shuffle: false, repeat: 'off' } : null),
+    snapshot: (): Snapshot | null =>
+      s.track ? { track: s.track, private: false, playing: s.playing && !s.stalled, wants: s.playing, pos: s.pos, queue: s.queue, volume: s.volume, shuffle: false, repeat: 'off' } : null,
     play: () => { s.calls.push('play'); s.playing = true; },
     pause: () => { s.calls.push('pause'); s.playing = false; },
-    next: () => { s.calls.push('next'); },
+    next: () => { s.calls.push('next'); s.track = s.queue[0] ?? null; s.queue = s.queue.slice(1); s.pos = 0; },
     previous: () => { s.calls.push('previous'); },
     seekTo: (ms) => { s.calls.push(`seek ${ms}`); s.pos = ms; },
     setVolume: (v) => { s.calls.push(`volume ${v}`); s.volume = v; },
@@ -133,7 +153,7 @@ async function devicesWith(timings: Timings, transport: TransportFactory, ...nam
   });
 }
 
-const play = (d: Awaited<ReturnType<typeof devices>>[number], t: CTrack, pos = 0) => {
+const play = (d: Pick<Awaited<ReturnType<typeof devices>>[number], 's' | 'session'>, t: CTrack, pos = 0) => {
   d.s.track = t; d.s.playing = true; d.s.pos = pos;
   d.session.localChanged();
 };
@@ -334,6 +354,225 @@ describe('sessions', () => {
     a!.session.handle({ type: 'presence', from: 'a', seq: 9, at: 0, name: 'Me', form: 'web' });
     expect(a!.view?.devices.map((d) => d.name)).toEqual(['New']);
     a!.session.stop();
+  });
+});
+
+// ---- Handovers over relays that delay, reorder, duplicate and drop ---------------------------
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Devices on one chaotic bus; each with its clock [skew] ms off. Set [chaos.rule] to change how the relays behave. */
+async function chaotic(...specs: { id: string; name: string; skew?: number }[]) {
+  const group = await ConnectGroup.generate();
+  const chaos: { group: ConnectGroup; rule: Rule } = { group, rule: () => [0] };
+  const transport = bus(0, chaos);
+  const make = (id: string, name: string, skew = 0, took = 0, player = fakePlayer()) => {
+    const d = { id, s: player.s, player, view: null as ConnectView | null, notices: [] as string[], clock: () => Date.now() + skew, session: null as unknown as ConnectSession };
+    d.session = new ConnectSession(group, id, name, 'web', player.player, (v) => { d.view = v; }, (t, n) => d.notices.push(t.replace('{0}', n)), fast, transport, d.clock, () => {}, [], took);
+    d.session.start();
+    return d;
+  };
+  const devs = specs.map((s) => make(s.id, s.name, s.skew));
+  await eventually('all here', () => devs.every((d) => d.view?.devices.length === devs.length - 1));
+  type Dev = (typeof devs)[number];
+  /** Connect starting over on [d] (a group joined, the switch flipped), its player left as it is. */
+  const restart = (d: Dev): Dev => {
+    const took = d.session.tookAt;
+    d.session.stop();
+    return make(d.id, d.id, 0, took, d.player);
+  };
+  return { devs, chaos, restart, stop: () => devs.forEach((d) => d.session.stop()) };
+}
+
+describe('handovers over real-world relays', () => {
+  const x = track('x');
+  const y = track('y');
+
+  it('takes an answer overtaken by a later report', async () => {
+    const { devs: [a, b], chaos, stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome' });
+    play(a!, x, 60_000);
+    await eventually('b sees a', () => b!.view?.activeId === 'a');
+    // b's answer to the handover takes a slow relay; what b says after it gets there first.
+    chaos.rule = (m) => (m.type === 'ack' ? [150] : [0]);
+    a!.session.transferTo('b');
+    await eventually('b plays, a stops', () => b!.s.playing && !a!.s.playing);
+    await wait(fast.transferMs + 200);
+    expect(a!.notices).toEqual([]);
+    stop();
+  });
+
+  it('does not take a repeated or late handover again', async () => {
+    const [b] = await devices(['b', 'Chrome']);
+    const now = Date.now();
+    const t = { type: 'transfer' as const, from: 'a', seq: 10, at: now, to: 'b', id: 't1', queue: [x], pos: 1_000 };
+    b!.session.handle(t);
+    b!.session.handle(t); // a second relay's copy
+    b!.session.handle({ type: 'command', from: 'a', seq: 12, at: now, to: 'b', id: 'c1', action: 'pause' });
+    // An older handover, held up on its way, arriving after the pause that followed it.
+    b!.session.handle({ type: 'transfer', from: 'a', seq: 11, at: now, to: 'b', id: 't0', queue: [y], pos: 5_000 });
+    expect(b!.s.calls.filter((c) => c.startsWith('load'))).toHaveLength(1);
+    expect(b!.s.track?.id).toBe(x.id);
+    expect(b!.s.playing).toBe(false);
+    b!.session.stop();
+  });
+
+  it('starts a handover where it was, whatever the clocks say', async () => {
+    // The browser's clock runs 20 s ahead of the phone's.
+    const { devs: [a, b], stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome', skew: 20_000 });
+    play(a!, x, 60_000);
+    await eventually('b sees a', () => b!.view?.activeId === 'a');
+    a!.session.transferTo('b');
+    await eventually('b plays', () => b!.s.playing && b!.s.track?.id === x.id);
+    expect(b!.s.pos).toBeGreaterThanOrEqual(60_000);
+    expect(b!.s.pos).toBeLessThanOrEqual(61_000);
+    stop();
+  });
+
+  it("learns the other device's clock over the relays", async () => {
+    const { devs: [a, b], chaos, stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome', skew: 20_000 });
+    // Every message takes 100 ms to arrive.
+    chaos.rule = () => [100];
+    await eventually("b knows a's clock", () => b!.session.clockOffset('a') !== null);
+    const offset = b!.session.clockOffset('a')!;
+    expect(offset).toBeGreaterThanOrEqual(-20_100);
+    expect(offset).toBeLessThanOrEqual(-19_900);
+    play(a!, x, 60_000);
+    await eventually('b sees a', () => b!.view?.activeId === 'a');
+    a!.session.transferTo('b');
+    await eventually('b plays', () => b!.s.playing && b!.s.track?.id === x.id);
+    // Started on from where a was when it said so, the relay's 100 ms included.
+    expect(b!.s.pos).toBeGreaterThanOrEqual(60_030);
+    expect(b!.s.pos).toBeLessThanOrEqual(60_300);
+    stop();
+  });
+
+  it('keeps the place of paused music handed over', async () => {
+    const { devs: [a, b], stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome', skew: 5_000 });
+    play(a!, x, 30_000);
+    await eventually('b sees a', () => b!.view?.activeId === 'a');
+    a!.s.playing = false;
+    a!.session.localChanged();
+    await wait(50);
+    a!.session.transferTo('b');
+    await eventually('b has it', () => b!.s.track?.id === x.id);
+    expect(b!.s.pos).toBe(30_000);
+    expect(b!.s.playing).toBe(false);
+    stop();
+  });
+
+  it("judges who took the music last on each device's own clock", async () => {
+    // The phone's clock runs a minute ahead.
+    const { devs: [a, b], stop } = await chaotic({ id: 'a', name: 'Phone', skew: 60_000 }, { id: 'b', name: 'Chrome' });
+    play(a!, x);
+    await eventually('b sees a', () => b!.view?.activeId === 'a');
+    a!.s.playing = false;
+    a!.session.localChanged();
+    await wait(50);
+    b!.session.transferTo('b');
+    await eventually('b has it', () => b!.s.track?.id === x.id);
+    await eventually('both show b', () => a!.view?.activeId === 'b' && b!.view?.activeId === 'b');
+    stop();
+  });
+
+  it('keeps a device stalled to load as the one playing', async () => {
+    const { devs: [a, b], stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome' });
+    play(a!, x);
+    await eventually('b sees a', () => b!.view?.activeId === 'a');
+    await wait(30);
+    // b has a song of its own loaded, paused; then a stalls to load.
+    b!.s.track = y;
+    b!.session.localChanged();
+    a!.s.stalled = true;
+    a!.session.localChanged();
+    await wait(200);
+    expect(a!.view?.activeId).toBe('a');
+    expect(b!.view?.activeId).toBe('a');
+    expect(meant(b!.view!.devices[0]!.state)).toBe(true);
+    expect(b!.view!.devices[0]!.state?.playing).toBe(false);
+    stop();
+  });
+
+  it('does not take the music back when a paused device starts Connect again', async () => {
+    const { devs: [a, b], restart, stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome' });
+    a!.s.track = x;
+    a!.session.localChanged();
+    await wait(30);
+    play(b!, y);
+    await eventually('a shows b', () => a!.view?.activeId === 'b');
+    b!.s.playing = false;
+    b!.session.localChanged();
+    await wait(50);
+    const again = restart(a!);
+    await wait(300);
+    await eventually('they meet again', () => again.view?.devices.length === 1 && b!.view?.devices.length === 1);
+    expect(b!.view?.activeId).toBe('b');
+    expect(again.view?.activeId).toBe('b');
+    again.session.stop();
+    stop();
+  });
+
+  it('leaves one device playing when the answer and the pause are lost', async () => {
+    const { devs: [a, b], chaos, stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome' });
+    play(a!, x);
+    await eventually('b sees a', () => b!.view?.activeId === 'a');
+    // Nothing b sends to a in particular gets through: only what b says it plays.
+    chaos.rule = (m) => (m.from === 'b' && (m.type === 'ack' || m.type === 'command') ? [] : [0]);
+    a!.session.transferTo('b');
+    await eventually('b plays', () => b!.s.playing);
+    await eventually('a stops', () => !a!.s.playing);
+    await eventually('both show b', () => a!.view?.activeId === 'b' && b!.view?.activeId === 'b');
+    await wait(fast.transferMs + 100);
+    expect(a!.notices.filter((n) => n.startsWith("Can't play"))).toEqual([]);
+    stop();
+  });
+
+  it('leaves one device playing over a relay that duplicates and reorders', async () => {
+    const { devs: [a, b], chaos, stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome' });
+    play(a!, x, 60_000);
+    await eventually('b sees a', () => b!.view?.activeId === 'a');
+    // Every message twice, the second copy late; answers, commands and handovers slower than reports.
+    chaos.rule = (m) => (m.type === 'ack' || m.type === 'command' || m.type === 'transfer' ? [60, 250] : [0, 200]);
+    a!.session.transferTo('b');
+    await eventually('b plays, a stops', () => b!.s.playing && !a!.s.playing);
+    await wait(600);
+    expect(b!.s.playing).toBe(true);
+    expect(a!.s.playing).toBe(false);
+    expect(b!.s.calls.filter((c) => c.startsWith('load'))).toHaveLength(1);
+    expect(a!.s.calls).not.toContain('play');
+    expect(a!.view?.activeId).toBe('b');
+    expect(b!.view?.activeId).toBe('b');
+    stop();
+  });
+
+  it('keeps a seek on screen over a report from before it landed', async () => {
+    const { devs: [a, b], stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome' });
+    play(a!, x, 10_000);
+    await eventually('b controls a', () => b!.view?.activeId === 'a');
+    b!.session.intercept('seek', 42_000);
+    // a's report, sent before the seek reached it.
+    b!.session.handle({ type: 'state', from: 'a', seq: Number.MAX_SAFE_INTEGER - 1, at: Date.now(), track: x, playing: true, pos: 10_000 });
+    const shown = positionAt(b!.view!.devices[0]!, Date.now());
+    expect(shown).toBeGreaterThanOrEqual(42_000);
+    expect(shown).toBeLessThanOrEqual(43_000);
+    await eventually('a seeked', () => a!.s.calls.includes('seek 42000'));
+    stop();
+  });
+
+  it('shows the next song from its start at once', async () => {
+    const { devs: [a, b], stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome' });
+    a!.s.queue = [y];
+    play(a!, x, 100_000);
+    await eventually('b controls a', () => b!.view?.activeId === 'a' && b!.view.devices[0]!.state?.track?.id === x.id);
+    b!.session.intercept('next');
+    const shown = () => { const d = b!.view!.devices[0]!; return { id: d.state?.track?.id, at: positionAt(d, Date.now()) }; };
+    expect(shown().id).toBe(y.id);
+    expect(shown().at).toBeLessThan(1_000);
+    // a's report from before the skip landed: neither the old song nor its place come back.
+    b!.session.handle({ type: 'state', from: 'a', seq: Number.MAX_SAFE_INTEGER - 1, at: Date.now(), track: x, playing: true, pos: 100_000, queue: [y] });
+    expect(shown().id).toBe(y.id);
+    expect(shown().at).toBeLessThan(1_000);
+    await eventually('a skipped', () => a!.s.track?.id === y.id);
+    stop();
   });
 });
 
