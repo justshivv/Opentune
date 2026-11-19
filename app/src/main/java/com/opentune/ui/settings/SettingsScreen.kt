@@ -1196,14 +1196,25 @@ private fun settingsSections(
                         }
                     })
                 },
-                Entry("Palette style", "tonal vibrant expressive") {
-                    SettingRow("Palette style", icon = ImageVector.vectorResource(AppIcons.Palette), below = {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PaletteStyleOption.entries.forEach { s ->
-                                FilterChip(theme.paletteStyle == s, { AppSettings.updateTheme { it.copy(paletteStyle = s) } }, label = { Text(s.label) })
+                Entry("Palette style", "colour scheme tonal vibrant expressive fidelity fruit salad neutral monochrome grey") {
+                    // The style shapes the scheme made from the accent or a song's cover (OpenTuneTheme);
+                    // Material You's wallpaper scheme is the system's own, so with it on and the cover
+                    // not followed, the style has nothing to shape.
+                    val wallpaperOnly = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && theme.dynamicColor && !theme.colorFromArtwork
+                    SettingRow(
+                        "Palette style",
+                        summary = theme.paletteStyle.summary,
+                        icon = ImageVector.vectorResource(AppIcons.Palette),
+                        enabled = !wallpaperOnly,
+                        disabledReason = "Material You uses your wallpaper's own palette. Turn on Color from artwork to style a song's colours",
+                        below = {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                PaletteStyleOption.entries.forEach { s ->
+                                    FilterChip(theme.paletteStyle == s, { AppSettings.updateTheme { it.copy(paletteStyle = s) } }, label = { Text(com.opentune.ui.theme.tr(s.label)) })
+                                }
                             }
-                        }
-                    })
+                        },
+                    )
                 },
                 Entry("App language", "language locale hindi punjabi english भाषा ਭਾਸ਼ਾ") {
                     NavRow("App language", { languageDialog = true }, icon = ImageVector.vectorResource(AppIcons.Language),

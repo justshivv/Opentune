@@ -3,6 +3,7 @@ package com.opentune.data
 import com.opentune.data.settings.GLASS_STYLE_VERSION
 import com.opentune.data.settings.GlassStyle
 import com.opentune.data.settings.LyricsSource
+import com.opentune.data.settings.PaletteStyleOption
 import com.opentune.data.settings.SettingsState
 import com.opentune.data.settings.migrateGlassStyle
 import kotlinx.serialization.encodeToString
@@ -126,6 +127,36 @@ class SettingsDefaultsTest {
             com.opentune.data.settings.PlayerBackground.MESH,
             json.decodeFromString<SettingsState>("""{"theme":{"playerBackground":"MESH"}}""").theme.playerBackground,
         )
+    }
+
+    @Test fun aDroppedPaletteStyleReadsBackAsTheStyleItNearlyMatched() {
+        // Content was Fidelity but for its third colour; Rainbow, Tonal with grey surfaces.
+        assertEquals(PaletteStyleOption.Fidelity, json.decodeFromString<SettingsState>("""{"theme":{"paletteStyle":"Content","pureBlack":false}}""").theme.paletteStyle)
+        assertEquals(PaletteStyleOption.TonalSpot, json.decodeFromString<SettingsState>("""{"theme":{"paletteStyle":"Rainbow","pureBlack":false}}""").theme.paletteStyle)
+        // Through the app's own load, the rest of the file still reads.
+        val moved = loaded("""{"theme":{"paletteStyle":"Content","pureBlack":false,"seedColor":-1}}""")
+        assertEquals(PaletteStyleOption.Fidelity, moved.theme.paletteStyle)
+        assertFalse(moved.theme.pureBlack)
+        assertEquals(-1, moved.theme.seedColor)
+        // Written back, it's saved under the kept name and stays put.
+        assertTrue("\"paletteStyle\":\"Fidelity\"" in json.encodeToString(moved))
+        assertEquals(moved, json.decodeFromString<SettingsState>(json.encodeToString(moved)))
+        // Every kept style round-trips by its own name.
+        for (s in PaletteStyleOption.entries) {
+            val saved = json.encodeToString(SettingsState(theme = com.opentune.data.settings.ThemeSettings(paletteStyle = s)))
+            assertEquals(s, json.decodeFromString<SettingsState>(saved).theme.paletteStyle)
+        }
+        // A name nothing knows, or none saved, is the default.
+        assertEquals(PaletteStyleOption.TonalSpot, json.decodeFromString<SettingsState>("""{"theme":{"paletteStyle":"Sparkly"}}""").theme.paletteStyle)
+        assertEquals(PaletteStyleOption.TonalSpot, json.decodeFromString<SettingsState>("{}").theme.paletteStyle)
+        assertEquals(PaletteStyleOption.TonalSpot, PaletteStyleOption.fromSaved(null))
+        // Only the look-alikes went; each one moved to a style still offered.
+        assertEquals(
+            listOf("TonalSpot", "Vibrant", "Expressive", "Fidelity", "FruitSalad", "Neutral", "Monochrome"),
+            PaletteStyleOption.entries.map { it.name },
+        )
+        assertTrue(PaletteStyleOption.dropped.values.all { it in PaletteStyleOption.entries })
+        assertTrue(PaletteStyleOption.dropped.keys.none { k -> PaletteStyleOption.entries.any { it.name == k } })
     }
 
     @Test fun aDroppedDockMotionReadsBackAsTheDefault() {

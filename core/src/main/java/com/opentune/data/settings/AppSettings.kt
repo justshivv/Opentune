@@ -36,18 +36,44 @@ enum class AudioQuality(val label: String, val summary: String, val maxKbps: Int
 @Serializable
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
 
-/** Mirrors com.materialkolor.PaletteStyle by name, so this layer stays free of UI types. */
-@Serializable
-enum class PaletteStyleOption(val label: String) {
-    TonalSpot("Tonal"),
-    Vibrant("Vibrant"),
-    Expressive("Expressive"),
-    Fidelity("Fidelity"),
-    Content("Content"),
-    Rainbow("Rainbow"),
-    FruitSalad("Fruit salad"),
-    Neutral("Neutral"),
-    Monochrome("Monochrome"),
+/**
+ * Mirrors com.materialkolor.PaletteStyle by name, so this layer stays free of UI types.
+ *
+ * Two of its styles aren't offered: each made nearly the same scheme as one that is.
+ * Content is Fidelity with the third colour taken from next door on the wheel rather
+ * than across it (every other role is identical), and Rainbow is Tonal with grey
+ * surfaces and a slightly stronger first colour. One saved under either reads back as
+ * the style it copied ([fromSaved]).
+ */
+@Serializable(with = PaletteStyleOptionSerializer::class)
+enum class PaletteStyleOption(val label: String, val summary: String) {
+    TonalSpot("Tonal", "Calm: the colour softened, with quiet companions"),
+    Vibrant("Vibrant", "Bold, saturated colours"),
+    Expressive("Expressive", "Playful: hues pulled away from the colour"),
+    Fidelity("Fidelity", "True to the colour, with its opposite beside it"),
+    FruitSalad("Fruit salad", "Bright, every hue turned round the wheel"),
+    Neutral("Neutral", "Muted, almost grey"),
+    Monochrome("Monochrome", "Greys only"),
+    ;
+
+    companion object {
+        /** Styles no longer offered, and the kept one whose scheme each nearly matched. */
+        val dropped: Map<String, PaletteStyleOption> = mapOf("Content" to Fidelity, "Rainbow" to TonalSpot)
+
+        /** The style saved as [name]: itself, the one a dropped style moved to, or Tonal for anything else. */
+        fun fromSaved(name: String?): PaletteStyleOption =
+            entries.firstOrNull { it.name == name } ?: dropped[name] ?: TonalSpot
+    }
+}
+
+/** Saves a palette style by name, and reads back a dropped one as the style it moved to (not the default). */
+object PaletteStyleOptionSerializer : kotlinx.serialization.KSerializer<PaletteStyleOption> {
+    override val descriptor = kotlinx.serialization.descriptors.PrimitiveSerialDescriptor(
+        "com.opentune.data.settings.PaletteStyleOption", kotlinx.serialization.descriptors.PrimitiveKind.STRING,
+    )
+    override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: PaletteStyleOption) = encoder.encodeString(value.name)
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): PaletteStyleOption =
+        PaletteStyleOption.fromSaved(decoder.decodeString())
 }
 
 /**
@@ -1126,7 +1152,7 @@ object AppSettings {
                 mode = enumOf(ThemeMode.entries.toTypedArray(), p.getString("theme_mode", null), ThemeMode.SYSTEM),
                 dynamicColor = p.getBoolean("dynamic_color", false),
                 seedColor = p.getInt("seed_color", SEED_COLORS.first()),
-                paletteStyle = enumOf(PaletteStyleOption.entries.toTypedArray(), p.getString("palette_style", null), PaletteStyleOption.TonalSpot),
+                paletteStyle = PaletteStyleOption.fromSaved(p.getString("palette_style", null)),
                 pureBlack = p.getBoolean("pure_black", true),
                 colorFromArtwork = p.getBoolean("color_from_artwork", true),
                 playerBackground = enumOf(PlayerBackground.entries.toTypedArray(), p.getString("player_background", null), PlayerBackground.BLUR),
