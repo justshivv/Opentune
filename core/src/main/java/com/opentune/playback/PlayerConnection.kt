@@ -295,6 +295,13 @@ class PlayerConnection(private val context: Context) {
         // (an upgrade, a recovery) settles the toggle on what is actually playing.
         _videoMode.value = (mixing?.item ?: player.currentMediaItem)?.localConfiguration?.uri?.let(::isVideoUri) == true
         _videoAvailable.value = id?.let { StreamResolver.hasVideo(it) } == true
+        // A song served without its response ever being parsed (from the cache,
+        // a download) has no answer yet: ask, and light the toggle if it has one.
+        if (id != null && !_videoAvailable.value) {
+            scope.launch {
+                if (StreamResolver.videoAvailable(id) && _currentSong.value?.videoId == id) _videoAvailable.value = true
+            }
+        }
         _videoSize.value = player.videoSize
         // Buffering on the way, with playback meant to go on (a quality switch
         // loading its stream, a stall), still counts as playing: the button

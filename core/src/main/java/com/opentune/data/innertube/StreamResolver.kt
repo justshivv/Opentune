@@ -1071,7 +1071,7 @@ object StreamResolver {
                     continue
                 }
 
-                val verdict = timed("$videoId ${client.clientName} probe") { probe(playable) }
+                val verdict = timed("$videoId ${client.clientName} probe") { probe(playable, expectVideo = picked is Video) }
                 TrackLog.d(TAG, "TIMING $videoId ${client.clientName} total: ${SystemClock.elapsedRealtime() - clientStart}ms")
                 when (verdict) {
                     Probe.OK -> {
@@ -1231,7 +1231,35 @@ object StreamResolver {
     private val videos = ConcurrentHashMap<String, Video>()
 
     /** Whether [videoId]'s response offered any video format worth switching to. */
-    fun hasVideo(videoId: String): Boolean = videos.containsKey(videoId)
+    fun hasVideo(videoId: String): Boolean = videos[videoId]?.muxed == true
+
+    /** Tracks a client walk answered for, none of which offered a playable video. */
+    private val noVideo = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Whether [videoId] has a music video worth switching to, asking the walk
+     * itself when no response of the track's was ever parsed (a song served
+     * from the cache or a download never had its formats read). The answer is
+     * kept either way, so a song is only ever asked about once.
+     */
+    suspend fun videoAvailable(videoId: String): Boolean {
+        if (videos[videoId]?.muxed == true) return true
+        if (videoId in noVideo) return false
+        if (!com.opentune.data.isYouTubeId(videoId)) return false
+        unplayableReason(videoId)?.let { return false }
+        var answered = false
+        var offered = false
+        val stream = playerStream(videoId, select = { response ->
+            answered = true
+            rememberVideo(response)
+            val muxed = rankVideoFormats(response).filter { it.muxed }
+            if (muxed.isNotEmpty()) offered = true
+            muxed
+        })
+        if (stream != null) return true
+        if (answered && !offered) noVideo += videoId
+        return false
+    }
 
     /** The best video format seen for [videoId], or null when its response offered none. */
     internal fun videoFor(videoId: String): Video? = videos[videoId]
@@ -1622,7 +1650,7 @@ object StreamResolver {
      * [PlayerClient.forStreamUrl] — so this tests the request that matters
      * rather than a more favourable version of it.
      */
-    private fun probe(url: String): Probe {
+    private fun probe(url: String, expectVideo: Boolean = false): Probe {
         val builder = okhttp3.Request.Builder().url(url)
             .header("Range", "bytes=0-${PROBE_RANGE_BYTES - 1}")
         mediaHeadersFor(url).forEach { (name, value) ->
@@ -1635,7 +1663,7 @@ object StreamResolver {
                     response.code !in 200..299 && response.code != 416 -> Probe.UNREACHABLE
                     // A refusal dressed as a success: an error page, or the
                     // consent/captcha interstitial, rather than audio.
-                    response.header("Content-Type")?.startsWith("audio/") != true -> Probe.REFUSED
+                    response.header("Content-Type")?.let { it.startsWith("audio/") || (expectVideo && it.startsWith("video/")) } != true -> Probe.REFUSED
                     // Headers can arrive long before a body that never does —
                     // exactly the shaping this whole path exists to sidestep.
                     // Insisting on the bytes is the point: a trickle that
