@@ -7,6 +7,7 @@ import com.opentune.data.lyrics.Lyrics
 import com.opentune.data.lyrics.LyricsRepository
 import com.opentune.data.model.Song
 import com.opentune.data.connect.Connect
+import com.opentune.data.connect.meant
 import com.opentune.data.together.Together
 import com.opentune.playback.PlayerConnection
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -79,10 +80,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, player.upNext.value)
     val hasNext = combine(player.hasNext, remote) { here, far -> far != null || here }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
-    val isPlaying = combine(player.isPlaying, remote) { here, far -> far?.state?.playing ?: here }
+    // Meant to play there, stalled to load or not, as this phone's own button shows it: by
+    // moving, a stall there showed Play, and pressing it sent "play" to a device already playing.
+    val isPlaying = combine(player.isPlaying, remote) { here, far -> far?.state?.meant ?: here }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
     val isSounding = player.isSounding
-    val isBuffering = combine(player.isBuffering, remote) { here, far -> far == null && here }
+    val isBuffering = combine(player.isBuffering, remote) { here, far -> far?.state?.let { it.meant && !it.playing } ?: (far == null && here) }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
     val loadingMessage = player.loadingMessage
     val shuffleEnabled = combine(player.shuffleEnabled, remote) { here, far -> far?.state?.shuffle ?: here }
@@ -100,7 +103,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             else -> androidx.media3.common.Player.REPEAT_MODE_OFF
         }
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, androidx.media3.common.Player.REPEAT_MODE_OFF)
-    val durationMs = combine(player.durationMs, remote) { here, far -> far?.state?.track?.lengthMs?.takeIf { it > 0 } ?: here }
+    // The other device's song's length, never this phone's own song's: that one's showed under the other song.
+    val durationMs = combine(player.durationMs, remote) { here, far -> far?.state?.let { it.track?.lengthMs ?: 0L } ?: here }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, 0L)
     val playbackError = player.error
     val source = player.source
@@ -319,7 +323,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** A song on its own; the service follows it with radio. */
     fun startRadio(song: Song) { if (!toRoom(song)) player.play(song, com.opentune.i18n.Tr.f("{0} radio", song.title)) }
     fun seekTo(positionMs: Long) { if (!Connect.seekTo(positionMs) && !Together.intercept(Together.Control.Seek(positionMs))) player.seekTo(positionMs) }
-    fun positionMs(): Long = remote.value?.positionAt(System.currentTimeMillis()) ?: player.currentPositionMs()
+    fun positionMs(): Long = remote.value?.let { far ->
+        // Counted on from its last report, never past the song's end while the next report is on its way.
+        val at = far.positionAt(System.currentTimeMillis())
+        far.state?.track?.lengthMs?.takeIf { it > 0 }?.let { at.coerceAtMost(it) } ?: at
+    } ?: player.currentPositionMs()
     fun bufferedPositionMs(): Long = player.bufferedPositionMs()
 
     override fun onCleared() {

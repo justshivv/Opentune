@@ -110,11 +110,15 @@ object Connect {
         // The player's changes go out a moment after they settle.
         watching = main.launch {
             merge(
-                combine(player.currentSong, player.isPlaying, player.queue, player.upNext, player.volume) { _, _, _, _, _ -> Unit },
-                // A stall starting or ending too: other devices' clocks for this one stop and start with it.
-                combine(player.shuffleMode, player.repeatMode, player.audioFormat, com.opentune.data.NerdStats.playbackSource, player.isSounding) { _, _, _, _, _ -> Unit },
+                merge(
+                    combine(player.currentSong, player.isPlaying, player.queue, player.upNext, player.volume) { _, _, _, _, _ -> Unit },
+                    // A stall starting or ending too: other devices' clocks for this one stop and start with it.
+                    combine(player.shuffleMode, player.repeatMode, player.audioFormat, com.opentune.data.NerdStats.playbackSource, player.isSounding) { _, _, _, _, _ -> Unit },
+                ).debounce(300),
+                // A seek goes out at once: held back with the rest, the other devices ran on from the old
+                // place meanwhile, and a stall or a quality label changing kept putting it off.
                 player.seeks,
-            ).debounce(300).collect { session?.localChanged() }
+            ).collect { session?.localChanged() }
         }
         restart()
         // Once signed in (at start, or later), the account's group is looked for.
@@ -188,7 +192,7 @@ object Connect {
         // The old group is listened to for a while longer, for its devices that were off just now.
         val former = if (remember) (listOfNotNull(old?.encoded) + formerSecrets()).filter { it != group.encoded }.distinct().take(MAX_FORMER) else emptyList()
         prefs?.edit { putString("secret", group.encoded); putString("former", former.joinToString(",")) }
-        if (bring) session?.let { it.stop(next = group.encoded); session = null }
+        if (bring) session?.let { took = it.tookAt; it.stop(next = group.encoded); session = null }
         restart()
     }
 
@@ -220,7 +224,8 @@ object Connect {
      */
     fun togglePlayPause(): Boolean {
         val target = controlling.value ?: return false
-        return session?.intercept(if (target.state?.playing == true) "pause" else "play") ?: false
+        // By what it's meant to do: one stalled to load is playing, and Pause pauses it.
+        return session?.intercept(if (target.state?.meant == true) "pause" else "play") ?: false
     }
     fun skipNext(): Boolean = session?.intercept("next") ?: false
     /** Plays entry [at] ([track]) of the Up Next on the device playing elsewhere. */
@@ -276,12 +281,22 @@ object Connect {
             { template, name -> _notices.tryEmit(Tr.f(template, name)) }, main,
             moved = { secret -> ConnectGroup.parse(secret)?.let { main.launch { join(it, bring = false) } } },
             former = former,
+            took = took,
         ).also { it.start() }
     }
 
     private var viewJob: Job? = null
 
+    /**
+     * When this phone last took the music, kept across sessions: Connect
+     * starting over (the player screen made again, a group joined, the
+     * switch flipped) isn't taking it. Counted as taking it, a paused phone
+     * became the device shown everywhere, and Play pressed elsewhere played here.
+     */
+    private var took = 0L
+
     private fun stopSession() {
+        session?.let { took = it.tookAt }
         session?.stop()
         session = null
         viewJob?.cancel()
@@ -362,6 +377,9 @@ internal class ConnectionConnectPlayer(private val c: PlayerConnection) : Connec
     }
     override fun load(queue: List<CTrack>, index: Int, pos: Long, playing: Boolean): Boolean {
         if (queue.isEmpty() || index !in queue.indices) return false
+        // Not yet joined to the player service (the app just opened): it would go nowhere, and the
+        // device handing it over, told it was taken, would stop with nothing playing anywhere.
+        if (!c.connected.value) return false
         val songs: List<Song> = queue.map { it.toSong() }
         c.playAll(songs, index, shuffle = false, source = null, startPositionMs = pos, fromList = false)
         if (!playing) c.pause()

@@ -12,6 +12,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.opentune.data.connect.CTrack
 import com.opentune.data.connect.Connect
 import com.opentune.data.connect.Device
+import com.opentune.data.connect.meant
 
 /**
  * The player behind the media notification while another of the person's
@@ -39,8 +40,9 @@ internal class ConnectRemotePlayer : SimpleBasePlayer(Looper.getMainLooper()) {
         return base
             .setPlaylist(items)
             .setCurrentMediaItemIndex(0)
-            .setPlayWhenReady(s.playing, Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE)
-            .setPlaybackState(Player.STATE_READY)
+            .setPlayWhenReady(s.meant, Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE)
+            // Stalled to load there: not counted on by the notification until it moves again.
+            .setPlaybackState(if (s.meant && !s.playing) Player.STATE_BUFFERING else Player.STATE_READY)
             .setContentPositionMs { d.positionAt(System.currentTimeMillis()) }
             .build()
     }
@@ -60,7 +62,7 @@ internal class ConnectRemotePlayer : SimpleBasePlayer(Looper.getMainLooper()) {
     }
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
-        if (playWhenReady != (device?.state?.playing == true)) Connect.togglePlayPause()
+        if (playWhenReady != (device?.state?.meant == true)) Connect.togglePlayPause()
         return Futures.immediateVoidFuture()
     }
 

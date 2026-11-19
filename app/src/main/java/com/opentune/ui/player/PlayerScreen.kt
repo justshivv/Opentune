@@ -1,5 +1,6 @@
 package com.opentune.ui.player
 
+import com.opentune.data.connect.meant
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.onSizeChanged
@@ -1928,15 +1929,16 @@ private fun RemoteMiniPlayer(device: com.opentune.data.connect.Device, onExpand:
     val haptics = com.opentune.ui.components.rememberHaptics()
     MiniPlayer(
         song = song,
-        isPlaying = state.playing,
-        isBuffering = false,
+        // Meant to play there, a stall shown as one rather than as paused.
+        isPlaying = state.meant,
+        isBuffering = state.meant && !state.playing,
         hasNext = true,
         progress = { if (length > 0) (device.positionAt(System.currentTimeMillis()).toFloat() / length).coerceIn(0f, 1f) else 0f },
         onTogglePlay = { haptics.tick(); com.opentune.data.connect.Connect.togglePlayPause() },
         onNext = { haptics.tick(); com.opentune.data.connect.Connect.skipNext() },
         onPrevious = { haptics.tick(); com.opentune.data.connect.Connect.skipPrevious() },
         onClick = onExpand,
-        onDismiss = { if (state.playing) com.opentune.data.connect.Connect.togglePlayPause() },
+        onDismiss = { if (state.meant) com.opentune.data.connect.Connect.togglePlayPause() },
         modifier = modifier,
         inline = inline,
         replica = replica,

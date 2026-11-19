@@ -1,5 +1,6 @@
 package com.opentune.playback
 
+import com.opentune.data.connect.meant
 import com.opentune.data.lossless.ExternalStreams
 import com.opentune.data.model.artworkAt
 import com.opentune.data.model.durationMillis
@@ -985,8 +986,8 @@ class PlaybackService : MediaLibraryService() {
             } ?: return false
             val act: (() -> Unit) = when (key.keyCode) {
                 android.view.KeyEvent.KEYCODE_HEADSETHOOK, android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> { { com.opentune.data.connect.Connect.togglePlayPause() } }
-                android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> { { if (com.opentune.data.connect.Connect.controlling.value?.state?.playing != true) com.opentune.data.connect.Connect.togglePlayPause() } }
-                android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> { { if (com.opentune.data.connect.Connect.controlling.value?.state?.playing == true) com.opentune.data.connect.Connect.togglePlayPause() } }
+                android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> { { if (com.opentune.data.connect.Connect.controlling.value?.state?.meant != true) com.opentune.data.connect.Connect.togglePlayPause() } }
+                android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> { { if (com.opentune.data.connect.Connect.controlling.value?.state?.meant == true) com.opentune.data.connect.Connect.togglePlayPause() } }
                 android.view.KeyEvent.KEYCODE_MEDIA_NEXT -> { { com.opentune.data.connect.Connect.skipNext() } }
                 android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { { com.opentune.data.connect.Connect.skipPrevious() } }
                 else -> return false
