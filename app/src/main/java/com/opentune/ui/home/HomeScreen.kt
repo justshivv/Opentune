@@ -149,7 +149,7 @@ fun HomeScreen(
             refreshHome()
         }
     }
-    val recents = remember(records, hideExplicit) { ContentFilter.songs(History.recents(records, 100), hideExplicit) }
+    val recents = rememberHomeDerived("recents", records, hideExplicit, initial = emptyList()) { ContentFilter.songs(History.recents(records, 100), hideExplicit) }
     // Not saved with the page: a page opened from inside it (an artist, from a
     // song's menu) is left with one back press, not one that brings the list up again.
     var historyOpen by remember { mutableStateOf(false) }
@@ -162,7 +162,7 @@ fun HomeScreen(
     // YouTube Music's own Speed dial when it sends one (signed in), else the songs
     // played most on this phone, with what's hidden or filtered left out.
     val collectionPlays by com.opentune.data.history.ListenedCollections.plays.collectAsState()
-    val localDial = remember(records, collectionPlays, hidden, hideExplicit) {
+    val localDial = rememberHomeDerived("speedDial", records, collectionPlays, hidden, hideExplicit, initial = emptyList()) {
         val picks = com.opentune.data.history.SpeedDial.fromHistory(records, collections = collectionPlays)
         hidden.shelves(ContentFilter.shelves(listOf(HomeShelf(com.opentune.data.history.SpeedDial.TITLE, picks)), hideExplicit))
             .firstOrNull()?.items.orEmpty()
@@ -176,7 +176,7 @@ fun HomeScreen(
         seedsAll.filterNot { hidden.hidesArtist(it.name, it.browseId) }
             .map { it.copy(top = hidden.songs(it.top), radio = hidden.songs(it.radio)) }
     }
-    val mixes = remember(records, seeds, hidden) {
+    val mixes = rememberHomeDerived("mixes", records, seeds, hidden, initial = emptyList()) {
         com.opentune.data.reco.HomeSeed.mixes(com.opentune.data.history.DailyMixes.build(records, hidden = hidden), seeds, records.size)
     }
     // One mix for each genre played most, from the artists' genres as they're learnt; the most
@@ -217,13 +217,13 @@ fun HomeScreen(
             daylistPart = com.opentune.data.history.Daylist.partAt(System.currentTimeMillis())
         }
     }
-    val daylist = remember(records, artistGenres, hidden, daylistPart) {
+    val daylist = rememberHomeDerived("daylist", records, artistGenres, hidden, daylistPart, initial = null) {
         com.opentune.data.history.Daylist.build(records, { artistGenres[com.opentune.data.metadata.ArtistGenres.key(it)] }, hidden = hidden)
     }
     // Discover: songs not played yet from the radios of each genre's favourites, made once a day.
     // While history is short, the welcome's artists' top songs stand in as each genre's favourites.
     val discoverMixes by com.opentune.data.reco.GenreDiscover.mixes.collectAsState()
-    val discoverSeeds = remember(records, artistGenres, hidden, seeds) {
+    val discoverSeeds = rememberHomeDerived("discoverSeeds", records, artistGenres, hidden, seeds, initial = LinkedHashMap()) {
         val genreOf = { a: String -> artistGenres[com.opentune.data.metadata.ArtistGenres.key(a)] }
         val fromHistory = com.opentune.data.history.GenreMixes.favourites(records, genreOf, hidden)
         if (com.opentune.data.reco.HomeSeed.isShort(records.size)) {
@@ -246,7 +246,7 @@ fun HomeScreen(
     val discover = remember(discoverMixes, hidden) {
         discoverMixes.mapNotNull { m -> hidden.songs(m.songs).takeIf { it.size >= 6 }?.let { m.copy(songs = it) } }
     }
-    val badges = remember(records) { com.opentune.data.history.Streaks.badges(records) }
+    val badges = rememberHomeDerived("badges", records, initial = emptyList()) { com.opentune.data.history.Streaks.badges(records) }
     val ui by AppSettings.ui.collectAsState()
     // Spotify's own mixes for the listener, when Spotify is connected (see SpotifySync).
     val spotifyConnected by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
