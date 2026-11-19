@@ -210,7 +210,7 @@ private fun VerifyComputer() {
                     QuietPill("Copy link", { clipboard.setText(AnnotatedString(waiting.link)); message = "Link copied. Open it on your phone." })
                     QuietPill("Cancel", { pair = null; message = "Cancelled. The request expires by itself in five minutes." })
                 }
-                Text("Waiting for your phone…", style = rowDetailStyle(), color = keyColour())
+                Text("Waiting for your phone…", style = rowDetailStyle(), color = accentKey())
             }
         }
         until > now -> SettingRow("Verified until ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(until))}") {

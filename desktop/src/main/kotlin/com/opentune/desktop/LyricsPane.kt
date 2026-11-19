@@ -55,6 +55,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.ui.draw.drawWithContent
 import com.opentune.data.lyrics.LyricLine
 import com.opentune.data.lyrics.Lyrics
 import com.opentune.data.lyrics.LyricsRepository
@@ -124,20 +131,60 @@ internal fun LyricsPane(song: Song, modifier: Modifier = Modifier) {
         if (target.isBlank() || lines.isEmpty()) return@produceState
         value = com.opentune.data.lyrics.LyricsTranslator.translate(lines, target).getOrDefault(emptyList())
     }
+    val ui by AppSettings.ui.collectAsState()
     Column(modifier) {
         LyricsHeader(song, lyrics, offset)
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                state is LyricsState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                lyrics is Lyrics.Synced -> SyncedLyrics(song, lyrics, offset, translated)
-                lyrics is Lyrics.Plain -> PlainLyrics(lyrics.text, translated)
-                else -> Text(
-                    "No lyrics for this song.",
-                    style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center),
-                )
+        // The lyrics fade in once found, rather than popping in over the spinner, as the web's do.
+        androidx.compose.animation.AnimatedContent(
+            state is LyricsState.Loading,
+            transitionSpec = {
+                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (ui.reduceAnimation) 120 else 400)) togetherWith
+                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
+            },
+            label = "lyrics shown",
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) { loading ->
+            Box(Modifier.fillMaxSize()) {
+                when {
+                    loading -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    lyrics is Lyrics.Synced -> SyncedLyrics(song, lyrics, offset, translated)
+                    lyrics is Lyrics.Plain -> PlainLyrics(lyrics.text, translated)
+                    else -> Column(
+                        Modifier.align(Alignment.Center).padding(horizontal = 24.dp).padding(bottom = 60.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text("No lyrics available", style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold))
+                        Text(
+                            "None of the lyric sources has this song. Try another in the list above.",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+/**
+ * A small control above the lyrics, as the web's are: 12sp, grey, a soft fill
+ * under the pointer; [lit] in the key colour.
+ */
+@Composable
+private fun HeaderChip(text: String, onClick: () -> Unit, lit: Boolean = false, menu: Boolean = false, modifier: Modifier = Modifier) {
+    val hover = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    val shape = RoundedCornerShape(8.dp)
+    val fill by animateColorAsState(if (hovered) quinaryFill() else MaterialTheme.colorScheme.onSurface.copy(alpha = 0f), androidx.compose.animation.core.tween(150), label = "chip")
+    val ink = if (lit) keyColour() else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier.pressGive(hover, to = 0.96f).clip(shape).background(fill).hoverable(hover)
+            .clickable(interactionSource = hover, indication = com.opentune.ui.components.FocusRing(shape), role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, color = ink, maxLines = 1, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold))
+        if (menu) Icon(Icons.Rounded.ExpandMore, null, tint = ink, modifier = Modifier.padding(start = 2.dp).size(15.dp))
     }
 }
 
@@ -146,11 +193,14 @@ private fun LyricsHeader(song: Song, lyrics: Lyrics?, offset: Long) {
     val scheme = MaterialTheme.colorScheme
     val settings by AppSettings.lyrics.collectAsState()
     var picking by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    // On one line where there's room (the full player), over two in the narrow column.
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
         Box {
-            TextButton(onClick = { picking = true }) {
-                Text(lyrics?.source?.let { "From $it" } ?: "Lyrics source", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
-            }
+            HeaderChip(lyrics?.source?.let { "From $it" } ?: "Lyrics source", { picking = true }, menu = true)
             DropdownMenu(picking, onDismissRequest = { picking = false }) {
                 val chosen = settings.chosen[song.videoId]
                 DropdownMenuItem(
@@ -168,33 +218,29 @@ private fun LyricsHeader(song: Song, lyrics: Lyrics?, offset: Long) {
             }
         }
         TranslateButton(settings.translateTo, settings.translateTarget)
-        Spacer(Modifier.weight(1f))
-        if (lyrics is Lyrics.Synced) {
+        if (lyrics is Lyrics.Synced) Row(verticalAlignment = Alignment.CenterVertically) {
             val choruses = remember(lyrics) { SongParts.choruses(lyrics) }
             if (choruses.isNotEmpty()) {
-                TextButton(onClick = {
+                HeaderChip("Skip to chorus", {
                     SongParts.nextChorus(choruses, Player.positionMs() + offset)?.let { Player.seekTo((it - offset).coerceAtLeast(0)) }
-                }) { Text("Skip to chorus", style = MaterialTheme.typography.labelLarge) }
+                })
             }
             // Earlier or later by a tenth of a second, kept for this song, as the phone's "Lyrics offset":
             // a positive shift shows the words earlier. A 0 set here is kept when it overrides the automatic shift.
             fun set(ms: Long) = AppSettings.setLyricsOffset(song.videoId, ms.coerceIn(-10_000, 10_000), keepZero = lyrics.autoOffsetMs != 0L)
-            IconButton(onClick = { set(offset - 100) }) {
-                Icon(Icons.Rounded.Remove, "Lyrics later", tint = scheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-            }
+            HoverIcon(Icons.Rounded.Remove, "Lyrics later", size = 28.dp, iconSize = 16.dp, shape = RoundedCornerShape(8.dp)) { set(offset - 100) }
             Text(
                 when {
                     offset == 0L -> "In step"
                     offset > 0 -> "%.1f s earlier".format(offset / 1000f)
                     else -> "%.1f s later".format(-offset / 1000f)
                 },
-                style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium), color = scheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                maxLines = 1,
                 // Clicking it goes back to the automatic shift.
-                modifier = Modifier.width(96.dp).clickable { AppSettings.setLyricsOffset(song.videoId, 0) },
+                modifier = Modifier.width(80.dp).clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Back to the automatic timing") { AppSettings.setLyricsOffset(song.videoId, 0) },
             )
-            IconButton(onClick = { set(offset + 100) }) {
-                Icon(Icons.Rounded.Add, "Lyrics earlier", tint = scheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-            }
+            HoverIcon(Icons.Rounded.Add, "Lyrics earlier", size = 28.dp, iconSize = 16.dp, shape = RoundedCornerShape(8.dp)) { set(offset + 100) }
         }
     }
 }
@@ -221,7 +267,13 @@ private fun SyncedLyrics(song: Song, lyrics: Lyrics.Synced, offset: Long, transl
         state = list,
         contentPadding = PaddingValues(top = 24.dp, bottom = 240.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.fillMaxSize(),
+        // Soft at the top and the foot, so lines fade into the edges rather than being cut off there.
+        modifier = Modifier.fillMaxSize()
+            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                drawRect(LYRIC_FADE, blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+            },
     ) {
         itemsIndexed(lyrics.lines, key = { i, l -> "$i:${l.startMs}" }) { i, line ->
             // Only the line being sung follows the clock; the rest stay as they are, so the
@@ -282,13 +334,10 @@ private fun LyricRow(line: LyricLine, active: Boolean, at: Long, translation: St
 private fun TranslateButton(current: String, last: String) {
     var open by remember { mutableStateOf(false) }
     Box {
-        TextButton(onClick = { open = true }) {
-            Text(
-                com.opentune.data.lyrics.LyricsTranslator.languageName(current)?.let { "In $it" } ?: "Translate",
-                style = MaterialTheme.typography.labelLarge,
-                color = if (current.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        HeaderChip(
+            com.opentune.data.lyrics.LyricsTranslator.languageName(current)?.let { "In $it" } ?: "Translate", { open = true },
+            lit = current.isNotBlank(), menu = true,
+        )
         DropdownMenu(open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 420.dp)) {
             fun pick(code: String) {
                 open = false
@@ -325,6 +374,10 @@ private fun PlainLyrics(text: String, translated: List<String?>) {
         )
     }
 }
+
+private val LYRIC_FADE = androidx.compose.ui.graphics.Brush.verticalGradient(
+    0f to Color.Transparent, 0.06f to Color.Black, 0.86f to Color.Black, 1f to Color.Transparent,
+)
 
 /** Timed syllables already contain their intended spacing; never insert extra spaces. */
 internal fun lyricDisplayText(line: LyricLine): String =

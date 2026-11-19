@@ -88,6 +88,13 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -99,44 +106,61 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.data.subsonic.Subsonic
 
 /** The column beside the page: the song's lyrics, or what plays next. */
-enum class SidePanel(val label: String) { NOW("Now playing"), LYRICS("Lyrics"), QUEUE("Queue") }
+enum class SidePanel(val label: String) { NOW("Now playing"), LYRICS("Lyrics"), QUEUE("Up next") }
 
 
 
-/** A thin progress line: click or drag along it to move through the song. */
+/**
+ * The thin line along the foot of the song in the top bar, as the web
+ * player's: 2dp, thickening to 4dp under the pointer over 150ms; click or drag
+ * along it to move through the song. [hover] tells the bar when the pointer
+ * is on it, and [onScrub] where a drag has got to (null once let go), so the
+ * times can show over its ends.
+ */
 @Composable
-internal fun SeekLine(progress: Progress, modifier: Modifier) {
+internal fun SeekLine(
+    progress: Progress,
+    modifier: Modifier,
+    hover: MutableInteractionSource = remember { MutableInteractionSource() },
+    onScrub: (Float?) -> Unit = {},
+) {
     var width by remember { mutableFloatStateOf(1f) }
     var dragging by remember { mutableStateOf<Float?>(null) }
-    val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
-    val thick by androidx.compose.animation.core.animateDpAsState(if (hovered || dragging != null) 4.dp else 2.dp, tween(140), label = "seek line")
-    val color = MaterialTheme.colorScheme.onSurface
+    val thick by androidx.compose.animation.core.animateFloatAsState(
+        if (hovered || dragging != null) 1f else 0.5f, tween(150, easing = Motion.Emphasized), label = "seek line",
+    )
+    val track = quaternaryFill()
+    val played = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
     val shown = dragging ?: progress.fraction()
     fun seekTo(f: Float) { if (progress.durationMs > 0) Player.seekTo((f.coerceIn(0f, 1f) * progress.durationMs).toLong()) }
+    fun scrub(f: Float?) { dragging = f; onScrub(f) }
     Box(
-        modifier.height(10.dp).hoverable(hover)
+        // A taller place to take hold of than the line it carries.
+        modifier.height(14.dp).hoverable(hover)
             .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }
             .pointerInput(progress.durationMs) { detectTapGestures { seekTo(it.x / width) } }
             .pointerInput(progress.durationMs) {
                 detectHorizontalDragGestures(
-                    onDragStart = { dragging = it.x / width },
-                    onDragEnd = { dragging?.let(::seekTo); dragging = null },
-                    onDragCancel = { dragging = null },
-                ) { change, _ -> dragging = (change.position.x / width).coerceIn(0f, 1f) }
+                    onDragStart = { scrub((it.x / width).coerceIn(0f, 1f)) },
+                    onDragEnd = { dragging?.let(::seekTo); scrub(null) },
+                    onDragCancel = { scrub(null) },
+                ) { change, _ -> scrub((change.position.x / width).coerceIn(0f, 1f)) }
             }
             .drawBehind {
-                val h = thick.toPx()
-                val y = size.height - h
-                drawRoundRect(color.copy(alpha = 0.14f), Offset(0f, y), Size(size.width, h), CornerRadius(h / 2))
-                drawRoundRect(color.copy(alpha = 0.85f), Offset(0f, y), Size(size.width * shown.coerceIn(0f, 1f), h), CornerRadius(h / 2))
+                // Drawn 4dp and scaled about its middle, 5dp up from the foot, as the web draws it.
+                val full = 4.dp.toPx()
+                val h = full * thick
+                val y = size.height - 5.dp.toPx() - full / 2 - h / 2
+                drawRoundRect(track, Offset(0f, y), Size(size.width, h), CornerRadius(h / 2))
+                drawRoundRect(played, Offset(0f, y), Size(size.width * shown.coerceIn(0f, 1f), h), CornerRadius(h / 2))
             },
     )
 }
 
-/** The speaker, muting on click, and a short slider beside it. */
+/** The speaker for the top bar: mutes on click, the wheel over it turns the music up or down. */
 @Composable
-internal fun VolumeControl(slider: Boolean) {
+internal fun VolumeSpeaker(modifier: Modifier = Modifier, size: Dp = 32.dp, shape: androidx.compose.ui.graphics.Shape = CircleShape) {
     val volume by Player.volume.collectAsState()
     var before by remember { mutableStateOf(0.8) }
     val icon = when {
@@ -144,31 +168,66 @@ internal fun VolumeControl(slider: Boolean) {
         volume < 0.5 -> Icons.AutoMirrored.Rounded.VolumeDown
         else -> Icons.AutoMirrored.Rounded.VolumeUp
     }
-    Box(Modifier.volumeWheel()) {
-        HoverIcon(icon, if (volume <= 0.0) "Unmute" else "Mute", iconSize = 19.dp) {
+    Box(modifier.volumeWheel()) {
+        HoverIcon(icon, if (volume <= 0.0) "Unmute" else "Mute", size = size, iconSize = 19.dp, shape = shape) {
             if (volume > 0.0) { before = volume; Player.setVolume(0.0) } else Player.setVolume(before.takeIf { it > 0 } ?: 0.8)
         }
     }
-    if (!slider) return
+}
+
+/**
+ * The volume level as the web player draws it: a 4dp track filled to the
+ * level, with a white knob. Click or drag along it; the wheel and, once it
+ * has the keyboard, the arrow keys move it too.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+internal fun VolumeLevel(modifier: Modifier = Modifier) {
+    val volume by Player.volume.collectAsState()
     var width by remember { mutableFloatStateOf(1f) }
-    val color = MaterialTheme.colorScheme.onSurface
+    val fill = MaterialTheme.colorScheme.onSurface
+    val track = quaternaryFill()
     fun set(x: Float) = Player.setVolume((x / width).coerceIn(0f, 1f).toDouble())
     Box(
-        Modifier.width(96.dp).height(20.dp).volumeWheel()
+        modifier.width(96.dp).height(16.dp).volumeWheel()
             .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }
             .pointerInput(Unit) { detectTapGestures { set(it.x) } }
             .pointerInput(Unit) { detectHorizontalDragGestures { change, _ -> set(change.position.x) } }
+            .semantics {
+                contentDescription = "Volume"
+                progressBarRangeInfo = androidx.compose.ui.semantics.ProgressBarRangeInfo(volume.toFloat(), 0f..1f)
+                setProgress { Player.setVolume(it.coerceIn(0f, 1f).toDouble()); true }
+            }
+            .focusable()
+            .onKeyEvent { e ->
+                if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onKeyEvent false
+                when (e.key) {
+                    androidx.compose.ui.input.key.Key.DirectionRight, androidx.compose.ui.input.key.Key.DirectionUp -> { Player.setVolume(Player.volume.value + 0.05); true }
+                    androidx.compose.ui.input.key.Key.DirectionLeft, androidx.compose.ui.input.key.Key.DirectionDown -> { Player.setVolume(Player.volume.value - 0.05); true }
+                    else -> false
+                }
+            }
             .drawBehind {
-                val h = 3.dp.toPx()
+                val h = 4.dp.toPx()
                 val y = (size.height - h) / 2
-                drawRoundRect(color.copy(alpha = 0.16f), Offset(0f, y), Size(size.width, h), CornerRadius(h / 2))
-                drawRoundRect(color.copy(alpha = 0.8f), Offset(0f, y), Size(size.width * volume.toFloat(), h), CornerRadius(h / 2))
-                drawCircle(color, 5.dp.toPx(), Offset(size.width * volume.toFloat(), size.height / 2))
+                val x = size.width * volume.toFloat().coerceIn(0f, 1f)
+                drawRoundRect(track, Offset(0f, y), Size(size.width, h), CornerRadius(h / 2))
+                drawRoundRect(fill, Offset(0f, y), Size(x, h), CornerRadius(h / 2))
+                // The knob, with the faint shadow that lifts it off the track.
+                val r = 6.dp.toPx()
+                val at = Offset(x.coerceIn(r, size.width - r), size.height / 2)
+                drawCircle(Color.Black.copy(alpha = 0.3f), r + 1.dp.toPx(), at)
+                drawCircle(Color.White, r, at)
             },
     )
 }
 
-/** A bare icon that a soft circle comes up behind under the pointer; [lit] is white rather than grey. */
+/**
+ * A bare icon that a soft fill comes up behind under the pointer, giving a
+ * little when pressed, as the web player's buttons do. [lit] marks a switch
+ * that's on: the full ink with a dot under it, or with [litColour] given, that
+ * colour on a fill of its own (the web's ot-toggle).
+ */
 @Composable
 internal fun HoverIcon(
     icon: ImageVector,
@@ -177,25 +236,35 @@ internal fun HoverIcon(
     lit: Boolean = false,
     size: Dp = 34.dp,
     iconSize: Dp = 20.dp,
+    shape: androidx.compose.ui.graphics.Shape = CircleShape,
+    litColour: Color? = null,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     val onSurface = MaterialTheme.colorScheme.onSurface
-    val fill by animateColorAsState(onSurface.copy(alpha = if (hovered && enabled) 0.09f else 0f), tween(140), label = "icon fill")
     val ink = when {
         !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-        lit -> onSurface
+        lit -> litColour ?: onSurface
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val fill by animateColorAsState(
+        when {
+            lit && litColour != null && enabled -> litColour.copy(alpha = if (hovered) 0.26f else 0.2f)
+            hovered && enabled -> onSurface.copy(alpha = 0.09f)
+            else -> onSurface.copy(alpha = 0f)
+        },
+        tween(150), label = "icon fill",
+    )
     Box(
-        Modifier.size(size).clip(CircleShape).background(fill).hoverable(hover)
-            .clickable(enabled = enabled, interactionSource = hover, indication = null, onClick = onClick),
+        modifier.size(size).pressGive(hover, enabled).clip(shape).background(fill).hoverable(hover)
+            .clickable(enabled = enabled, interactionSource = hover, indication = com.opentune.ui.components.FocusRing(shape), role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, label, tint = ink, modifier = Modifier.size(iconSize))
         // A dot under a lit toggle, as the Mac's music app marks shuffle and repeat.
-        if (lit) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).size(3.dp).clip(CircleShape).background(onSurface))
+        if (lit) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).size(3.dp).clip(CircleShape).background(ink))
     }
 }
 

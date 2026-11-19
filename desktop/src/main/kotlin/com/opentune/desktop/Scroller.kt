@@ -91,7 +91,12 @@ private fun BoxScope.PageArrows(state: ScrollableState, hover: MutableInteractio
 
 @Composable
 private fun Arrow(icon: ImageVector, label: String, shown: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    AnimatedVisibility(shown, modifier, enter = fadeIn(tween(160)) + scaleIn(tween(200), 0.8f), exit = fadeOut(tween(120)) + scaleOut(tween(140), 0.8f)) {
+    // As the web's shelf arrows: a 200ms fade while the disc settles from 80% over 350ms.
+    AnimatedVisibility(
+        shown, modifier,
+        enter = fadeIn(tween(200)) + scaleIn(tween(350, easing = Motion.Settle), 0.8f),
+        exit = fadeOut(tween(200)) + scaleOut(tween(200, easing = Motion.Exit), 0.8f),
+    ) {
         val press = remember { MutableInteractionSource() }
         Box(
             Modifier.size(40.dp).hoverLift(press, 1.08f).shadow(10.dp, CircleShape)

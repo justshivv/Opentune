@@ -1,9 +1,12 @@
 package com.opentune.desktop
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -72,6 +75,37 @@ internal object Motion {
     fun <T> soft() = spring<T>(dampingRatio = 0.9f, stiffness = 380f)
     fun <T> bouncy() = spring<T>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = 500f)
     fun <T> fade(ms: Int = 220) = tween<T>(ms, easing = FastOutSlowInEasing)
+
+    // The web player's curves (web/app/src/styles/motion.css and tokens.css), so the chrome moves as it does there.
+    /** A quick settle with no overshoot: presses, switches, the sidebar folding. */
+    val Settle = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+    /** Material's emphasized decelerate, for things arriving. */
+    val Emphasized = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+    /** Leaving: gathers speed, so what goes doesn't linger under what comes. */
+    val Exit = CubicBezierEasing(0.4f, 0f, 1f, 1f)
+    /** The side panel sliding in, and its sections changing. */
+    val Panel = CubicBezierEasing(0.215f, 0.61f, 0.355f, 1f)
+
+    /**
+     * One section of a panel giving way to another: the new one fades in with a
+     * 10dp lift over 260ms (the web's ot-panel-swap), the old one goes quickly.
+     * With smooth motion off, a short fade and no movement.
+     */
+    fun swap(still: Boolean, liftPx: Float): ContentTransform =
+        if (still) fadeIn(tween(120)) togetherWith fadeOut(tween(90))
+        else (fadeIn(tween(260, easing = Panel)) + slideInVertically(tween(260, easing = Panel)) { liftPx.toInt() }) togetherWith
+            fadeOut(tween(90, easing = Exit))
+}
+
+/**
+ * The web player's press feedback on a button: it gives a little (to 90%)
+ * while held, over 150ms, and settles back. Nothing moves with smooth motion off.
+ */
+internal fun Modifier.pressGive(source: MutableInteractionSource, enabled: Boolean = true, to: Float = 0.9f): Modifier = composed {
+    val pressed by source.collectIsPressedAsState()
+    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+    val scale by animateFloatAsState(if (pressed && enabled && !still) to else 1f, tween(150, easing = Motion.Settle), label = "give")
+    graphicsLayer { scaleX = scale; scaleY = scale }
 }
 
 /** Grows a little under the pointer and settles back when it leaves; pressed, it gives a little. */

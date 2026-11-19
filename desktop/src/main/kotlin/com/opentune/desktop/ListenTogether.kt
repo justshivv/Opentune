@@ -36,6 +36,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -97,8 +102,16 @@ private fun RoomHead(r: Together.Room) {
         Together.Phase.LostHost -> "Lost the host. Trying again…"
         Together.Phase.Ended -> r.endedReason ?: "The room has ended"
     }
-    Column(Modifier.padding(horizontal = GUTTER), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(phase, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+    // The room on a card of its own, lit faintly from the top in the key colour, as the web player's.
+    val key = keyColour()
+    Column(
+        Modifier.padding(horizontal = GUTTER).widthIn(max = 720.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp))
+            .background(quinaryFill())
+            .drawBehind { drawRect(Brush.radialGradient(listOf(key.copy(alpha = 0.16f), Color.Transparent), center = Offset(size.width / 2, 0f), radius = size.width * 0.7f)) }
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        RoomStatus(phase, r.phase)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 r.code.pretty, style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Monospace, letterSpacing = 3.sp),
@@ -111,6 +124,24 @@ private fun RoomHead(r: Together.Room) {
             TextButton(onClick = Together::leave) { Text(if (r.hosting) "End the room" else "Leave") }
         }
         r.track?.let { t -> Text("Playing ${t.title} · ${t.artist}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+
+/** Where the room is, after a dot: green with a soft ring while live, red once lost or ended, grey on the way. */
+@Composable
+private fun RoomStatus(text: String, phase: Together.Phase) {
+    val live = phase == Together.Phase.Live
+    val dot = when (phase) {
+        Together.Phase.Live -> Color(0xFF32D74B)
+        Together.Phase.LostHost, Together.Phase.Ended -> Color(0xFFFF453A)
+        else -> Color(0xFF98989D)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
+            if (live) Box(Modifier.matchParentSize().clip(CircleShape).background(dot.copy(alpha = 0.25f)))
+            Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+        }
+        Text(text, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp))
     }
 }
 
@@ -168,12 +199,12 @@ private fun Chat(r: Together.Room) {
         Text("Chat", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         r.chat.takeLast(60).forEach { line ->
             when {
-                line.system -> Text(line.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                line.voice != null -> Text("${line.name} sent a voice note. Hear it on a phone.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                else -> Row {
-                    Text((if (line.mine) "You" else line.name) + "  ", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                    Text(line.text, style = MaterialTheme.typography.bodyMedium)
-                }
+                line.system -> Text(
+                    line.text, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                )
+                line.voice != null -> ChatBubble(line.name, "Sent a voice note. Hear it on a phone.", mine = line.mine)
+                else -> ChatBubble(line.name, line.text, mine = line.mine)
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -181,5 +212,27 @@ private fun Chat(r: Together.Room) {
             Button(onClick = { Together.say(text.trim()); text = "" }, enabled = text.isNotBlank() && r.phase == Together.Phase.Live) { Text("Send") }
         }
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+/**
+ * A line of the chat as a bubble, as the web player's: others' on the left in
+ * a soft grey with their name over it, yours on the right in the key colour,
+ * each with its corner by the speaker tucked in.
+ */
+@Composable
+private fun ChatBubble(name: String, text: String, mine: Boolean) {
+    val big = 16.dp
+    val small = 4.dp
+    val fill = if (mine) (if (darkTheme()) androidx.compose.ui.graphics.lerp(railAccent(), Color.Black, 0.18f) else keyColour()) else quaternaryFill()
+    Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
+        Column(
+            Modifier.fillMaxWidth(0.85f).wrapContentWidth(if (mine) Alignment.End else Alignment.Start)
+                .clip(RoundedCornerShape(big, big, if (mine) small else big, if (mine) big else small))
+                .background(fill).padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            if (!mine) Text(name, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+            Text(text, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 19.sp), color = if (mine) Color.White else MaterialTheme.colorScheme.onSurface)
+        }
     }
 }

@@ -23,8 +23,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -192,6 +190,8 @@ fun DesktopApp(startPanel: SidePanel? = null) {
     var searches by remember { mutableStateOf(0) }
     var playerOpen by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(startPanel) }
+    // The sidebar folded or opened by hand; until then it follows the window's width.
+    var foldPick by remember { mutableStateOf<Boolean?>(null) }
     val queue by Player.queue.collectAsState()
     val index by Player.index.collectAsState()
     val song = queue.getOrNull(index)
@@ -249,20 +249,35 @@ fun DesktopApp(startPanel: SidePanel? = null) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val roomForPanel = maxWidth >= 1100.dp
                 val panelShown = panel != null && song != null && roomForPanel
-                val folded = maxWidth < 900.dp
+                // Folded to its rail on a narrow window, or as the button at its head last left it.
+                val folded = foldPick ?: (maxWidth < 900.dp)
+                // The sidebar eases between its widths over 380ms, as the web's does; the room it takes
+                // changes in one step and the page slides from where it was (see below), so nothing on
+                // the page is laid out again on each frame of it.
+                val fold by animateFloatAsState(
+                    if (folded) 1f else 0f,
+                    if (ui.reduceAnimation) androidx.compose.animation.core.snap() else tween(380, easing = Motion.Settle),
+                    label = "fold",
+                )
                 val haze = rememberHazeState()
                 // Behind the whole window, so the see-through sidebar and side column take its colour
                 // as well as the page; a source for the top bar's blur under the page's own.
                 Box(Modifier.fillMaxSize().hazeSource(haze, zIndex = 0f)) { WindowBackdrop(song?.thumbnailUrl, clear) }
                 Row(Modifier.fillMaxSize()) {
-                    Sidebar(sideSelected, folded = folded) { key ->
+                    Sidebar(sideSelected, folded = folded, fold = fold, haze = haze.takeIf { !ui.reduceBlur }, onFold = { foldPick = !folded }) { key ->
                         when (key) {
                             is Tab -> go(Page(key))
                             is Shelf -> go(Page(Tab.LIBRARY, key))
                             is PlaylistKey -> go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, key))
                         }
                     }
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                    Box(
+                        Modifier.weight(1f).fillMaxHeight().graphicsLayer {
+                            // Where the sidebar is drawn this frame against the room it now takes.
+                            val drawn = androidx.compose.ui.unit.lerp(SIDEBAR_WIDTH, SIDEBAR_FOLDED, fold)
+                            translationX = (drawn - if (folded) SIDEBAR_FOLDED else SIDEBAR_WIDTH).toPx()
+                        },
+                    ) {
                         // The page is what the frosted player bar blurs; every page starts below it.
                         CompositionLocalProvider(
                             LocalPageTop provides TOP_BAR_HEIGHT + DesktopWindow.topInset,
@@ -297,12 +312,18 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                         }
                     }
                     val shown = rememberLast(panel)
+                    // The column slides in from the window's edge over 300ms and back out over 220ms, as
+                    // the web's side panel does. It takes its room in one step, so the page beside it
+                    // isn't laid out again on every frame of the slide.
                     AnimatedVisibility(
                         visible = panelShown,
-                        enter = if (ui.reduceAnimation) fadeIn(tween(140)) else expandHorizontally(Motion.soft(), Alignment.Start) + fadeIn(tween(220, 80)),
-                        exit = if (ui.reduceAnimation) fadeOut(tween(120)) else shrinkHorizontally(tween(260), Alignment.Start) + fadeOut(tween(160)),
+                        enter = if (ui.reduceAnimation) fadeIn(tween(140)) else slideInHorizontally(tween(300, easing = Motion.Panel)) { it } + fadeIn(tween(200)),
+                        exit = if (ui.reduceAnimation) fadeOut(tween(120)) else slideOutHorizontally(tween(220, easing = Motion.Exit)) { it } + fadeOut(tween(220, easing = Motion.Exit)),
                     ) {
-                        if (song != null && shown != null) RightPanel(shown, song, queue, index, onPanel = { panel = it }, onOpenArtist = { go(page.copy(opened = it)) })
+                        if (song != null && shown != null) RightPanel(
+                            shown, song, queue, index, haze = haze.takeIf { !ui.reduceBlur },
+                            onPanel = { panel = it }, onOpenArtist = { go(page.copy(opened = it)) },
+                        )
                     }
                 }
 

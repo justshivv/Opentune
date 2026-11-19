@@ -98,6 +98,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.material.icons.rounded.Close
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
@@ -170,15 +175,24 @@ internal fun NowPlaying(song: Song, docked: Boolean, onClose: () -> Unit) {
             BoxWithConstraints(Modifier.fillMaxSize().padding(top = if (docked) 8.dp else DesktopWindow.topInset)) {
                 val beside = !docked && maxWidth >= 900.dp && maxWidth > maxHeight
                 if (beside) {
-                    Row(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).fillMaxHeight().widthIn(max = 560.dp)) {
-                            PlayerHeader(song, docked, onClose)
-                            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { BigCover(song, playing) }
+                    // As the web's full player lays it out: the cover's column a third of the width, the
+                    // lyrics beside it, both centred. The cover takes what height the controls leave it.
+                    val art = minOf(maxWidth * 0.32f, 720.dp).coerceAtLeast(300.dp)
+                    val gap = (maxWidth * 0.07f).coerceIn(48.dp, 144.dp)
+                    val lyricsWidth = maxWidth * 0.38f
+                    Row(
+                        Modifier.fillMaxSize().padding(horizontal = (maxWidth * 0.09f).coerceIn(24.dp, 144.dp)).padding(top = 56.dp, bottom = 24.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Column(Modifier.width(art).fillMaxHeight(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(Modifier.weight(1f, fill = false).aspectRatio(1f, matchHeightConstraintsFirst = true)) { BigCover(song, playing) }
                             PlayerFoot(song, showLyrics = true, onLyrics = null)
                         }
-                        Spacer(Modifier.width(48.dp))
-                        LyricsPane(song, Modifier.weight(1f).fillMaxHeight())
+                        Spacer(Modifier.width(gap))
+                        LyricsPane(song, Modifier.weight(1f, fill = false).widthIn(max = lyricsWidth).fillMaxWidth().fillMaxHeight())
                     }
+                    PlayerHeader(song, docked, onClose, Modifier.align(Alignment.TopCenter))
                 } else {
                     Column(
                         Modifier.fillMaxSize().padding(horizontal = if (docked) 20.dp else 28.dp).padding(bottom = 16.dp)
@@ -343,44 +357,68 @@ private fun rememberDrift(playing: Boolean): () -> Float {
     return { t }
 }
 
-/** The close button, and where the song is playing from, as the phone's player opens. */
+/**
+ * The close button in the corner, a 32dp circle that a soft fill comes up
+ * behind under the pointer, and where the song is playing from over the
+ * middle, small and spaced out, as the web's full player has them.
+ */
 @Composable
-private fun PlayerHeader(song: Song, docked: Boolean, onClose: () -> Unit) {
-    Box(Modifier.fillMaxWidth().height(64.dp)) {
-        IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart)) {
-            Icon(if (docked) Icons.AutoMirrored.Rounded.KeyboardArrowRight else Icons.Rounded.ExpandMore, if (docked) "Hide player" else "Close", Modifier.size(30.dp))
-        }
+private fun PlayerHeader(song: Song, docked: Boolean, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth().height(64.dp)) {
+        HoverIcon(
+            if (docked) Icons.AutoMirrored.Rounded.KeyboardArrowRight else Icons.Rounded.Close, if (docked) "Hide player" else "Close",
+            size = 32.dp, iconSize = 20.dp, modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp), onClick = onClose,
+        )
         Column(Modifier.align(Alignment.Center).padding(horizontal = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                "PLAYING FROM", style = MaterialTheme.typography.labelSmall, letterSpacing = MaterialTheme.typography.labelSmall.letterSpacing * 1.6f,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "PLAYING FROM", fontSize = 10.sp, letterSpacing = 1.4.sp, fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             )
             Text(
-                song.albumName?.takeIf { it.isNotBlank() } ?: "Up next", style = MaterialTheme.typography.titleSmall,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                song.albumName?.takeIf { it.isNotBlank() } ?: "OpenTune", fontSize = 13.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.87f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 3.dp),
             )
         }
     }
 }
 
-/** The cover, as large as fits, easing a little smaller while paused and crossfading between songs. */
+/**
+ * The cover, as large as fits, with the web's rounding and its glow: a small,
+ * blurred and saturated copy just behind and below it. It eases to 92% while
+ * paused over 450ms, and a new song's comes in with a fade from 94%.
+ */
 @Composable
 private fun BigCover(song: Song, playing: Boolean) {
-    val scale by animateFloatAsState(if (playing) 1f else 0.86f, spring(dampingRatio = 0.7f, stiffness = 300f), label = "coverScale")
+    val ui by AppSettings.ui.collectAsState()
+    val scale by animateFloatAsState(
+        if (playing) 1f else 0.92f, if (ui.reduceAnimation) androidx.compose.animation.core.snap() else tween(450, easing = Motion.Settle), label = "coverScale",
+    )
     BoxWithConstraints(Modifier.fillMaxSize().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
         val side = minOf(maxWidth, maxHeight)
         AnimatedContent(
             song.videoId,
-            transitionSpec = { (fadeIn(tween(320)) + scaleIn(tween(420, easing = FastOutSlowInEasing), 0.94f)) togetherWith (fadeOut(tween(200)) + scaleOut(tween(300), 1.03f)) },
+            transitionSpec = {
+                if (ui.reduceAnimation) fadeIn(tween(120)) togetherWith fadeOut(tween(90))
+                else (fadeIn(tween(450, easing = Motion.Emphasized)) + scaleIn(tween(450, easing = Motion.Emphasized), 0.94f)) togetherWith fadeOut(tween(200))
+            },
             label = "cover",
         ) { _ ->
-            val shape = RoundedCornerShape(24.dp)
-            Artwork(
-                song.thumbnailUrl,
-                Modifier.size(side).aspectRatio(1f).graphicsLayer { scaleX = scale; scaleY = scale }
-                    .shadow(28.dp, shape, ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.6f)),
-                shape,
-            )
+            val shape = RoundedCornerShape(28.dp)
+            Box(Modifier.size(side).graphicsLayer { scaleX = scale; scaleY = scale }, contentAlignment = Alignment.Center) {
+                // The glow, left out with blur reduced.
+                if (!ui.reduceBlur) Artwork(
+                    song.thumbnailUrl,
+                    Modifier.matchParentSize().graphicsLayer { translationY = 8.dp.toPx(); scaleX = 0.96f; scaleY = 0.96f; alpha = 0.4f }
+                        .blur(20.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded),
+                    shape,
+                )
+                Artwork(
+                    song.thumbnailUrl,
+                    Modifier.matchParentSize().aspectRatio(1f).shadow(10.dp, shape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.25f)),
+                    shape,
+                )
+            }
         }
     }
 }
@@ -399,32 +437,40 @@ private fun PlayerFoot(song: Song, showLyrics: Boolean, onLyrics: (() -> Unit)?)
     val progress = rememberProgress(song)
     val isLiked = liked.any { it.videoId == song.videoId }
     Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        // The names a little apart from the cover, as the web's are, and a new song's come in with a short rise.
+        val rise = with(LocalDensity.current) { 6.dp.toPx() }.toInt()
+        Row(Modifier.fillMaxWidth().padding(top = 22.dp), verticalAlignment = Alignment.CenterVertically) {
             AnimatedContent(
                 song.videoId,
-                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(150)) },
+                transitionSpec = {
+                    if (ui.reduceAnimation) fadeIn(tween(120)) togetherWith fadeOut(tween(90))
+                    else (fadeIn(tween(280, easing = Motion.Emphasized)) + androidx.compose.animation.slideInVertically(tween(280, easing = Motion.Emphasized)) { rise }) togetherWith fadeOut(tween(120))
+                },
                 label = "title",
                 modifier = Modifier.weight(1f),
             ) { _ ->
                 Column {
-                    Text(song.title, style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(song.title, fontSize = 19.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        error ?: song.artist, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        error ?: song.artist,
+                        fontSize = 15.sp, lineHeight = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                 }
             }
             Spacer(Modifier.width(10.dp))
             HeartButton(isLiked) { Library.setLiked(song, !isLiked) }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(8.dp))
             MoreButton(song)
         }
-        SeekBar(progress, Modifier.padding(top = 14.dp))
+        SeekBar(progress, Modifier.padding(top = 8.dp))
         Box(Modifier.fillMaxWidth()) {
-            Text(Time.format(progress.positionMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterStart))
+            val times = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, fontFeatureSettings = "tnum")
+            Text(Time.format(progress.positionMs), style = times, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterStart))
             QualityLabel(quality, Modifier.align(Alignment.Center))
             Text(
-                "-" + Time.format((progress.durationMs - progress.positionMs).coerceAtLeast(0)), style = MaterialTheme.typography.labelMedium,
+                "-" + Time.format((progress.durationMs - progress.positionMs).coerceAtLeast(0)), style = times,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterEnd),
             )
         }
@@ -451,28 +497,21 @@ private fun FootRow(showLyrics: Boolean, onLyrics: (() -> Unit)?) {
     val sleep by Player.sleep.collectAsState()
     var timing by remember { mutableStateOf(false) }
     val faint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    // The web's toggles: grey when off; on, the full ink on a soft fill of it with a dot under,
+    // rather than the accent, which would clash with the cover's colours behind.
+    val on = MaterialTheme.colorScheme.onSurface
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         if (onLyrics != null) {
-            IconButton(onClick = onLyrics) {
-                Icon(
-                    PlayerIcons.Lyrics, if (showLyrics) "Hide lyrics" else "Show lyrics",
-                    tint = if (showLyrics) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                )
-            }
+            HoverIcon(PlayerIcons.Lyrics, if (showLyrics) "Hide lyrics" else "Show lyrics", lit = showLyrics, litColour = on, size = 38.dp, iconSize = 21.dp, onClick = onLyrics)
         }
         val shuffled by Player.shuffled.collectAsState()
         val repeat by Player.repeat.collectAsState()
-        IconButton(onClick = Player::toggleShuffle) {
-            Icon(Icons.Rounded.Shuffle, if (shuffled) "Shuffle on" else "Shuffle",
-                tint = if (shuffled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-        }
-        IconButton(onClick = Player::cycleRepeat) {
-            Icon(
-                if (repeat == Player.Repeat.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                when (repeat) { Player.Repeat.OFF -> "Repeat off"; Player.Repeat.ALL -> "Repeat all"; Player.Repeat.ONE -> "Repeat this song" },
-                tint = if (repeat != Player.Repeat.OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            )
-        }
+        HoverIcon(Icons.Rounded.Shuffle, if (shuffled) "Shuffle on" else "Shuffle", lit = shuffled, litColour = on, size = 38.dp, iconSize = 21.dp, onClick = Player::toggleShuffle)
+        HoverIcon(
+            if (repeat == Player.Repeat.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+            when (repeat) { Player.Repeat.OFF -> "Repeat off"; Player.Repeat.ALL -> "Repeat all"; Player.Repeat.ONE -> "Repeat this song" },
+            lit = repeat != Player.Repeat.OFF, litColour = on, size = 38.dp, iconSize = 21.dp, onClick = Player::cycleRepeat,
+        )
         Icon(Icons.AutoMirrored.Rounded.VolumeUp, "Volume", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp).size(20.dp))
         var level by remember { mutableFloatStateOf(volume.toFloat()) }
         LaunchedEffect(volume) { level = volume.toFloat() }
@@ -481,9 +520,7 @@ private fun FootRow(showLyrics: Boolean, onLyrics: (() -> Unit)?) {
             Modifier.weight(1f).padding(horizontal = 10.dp).volumeWheel(),
         )
         Box {
-            IconButton(onClick = { timing = true }) {
-                Icon(Icons.Rounded.Bedtime, "Sleep timer", tint = if (sleep != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-            }
+            HoverIcon(Icons.Rounded.Bedtime, "Sleep timer", lit = sleep != null, litColour = on, size = 38.dp, iconSize = 21.dp) { timing = true }
             DropdownMenu(timing, onDismissRequest = { timing = false }) {
                 Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).widthIn(max = 300.dp)) { SleepChips(sleep) }
             }
@@ -593,10 +630,11 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
         burst.animateTo(1f, tween(720, easing = LinearEasing))
     }
     val colors = listOf(Color(0xFFFF4D6D), Color(0xFFFF8FA3), Color(0xFFFFC2D1), MaterialTheme.colorScheme.primary)
-    Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(ROUND_BUTTON), contentAlignment = Alignment.Center) {
         Box(
-            Modifier.size(46.dp).graphicsLayer { scaleX = scale; scaleY = scale }
-                .clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            Modifier.size(ROUND_BUTTON).graphicsLayer { scaleX = scale; scaleY = scale }
+                .clip(CircleShape).background(roundFill(interactions))
+                .hoverable(interactions)
                 .clickable(interactionSource = interactions, indication = FocusRing(CircleShape)) {
                     if (!liked && !still) bursts++
                     onClick()
@@ -606,12 +644,22 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
             Icon(
                 if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 if (liked) "Remove from Liked" else "Like",
-                Modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+                Modifier.size(20.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
                 tint = if (liked) Color(0xFFFF4D6D) else LocalContentColor.current,
             )
         }
         if (burst.value < 1f) LikeBurst(burst.value, bursts, colors, Modifier.requiredSize(150.dp))
     }
+}
+
+/** The heart's and More's size beside the title: the web's soft round buttons, a little larger for a pointer. */
+private val ROUND_BUTTON = 38.dp
+
+/** The web's on-dark fill for those buttons: a faint white, brighter under the pointer. */
+@Composable
+private fun roundFill(source: MutableInteractionSource): Color {
+    val hovered by source.collectIsHoveredAsState()
+    return animateColorAsState(Color.White.copy(alpha = if (hovered) 0.18f else 0.10f), tween(150), label = "round fill").value
 }
 
 /** Small hearts and sparks flying out from the middle at [t] (0 to 1), a little different each [seed]. */
@@ -636,11 +684,13 @@ private fun LikeBurst(t: Float, seed: Int, colors: List<Color>, modifier: Modifi
 private fun MoreButton(song: Song) {
     var open by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
+    val press = remember { MutableInteractionSource() }
     Box {
         Box(
-            Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable { open = true },
+            Modifier.size(ROUND_BUTTON).pressGive(press, to = 0.94f).clip(CircleShape).background(roundFill(press)).hoverable(press)
+                .clickable(interactionSource = press, indication = FocusRing(CircleShape)) { open = true },
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.MoreHoriz, "More", Modifier.size(26.dp)) }
+        ) { Icon(Icons.Rounded.MoreHoriz, "More", Modifier.size(22.dp)) }
         // The same actions as a song's right-click menu, as on the web player.
         val actions = songActions(song) { adding = true }
         DropdownMenu(open, onDismissRequest = { open = false }) {

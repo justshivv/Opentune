@@ -117,7 +117,7 @@ private fun hairlineColour() = MaterialTheme.colorScheme.onSurface.copy(alpha = 
 
 /** The key colour the web fills a switch and the main button with: here, the chosen accent. */
 @Composable
-internal fun keyColour(): Color = Color(AppSettings.theme.collectAsState().value.seedColor)
+internal fun accentKey(): Color = Color(AppSettings.theme.collectAsState().value.seedColor)
 
 /** White on the key colour, unless the accent is so light (the yellow) that white wouldn't read on it. */
 internal fun inkOn(colour: Color): Color = if (colour.luminance() > 0.6f) Color(0xFF1C1C1E) else Color.White
@@ -356,7 +356,7 @@ internal fun ToggleRow(
 @Composable
 internal fun WebSwitch(checked: Boolean, pressed: Boolean = false) {
     val still = still()
-    val track by animateColorAsState(if (checked) keyColour() else fillQuaternary(), if (still) snap() else tween(200), label = "switch track")
+    val track by animateColorAsState(if (checked) accentKey() else fillQuaternary(), if (still) snap() else tween(200), label = "switch track")
     val x by animateDpAsState(if (checked) 21.dp else 3.dp, if (still) snap() else tween(250, easing = Settle), label = "switch knob")
     val grow by animateFloatAsState(if (pressed && !still) 1.1f else 1f, tween(150), label = "switch press")
     Box(Modifier.size(44.dp, 26.dp).clip(RoundedCornerShape(13.dp)).background(track)) {
@@ -486,7 +486,7 @@ internal fun <T> MenuRow(
                                 summary?.invoke(c)?.let { Text(it, style = rowDetailStyle(), color = inkSecondary()) }
                             }
                         },
-                        leadingIcon = { Box(Modifier.size(18.dp)) { if (c == selected) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp), tint = keyColour()) } },
+                        leadingIcon = { Box(Modifier.size(18.dp)) { if (c == selected) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp), tint = accentKey()) } },
                         onClick = { open = false; onPick(c) },
                     )
                 }
@@ -532,7 +532,7 @@ internal fun SliderRow(
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun WebSlider(value: Float, range: ClosedFloatingPointRange<Float>, name: String, onChange: (Float) -> Unit, modifier: Modifier = Modifier.fillMaxWidth()) {
-    val key = keyColour()
+    val key = accentKey()
     val colours = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = key, inactiveTrackColor = fillQuaternary())
     val source = remember { MutableInteractionSource() }
     Slider(
@@ -627,7 +627,7 @@ private fun Modifier.press(source: MutableInteractionSource): Modifier {
 internal fun KeyPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
-    val key = keyColour()
+    val key = accentKey()
     val fill = if (hovered && enabled) androidx.compose.ui.graphics.lerp(key, Color.White, 0.08f) else key
     Text(
         label, style = buttonStyle(), color = inkOn(key), maxLines = 1, softWrap = false,
