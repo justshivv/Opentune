@@ -10,6 +10,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.vectorResource
@@ -119,4 +121,25 @@ class PosterLayoutScreenshotTest {
         canvas.restore()
         File(File("build/screenshots").apply { mkdirs() }, "poster-song-menu.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
+
+    @Test fun everydayPieces() = shoot("poster-pieces") {
+        Column(Modifier.fillMaxWidth()) {
+            com.opentune.ui.components.GroupLabel("Playback")
+            com.opentune.ui.components.GroupCard {
+                com.opentune.ui.components.ToggleRow("Gapless playback", true, {}, summary = "No silence between songs",
+                    icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.opentune.ui.theme.AppIcons.QueueMusic))
+                com.opentune.ui.components.RowDivider()
+                com.opentune.ui.components.NavRow("Quality on Wi-Fi", {}, value = "Lossless",
+                    icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.opentune.ui.theme.AppIcons.HighQuality))
+            }
+            androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 16.dp))
+            com.opentune.ui.components.PillSegmented(listOf("Songs", "Albums", "Artists"), "Albums", { it }, {}, Modifier.padding(horizontal = 16.dp))
+            songs.take(3).forEach { com.opentune.ui.components.SongListItem(it, onClick = {}, onPlayNext = {}) }
+            androidx.compose.foundation.layout.Row {
+                com.opentune.ui.components.ItemCard("Jai Mata", "2026", null, com.opentune.data.model.BrowseType.ALBUM, {})
+                com.opentune.ui.components.ItemCard("Gehra Hua Afro Mix", "2026", null, com.opentune.data.model.BrowseType.ALBUM, {})
+            }
+        }
+    }
 }
+

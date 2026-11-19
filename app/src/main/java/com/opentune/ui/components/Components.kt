@@ -1,5 +1,7 @@
 package com.opentune.ui.components
 
+import androidx.compose.ui.draw.shadow
+
 import androidx.compose.foundation.indication
 import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.semantics
@@ -315,6 +317,10 @@ fun SongListItem(
     if (contextOpen && at != null) SongContextMenu(song, at, onDismiss = { contextOpen = false }, onRemoveFromPlaylist = onRemoveFromPlaylist,
         onSelect = selection?.let { s -> { contextOpen = false; s.start(selectKey, song) } }) { SongPreview(song) }
     val playback by AppSettings.playback.collectAsState()
+    // The Poster layout's rows: roomier, the title a size up, a hairline under each from the
+    // words to the edge, and the menu as three dots across, as on its album pages.
+    val poster = posterLayout()
+    val hairline = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f)
     // Toward the end of the line plays next, toward the start adds to the queue.
     val swipes = swipeToQueue && playback.swipeToQueue && !selecting
     SwipeToQueueRow(
@@ -337,7 +343,11 @@ fun SongListItem(
                         if (anchor.rect != null) contextOpen = true else menuOpen = true
                     }
                 })
-                .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                .then(if (poster) Modifier.drawBehind {
+                    val y = size.height - 0.5.dp.toPx()
+                    drawLine(hairline, androidx.compose.ui.geometry.Offset(82.dp.toPx(), y), androidx.compose.ui.geometry.Offset(size.width - 16.dp.toPx(), y), 1.dp.toPx())
+                } else Modifier)
+                .padding(start = 16.dp, end = 4.dp, top = if (poster) 10.dp else 6.dp, bottom = if (poster) 10.dp else 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -362,8 +372,8 @@ fun SongListItem(
                     song.title,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
+                    style = if (poster) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (poster) FontWeight.Normal else FontWeight.Medium,
                     color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
                 SubtitleLine(
@@ -378,7 +388,7 @@ fun SongListItem(
                 download?.let { DownloadBadge(it.state, it.progress) }
                 if (hasMenu) {
                     IconButton(onClick = { menuOpen = true }) {
-                        Icon(ImageVector.vectorResource(AppIcons.MoreVert), contentDescription = "More options")
+                        Icon(ImageVector.vectorResource(if (poster) AppIcons.MoreHoriz else AppIcons.MoreVert), contentDescription = "More options")
                     }
                 }
             }
@@ -453,10 +463,14 @@ private fun ColumnScope.ItemCardBody(
     onArtLoaded: ((Boolean) -> Unit)?,
 ) {
     val round = type == BrowseType.ARTIST
+    // The Poster layout's cards: rounder covers resting on a soft shadow, the name a size up.
+    val poster = posterLayout()
+    val frame = if (round) CircleShape else if (poster) RoundedCornerShape(16.dp) else MaterialTheme.shapes.medium
     Artwork(
         thumbnailUrl.artworkAt(CARD_ART_PX),
-        Modifier.fillMaxWidth().aspectRatio(1f),
-        shape = if (round) CircleShape else MaterialTheme.shapes.medium,
+        Modifier.fillMaxWidth().aspectRatio(1f)
+            .then(if (poster) Modifier.shadow(10.dp, frame, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f)) else Modifier),
+        shape = frame,
         placeholder = when (type) {
             BrowseType.ARTIST -> ImageVector.vectorResource(AppIcons.Person)
             BrowseType.ALBUM -> ImageVector.vectorResource(AppIcons.Album)
@@ -466,12 +480,12 @@ private fun ColumnScope.ItemCardBody(
         imageModifier = imageModifier,
         onLoaded = onArtLoaded,
     )
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(if (poster) 10.dp else 8.dp))
     Text(
         title,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
-        style = MaterialTheme.typography.titleSmall,
+        style = if (poster) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
         textAlign = if (round) TextAlign.Center else TextAlign.Start,
         modifier = Modifier.fillMaxWidth(),
     )

@@ -1,5 +1,7 @@
 package com.opentune.ui.search
 
+import com.opentune.ui.components.posterGlass
+
 import com.opentune.ui.components.menuClickable
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -60,6 +62,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opentune.data.model.BrowseItem
 import com.opentune.data.model.BrowseType
@@ -176,11 +179,19 @@ fun SearchScreen(
     }
     androidx.activity.compose.BackHandler(enabled = explore != null && searching, onBack = leave)
 
+    // The Poster layout: a heavy title over the bar, and the bar in clear glass.
+    val poster = com.opentune.ui.components.posterLayout()
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
+        if (poster && !searching) Text(
+            "Search",
+            style = MaterialTheme.typography.displaySmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Black, letterSpacing = (-0.5).sp),
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
+        )
         TextField(
             value = fieldValue,
             onValueChange = { fieldValue = it; vm.onQueryChange(it.text) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
+                .then(if (poster) Modifier.posterGlass(CircleShape) else Modifier)
                 .focusRequester(field)
                 .onFocusChanged { focused = it.isFocused },
             singleLine = true,
@@ -200,8 +211,8 @@ fun SearchScreen(
             colors = TextFieldDefaults.colors(
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedContainerColor = if (poster) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = if (poster) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
             ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { submit(query) }),

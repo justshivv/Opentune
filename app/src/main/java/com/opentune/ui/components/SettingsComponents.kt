@@ -50,6 +50,15 @@ import com.opentune.ui.theme.AppIcons
 /** Small gray uppercase label above a group. */
 @Composable
 fun GroupLabel(text: String, modifier: Modifier = Modifier) {
+    if (posterLayout()) {
+        // The Poster layout's: a hairline across, the name in spaced capitals under it.
+        Column(modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 30.dp, bottom = 8.dp)) {
+            HorizontalDivider(Modifier.padding(bottom = 14.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))
+            PosterCaps(com.opentune.ui.theme.tr(text), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Start)
+        }
+        return
+    }
     Text(
         com.opentune.ui.theme.tr(text).uppercase(),
         style = MaterialTheme.typography.labelLarge,
@@ -62,6 +71,11 @@ fun GroupLabel(text: String, modifier: Modifier = Modifier) {
 /** A rounded card holding rows, with hairline dividers between them. */
 @Composable
 fun GroupCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    // The Poster layout lists its rows straight on the page, with hairlines between, no card.
+    if (posterLayout()) {
+        Column(modifier.fillMaxWidth().padding(horizontal = 8.dp), content = content)
+        return
+    }
     Column(
         modifier
             .fillMaxWidth()
@@ -77,7 +91,7 @@ fun RowDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(start = 72.dp),
         thickness = 0.75.dp,
-        color = MaterialTheme.colorScheme.outlineVariant,
+        color = if (posterLayout()) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f) else MaterialTheme.colorScheme.outlineVariant,
     )
 }
 
@@ -112,7 +126,7 @@ fun SettingRow(
                 leading()
                 Box(Modifier.width(26.dp))
             } else if (icon != null) {
-                Icon(icon, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha), modifier = Modifier.size(26.dp))
+                Icon(icon, null, tint = (if (posterLayout()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface).copy(alpha = alpha), modifier = Modifier.size(26.dp))
                 Box(Modifier.width(26.dp))
             }
             Column(Modifier.weight(1f)) {
@@ -250,9 +264,12 @@ fun <T> PillSegmented(options: List<T>, selected: T, label: (T) -> String, onSel
         }
         // Keep the whole label at larger font sizes instead of silently clipping it.
         val height = maxOf(58.dp, with(density) { labelHeight.toDp() } + 26.dp)
+        // The Poster layout's: a clear glass capsule with a capsule picking the choice.
+        val poster = posterLayout()
+        val inner = if (poster) RoundedCornerShape(percent = 50) else RoundedCornerShape(12.dp)
         Box(Modifier.fillMaxWidth().height(height)
-            .clip(RoundedCornerShape(16.dp))
-            .background(c.surfaceContainerHighest.copy(alpha = 0.7f))
+            .then(if (poster) Modifier.posterGlass(RoundedCornerShape(percent = 50))
+                else Modifier.clip(RoundedCornerShape(16.dp)).background(c.surfaceContainerHighest.copy(alpha = 0.7f)))
             .padding(5.dp)) {
             val index = options.indexOf(selected).coerceAtLeast(0)
             val x by animateDpAsState(segment * index, if (reduced) snap() else spring(dampingRatio = 1f, stiffness = 500f), label = "pill")
@@ -261,14 +278,14 @@ fun <T> PillSegmented(options: List<T>, selected: T, label: (T) -> String, onSel
                     .offset { IntOffset(x.roundToPx(), 0) }
                     .width(segment)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(inner)
                     .background(c.onSurface),
             )
             Row(Modifier.fillMaxWidth().fillMaxHeight().selectableGroup(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 options.forEachIndexed { i, option ->
                     val color by animateColorAsState(if (i == index) c.background else c.onSurfaceVariant, if (reduced) snap() else spring(), label = "pillText")
                     Box(
-                        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                        Modifier.weight(1f).fillMaxHeight().clip(inner)
                             .selectable(selected = i == index, role = Role.RadioButton, onClick = { onSelect(option) })
                             .padding(horizontal = 8.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center,
