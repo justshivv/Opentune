@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,55 +45,72 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The YouTube Music account: who's signed in, the other saved accounts to switch to, and
- * signing in with the phone. Signed in, Home, search and the mixes are the account's own.
+ * Accounts and integrations, as the web player's: YouTube Music first, as an integration row
+ * with who's signed in under it (photo, name, email, Sign out), the other saved accounts to
+ * switch to, and signing in with the phone; then [integrations] (Discord, Last.fm) in a card
+ * of their own. Signed in, Home, search and the mixes are the account's own.
  */
 @Composable
-internal fun AccountSection() {
+internal fun AccountSection(integrations: @Composable () -> Unit) {
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val accounts by AccountStore.accounts.collectAsState()
     var signingIn by remember { mutableStateOf(false) }
     if (signingIn) SignInWithPhone { signingIn = false }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("YouTube Music", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        if (signedIn) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val photo = account?.thumbnailUrl
-                if (photo != null) Cover(photo, 48.dp, CircleShape)
-                else Icon(Icons.Rounded.AccountCircle, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                    Text(account?.name ?: "Signed in", style = MaterialTheme.typography.titleMedium)
-                    account?.email?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                OutlinedButton(onClick = AccountStore::signOut) { Text("Sign out") }
+    Sections("Accounts & integrations") {
+        RowsCard {
+            IntegrationRow(
+                "YouTube Music", if (signedIn) "Signed in" else "Not signed in",
+                tile = { YouTubeMusicTile() },
+            ) {
+                if (signedIn) LiveDot() else KeyPill("Sign in with your phone", { signingIn = true })
             }
-            // Other accounts signed in here, one click to switch.
-            accounts.filter { !it.active }.forEach { other ->
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { AccountStore.switchTo(other.id) }.padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (other.thumbnailUrl != null) Cover(other.thumbnailUrl, 32.dp, CircleShape)
-                    else Icon(Icons.Rounded.AccountCircle, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                        Text(other.name.ifBlank { "Another account" }, style = MaterialTheme.typography.bodyLarge)
-                        if (other.email.isNotBlank()) Text(other.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Text("Switch", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            if (signedIn) {
+                // The accounts sit under YouTube Music's row, their hairlines starting where its name does.
+                val nested = Modifier.hairline(ICON_INSET).padding(start = ICON_INSET - TEXT_INSET)
+                SettingRow(
+                    account?.name ?: "Signed in", nested,
+                    detail = account?.email?.takeIf { it.isNotBlank() },
+                    leading = { Photo(account?.thumbnailUrl) }, leadingSize = PHOTO,
+                ) { QuietPill("Sign out", AccountStore::signOut) }
+                // Other accounts signed in here, one click to switch.
+                accounts.filter { !it.active }.forEach { other ->
+                    SettingRow(
+                        other.name.ifBlank { "Another account" }, nested,
+                        detail = other.email.takeIf { it.isNotBlank() },
+                        leading = { Photo(other.thumbnailUrl) }, leadingSize = PHOTO,
+                        onClick = { AccountStore.switchTo(other.id) },
+                    ) { RowAction("Switch", { AccountStore.switchTo(other.id) }) }
                 }
+                SettingRow(
+                    "Add another account", nested,
+                    leading = {
+                        Box(Modifier.size(PHOTO).clip(CircleShape).background(fillQuaternary()), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.Add, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurface)
+                        }
+                    },
+                    leadingSize = PHOTO,
+                    onClick = { signingIn = true },
+                )
             }
-            TextButton(onClick = { signingIn = true }) { Text("Add another account") }
-        } else {
-            Text(
-                "Sign in to have Home, mixes and suggestions made for you, from your YouTube Music account. Your phone signs this computer in: no password is typed here.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Button(onClick = { signingIn = true }) { Text("Sign in with your phone") }
         }
+        CardFooter(
+            if (signedIn) "Home, search and the mixes are your account's own."
+            else "Sign in to have Home, mixes and suggestions made for you, from your YouTube Music account. Your phone signs this computer in: no password is typed here.",
+        )
+        CardHeading("Integrations")
+        RowsCard(content = integrations)
     }
+}
+
+/** How big an account's photo is in its row. */
+private val PHOTO = 32.dp
+
+/** An account's photo, round, or the plain account glyph when it has none. */
+@Composable
+private fun Photo(url: String?) {
+    if (url != null) Cover(url, PHOTO, CircleShape)
+    else Icon(Icons.Rounded.AccountCircle, null, Modifier.size(PHOTO), tint = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /**

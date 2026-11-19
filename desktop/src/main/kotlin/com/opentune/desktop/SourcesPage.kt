@@ -1,6 +1,7 @@
 package com.opentune.desktop
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,22 +14,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -53,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import com.opentune.data.settings.AppSettings
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.delay
@@ -61,7 +57,9 @@ import kotlinx.coroutines.launch
 /**
  * Audio sources, as the phone's Add-ons page and the web player's Audio
  * sources: JioSaavn, the add-ons OpenTune publishes and your own, and
- * verifying this computer for OpenTune's own source.
+ * verifying this computer for OpenTune's own source. Laid out in the web's
+ * grouped rows: the two switches, then the add-ons in their order, then
+ * adding one by its address.
  */
 @Composable
 internal fun SourcesSection() {
@@ -69,97 +67,105 @@ internal fun SourcesSection() {
     val saavn by Addons.jioSaavn.collectAsState()
     val lossless by Addons.lossless.collectAsState()
     val status by Addons.status.collectAsState()
+    val still = AppSettings.ui.collectAsState().value.reduceAnimation
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { Addons.syncPublished(force = true) }
-    SettingsCard("Audio sources") {
+    Sections("Audio sources") {
         Text(
             "Songs start from YouTube straight away. These are asked at the same time, and the best answer takes over at the same point in the song.",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = rowDetailStyle().copy(lineHeight = 18.sp), color = inkSecondary(),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
         )
-        SwitchRow("JioSaavn", "320 kbps AAC, when no add-on has the song in FLAC", saavn, Addons::setJioSaavn)
-        SwitchRow(
-            "Lossless from add-ons",
-            "Verified FLAC, sent to your sound card at its own sample rate and bit depth. The equalizer and speed don't change it.",
-            lossless, Addons::setLossless,
-        )
-        AnimatedVisibility(lossless, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (sources.isEmpty()) {
-                    Text("No add-ons yet. OpenTune's own appear here when they're published; you can add others below.",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        RowsCard {
+            ToggleRow(
+                "JioSaavn", "320 kbps AAC, when no add-on has the song in FLAC", saavn, Addons::setJioSaavn,
+                leading = { LetterTile("J", Brand.JioSaavn, Brand.JioSaavnInk) },
+            )
+            ToggleRow(
+                "Lossless from add-ons",
+                "Verified FLAC, sent to your sound card at its own sample rate and bit depth. The equalizer and speed don't change it.",
+                lossless, Addons::setLossless,
+                leading = { IconTile(Icons.Rounded.GraphicEq, Color(0xFFE5483A)) },
+            )
+        }
+        // The add-ons only matter with lossless on; they fold away with it (or cut, with smooth motion off).
+        AnimatedVisibility(
+            lossless,
+            enter = if (still) fadeIn(snap()) else expandVertically() + fadeIn(),
+            exit = if (still) fadeOut(snap()) else shrinkVertically() + fadeOut(),
+        ) {
+            Column {
+                CardHeading("Lossless add-ons")
+                RowsCard {
+                    if (sources.isEmpty()) NoteRow("No add-ons yet. OpenTune's own appear here when they're published; you can add others below.")
+                    sources.forEachIndexed { i, source -> SourceRow(source, first = i == 0, last = i == sources.lastIndex) }
+                    if (status.isNotBlank()) SettingRow("Last song", detail = status)
                 }
-                sources.forEachIndexed { i, source -> SourceRow(source, first = i == 0, last = i == sources.lastIndex) }
-                AddSource()
-                if (sources.any { it.enabled && !it.ownerOff && AddonPairing.protects(it.url.replace("manifest.json", "search")) }) VerifyComputer()
-                if (status.isNotBlank()) {
-                    Text("Last song", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 4.dp))
-                    Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (sources.size > 1) CardFooter("Asked in this order: move one up or down with its arrows.")
+                CardHeading("Add a source")
+                RowsCard {
+                    AddSource()
+                    ButtonsRow { QuietPill("Check for published add-ons", { scope.launch { Addons.syncPublished(force = true) } }) }
                 }
-                TextButton(onClick = { scope.launch { Addons.syncPublished(force = true) } }) { Text("Check for published add-ons") }
+                if (sources.any { it.enabled && !it.ownerOff && AddonPairing.protects(it.url.replace("manifest.json", "search")) }) {
+                    CardHeading("OpenTune's own source")
+                    RowsCard { VerifyComputer() }
+                }
             }
         }
     }
 }
 
-@Composable
-private fun SettingsCard(title: String, content: @Composable () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            content()
-        }
-    }
-}
-
+/** An add-on as the web's source list has it: its square, its name and where it's from, the arrows that move it, its switch. */
 @Composable
 private fun SourceRow(source: Addons.Source, first: Boolean, last: Boolean) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(scheme.surfaceContainerHigh).padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(source.name, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                when {
-                    source.ownerOff -> "Turned off by OpenTune for now"
-                    source.admin -> "Added by OpenTune"
-                    else -> runCatching { java.net.URI(source.url).host }.getOrDefault(source.url)
-                },
-                style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant,
-            )
-        }
-        IconButton(onClick = { Addons.move(source.id, -1) }, enabled = !first) { Icon(Icons.Rounded.KeyboardArrowUp, "Ask earlier") }
-        IconButton(onClick = { Addons.move(source.id, 1) }, enabled = !last) { Icon(Icons.Rounded.KeyboardArrowDown, "Ask later") }
-        if (!source.admin) IconButton(onClick = { Addons.remove(source.id) }) { Icon(Icons.Rounded.Close, "Remove") }
-        Switch(source.enabled && !source.ownerOff, { Addons.setEnabled(source.id, it) }, enabled = !source.ownerOff)
-    }
+    ToggleRow(
+        source.name,
+        when {
+            source.ownerOff -> "Turned off by OpenTune for now"
+            source.admin -> "Added by OpenTune"
+            else -> runCatching { java.net.URI(source.url).host }.getOrDefault(source.url)
+        },
+        source.enabled && !source.ownerOff,
+        { Addons.setEnabled(source.id, it) },
+        enabled = !source.ownerOff,
+        leading = { IconTile(Icons.Rounded.Extension, fillQuaternary(), MaterialTheme.colorScheme.onSurface) },
+        extra = {
+            SmallIconButton(Icons.Rounded.KeyboardArrowUp, "Ask ${source.name} earlier", enabled = !first) { Addons.move(source.id, -1) }
+            SmallIconButton(Icons.Rounded.KeyboardArrowDown, "Ask ${source.name} later", enabled = !last) { Addons.move(source.id, 1) }
+            if (!source.admin) SmallIconButton(Icons.Rounded.Close, "Remove ${source.name}") { Addons.remove(source.id) }
+        },
+    )
 }
 
+/** An add-on's address and the Add button beside it, as the web's Add a source card. */
 @Composable
 private fun AddSource() {
     var address by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedTextField(
-            address, { address = it; problem = null }, singleLine = true, modifier = Modifier.weight(1f),
-            label = { Text("Add-on address") }, placeholder = { Text("https://example.com/manifest.json") },
-            isError = problem != null, supportingText = problem?.let { { Text(it) } },
-        )
-        Button(
-            onClick = {
-                busy = true
-                scope.launch {
-                    runCatching { Addons.add(address) }
-                        .onSuccess { address = "" }
-                        .onFailure { problem = it.message ?: "Couldn't add it" }
-                    busy = false
-                }
-            },
-            enabled = !busy && address.isNotBlank(),
-        ) { Text(if (busy) "Adding…" else "Add") }
+    Column(Modifier.hairline(TEXT_INSET).fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WebField(
+                address, { address = it; problem = null }, "Add-on address",
+                modifier = Modifier.weight(1f), placeholder = "https://example.com/manifest.json", error = problem != null,
+            )
+            KeyPill(
+                if (busy) "Adding…" else "Add",
+                onClick = {
+                    busy = true
+                    scope.launch {
+                        runCatching { Addons.add(address) }
+                            .onSuccess { address = "" }
+                            .onFailure { problem = it.message ?: "Couldn't add it" }
+                        busy = false
+                    }
+                },
+                enabled = !busy && address.isNotBlank(),
+            )
+        }
+        problem?.let { Text(it, style = rowDetailStyle(), color = MaterialTheme.colorScheme.error) }
     }
 }
 
@@ -172,7 +178,6 @@ private fun VerifyComputer() {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
-    val scheme = MaterialTheme.colorScheme
     LaunchedEffect(pair) {
         val waiting = pair ?: return@LaunchedEffect
         while (true) {
@@ -185,51 +190,49 @@ private fun VerifyComputer() {
             }
         }
     }
-    Surface(color = scheme.surfaceContainerHigh, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("OpenTune's own source", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "It plays only for devices the official app vouches for. Approve this computer once from OpenTune on your Android phone or TV; access lasts up to 12 hours.",
-                style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant,
-            )
-            val now = System.currentTimeMillis()
-            val waiting = pair
-            when {
-                waiting != null -> Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    QrCode(waiting.link, 168.dp)
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Code", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
-                        Text(waiting.code, fontFamily = FontFamily.Monospace, fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
-                        Text(
-                            "Scan this with your phone's camera, then allow it in OpenTune when the app shows this same code.",
-                            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(320.dp),
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { clipboard.setText(AnnotatedString(waiting.link)); message = "Link copied. Open it on your phone." }) { Text("Copy link") }
-                            TextButton(onClick = { pair = null; message = "Cancelled. The request expires by itself in five minutes." }) { Text("Cancel") }
-                        }
-                        Text("Waiting for your phone…", style = MaterialTheme.typography.bodySmall, color = scheme.primary)
-                    }
+    NoteRow("It plays only for devices the official app vouches for. Approve this computer once from OpenTune on your Android phone or TV; access lasts up to 12 hours.")
+    val now = System.currentTimeMillis()
+    val waiting = pair
+    when {
+        waiting != null -> Row(
+            Modifier.hairline(TEXT_INSET).fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically,
+        ) {
+            QrCode(waiting.link, 168.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Code", style = rowDetailStyle(), color = inkSecondary())
+                Text(waiting.code, fontFamily = FontFamily.Monospace, fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
+                Text(
+                    "Scan this with your phone's camera, then allow it in OpenTune when the app shows this same code.",
+                    style = rowTitleStyle(), modifier = Modifier.widthIn(max = 320.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuietPill("Copy link", { clipboard.setText(AnnotatedString(waiting.link)); message = "Link copied. Open it on your phone." })
+                    QuietPill("Cancel", { pair = null; message = "Cancelled. The request expires by itself in five minutes." })
                 }
-                until > now -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Verified until ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(until))}", modifier = Modifier.weight(1f))
-                    TextButton(onClick = { AddonPairing.disconnect(); message = "This computer's key and session were removed." }) { Text("Disconnect") }
-                }
-                else -> Button(
-                    onClick = {
-                        busy = true
-                        message = null
-                        scope.launch {
-                            runCatching { AddonPairing.start() }.onSuccess { pair = it }.onFailure { message = it.message ?: "Couldn't start" }
-                            busy = false
-                        }
-                    },
-                    enabled = !busy,
-                ) { Text(if (busy) "Starting…" else if (until > 0) "Verify again" else "Verify this computer") }
+                Text("Waiting for your phone…", style = rowDetailStyle(), color = keyColour())
             }
-            message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
+        }
+        until > now -> SettingRow("Verified until ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(until))}") {
+            LiveDot()
+            RowAction("Disconnect", { AddonPairing.disconnect(); message = "This computer's key and session were removed." })
+        }
+        else -> ButtonsRow {
+            KeyPill(
+                if (busy) "Starting…" else if (until > 0) "Verify again" else "Verify this computer",
+                onClick = {
+                    busy = true
+                    message = null
+                    scope.launch {
+                        runCatching { AddonPairing.start() }.onSuccess { pair = it }.onFailure { message = it.message ?: "Couldn't start" }
+                        busy = false
+                    }
+                },
+                enabled = !busy,
+            )
         }
     }
+    message?.let { NoteRow(it) }
 }
 
 /** [text] as a QR code, dark on white with a quiet border, as phone cameras read best. */

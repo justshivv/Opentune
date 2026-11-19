@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,8 +47,9 @@ internal fun ServerShelf() {
     }
     open?.let { a -> return ServerAlbum(a, onBack = { open = null }) }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.padding(horizontal = GUTTER, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ORDERS.forEach { o -> FilterChip(order == o, { order = o }, label = { Text(o.second) }) }
+        // The order as the web's segmented control, as Settings picks between a few choices.
+        Row(Modifier.padding(horizontal = GUTTER, vertical = 4.dp)) {
+            Segmented("Order", ORDERS, order, { it.second }) { order = it }
         }
         val found = albums
         when {

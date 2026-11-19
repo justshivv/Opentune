@@ -1,17 +1,29 @@
 package com.opentune.desktop
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import com.opentune.ui.components.FocusRing
 import com.opentune.ui.components.glass
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -24,8 +36,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -35,20 +45,20 @@ import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.ArrowOutward
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,17 +72,27 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.horizontalScroll
 import dev.chrisbanes.haze.hazeSource
 import com.opentune.core.BuildConfig
+import com.opentune.data.settings.AppFont
 import com.opentune.data.settings.AppSettings
+import com.opentune.data.settings.ControlStyle
 import com.opentune.data.settings.EQ_BANDS_HZ
 import com.opentune.data.settings.EqPreset
+import com.opentune.data.settings.GlassStyle
+import com.opentune.data.settings.PlayerBackground
+import com.opentune.data.settings.PlayerMotion
+import com.opentune.data.settings.SEED_COLORS
+import com.opentune.data.settings.TextWeight
+import com.opentune.data.settings.ThemeMode
 import com.opentune.data.subsonic.Subsonic
 import kotlinx.coroutines.launch
 
@@ -132,16 +152,9 @@ internal fun SettingsPage() {
                             Group.SOURCES -> SourcesSection()
                             Group.SOUND -> EqualizerSection()
                             Group.LYRICS -> LyricsSection()
-                            Group.ACCOUNTS -> Column(verticalArrangement = Arrangement.spacedBy(26.dp)) { AccountSection(); ConnectedSection() }
+                            Group.ACCOUNTS -> AccountSection { ConnectedRows() }
                             Group.SERVER -> ServerSection()
-                            Group.ABOUT -> Section("About") {
-                                Text("OpenTune ${BuildConfig.VERSION_NAME} for computers", style = MaterialTheme.typography.bodyLarge)
-                                Text(
-                                    "Settings and playlists are kept in ${appContext.getFilesDir().parentFile.absolutePath}.",
-                                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                AboutLinks()
-                            }
+                            Group.ABOUT -> AboutSection()
                         }
                     }
                 }
@@ -212,25 +225,34 @@ private fun Modifier.column(wide: Boolean): Modifier =
     if (wide) this.padding(horizontal = 32.dp).widthIn(max = FRAME).fillMaxWidth().padding(start = SIDE + 48.dp)
     else this.padding(horizontal = 32.dp).widthIn(max = 880.dp).fillMaxWidth()
 
-/** A group of settings as the web player draws one: its name above, its rows on a soft card. */
+/**
+ * A group of settings as the web player draws one: its name above, its rows on a soft card
+ * with hairlines between them, and an optional note under the card.
+ */
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
+internal fun Section(title: String, footer: String? = null, content: @Composable () -> Unit) {
+    Sections(title) {
+        RowsCard(content = content)
+        footer?.let { CardFooter(it) }
+    }
+}
+
+/** A group with more than one card under its name, as the web's Appearance has Now Playing below the rest. */
+@Composable
+internal fun Sections(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         Text(
             title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
         )
-        Surface(
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f), shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                content()
-            }
-        }
+        content()
     }
 }
 
+/**
+ * A setting and its switch, stacked as the phone's lists have them. Settings itself draws its
+ * switches as [ToggleRow]s now; this stays for the pages that still use it (Listen Together).
+ */
 @Composable
 internal fun SwitchRow(title: String, summary: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
@@ -251,18 +273,38 @@ private fun PlaybackSection() {
     val sound by AppSettings.sound.collectAsState()
     val sleep by Player.sleep.collectAsState()
     Section("Playback") {
-        SwitchRow("Autoplay", "When the queue ends, keep going with similar songs", playback.autoplay, AppSettings::setAutoplay)
+        ToggleRow("Autoplay", "When the queue ends, keep going with similar songs", playback.autoplay, AppSettings::setAutoplay)
         OutputDeviceRow()
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Speed", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.width(120.dp))
-            Slider(
-                sound.speed, { v -> AppSettings.updateSound { it.copy(speed = (v * 20).toInt() / 20f) } },
-                valueRange = 0.5f..2f, modifier = Modifier.weight(1f),
-            )
-            Text("%.2f×".format(sound.speed), modifier = Modifier.width(56.dp).padding(start = 8.dp))
-            TextButton(onClick = { AppSettings.updateSound { it.copy(speed = 1f) } }, enabled = sound.speed != 1f) { Text("Reset") }
+        SliderRow(
+            "Speed", sound.speed, 0.5f..2f, "%.2f×".format(sound.speed),
+            reset = if (sound.speed != 1f) ({ AppSettings.updateSound { it.copy(speed = 1f) } }) else null,
+        ) { v -> AppSettings.updateSound { it.copy(speed = (v * 20).toInt() / 20f) } }
+        SleepRow(sleep)
+    }
+}
+
+/** The sleep timer's choices, as the phone's: off, a number of minutes, or the end of the song. */
+private val SLEEP_MINUTES = listOf(15, 30, 45, 60, 90)
+
+/** The sleep timer as a row with its choices in a menu, as the web's selects. */
+@Composable
+private fun SleepRow(sleep: Player.Sleep?) {
+    // 0 is off, -1 the end of the song, anything else minutes.
+    val current = when (sleep) {
+        null -> 0
+        Player.Sleep.EndOfSong -> -1
+        is Player.Sleep.At -> sleep.minutes
+    }
+    MenuRow(
+        "Sleep timer", detail = null,
+        choices = listOf(0) + SLEEP_MINUTES + -1, selected = current,
+        label = { when (it) { 0 -> "Off"; -1 -> "End of song"; else -> "$it min" } },
+    ) { m ->
+        when (m) {
+            0 -> Player.sleepIn(null)
+            -1 -> Player.sleepAtEndOfSong()
+            else -> Player.sleepIn(m)
         }
-        SleepChips(sleep)
     }
 }
 
@@ -274,7 +316,7 @@ internal fun SleepChips(sleep: Player.Sleep?) {
         Text("Sleep timer", style = MaterialTheme.typography.bodyLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
             FilterChip(sleep == null, { Player.sleepIn(null) }, label = { Text("Off") })
-            listOf(15, 30, 45, 60, 90).forEach { m ->
+            SLEEP_MINUTES.forEach { m ->
                 FilterChip((sleep as? Player.Sleep.At)?.minutes == m, { Player.sleepIn(m) }, label = { Text("$m min") })
             }
             FilterChip(sleep == Player.Sleep.EndOfSong, { Player.sleepAtEndOfSong() }, label = { Text("End of song") })
@@ -282,51 +324,40 @@ internal fun SleepChips(sleep: Player.Sleep?) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EqualizerSection() {
     val eq by AppSettings.equalizer.collectAsState()
     Section("Equalizer") {
-        SwitchRow("Equalizer", "Fifteen bands from 25 Hz to 16 kHz, with the phone's presets", eq.enabled) { on ->
+        ToggleRow("Equalizer", "Fifteen bands from 25 Hz to 16 kHz, with the phone's presets", eq.enabled, { on ->
             AppSettings.updateEqualizer { it.copy(enabled = on) }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            EqPreset.entries.forEach { p ->
-                FilterChip(
-                    eq.bands == p.bands,
-                    { AppSettings.updateEqualizer { it.copy(enabled = true, bands = p.bands) } },
-                    label = { Text(p.label) },
-                )
-            }
-        }
-        Row(Modifier.fillMaxWidth().height(220.dp).padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        })
+        // The bands that match no preset read as Custom; picking a preset turns the equalizer on, as before.
+        MenuRow(
+            "Preset", choices = EqPreset.entries, selected = EqPreset.entries.firstOrNull { it.bands == eq.bands },
+            label = { it?.label ?: "Custom" }, summary = { it?.summary?.takeIf(String::isNotBlank) },
+        ) { p -> if (p != null) AppSettings.updateEqualizer { it.copy(enabled = true, bands = p.bands) } }
+        Row(
+            Modifier.hairline(TEXT_INSET).fillMaxWidth().height(236.dp).padding(horizontal = 12.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             EQ_BANDS_HZ.forEachIndexed { i, hz ->
+                val name = if (hz >= 1000f) "${(hz / 1000).let { if (it % 1f == 0f) it.toInt().toString() else "%.1f".format(it) }}k" else hz.toInt().toString()
                 Column(Modifier.weight(1f).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("%+.0f".format(eq.bands.getOrElse(i) { 0f }), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("%+.0f".format(eq.bands.getOrElse(i) { 0f }), style = rowDetailStyle().copy(fontSize = 11.sp), color = inkSecondary())
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Slider(
-                            eq.bands.getOrElse(i) { 0f },
+                        WebSlider(
+                            eq.bands.getOrElse(i) { 0f }, -12f..12f, "$name Hz",
                             { v -> AppSettings.updateEqualizer { e -> e.copy(enabled = true, bands = e.bands.toMutableList().also { b -> b[i] = (v * 2).toInt() / 2f }) } },
-                            valueRange = -12f..12f,
-                            modifier = Modifier.vertical().fillMaxWidth(),
+                            Modifier.vertical().fillMaxWidth(),
                         )
                     }
-                    Text(if (hz >= 1000f) "${(hz / 1000).let { if (it % 1f == 0f) it.toInt().toString() else "%.1f".format(it) }}k" else hz.toInt().toString(), style = MaterialTheme.typography.labelSmall)
+                    Text(name, style = rowDetailStyle().copy(fontSize = 11.sp), color = MaterialTheme.colorScheme.onSurface)
                 }
             }
         }
-        LabelledSlider("Bass", eq.bassDb, -12f..12f, "%+.1f dB") { v -> AppSettings.updateEqualizer { it.copy(bassDb = v) } }
-        LabelledSlider("Treble", eq.trebleDb, -12f..12f, "%+.1f dB") { v -> AppSettings.updateEqualizer { it.copy(trebleDb = v) } }
-        LabelledSlider("Balance", eq.balance, -1f..1f, "%+.2f") { v -> AppSettings.updateEqualizer { it.copy(balance = v) } }
-    }
-}
-
-@Composable
-private fun LabelledSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, format: String, onChange: (Float) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.width(120.dp))
-        Slider(value, { onChange((it * 10).toInt() / 10f) }, valueRange = range, modifier = Modifier.weight(1f))
-        Text(format.format(value), modifier = Modifier.width(80.dp).padding(start = 8.dp))
+        SliderRow("Bass", eq.bassDb, -12f..12f, "%+.1f dB".format(eq.bassDb)) { v -> AppSettings.updateEqualizer { it.copy(bassDb = (v * 10).toInt() / 10f) } }
+        SliderRow("Treble", eq.trebleDb, -12f..12f, "%+.1f dB".format(eq.trebleDb)) { v -> AppSettings.updateEqualizer { it.copy(trebleDb = (v * 10).toInt() / 10f) } }
+        SliderRow("Balance", eq.balance, -1f..1f, "%+.2f".format(eq.balance)) { v -> AppSettings.updateEqualizer { it.copy(balance = (v * 10).toInt() / 10f) } }
     }
 }
 
@@ -344,26 +375,30 @@ private fun Modifier.vertical() = graphicsLayer {
 @Composable
 private fun LyricsSection() {
     val lyrics by AppSettings.lyrics.collectAsState()
-    Section("Lyrics") {
-        SwitchRow("Prefer word-by-word lyrics", "Keep looking past line-synced lyrics for ones timed word by word", lyrics.preferWordSynced) { on ->
-            AppSettings.updateLyrics { it.copy(preferWordSynced = on) }
+    Sections("Lyrics") {
+        RowsCard {
+            ToggleRow("Prefer word-by-word lyrics", "Keep looking past line-synced lyrics for ones timed word by word", lyrics.preferWordSynced, { on ->
+                AppSettings.updateLyrics { it.copy(preferWordSynced = on) }
+            })
         }
-        Text(
-            "Sources, asked all at once and chosen between in this order",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        val order = lyrics.ordered
-        order.forEachIndexed { i, entry ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(entry.source.label, style = MaterialTheme.typography.bodyLarge)
-                    Text(entry.source.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconButton(onClick = { move(i, -1) }, enabled = i > 0) { Icon(Icons.Rounded.KeyboardArrowUp, "Move up") }
-                IconButton(onClick = { move(i, 1) }, enabled = i < order.lastIndex) { Icon(Icons.Rounded.KeyboardArrowDown, "Move down") }
-                Switch(entry.enabled, { on -> AppSettings.updateLyrics { l -> l.copy(sources = l.ordered.map { if (it.source == entry.source) it.copy(enabled = on) else it }) } })
+        CardHeading("Sources")
+        RowsCard {
+            val order = lyrics.ordered
+            order.forEachIndexed { i, entry ->
+                // The whole row turns the source on or off; the arrows beside the switch move it.
+                ToggleRow(
+                    entry.source.label, entry.source.summary, entry.enabled,
+                    { on -> AppSettings.updateLyrics { l -> l.copy(sources = l.ordered.map { if (it.source == entry.source) it.copy(enabled = on) else it }) } },
+                    leading = { Text("${i + 1}", style = rowDetailStyle().copy(fontWeight = FontWeight.SemiBold), color = inkTertiary()) },
+                    leadingSize = 18.dp,
+                    extra = {
+                        SmallIconButton(Icons.Rounded.KeyboardArrowUp, "Move ${entry.source.label} up", enabled = i > 0) { move(i, -1) }
+                        SmallIconButton(Icons.Rounded.KeyboardArrowDown, "Move ${entry.source.label} down", enabled = i < order.lastIndex) { move(i, 1) }
+                    },
+                )
             }
         }
+        CardFooter("Asked all at once, and chosen between in this order.")
     }
 }
 
@@ -374,39 +409,35 @@ private fun move(i: Int, by: Int) = AppSettings.updateLyrics { l ->
     l.copy(sources = list)
 }
 
-/** Your own Navidrome, Gonic, Airsonic or other Subsonic server, as on the phone. */
+/** Your own Navidrome, Gonic, Airsonic or other Subsonic server, as on the phone: an integration row, its sign-in under it. */
 @Composable
 private fun ServerSection() {
     val server by Subsonic.server.collectAsState()
     val scope = rememberCoroutineScope()
-    Section("Your music server") {
-        val s = server
-        if (s != null) {
-            Text("Connected to ${s.url} as ${s.user}", style = MaterialTheme.typography.bodyLarge)
-            Text("Its albums are under Library › Your server.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedButton(onClick = Subsonic::disconnect) { Text("Disconnect") }
-            return@Section
-        }
-        Text(
-            "Navidrome, Gonic, Airsonic and other Subsonic servers. Songs play as MP3, which the server converts.",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    val s = server
+    Section(
+        "Your music server",
+        footer = if (s != null) "Its albums are under Library › Your server."
+        else "Navidrome, Gonic, Airsonic and other Subsonic servers. Songs play as MP3, which the server converts.",
+    ) {
+        IntegrationRow(
+            "Music server", if (s != null) "Connected" else "Not connected",
+            tile = { IconTile(Icons.Rounded.Storage, Brand.Server) },
+            detail = s?.let { "${it.url} as ${it.user}" },
+        ) { if (s != null) RowAction("Disconnect", Subsonic::disconnect) }
+        if (s != null) return@Section
         var address by remember { mutableStateOf("") }
         var user by remember { mutableStateOf("") }
         var password by remember { mutableStateOf("") }
         var busy by remember { mutableStateOf(false) }
         var problem by remember { mutableStateOf<String?>(null) }
-        OutlinedTextField(address, { address = it }, label = { Text("Address") }, placeholder = { Text("https://music.example.com") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(user, { user = it }, label = { Text("User") }, singleLine = true, modifier = Modifier.weight(1f))
-            OutlinedTextField(
-                password, { password = it }, label = { Text("Password") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        problem?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
-        Button(
+        FieldRow("Address", address, { address = it }, placeholder = "https://music.example.com", inset = ICON_INSET)
+        FieldRow("User", user, { user = it }, inset = ICON_INSET)
+        FieldRow("Password", password, { password = it }, secret = true, inset = ICON_INSET)
+        problem?.let { NoteRow(it, colour = MaterialTheme.colorScheme.error, inset = ICON_INSET) }
+        ButtonsRow(inset = ICON_INSET) {
+            KeyPill(
+                if (busy) "Connecting…" else "Connect",
                 onClick = {
                     busy = true
                     problem = null
@@ -416,49 +447,92 @@ private fun ServerSection() {
                     }
                 },
                 enabled = !busy && address.isNotBlank() && user.isNotBlank() && password.isNotEmpty(),
-        ) { Text(if (busy) "Connecting…" else "Connect") }
+            )
+        }
     }
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun AppearanceSection() {
     val theme by AppSettings.theme.collectAsState()
     val ui by AppSettings.ui.collectAsState()
-    Section("Look") {
-        Choices("Theme", com.opentune.data.settings.ThemeMode.entries, theme.mode, { it.label }) { v -> AppSettings.updateTheme { it.copy(mode = v) } }
-        SwitchRow("Pure black", "A black background in the dark theme, rather than a dark grey", theme.pureBlack) { on -> AppSettings.updateTheme { it.copy(pureBlack = on) } }
-        Text("Accent", style = MaterialTheme.typography.bodyLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            com.opentune.data.settings.SEED_COLORS.forEach { c ->
-                val chosen = theme.seedColor == c
-                Box(
-                    Modifier.size(30.dp).clip(CircleShape).background(Color(c))
-                        .then(if (chosen) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
-                        .clickable { AppSettings.updateTheme { it.copy(seedColor = c) } },
-                )
+    Sections("Appearance") {
+        RowsCard {
+            SegmentedRow("Theme", choices = ThemeMode.entries, selected = theme.mode, label = { it.label }) { v -> AppSettings.updateTheme { it.copy(mode = v) } }
+            ToggleRow("Pure black", "A black background in the dark theme, rather than a dark grey", theme.pureBlack, { on -> AppSettings.updateTheme { it.copy(pureBlack = on) } })
+            ToggleRow("Colour from the song", "A soft wash of the playing cover's colour behind the pages", theme.colorFromArtwork, { on -> AppSettings.updateTheme { it.copy(colorFromArtwork = on) } })
+            AccentRow(theme.seedColor)
+            // The first choice is DM Sans here, the web player's typeface, rather than the system's own sans.
+            SegmentedRow(
+                "Font", choices = AppFont.entries.filter { it != AppFont.CUSTOM }, selected = theme.font,
+                label = { if (it == AppFont.SYSTEM) "DM Sans" else it.label },
+            ) { v -> AppSettings.updateTheme { it.copy(font = v) } }
+            SegmentedRow("Text weight", choices = TextWeight.entries, selected = theme.textWeight, label = { it.label }) { v -> AppSettings.updateTheme { it.copy(textWeight = v) } }
+        }
+        CardHeading("Glass and motion")
+        RowsCard {
+            ToggleRow("Blur effects", "Frosted glass on the player, the bars and the search box, blurring what scrolls under them", !ui.reduceBlur, { on -> AppSettings.updateUi { it.copy(reduceBlur = !on) } })
+            // Liquid Glass first, as the web player draws it (the default); the others are frosted.
+            if (!ui.reduceBlur) MenuRow(
+                "Glass", choices = GlassStyle.entries.sortedBy { if (it == GlassStyle.LIQUID) 0 else 1 }, selected = ui.glassStyle,
+                label = { if (it == GlassStyle.LIQUID) "Liquid Glass" else it.label }, summary = { it.summary },
+            ) { v -> AppSettings.updateUi { it.copy(glassStyle = v) } }
+            ToggleRow("Smooth motion", "Pages glide in, covers lift under the pointer, rows rise into place", !ui.reduceAnimation, { on -> AppSettings.updateUi { it.copy(reduceAnimation = !on) } })
+            ToggleRow("Artist signatures (beta)", "An artist's handwritten signature over their photo, in place of their name, when there's one", ui.artistSignatures, { on ->
+                AppSettings.updateUi { it.copy(artistSignatures = on) }
+            })
+            if (ui.artistSignatures) SignatureServiceRow(ui.signatureApi)
+        }
+        CardHeading("Now Playing")
+        RowsCard {
+            MenuRow("Player background", choices = PlayerBackground.entries, selected = theme.playerBackground, label = { it.label }) { v -> AppSettings.updateTheme { it.copy(playerBackground = v) } }
+            MenuRow("Player buttons", choices = ControlStyle.entries, selected = ui.controlStyle, label = { it.label }, summary = { it.summary }) { v -> AppSettings.updateUi { it.copy(controlStyle = v) } }
+            MenuRow("Player opens", choices = PlayerMotion.entries, selected = ui.playerMotion, label = { it.label }, summary = { it.summary }) { v -> AppSettings.updateUi { it.copy(playerMotion = v) } }
+        }
+        if (TrayPrefs.supported || WindowsFrame.isWindows) {
+            CardHeading("Window")
+            RowsCard {
+                if (TrayPrefs.supported) {
+                    val tray by TrayPrefs.keepPlaying.collectAsState()
+                    ToggleRow("Keep playing in the tray", "Closing the window leaves the music playing; the tray icon brings it back or quits", tray, TrayPrefs::setKeepPlaying)
+                }
+                if (WindowsFrame.isWindows) WindowRows()
             }
         }
-        // The first choice is DM Sans here, the web player's typeface, rather than the system's own sans.
-        Choices("Font", com.opentune.data.settings.AppFont.entries.filter { it != com.opentune.data.settings.AppFont.CUSTOM }, theme.font, { if (it == com.opentune.data.settings.AppFont.SYSTEM) "DM Sans" else it.label }) { v -> AppSettings.updateTheme { it.copy(font = v) } }
-        Choices("Text weight", com.opentune.data.settings.TextWeight.entries, theme.textWeight, { it.label }) { v -> AppSettings.updateTheme { it.copy(textWeight = v) } }
-        SwitchRow("Blur effects", "Frosted glass on the player, the bars and the search box, blurring what scrolls under them", !ui.reduceBlur) { on -> AppSettings.updateUi { it.copy(reduceBlur = !on) } }
-        // Liquid Glass first, as the web player draws it (the default); the others are frosted.
-        if (!ui.reduceBlur) Choices("Glass", com.opentune.data.settings.GlassStyle.entries.sortedBy { if (it == com.opentune.data.settings.GlassStyle.LIQUID) 0 else 1 }, ui.glassStyle, { if (it == com.opentune.data.settings.GlassStyle.LIQUID) "Liquid Glass" else it.label }) { v -> AppSettings.updateUi { it.copy(glassStyle = v) } }
-        SwitchRow("Smooth motion", "Pages glide in, covers lift under the pointer, rows rise into place", !ui.reduceAnimation) { on -> AppSettings.updateUi { it.copy(reduceAnimation = !on) } }
-        SwitchRow("Colour from the song", "A soft wash of the playing cover's colour behind the pages", theme.colorFromArtwork) { on -> AppSettings.updateTheme { it.copy(colorFromArtwork = on) } }
-        SwitchRow("Artist signatures (beta)", "An artist's handwritten signature over their photo, in place of their name, when there's one", ui.artistSignatures) { on ->
-            AppSettings.updateUi { it.copy(artistSignatures = on) }
+    }
+}
+
+/** The accent colours, named for screen readers in the order the phone lists them. */
+private val ACCENT_NAMES = listOf("Red", "Amber", "Yellow", "Green", "Teal", "Sky", "Indigo", "Purple", "Pink", "Brown")
+
+/** The accent swatches, as the web's accent picker: the name above, round swatches under it, the chosen one ringed and ticked. */
+@Composable
+private fun AccentRow(chosen: Int) {
+    val still = AppSettings.ui.collectAsState().value.reduceAnimation
+    Column(Modifier.hairline(TEXT_INSET).fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 16.dp)) {
+        Text("Accent", style = rowTitleStyle())
+        Row(
+            Modifier.padding(top = 12.dp).selectableGroup().semantics { contentDescription = "Accent" },
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            SEED_COLORS.forEachIndexed { i, c ->
+                val on = chosen == c
+                val colour = Color(c)
+                val source = remember { MutableInteractionSource() }
+                val hovered by source.collectIsHoveredAsState()
+                val grow by animateFloatAsState(if (hovered && !still) 1.08f else 1f, if (still) snap() else tween(200), label = "swatch")
+                Box(
+                    Modifier.size(36.dp).scale(grow)
+                        .then(if (on) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
+                        .padding(3.dp).clip(CircleShape).background(colour).hoverable(source)
+                        .selectable(on, source, FocusRing(CircleShape), role = Role.RadioButton) { AppSettings.updateTheme { it.copy(seedColor = c) } }
+                        .semantics { contentDescription = ACCENT_NAMES.getOrElse(i) { "Accent ${i + 1}" } },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (on) Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = inkOn(colour))
+                }
+            }
         }
-        if (ui.artistSignatures) SignatureServiceRow(ui.signatureApi)
-        Choices("Player background", com.opentune.data.settings.PlayerBackground.entries, theme.playerBackground, { it.label }) { v -> AppSettings.updateTheme { it.copy(playerBackground = v) } }
-        Choices("Player buttons", com.opentune.data.settings.ControlStyle.entries, ui.controlStyle, { it.label }) { v -> AppSettings.updateUi { it.copy(controlStyle = v) } }
-        Choices("Player opens", com.opentune.data.settings.PlayerMotion.entries, ui.playerMotion, { it.label }) { v -> AppSettings.updateUi { it.copy(playerMotion = v) } }
-        if (TrayPrefs.supported) {
-            val tray by TrayPrefs.keepPlaying.collectAsState()
-            SwitchRow("Keep playing in the tray", "Closing the window leaves the music playing; the tray icon brings it back or quits", tray, TrayPrefs::setKeepPlaying)
-        }
-        if (WindowsFrame.isWindows) WindowRows()
     }
 }
 
@@ -466,17 +540,18 @@ private fun AppearanceSection() {
 @Composable
 private fun WindowRows() {
     val own by WindowsFrame.ownFrame.collectAsState()
-    SwitchRow(
+    ToggleRow(
         "OpenTune's own title bar",
         "Close, minimise and zoom at the head of the sidebar, and the window is moved by the empty parts of the bars." +
             if (own != WindowsFrame.drawn) " Takes effect when OpenTune next opens." else "",
         own,
-    ) { WindowsFrame.setOwnFrame(it) }
+        { WindowsFrame.setOwnFrame(it) },
+    )
     // A material needs the window made see-through, which happens only with the app's own title bar on Windows 11.
     if (WindowsFrame.transparent) {
         val material by WindowsFrame.material.collectAsState()
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-        Choices("Window material", WindowsFrame.Material.entries, material, { it.label }) { WindowsFrame.setMaterial(it, dark) }
+        SegmentedRow("Window material", choices = WindowsFrame.Material.entries, selected = material, label = { it.label }) { WindowsFrame.setMaterial(it, dark) }
     }
 }
 
@@ -487,16 +562,16 @@ private fun SignatureServiceRow(current: String) {
     var problem by remember { mutableStateOf<String?>(null) }
     var checking by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedTextField(
-            address, { address = it; problem = null }, singleLine = true, label = { Text("Signature service") },
-            isError = problem != null, supportingText = problem?.let { p -> { Text(p) } }, modifier = Modifier.weight(1f),
-        )
-        OutlinedButton(
+    SettingRow(
+        "Signature service", detail = problem, detailColour = MaterialTheme.colorScheme.error,
+    ) {
+        WebField(address, { address = it; problem = null }, "Signature service", error = problem != null, placeholder = com.opentune.data.covers.ArtistSignatures.DEFAULT_API)
+        RowAction(
+            if (checking) "Checking…" else "Save",
             enabled = !checking && address.trim() != current,
             onClick = {
                 val base = com.opentune.data.covers.ArtistSignatures.normalize(address.ifBlank { com.opentune.data.covers.ArtistSignatures.DEFAULT_API })
-                if (base == null) { problem = "Use an address starting with https://"; return@OutlinedButton }
+                if (base == null) { problem = "Use an address starting with https://"; return@RowAction }
                 checking = true
                 scope.launch {
                     val ok = com.opentune.data.covers.ArtistSignatures.reachable(base)
@@ -507,23 +582,17 @@ private fun SignatureServiceRow(current: String) {
                     } else problem = "That service didn't answer"
                 }
             },
-        ) { Text(if (checking) "Checking…" else "Save") }
+        )
     }
 }
 
-/** A setting's name over a row of chips, one per choice. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+/**
+ * Discord's "Listening to" card and Last.fm scrobbles, as the web's integration rows: each
+ * service's square, its name, its state and its action, with what it needs set (an
+ * application id, a key and secret) and how its card reads shown under it only when it's on.
+ */
 @Composable
-private fun <T> Choices(title: String, choices: List<T>, selected: T, label: (T) -> String, onPick: (T) -> Unit) {
-    Text(title)
-    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        choices.forEach { c -> FilterChip(c == selected, { onPick(c) }, label = { Text(label(c)) }) }
-    }
-}
-
-/** Discord's "Listening to" card and Last.fm scrobbles. */
-@Composable
-private fun ConnectedSection() {
+private fun ConnectedRows() {
     val discord by DiscordPresence.enabled.collectAsState()
     val discordStatus by DiscordPresence.status.collectAsState()
     val lastFm by LastFmDesktop.state.collectAsState()
@@ -531,137 +600,149 @@ private fun ConnectedSection() {
     var problem by remember { mutableStateOf<String?>(null) }
     var key by remember { mutableStateOf(lastFm.ownKey) }
     var secret by remember { mutableStateOf(lastFm.ownSecret) }
-    Section("Discord and Last.fm") {
-        SwitchRow(
-            "Show on Discord",
-            when (discordStatus) {
-                DiscordPresence.Status.Connected -> "The song you play shows on your Discord profile while the Discord app is open."
-                DiscordPresence.Status.NotRunning -> "Waiting for the Discord app. Open it on this computer and the song shows on your profile."
-                DiscordPresence.Status.NoApp -> "Needs a Discord application named OpenTune, which the card is titled with. Paste its id below."
-                DiscordPresence.Status.Off -> "Show the song you play on your Discord profile, through the Discord app on this computer."
-            },
-            discord, DiscordPresence::setEnabled,
+
+    // Discord: the row is its switch, as "Show on Discord" was; its state at the right. Turned on,
+    // it reads Off only until the presence loop first looks for the app, so that reads as not connected.
+    IntegrationRow(
+        "Discord",
+        if (!discord) "Off" else when (discordStatus) {
+            DiscordPresence.Status.Connected -> "Connected"
+            DiscordPresence.Status.NotRunning -> "Waiting for Discord"
+            DiscordPresence.Status.NoApp -> "Needs an application"
+            DiscordPresence.Status.Off -> "Not connected"
+        },
+        tile = { DiscordTile() },
+        detail = when (discordStatus) {
+            DiscordPresence.Status.Connected -> "The song you play shows on your Discord profile while the Discord app is open."
+            DiscordPresence.Status.NotRunning -> "Waiting for the Discord app. Open it on this computer and the song shows on your profile."
+            DiscordPresence.Status.NoApp -> "Needs a Discord application named OpenTune, which the card is titled with. Paste its id below."
+            DiscordPresence.Status.Off -> "Show the song you play on your Discord profile, through the Discord app on this computer."
+        },
+        modifier = Modifier.toggleable(discord, role = Role.Switch, onValueChange = DiscordPresence::setEnabled)
+            .semantics { contentDescription = "Show on Discord" },
+    ) {
+        if (discordStatus == DiscordPresence.Status.Connected) LiveDot()
+        WebSwitch(discord)
+    }
+    if (discord && !DiscordPresence.buildHasApp) {
+        val saved by DiscordPresence.ownAppId.collectAsState()
+        var appId by remember(saved) { mutableStateOf(saved) }
+        val valid = appId.isBlank() || appId.trim().matches(Regex("[0-9]{17,20}"))
+        FieldRow(
+            "Application ID", appId, { appId = it; if (it.isBlank() || it.trim().matches(Regex("[0-9]{17,20}"))) DiscordPresence.setOwnAppId(it) },
+            placeholder = "17 to 20 digits", inset = ICON_INSET,
+            detail = "This build has no Discord application of its own. Create one named OpenTune at discord.com/developers/applications and paste its Application ID.",
+            problem = if (valid) null else "An application id is 17 to 20 digits.",
         )
-        if (discord) DiscordCardRows()
-        if (!DiscordPresence.buildHasApp) {
-            val saved by DiscordPresence.ownAppId.collectAsState()
-            var appId by remember(saved) { mutableStateOf(saved) }
-            val valid = appId.isBlank() || appId.trim().matches(Regex("[0-9]{17,20}"))
-            Text(
-                "This build has no Discord application of its own. Create one named OpenTune at discord.com/developers/applications and paste its Application ID.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedTextField(
-                appId, { appId = it; if (it.isBlank() || it.trim().matches(Regex("[0-9]{17,20}"))) DiscordPresence.setOwnAppId(it) },
-                label = { Text("Discord Application ID") }, singleLine = true, isError = !valid,
-                supportingText = if (valid) null else ({ Text("An application id is 17 to 20 digits.") }),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Last.fm", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    when {
-                        lastFm.session != null -> "Scrobbling as ${lastFm.session!!.user}" + if (lastFm.queue.isNotEmpty()) " · ${lastFm.queue.size} waiting to send" else ""
-                        waiting -> "Press “Yes, allow access” on the Last.fm page that opened in your browser."
-                        else -> "Add the songs you play to your Last.fm profile once you’ve heard half of them, or four minutes."
-                    },
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            when {
-                lastFm.session != null -> OutlinedButton(onClick = LastFmDesktop::signOut) { Text("Disconnect") }
-                waiting -> OutlinedButton(onClick = LastFmDesktop::cancelSignIn) { Text("Cancel") }
-                else -> Button(
-                    enabled = LastFmDesktop.buildHasKeys || (key.isNotBlank() && secret.isNotBlank()),
-                    onClick = {
-                        problem = null
-                        if (!LastFmDesktop.buildHasKeys) LastFmDesktop.setOwnKeys(key, secret)
-                        LastFmDesktop.signIn { problem = it }
-                    },
-                ) { Text("Connect") }
-            }
-        }
-        problem?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
-        if (lastFm.session != null) {
-            SwitchRow("Scrobble", "Send what you play here to Last.fm.", lastFm.scrobbling, LastFmDesktop::setScrobbling)
-        } else if (!LastFmDesktop.buildHasKeys) {
-            Text(
-                "This build has no Last.fm application of its own. Create one free at last.fm/api/account/create and paste its key and secret.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedTextField(key, { key = it }, label = { Text("API key") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(
-                secret, { secret = it }, label = { Text("Shared secret") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                visualTransformation = PasswordVisualTransformation(),
+    }
+    if (discord) DiscordCardRows()
+
+    // Last.fm: its state, and Connect, Cancel or Disconnect beside it.
+    val session = lastFm.session
+    IntegrationRow(
+        "Last.fm",
+        when {
+            session != null -> "Scrobbling as ${session.user}"
+            waiting -> "Waiting for your browser"
+            else -> "Not connected"
+        },
+        tile = { LastFmTile() },
+        detail = when {
+            session != null -> if (lastFm.queue.isNotEmpty()) "${lastFm.queue.size} waiting to send" else null
+            waiting -> "Press “Yes, allow access” on the Last.fm page that opened in your browser."
+            else -> "Add the songs you play to your Last.fm profile once you’ve heard half of them, or four minutes."
+        },
+    ) {
+        when {
+            session != null -> RowAction("Disconnect", LastFmDesktop::signOut)
+            waiting -> RowAction("Cancel", LastFmDesktop::cancelSignIn)
+            else -> RowAction(
+                "Connect",
+                enabled = LastFmDesktop.buildHasKeys || (key.isNotBlank() && secret.isNotBlank()),
+                onClick = {
+                    problem = null
+                    if (!LastFmDesktop.buildHasKeys) LastFmDesktop.setOwnKeys(key, secret)
+                    LastFmDesktop.signIn { problem = it }
+                },
             )
         }
     }
+    problem?.let { NoteRow(it, colour = MaterialTheme.colorScheme.error, inset = ICON_INSET) }
+    if (session != null) {
+        ToggleRow("Scrobble", "Send what you play here to Last.fm.", lastFm.scrobbling, LastFmDesktop::setScrobbling, Modifier.hairline(ICON_INSET).padding(start = ICON_INSET - TEXT_INSET))
+    } else if (!LastFmDesktop.buildHasKeys) {
+        NoteRow(
+            "This build has no Last.fm application of its own. Create one free at last.fm/api/account/create and paste its key and secret.",
+            inset = ICON_INSET,
+        )
+        FieldRow("API key", key, { key = it }, inset = ICON_INSET)
+        FieldRow("Shared secret", secret, { secret = it }, secret = true, inset = ICON_INSET)
+    }
 }
 
-/** Where else OpenTune is, as the web player's About lists it: the code, the community, the phone and TV apps, the web player. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+/** Where else OpenTune is, as the web player's About lists it: rows that leave for the code, the community, the phone and TV apps, the web player. */
 @Composable
-private fun AboutLinks() {
+private fun AboutSection() {
     val links = androidx.compose.ui.platform.LocalUriHandler.current
     val config = com.opentune.data.config.RemoteConfig.current
-    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Section("About", footer = "OpenTune is free and open source. Report bugs, suggest features and share the add-ons you build.") {
+        SettingRow(
+            "OpenTune ${BuildConfig.VERSION_NAME} for computers",
+            detail = "Settings and playlists are kept in ${appContext.getFilesDir().parentFile.absolutePath}.",
+            leading = { androidx.compose.foundation.Image(rememberLogo(Logo.APP), null, Modifier.size(28.dp).clip(RoundedCornerShape(9.dp))) },
+        )
         listOf(
-            "GitHub" to config.github,
-            "Community on Discord" to config.discord,
-            "Android app" to "${config.github.trimEnd('/')}/releases/latest",
-            "TV app" to config.tv,
-            "Web player" to config.web,
-            "Build an add-on" to "https://bitchord.kushagrasingh.in/docs",
-        ).forEach { (label, url) ->
-            androidx.compose.material3.OutlinedButton(onClick = { runCatching { links.openUri(url) } }) { Text(label) }
+            Triple("Source code", "GitHub", config.github) to (Icons.Rounded.Code to Color(0xFF24292F)),
+            Triple("Community", "Discord", config.discord) to (null to Brand.Discord),
+            Triple("OpenTune for Android", "Download", "${config.github.trimEnd('/')}/releases/latest") to (Icons.Rounded.Smartphone to Color(0xFF2FA84F)),
+            Triple("OpenTune on TV", null, config.tv) to (Icons.Rounded.Tv to Color(0xFF3478F6)),
+            Triple("Web player", null, config.web) to (Icons.Rounded.Language to Color(0xFF8E5BD8)),
+            Triple("Build an add-on", null, "https://bitchord.kushagrasingh.in/docs") to (Icons.Rounded.Build to Color(0xFFE5483A)),
+        ).forEach { (link, look) ->
+            val (title, value, url) = link
+            val (icon, colour) = look
+            SettingRow(
+                title,
+                leading = { if (icon != null) IconTile(icon, colour) else DiscordTile() },
+                onClick = { runCatching { links.openUri(url) } },
+                role = Role.Button,
+            ) {
+                value?.let { Text(it, style = rowDetailStyle().copy(fontSize = 14.sp), color = inkSecondary()) }
+                Icon(Icons.Rounded.ArrowOutward, "Opens in your browser", Modifier.size(16.dp), tint = inkTertiary())
+            }
         }
     }
 }
 
-/** How the Discord card reads, as the web player sets it. */
+/** How the Discord card reads, as the web player sets it: rows under Discord's, inset past its square. */
 @Composable
 private fun DiscordCardRows() {
     val card by DiscordPresence.card.collectAsState()
-    SwitchRow("Lead with the song", "Member lists show the song's title rather than OpenTune", card.leadWithSong) { on -> DiscordPresence.setCard { it.copy(leadWithSong = on) } }
-    SwitchRow("Listen button", "A button under the card that opens the song on YouTube Music", card.listenButton) { on -> DiscordPresence.setCard { it.copy(listenButton = on) } }
-    if (card.listenButton) OutlinedTextField(
-        card.listenLabel, { v -> DiscordPresence.setCard { it.copy(listenLabel = v.take(32)) } },
-        label = { Text("Listen button text") }, placeholder = { Text("Listen on YouTube Music") }, singleLine = true,
+    val nested = Modifier.hairline(ICON_INSET).padding(start = ICON_INSET - TEXT_INSET)
+    ToggleRow("Lead with the song", "Member lists show the song's title rather than OpenTune", card.leadWithSong, { on -> DiscordPresence.setCard { it.copy(leadWithSong = on) } }, nested)
+    ToggleRow("Listen button", "A button under the card that opens the song on YouTube Music", card.listenButton, { on -> DiscordPresence.setCard { it.copy(listenButton = on) } }, nested)
+    if (card.listenButton) FieldRow(
+        "Listen button text", card.listenLabel, { v -> DiscordPresence.setCard { it.copy(listenLabel = v.take(32)) } },
+        placeholder = "Listen on YouTube Music", inset = ICON_INSET,
     )
-    SwitchRow("OpenTune button", "A button under the card that opens OpenTune's page", card.openTuneButton) { on -> DiscordPresence.setCard { it.copy(openTuneButton = on) } }
-    if (card.openTuneButton) OutlinedTextField(
-        card.openTuneLabel, { v -> DiscordPresence.setCard { it.copy(openTuneLabel = v.take(32)) } },
-        label = { Text("OpenTune button text") }, placeholder = { Text("Visit OpenTune") }, singleLine = true,
+    ToggleRow("OpenTune button", "A button under the card that opens OpenTune's page", card.openTuneButton, { on -> DiscordPresence.setCard { it.copy(openTuneButton = on) } }, nested)
+    if (card.openTuneButton) FieldRow(
+        "OpenTune button text", card.openTuneLabel, { v -> DiscordPresence.setCard { it.copy(openTuneLabel = v.take(32)) } },
+        placeholder = "Visit OpenTune", inset = ICON_INSET,
     )
 }
 
-/** Where the sound goes: the system's default, or a device of this computer's. */
+/** Where the sound goes: the system's default, or a device of this computer's, picked from a menu that's read afresh each time it opens. */
 @Composable
 private fun OutputDeviceRow() {
     val selected by AudioDevices.selected.collectAsState()
     var devices by remember { mutableStateOf(AudioDevices.available()) }
-    var open by remember { mutableStateOf(false) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text("Output device", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                selected.ifBlank { "The system's default" },
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Box {
-            androidx.compose.material3.OutlinedButton(onClick = { devices = AudioDevices.available(); open = true }) { Text("Change") }
-            androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }) {
-                androidx.compose.material3.DropdownMenuItem(text = { Text("The system's default") }, onClick = { open = false; AudioDevices.select("") })
-                devices.forEach { d ->
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Column { Text(d.name); if (d.description.isNotBlank() && d.description != d.name) Text(d.description, style = MaterialTheme.typography.bodySmall) } },
-                        onClick = { open = false; AudioDevices.select(d.name) },
-                    )
-                }
-            }
-        }
-    }
+    MenuRow(
+        "Output device",
+        choices = listOf("") + devices.map { it.name }.filter { it.isNotBlank() },
+        selected = selected,
+        label = { it.ifBlank { "The system's default" } },
+        summary = { name -> devices.firstOrNull { it.name == name }?.description?.takeIf { it.isNotBlank() && it != name } },
+        onOpen = { devices = AudioDevices.available() },
+    ) { AudioDevices.select(it) }
 }
