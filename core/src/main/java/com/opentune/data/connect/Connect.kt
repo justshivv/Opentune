@@ -381,7 +381,8 @@ internal class ConnectionConnectPlayer(private val c: PlayerConnection) : Connec
         // device handing it over, told it was taken, would stop with nothing playing anywhere.
         if (!c.connected.value) return false
         val songs: List<Song> = queue.map { it.toSong() }
-        c.playAll(songs, index, shuffle = false, source = null, startPositionMs = pos, fromList = false)
+        // That device's Up Next, as it was: songs left queued by hand here don't push in after its song.
+        c.playAll(songs, index, shuffle = false, source = null, startPositionMs = pos, fromList = false, keepQueued = false)
         if (!playing) c.pause()
         return true
     }

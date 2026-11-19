@@ -328,6 +328,12 @@ class PlayerConnection(private val context: Context) {
         startPositionMs: Long = 0L,
         fromList: Boolean = true,
         smart: Boolean = false,
+        /**
+         * Whether the songs queued by hand here come next, as they do for anything started
+         * here. Not for a queue that is another's whole session (a device handing its music
+         * over, a room): its own Up Next is already in [songs].
+         */
+        keepQueued: Boolean = true,
     ) {
         val controller = controller ?: return
         if (songs.isEmpty()) return
@@ -348,7 +354,7 @@ class PlayerConnection(private val context: Context) {
         }.let { o ->
             // Songs queued by hand come right after the first song. Smart shuffle
             // slots its picks by position, so it starts on the list alone.
-            val kept = if (mixing) emptyList() else handQueued(controller)
+            val kept = if (mixing || !keepQueued) emptyList() else handQueued(controller)
             if (kept.isEmpty()) o else {
                 val at = (if (shuffled) 0 else startIndex.coerceIn(o.indices)) + 1
                 o.take(at) + kept + o.drop(at)
