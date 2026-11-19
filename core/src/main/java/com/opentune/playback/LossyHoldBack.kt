@@ -23,6 +23,7 @@ import androidx.media3.exoplayer.upstream.Allocator
  */
 // The older forms Media3 still calls on some paths are passed on too.
 @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 internal class LossyHoldBack(
     private val base: LoadControl,
     private val aheadUs: Long,

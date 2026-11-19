@@ -14,6 +14,12 @@ val appVersionName = Regex("""versionName = "([^"]+)"""").find(appBuild)!!.group
 val appVersionCode = Regex("""versionCode = (\d+)""").find(appBuild)!!.groupValues[1].toInt()
 
 android {
+    lint {
+        // AGP 8.10's lint can't follow the class hierarchy of classes Kotlin 2.4 compiles, so it
+        // reports every Activity and Service in the manifests as not extending one. Off until the
+        // Android Gradle plugin is moved up; the compiler checks the same thing.
+        disable += "Instantiatable"
+    }
     namespace = "com.opentune.wear"
     compileSdk = 37
 

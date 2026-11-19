@@ -88,9 +88,9 @@ fun OpenTuneTheme(
         isAmoled = settings.pureBlack,
         style = settings.paletteStyle.toPaletteStyle(),
     )
-    val base = if (useWallpaper) {
-        val context = LocalContext.current
-        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val wallpaper = if (useWallpaper) wallpaperScheme(LocalContext.current, dark) else null
+    val base = if (wallpaper != null) {
+        wallpaper
     } else {
         generated
     }
@@ -279,4 +279,14 @@ private fun rememberAppTypography(settings: ThemeSettings): Typography {
             labelLarge = labelLarge.readable(), labelMedium = labelMedium.readable(), labelSmall = labelSmall.readable(),
         ) }
     }
+}
+
+/**
+ * The wallpaper's colours, on Android 12 and later; null before. The check is here beside the
+ * calls because lint under Kotlin 2.4 doesn't follow a check made in the caller.
+ */
+@android.annotation.SuppressLint("NewApi")
+private fun wallpaperScheme(context: android.content.Context, dark: Boolean): androidx.compose.material3.ColorScheme? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+    return if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
 }

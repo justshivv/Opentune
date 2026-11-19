@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
+import androidx.media3.common.util.UnstableApi
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.opentune.data.connect.CTrack
@@ -20,6 +21,7 @@ import com.opentune.data.connect.meant
  * the notification's buttons (and headphones', and the lock screen's) acting
  * there. The phone's own player is left alone underneath.
  */
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 internal class ConnectRemotePlayer : SimpleBasePlayer(Looper.getMainLooper()) {
     /** The device playing; null shows nothing. */
     var device: Device? = null

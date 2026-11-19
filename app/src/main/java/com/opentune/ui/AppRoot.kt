@@ -501,6 +501,7 @@ fun AppRoot(vm: PlayerViewModel) {
     // The whole back stack is only public as this restricted, long-stable flow.
     @android.annotation.SuppressLint("RestrictedApi")
     fun pagesAbove(root: Tab): List<String> {
+        //noinspection RestrictedApi
         val stack = nav.currentBackStack.value.filter { it.destination.route != null }
         val at = stack.indexOfLast { it.destination.route == root.route }
         if (at < 0) return emptyList()

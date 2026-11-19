@@ -25,6 +25,12 @@ fun lastFmCredential(name: String): String {
 }
 
 android {
+    lint {
+        // AGP 8.10's lint can't follow the class hierarchy of classes Kotlin 2.4 compiles, so it
+        // reports every Activity and Service in the manifests as not extending one. Off until the
+        // Android Gradle plugin is moved up; the compiler checks the same thing.
+        disable += "Instantiatable"
+    }
     namespace = "com.opentune.core"
     ndkVersion = "27.2.12479018"
     externalNativeBuild {
