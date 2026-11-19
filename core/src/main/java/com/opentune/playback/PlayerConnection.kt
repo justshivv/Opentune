@@ -296,7 +296,10 @@ class PlayerConnection(private val context: Context) {
         _durationOf.value = id to duration
         // Video mode follows the item's own address, so a swap the service makes
         // (an upgrade, a recovery) settles the toggle on what is actually playing.
-        _videoMode.value = (mixing?.item ?: player.currentMediaItem)?.localConfiguration?.uri?.let(::isVideoUri) == true
+        // A merged video source publishes its first side's item, whose address
+        // is the picture-only one, so both video addresses count.
+        _videoMode.value = (mixing?.item ?: player.currentMediaItem)?.localConfiguration?.uri
+            ?.let { isVideoUri(it) || isVideoOnlyUri(it) } == true
         _videoAvailable.value = id?.let { StreamResolver.hasVideo(it) } == true
         // A song served without its response ever being parsed (from the cache,
         // a download) has no answer yet: ask, and light the toggle if it has one.
@@ -440,16 +443,10 @@ class PlayerConnection(private val context: Context) {
     fun setVideoMode(on: Boolean) {
         val controller = controller ?: return
         val item = controller.currentMediaItem ?: return
-        val uri = if (on) videoStreamUri(item.mediaId) else trackUri(item.mediaId)
-        // A rendition swap, not a new song: replacing the playing item drops
-        // the playhead to the item's start, so the position and play state
-        // are carried across by hand.
-        val index = controller.currentMediaItemIndex
-        val position = controller.currentPosition
-        val playing = controller.isPlaying
-        controller.replaceMediaItem(index, item.buildUpon().setUri(uri).build())
-        if (position > 0) controller.seekTo(index, position)
-        if (playing) controller.play()
+        // The service makes the swap on its own player: its rendition swaps
+        // (the quality switch's) are the ones that hold, where a controller's
+        // replace of the playing item settles back onto the queued item.
+        PlaybackRequests.setVideoMode(item.mediaId, on)
         _videoMode.value = on
     }
 

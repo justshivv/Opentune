@@ -287,7 +287,12 @@ class PlaybackService : MediaLibraryService() {
                     // streams underneath, started together.
                     val audioSide = this.createMediaSource(mediaItem.buildUpon().setUri(trackUri(id)).build())
                     val videoSide = sources.createMediaSource(mediaItem.buildUpon().setUri(videoOnlyUri(id)).build())
-                    return androidx.media3.exoplayer.source.MergingMediaSource(audioSide, videoSide)
+                    // The picture side leads: a merged source publishes its
+                    // first source's item as the playing one, and the player
+                    // reads video mode off that item's address — led by the
+                    // audio side, the item would read as a plain song and the
+                    // switch would settle straight back off.
+                    return androidx.media3.exoplayer.source.MergingMediaSource(videoSide, audioSide)
                 }
                 if (!isYouTubeId(id) || Podcasts.isEpisode(id) || externalStreamKeyOf(uri) != null ||
                     uri.getQueryParameter("fallback") == "youtube") return sources.createMediaSource(mediaItem)
@@ -612,6 +617,24 @@ class PlaybackService : MediaLibraryService() {
             }
         }
         scope.launch { PlaybackRequests.upgrade.collect { scheduleUpgrade(force = true) } }
+        scope.launch {
+            PlaybackRequests.videoMode.collect { (id, on) ->
+                val player = mediaSession?.player as? ExoPlayer ?: return@collect
+                val item = player.currentMediaItem ?: return@collect
+                if (item.mediaId != id) return@collect
+                val uri = if (on) videoStreamUri(id) else trackUri(id)
+                if (item.localConfiguration?.uri == uri) return@collect
+                // A rendition swap like the quality switch's own: the position
+                // and play state are carried across by hand, because replacing
+                // the playing item drops the playhead to its start.
+                val index = player.currentMediaItemIndex
+                val position = player.currentPosition
+                val playing = player.isPlaying
+                player.replaceMediaItem(index, item.buildUpon().setUri(uri).build())
+                if (position > 0) player.seekTo(index, position)
+                if (playing) player.play()
+            }
+        }
         scope.launch { guardQuality() }
         // A stream picked in Search's Add-ons tab that came in after its song had started.
         scope.launch {
@@ -1671,6 +1694,10 @@ class PlaybackService : MediaLibraryService() {
         val item = player.currentMediaItem ?: return
         val uri = item.localConfiguration?.uri ?: return
         val id = videoIdOf(uri) ?: return
+        // Video mode is a rendition the user picked: upgrading it away would
+        // swap the picture out from under them mid-song. Its audio side
+        // already went through the factory's own source choice.
+        if (isVideoUri(uri) || isVideoOnlyUri(uri)) return
         fun alreadyExternal(): Boolean {
             val key = externalStreamKeyOf(selectedUri(uri)) ?: return false
             // Only a stream known to be lossless: one no longer on record used to count too,
