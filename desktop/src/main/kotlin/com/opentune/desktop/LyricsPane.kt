@@ -263,11 +263,15 @@ private fun SyncedLyrics(song: Song, lyrics: Lyrics.Synced, offset: Long, transl
     val at = position + offset
     val active = lyrics.lines.activeIndex(at)
     val list = rememberLazyListState()
+    val blur = !AppSettings.ui.collectAsState().value.reduceBlur
     LaunchedEffect(active) {
         if (active < 0) return@LaunchedEffect
-        // The line sung keeps a third of the way down.
+        // The line sung keeps a third of the way down, gliding there as the full player's does;
+        // only a line far out of view is jumped to.
         val third = list.layoutInfo.viewportSize.height / 3
-        list.animateScrollToItem(active, -third)
+        val item = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == active }
+        if (item == null) list.scrollToItem(active, -third)
+        else list.animateScrollBy((item.offset - third).toFloat(), androidx.compose.animation.core.tween(450, easing = PLAYER_LYRIC_EASE))
     }
     LazyColumn(
         state = list,
@@ -284,21 +288,32 @@ private fun SyncedLyrics(song: Song, lyrics: Lyrics.Synced, offset: Long, transl
         itemsIndexed(lyrics.lines, key = { i, l -> "$i:${l.startMs}" }, contentType = { i, _ -> i }) { i, line ->
             // Only the line being sung follows the clock; the rest stay as they are, so the
             // 25-a-second position updates redraw one row rather than the whole list.
-            LyricRow(line, i == active, if (i == active) at else 0L, translated.getOrNull(i)) { Player.seekTo((line.startMs - offset).coerceAtLeast(0)) }
+            LyricRow(line, i == active, if (i == active) at else 0L, translated.getOrNull(i), distance = if (active < 0) i + 1 else i - active, blur = blur) { Player.seekTo((line.startMs - offset).coerceAtLeast(0)) }
         }
     }
 }
 
 @Composable
-private fun LyricRow(line: LyricLine, active: Boolean, at: Long, translation: String?, onClick: () -> Unit) {
+private fun LyricRow(line: LyricLine, active: Boolean, at: Long, translation: String?, distance: Int = 0, blur: Boolean = false, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val lit = scheme.onSurface
     val dim = scheme.onSurface.copy(alpha = 0.32f)
     val ink by animateColorAsState(if (active) lit else dim)
     val scale by animateFloatAsState(if (active) 1f else 0.94f, androidx.compose.animation.core.spring(dampingRatio = 1f))
+    // Lines before and after the one sung go soft, more the further off they are, as in the full player.
+    val soft by animateFloatAsState(
+        if (!blur || active) 0f else (kotlin.math.abs(distance) * 0.8f + 0.4f).coerceAtMost(3.5f),
+        androidx.compose.animation.core.tween(450), label = "side lyric blur",
+    )
     val second = line.voice == VOICE_SECOND
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp)
+            // One layer that stays, its blur set as it's drawn (see PlayerLyricRow).
+            .graphicsLayer {
+                val r = soft.dp.toPx()
+                renderEffect = if (soft > 0.05f) androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Decal) else null
+                clip = false
+            },
         horizontalAlignment = if (second) Alignment.End else Alignment.Start,
     ) {
         val style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)

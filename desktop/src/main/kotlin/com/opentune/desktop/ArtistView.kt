@@ -49,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -109,6 +110,17 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
         item(key = "hero") {
             val background = MaterialTheme.colorScheme.background
             Box(Modifier.fillMaxWidth().height(heroHeight).clipToBounds()) {
+                // The photo itself fades out at its foot, into whatever is behind the page (its
+                // tinted backdrop): fading to the plain page colour left a hard line where that
+                // met the tint below, sharper still as the photo drifted down on scrolling.
+                Box(
+                    Modifier.matchParentSize()
+                        .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(ARTIST_HERO_MASK, blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                        },
+                ) {
                 AnimatedContent(hero ?: loaded?.thumbnailUrl ?: item.thumbnailUrl, transitionSpec = { fadeIn(tween(350)) togetherWith fadeOut(tween(300)) }, label = "artist photo") { url ->
                     // As on the web (.ot-parallax): over the first 640px of scrolling the photo drifts down
                     // by 28% of its height and grows to 1.08, so it slides away slower than the page.
@@ -121,8 +133,9 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
                         }
                     }, androidx.compose.ui.graphics.RectangleShape)
                 }
-                // The photo melts into the page at its foot, as the web's masked frame does.
-                Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 0.8f to background.copy(alpha = 0.7f), 1f to background)))
+                }
+                // A soft shade behind the name and buttons, back to clear at the very foot so it leaves no edge.
+                Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.4f to Color.Transparent, 0.78f to Color.Black.copy(alpha = 0.32f), 1f to Color.Transparent)))
                 Column(
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = LocalGutter.current, end = LocalGutter.current, bottom = 24.dp).riseIn(delayMs = 70),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -257,3 +270,6 @@ internal fun whiteInk(input: org.jetbrains.skia.Bitmap): org.jetbrains.skia.Bitm
     out.installPixels(info, bytes, w * 4)
     return out
 }
+
+/** The artist photo's own fade: whole down to just past the middle, gone at its foot. */
+private val ARTIST_HERO_MASK = Brush.verticalGradient(0f to Color.Black, 0.5f to Color.Black, 0.86f to Color.Black.copy(alpha = 0.35f), 1f to Color.Transparent)
