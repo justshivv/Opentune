@@ -887,9 +887,18 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
             if (ownNow != null) {
                 com.opentune.ui.components.MenuRow(ImageVector.vectorResource((ownNow.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).iconRes), (ownNow.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).meaning) { ownNow.choose() }
             }
-            com.opentune.ui.components.MenuRow(if (saved) ImageVector.vectorResource(AppIcons.BookmarkRemove) else ImageVector.vectorResource(AppIcons.PushPin), if (saved) "Unpin" else "Pin") {
-                close()
-                com.opentune.data.library.LibraryStore.setSaved(com.opentune.data.library.SavedList(c.browseId, c.title, c.subtitle, c.thumbnailUrl), !saved)
+            // Already in the account's library (made there or saved there): nothing to add.
+            val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
+            val inAccount = own != null || accountSaved.saved || accountLists.any { it.browseId?.removePrefix("VL") == c.browseId.removePrefix("VL") }
+            if (saved || !inAccount) {
+                com.opentune.ui.components.MenuRow(
+                    ImageVector.vectorResource(if (saved) AppIcons.BookmarkRemove else AppIcons.BookmarkAdd),
+                    if (saved) "Remove from Library" else "Add to Library",
+                ) {
+                    close()
+                    com.opentune.data.library.LibraryStore.setSaved(com.opentune.data.library.SavedList(c.browseId, c.title, c.subtitle, c.thumbnailUrl), !saved)
+                    com.opentune.data.Pills.done(if (saved) "Removed from Library" else "Added to Library", context)
+                }
             }
             if (accountSaved.saved) {
                 com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.BookmarkRemove), "Remove from your library") { close(); accountSaved.ask() }

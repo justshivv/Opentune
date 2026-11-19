@@ -414,6 +414,8 @@ fun CollectionContextMenu(
     val context = LocalContext.current
     val saved by LibraryStore.savedLists.collectAsState()
     val isSaved = saved.any { it.browseId == list.browseId }
+    val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
+    val inAccount = accountLists.any { it.browseId?.removePrefix("VL") == list.browseId.removePrefix("VL") }
     val kind = if (list.type == BrowseType.ALBUM) "album" else "playlist"
     // Add to playlist: the list's songs are read, then the playlist picker takes over from the menu.
     var adding by remember { mutableStateOf(false) }
@@ -451,9 +453,16 @@ fun CollectionContextMenu(
             add(MenuEntry(com.opentune.i18n.Tr.f("Open {0}", kind), ImageVector.vectorResource(AppIcons.KeyboardArrowRight)) { actions.open(list.browseId, list.type) })
         }
         add(MenuEntry("Share", ImageVector.vectorResource(AppIcons.Share)) { com.opentune.ui.share.ListShare.shareList(context, list.title, list.browseId, listOf(list.thumbnailUrl), list.subtitle) })
-        add(
-            MenuEntry(if (isSaved) "Unpin" else "Pin", if (isSaved) ImageVector.vectorResource(AppIcons.BookmarkRemove) else ImageVector.vectorResource(AppIcons.PushPin)) {
+        // Into the Library, or out again. A list already in the account's library (made there or
+        // saved there) is in the Library already, so there's nothing to add.
+        if (isSaved || !inAccount) add(
+            MenuEntry(
+                if (isSaved) "Remove from Library" else "Add to Library",
+                ImageVector.vectorResource(if (isSaved) AppIcons.BookmarkRemove else AppIcons.BookmarkAdd),
+                0,
+            ) {
                 LibraryStore.setSaved(com.opentune.data.library.SavedList(list.browseId, list.title, list.subtitle, list.thumbnailUrl), !isSaved)
+                com.opentune.data.Pills.done(if (isSaved) "Removed from Library" else "Added to Library", context)
             },
         )
     }
