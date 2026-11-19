@@ -160,15 +160,34 @@ internal object LibraryPins {
     const val MAX = 5
 
     fun toggle(key: String) {
-        val pins = AppSettings.ui.value.pinnedPlaylists
-        if (key !in pins && pins.size >= MAX) {
+        val after = toggled(AppSettings.ui.value.pinnedPlaylists, key, ::inLibrary)
+        if (after == null) {
             com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Up to {0} playlists can be pinned. Unpin one first", MAX))
             return
         }
-        AppSettings.updateUi { ui ->
-            ui.copy(pinnedPlaylists = if (key in ui.pinnedPlaylists) ui.pinnedPlaylists - key else ui.pinnedPlaylists + key)
-        }
+        AppSettings.updateUi { ui -> ui.copy(pinnedPlaylists = after) }
     }
+
+    /**
+     * [pins] with [key] pinned or unpinned; null when it can't be pinned, [MAX] being pinned
+     * already. Only pins still in the library ([present]) count toward that: a deleted playlist,
+     * or a list taken out of the library, kept its pin, which no row showed and none could
+     * unpin, so Library said "Unpin one first" with fewer than [MAX] pinned in sight. Those
+     * are let go of when room is needed; until then they stay, so a YouTube Music playlist
+     * that's out of sight while signed out is pinned again on signing back in.
+     */
+    internal fun toggled(pins: List<String>, key: String, present: (String) -> Boolean): List<String>? {
+        if (key in pins) return pins - key
+        if (pins.size < MAX) return pins + key
+        val live = pins.filter(present)
+        return if (live.size >= MAX) null else live + key
+    }
+
+    /** Whether a pin still names something in the library: a playlist here, a saved list, or one of the account's. */
+    private fun inLibrary(key: String): Boolean =
+        LibraryStore.playlist(key) != null ||
+            LibraryStore.savedLists.value.any { it.browseId == key } ||
+            com.opentune.data.library.LibraryCache.playlists.value.any { it.browseId == key }
 }
 
 private const val YT_PLAYLISTS = "library:ytPlaylists"
@@ -193,7 +212,29 @@ private fun rememberPlaylistRows(nav: LibraryNav): List<LibraryPlaylistRow> {
     val spotifyConnected by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
     // One linked to a playlist here is listed once, as that one.
     val ytPlaylists = if (signedIn) remember(cachedPlaylists, playlists) { PlaylistLinks.unlinked(cachedPlaylists, playlists) } else emptyList()
-    val playCounts = remember(records) { records.groupingBy { it.videoId }.eachCount() }
+    // Counted over the whole history, so off the main thread and kept as Home keeps its own
+    // (see HomeDerived): coming back to Library shows the last count at once.
+    val playCounts = com.opentune.ui.home.rememberHomeDerived("library:playCounts", records, initial = emptyMap<String, Int>()) {
+        records.groupingBy { it.videoId }.eachCount()
+    }
+    // Kept until what they're made from changes: made afresh on every recomposition of Library
+    // (a swipe between its faces, a refresh), each row a new one, so everything sorted or
+    // filtered from them below was worked out again each time too.
+    return remember(playlists, downloadEntries, hearted, ytPlaylists, pinned, playCounts, spotifyConnected, nav) {
+        playlistRows(nav, playlists, downloadEntries, hearted, ytPlaylists, pinned, playCounts, spotifyConnected)
+    }
+}
+
+private fun playlistRows(
+    nav: LibraryNav,
+    playlists: List<com.opentune.data.library.LocalPlaylist>,
+    downloadEntries: Map<String, com.opentune.data.download.DownloadEntry>,
+    hearted: List<com.opentune.data.library.SavedList>,
+    ytPlaylists: List<ShelfItem>,
+    pinned: List<String>,
+    playCounts: Map<String, Int>,
+    spotifyConnected: Boolean,
+): List<LibraryPlaylistRow> {
     val rows = mutableListOf<LibraryPlaylistRow>()
     for (p in playlists.filterNot { isYouTubeLikes(it.remoteId) || isYouTubeLikes(it.id) }) {
         val source = when {
