@@ -48,7 +48,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,7 +69,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * The page's selection bar, floating over the foot of the page while songs are picked; going to
@@ -237,12 +235,15 @@ private fun BarButton(icon: ImageVector, label: String, labelled: Boolean, solid
 @Composable
 internal fun AddSongsToPlaylistMenu(songs: List<Song>, open: Boolean, onDismiss: () -> Unit, onAdded: () -> Unit = {}) {
     val playlists by Library.playlists.collectAsState()
-    val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
+    // The account's own playlists, as the Library reads them once a sign-in (AccountLibrary).
+    val library by AccountLibrary.state.collectAsState()
     var naming by remember { mutableStateOf(false) }
-    val online = signedIn && songs.any { isYouTubeId(it.videoId) }
-    val account by produceState<List<ShelfItem>?>(null, open, online) {
-        value = if (open && online) AccountPlaylists.get() else null
+    val online = library.signedIn && songs.any { isYouTubeId(it.videoId) }
+    val account = remember(library.playlists, library.loaded) {
+        AccountLibrary.shownPlaylists(library.playlists).filter { it.browseId?.let(com.opentune.data.innertube.InnertubeParser::isEditablePlaylist) == true }
+            .takeIf { library.loaded || it.isNotEmpty() }
     }
+    LaunchedEffect(open, online) { if (open && online) AccountLibrary.refreshIfStale() }
     val ids = remember(songs) { songs.mapTo(HashSet()) { it.videoId } }
     val many = if (songs.size == 1) songs.first().title else "${songs.size} songs"
     if (open) {
@@ -291,33 +292,21 @@ internal fun AddSongsToPlaylistMenu(songs: List<Song>, open: Boolean, onDismiss:
     }
 }
 
-/**
- * The signed-in account's own playlists on YouTube Music that take songs, read once a sign-in
- * and kept a few minutes; songs go to one off the window's thread, as the phone's do.
- */
+/** Several songs at once to one of the account's playlists on YouTube Music, in one edit, off the window's thread. */
 internal object AccountPlaylists {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    @Volatile private var kept: Pair<Long, List<ShelfItem>>? = null
-
-    suspend fun get(): List<ShelfItem> {
-        kept?.takeIf { System.currentTimeMillis() - it.first < 5 * 60_000 }?.let { return it.second }
-        val list = withContext(Dispatchers.IO) {
-            runCatching {
-                com.opentune.data.innertube.InnertubeParser.parseLibraryItems(com.opentune.data.innertube.Innertube.browse("FEmusic_liked_playlists"))
-                    .filter { it.browseId?.let(com.opentune.data.innertube.InnertubeParser::isEditablePlaylist) == true }
-            }.getOrDefault(emptyList())
-        }
-        if (list.isNotEmpty()) kept = System.currentTimeMillis() to list
-        return list
-    }
 
     fun add(playlist: ShelfItem, songs: List<Song>) {
-        val id = playlist.browseId?.removePrefix("VL") ?: return
+        val id = playlist.browseId ?: return
         val online = songs.filter { isYouTubeId(it.videoId) }.map { it.videoId }.distinct()
         if (online.isEmpty()) return
         scope.launch {
-            val ok = runCatching { com.opentune.data.innertube.Innertube.addToPlaylist(id, online) }.isSuccess
-            Notice.show(if (ok) (if (online.size == 1) "Added to ${playlist.title}" else "Added ${online.size} songs to ${playlist.title}") else "Couldn't add them to ${playlist.title}")
+            runCatching { com.opentune.data.innertube.Innertube.addToPlaylist(id, online) }
+                .onSuccess {
+                    Pages.forgetListing(id)
+                    Notice.show(if (online.size == 1) "Added to ${playlist.title}" else "Added ${online.size} songs to ${playlist.title}")
+                }
+                .onFailure { Notice.show("Couldn't add them to ${playlist.title}") }
         }
     }
 }
