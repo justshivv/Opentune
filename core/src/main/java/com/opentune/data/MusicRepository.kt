@@ -835,7 +835,8 @@ object MusicRepository {
     /**
      * The album page for [song]: its own album id when the row carried one, else
      * the one YouTube Music's watch data gives the track, else the album of a
-     * search result that's the same song by the same artist.
+     * search result that's the same song by the same artist, else, for a title
+     * naming its film or album (`Song (From "Film")`), that album by the same people.
      */
     suspend fun albumIdFor(song: Song): String? {
         song.albumId?.let { return it }
@@ -845,12 +846,24 @@ object MusicRepository {
                 .getOrNull()
                 ?: runCatching {
                     val first = song.artist.split(", ", " & ").first().trim()
-                    val tracks = InnertubeParser.parseSearchPage(Innertube.search("${song.title} $first", SearchFilter.SONGS.params)).rows
+                    val bare = AlbumMatch.bareTitle(song.title)
+                    val tracks = InnertubeParser.parseSearchPage(Innertube.search("$bare $first", SearchFilter.SONGS.params)).rows
                         .mapNotNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
-                    // Only the same recording, or one with the same title by the same artist: a
-                    // near miss would open some other album with confidence.
+                    // Only the same recording, or one with the same title by one of the same
+                    // artists: a near miss would open some other album with confidence. Titles
+                    // are compared without their brackets, so `Song (From "Film")` or
+                    // `Song (Official Video)` matches the plain `Song` on the album.
                     (tracks.firstOrNull { it.videoId == song.videoId }
-                        ?: tracks.firstOrNull { it.albumId != null && it.title.equals(song.title, ignoreCase = true) && it.artist.contains(first, ignoreCase = true) })?.albumId
+                        ?: tracks.firstOrNull { it.albumId != null && AlbumMatch.sameTitle(it.title, song.title) && AlbumMatch.sharesArtist(it.artist, song.artist) })?.albumId
+                }.getOrNull()
+                ?: runCatching {
+                    // `Song (From "Film")`: the film's soundtrack, by a name in common.
+                    val from = AlbumMatch.fromTitle(song.title) ?: return@runCatching null
+                    val first = song.artist.split(", ", " & ").first().trim()
+                    InnertubeParser.parseSearchPage(Innertube.search("$from $first", SearchFilter.ALBUMS.params)).rows
+                        .mapNotNull { (it as? SearchResult.Browse)?.item?.takeIf { i -> i.type == BrowseType.ALBUM } }
+                        .firstOrNull { AlbumMatch.sameTitle(it.title, from) && AlbumMatch.sharesArtist(it.subtitle, song.artist) }
+                        ?.browseId
                 }.getOrNull()
         }
         if (found != null) synchronized(albumIds) { albumIds[song.videoId] = found }
