@@ -60,7 +60,7 @@ import com.opentune.ui.theme.AppIcons
  * otherwise, or until the signature has loaded.
  */
 @Composable
-internal fun ArtistNameOrSignature(name: String) {
+internal fun ArtistNameOrSignature(name: String, start: Boolean = false) {
     val ui by AppSettings.ui.collectAsState()
     val api = ui.signatureApi
     var signature by remember(name, api) { mutableStateOf(if (ui.artistSignatures) ArtistSignatures.cached(name, api) else null) }
@@ -70,7 +70,9 @@ internal fun ArtistNameOrSignature(name: String) {
         signature = if (ui.artistSignatures) ArtistSignatures.signatureFor(name, api) else null
     }
     val sig = signature?.takeIf { !failed }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    // [start]: set at the left, as the Poster layout lays the name over the photo's foot.
+    val align = if (start) TextAlign.Start else TextAlign.Center
+    Column(horizontalAlignment = if (start) Alignment.Start else Alignment.CenterHorizontally) {
         if (sig != null) {
             // Loaded off screen first, so the name doesn't blink out for an empty space.
             SignatureImage(sig, name, onDrawn = { drawn = true }, onFailed = { failed = true }, shown = drawn)
@@ -84,19 +86,20 @@ internal fun ArtistNameOrSignature(name: String) {
                     },
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                    textAlign = TextAlign.Center,
+                    textAlign = align,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = if (start) 0.dp else 24.dp, vertical = 4.dp),
                 )
             } else {
                 Text(
                     name,
-                    style = MaterialTheme.typography.displaySmall.copy(fontSize = 40.sp, lineHeight = 44.sp),
-                    textAlign = TextAlign.Center,
+                    style = if (start) MaterialTheme.typography.displayMedium.copy(fontSize = 48.sp, lineHeight = 52.sp, fontWeight = FontWeight.Black)
+                        else MaterialTheme.typography.displaySmall.copy(fontSize = 40.sp, lineHeight = 44.sp),
+                    textAlign = align,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 24.dp),
+                    modifier = Modifier.padding(horizontal = if (start) 0.dp else 24.dp),
                 )
             }
         }

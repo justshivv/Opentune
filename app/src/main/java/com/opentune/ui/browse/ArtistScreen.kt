@@ -310,7 +310,7 @@ private fun ArtistTint(photoUrl: String?, content: @Composable () -> Unit) {
  * scroll, so it slides away slower than the page, unless animation is reduced.
  */
 @Composable
-private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, listState: LazyListState, actions: SongActions, band: com.opentune.ui.components.RubberBandOverscroll? = null) {
+internal fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, listState: LazyListState, actions: SongActions, band: com.opentune.ui.components.RubberBandOverscroll? = null) {
     val ui by AppSettings.ui.collectAsState()
     val still = ui.reduceAnimation
     val background = MaterialTheme.colorScheme.background
@@ -324,10 +324,12 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
     val drift: androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit = {
         if (!still && listState.firstVisibleItemIndex == 0) translationY = listState.firstVisibleItemScrollOffset * PARALLAX
     }
+    val poster = posterLayout()
     Box(Modifier.fillMaxWidth()) {
         // The height of a full-screen playlist cover, so the photo takes
-        // the same share of the screen as the covers on the other pages.
-        val photoHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * ARTIST_HERO_FRACTION).dp
+        // the same share of the screen as the covers on the other pages;
+        // the Poster layout gives it more, with the name low over it.
+        val photoHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * if (poster) POSTER_HERO_FRACTION else ARTIST_HERO_FRACTION).dp
         Box(
             Modifier
                 // Pulled down at the top, the photo stays at the top of the screen and grows to
@@ -378,6 +380,25 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
             Modifier.graphicsLayer { translationY = -(band?.pull ?: 0f) }.fillMaxWidth().height(120.dp)
                 .background(Brush.verticalGradient(listOf(background.copy(alpha = 0.5f), background.copy(alpha = 0f)))),
         )
+        if (poster) {
+            // The name large at the left over the photo's foot, "ARTIST · 3 RELEASES" under it,
+            // then Play and Shuffle as two wide glass pills.
+            Column(
+                Modifier.fillMaxWidth().padding(top = (photoHeight - POSTER_NAME_OVERLAP).coerceAtLeast(0.dp)).padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                if (page == null) Placeholder(Modifier.width(220.dp).height(52.dp))
+                else ArtistNameOrSignature(page.name.orEmpty(), start = true)
+                val releases = page?.sections.orEmpty().sumOf { shelf -> shelf.items.count { it.browseId?.startsWith("MPRE") == true } }
+                PosterCaps(
+                    listOfNotNull(com.opentune.ui.theme.tr("Artist"), releases.takeIf { it > 0 }?.let { com.opentune.i18n.Tr.f("{0} releases", it) }).joinToString(" · "),
+                    Modifier.padding(top = 14.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                )
+                PosterArtistButtons(browseId, page, actions, Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 12.dp))
+            }
+            return@Box
+        }
         Column(
             Modifier.fillMaxWidth().padding(top = (photoHeight - NAME_OVERLAP).coerceAtLeast(0.dp)),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -389,6 +410,25 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
             }
             HeroButtons(browseId, page, actions, Modifier.padding(top = 18.dp, bottom = 12.dp))
         }
+    }
+}
+
+/** The Poster layout's buttons: Play and Shuffle as two wide glass pills, and Follow in a round one. */
+@Composable
+private fun PosterArtistButtons(browseId: String, page: ArtistPage?, actions: SongActions, modifier: Modifier = Modifier) {
+    val songs = page?.songs.orEmpty()
+    val enabled = songs.isNotEmpty()
+    val name = page?.name
+    val haptics = rememberHaptics()
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        PosterPill(com.opentune.ui.theme.tr("Play"), ImageVector.vectorResource(AppIcons.PlayArrow), enabled, {
+            haptics.pattern(Haptics.Pattern.PLAY)
+            actions.playAll(songs, 0, false, name)
+        }, Modifier.weight(1f))
+        PosterPill(com.opentune.ui.theme.tr("Shuffle"), ImageVector.vectorResource(AppIcons.Shuffle), enabled, {
+            actions.playAll(songs, 0, true, name)
+        }, Modifier.weight(1f))
+        FollowButton(browseId, page, Modifier.size(POSTER_ROUND))
     }
 }
 
@@ -760,6 +800,9 @@ private val PHOTO_FADE = Brush.verticalGradient(
 
 /** The share of the screen's height the photo takes, the same as a full-screen playlist cover. */
 private const val ARTIST_HERO_FRACTION = 0.68f
+/** The Poster layout's photo: most of the screen, the name over its foot. */
+private const val POSTER_HERO_FRACTION = 0.74f
+private val POSTER_NAME_OVERLAP = 150.dp
 /** How far up the name sits into the photo's fade. */
 private val NAME_OVERLAP = 76.dp
 private val SIDE_BUTTON = 56.dp

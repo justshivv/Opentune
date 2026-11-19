@@ -57,7 +57,7 @@ internal class ChunkedDataSource(
     }
 
     private fun openPiece(): Long {
-        val s = spec ?: error("not open")
+        val s = checkNotNull(spec)
         val want = minOf(chunkBytes, end - next)
         val got = upstream.open(s.subrange(next - s.position, want))
         opened = true

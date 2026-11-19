@@ -469,6 +469,8 @@ data class InterfaceSettings(
     val fullScreenCover: Boolean = false,
     /** Playlist and album pages open with their cover filling the top of the page, edge to edge. */
     val fullScreenListCover: Boolean = false,
+    /** How album, playlist and artist pages are laid out (Settings › Page layout). */
+    val pageLayout: PageLayout = PageLayout.CLASSIC,
     /** Liked Music's cover is the newest liked song's artwork; off, it is Liked Music's own heart cover. */
     val likedCoverFromLatest: Boolean = false,
     /** How round the player's cover is, in dp: 0 is a square with sharp corners. Not used with [fullScreenCover]. */
@@ -650,7 +652,14 @@ enum class PlayerMotion(val label: String, val summary: String) {
     ECHO("Echo", "A soft spring that settles without bouncing"),
 }
 
-/** What fills every sheet in the app: a frosted blur of what's behind it, or the app's own theme. */
+/** The look of album, playlist and artist pages. */
+@Serializable
+enum class PageLayout(val label: String, val summary: String) {
+    CLASSIC("Classic", "The page as it has always been, with the cover set as Full-screen playlist covers says"),
+    POSTER("Poster", "Covers and artist photos fill the top of the page, with big titles, spaced capitals and round buttons"),
+}
+
+/** What fills every sheet in the app: a frosted blur of what's behind it, the app's own theme, or a plain fill. */
 @Serializable
 enum class SheetStyle(val label: String, val summary: String) {
     BLUR("Blur", "A frosted blur of the page behind the sheet"),

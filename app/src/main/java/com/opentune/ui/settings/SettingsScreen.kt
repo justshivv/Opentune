@@ -480,6 +480,7 @@ private fun settingsSections(
     var dockLensDialog by remember { mutableStateOf(false) }
     var glassStyleDialog by remember { mutableStateOf(false) }
     var sheetStyleDialog by remember { mutableStateOf(false) }
+    var pageLayoutDialog by remember { mutableStateOf(false) }
     var choiceMenusDialog by remember { mutableStateOf(false) }
     var artistShadeDialog by remember { mutableStateOf(false) }
     var listBackgroundDialog by remember { mutableStateOf(false) }
@@ -704,6 +705,16 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { m -> AppSettings.updateUi { it.copy(choiceMenus = m) } },
             onDismiss = { choiceMenusDialog = false },
+        )
+    }
+    if (pageLayoutDialog) {
+        ChoiceSheet(
+            title = "Page layout",
+            options = com.opentune.data.settings.PageLayout.entries,
+            selected = ui.pageLayout,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { l -> AppSettings.updateUi { it.copy(pageLayout = l) } },
+            onDismiss = { pageLayoutDialog = false },
         )
     }
     if (sheetStyleDialog) {
@@ -1266,6 +1277,9 @@ private fun settingsSections(
                 },
                 Entry("Moving covers on Home", "motion artwork animated cover drift zoom home cards mixes") {
                     ToggleRow("Moving covers on Home", ui.homeMovingCovers, { v -> AppSettings.updateUi { it.copy(homeMovingCovers = v) } }, summary = "Song and album covers on Home drift and zoom slowly, one or two at a time, while you're not scrolling. Off in battery saver", icon = ImageVector.vectorResource(AppIcons.Animation))
+                },
+                Entry("Page layout", "layout poster classic album playlist artist page design look header") {
+                    NavRow("Page layout", { pageLayoutDialog = true }, summary = ui.pageLayout.summary, icon = ImageVector.vectorResource(AppIcons.GridView), value = ui.pageLayout.label)
                 },
                 Entry("Full-screen playlist covers", "playlist album cover art edge full screen header") {
                     ToggleRow("Full-screen playlist covers", ui.fullScreenListCover, { v -> AppSettings.updateUi { it.copy(fullScreenListCover = v) } }, summary = "Playlists and albums open with their cover across the top of the page, edge to edge", icon = ImageVector.vectorResource(AppIcons.Fullscreen))

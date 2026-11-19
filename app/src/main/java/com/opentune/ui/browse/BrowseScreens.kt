@@ -70,6 +70,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.opentune.data.MusicRepository
 import com.opentune.data.model.BrowseType
 import com.opentune.data.model.HEADER_ART_PX
@@ -566,10 +567,66 @@ internal fun playlistMeta(songs: List<com.opentune.data.model.Song>): String {
     return listOfNotNull(com.opentune.i18n.Tr.f("{0} songs", songs.size), length).joinToString(" • ")
 }
 
-/** Whether lists open with their cover across the top of the page (Settings › Full-screen playlist covers). */
+/** Whether lists open with their cover across the top of the page (Settings › Full-screen playlist covers, or the Poster layout). */
 @Composable
 internal fun fullListCover(): Boolean =
-    com.opentune.data.settings.AppSettings.ui.collectAsState().value.fullScreenListCover
+    com.opentune.data.settings.AppSettings.ui.collectAsState().value.let { it.fullScreenListCover || it.pageLayout == com.opentune.data.settings.PageLayout.POSTER }
+
+/** Whether album, playlist and artist pages wear the Poster layout (Settings › Page layout). */
+@Composable
+internal fun posterLayout(): Boolean =
+    com.opentune.data.settings.AppSettings.ui.collectAsState().value.pageLayout == com.opentune.data.settings.PageLayout.POSTER
+
+/** A line in the Poster layout's spaced capitals: "ALBUM · 9 SONGS · 42 MIN", an artist's name under a title. */
+@Composable
+internal fun PosterCaps(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelLarge,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    textAlign: TextAlign = TextAlign.Center,
+) {
+    Text(
+        text.uppercase(),
+        style = style.copy(letterSpacing = 3.sp),
+        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+        color = color,
+        textAlign = textAlign,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
+}
+
+/** The Poster layout's Play: a wide glass pill with the word in it. */
+@Composable
+internal fun PosterPill(label: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+    Row(
+        modifier.height(56.dp).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
+            .glass(shape).clip(shape).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(horizontal = 26.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
+        Spacer(Modifier.width(10.dp))
+        Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+    }
+}
+
+/** The Poster layout's round glass button, for shuffle, save and the like. */
+@Composable
+internal fun PosterRound(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    Box(
+        Modifier.size(POSTER_ROUND).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
+            .glass(androidx.compose.foundation.shape.CircleShape).clip(androidx.compose.foundation.shape.CircleShape)
+            .clickable(enabled = enabled, onClickLabel = label, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, label, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface) }
+}
+
+internal val POSTER_ROUND = 52.dp
 
 /**
  * The top of a playlist, album or Liked page, as Settings › Full-screen playlist covers asks.
@@ -713,6 +770,19 @@ internal fun ListPlayRow(
     actionLabel: String? = null,
 ) {
     val colors = MaterialTheme.colorScheme
+    if (posterLayout()) {
+        // Play as a glass pill, then round glass buttons beside it, centred under the title.
+        Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+            PosterPill(com.opentune.ui.theme.tr("Play"), ImageVector.vectorResource(AppIcons.PlayArrow), enabled, onPlay)
+            ShuffleButton(onShuffle, onSmartShuffle, Modifier.size(POSTER_ROUND), enabled = enabled, compact = true)
+            if (onSave != null) PosterRound(
+                if (saved) ImageVector.vectorResource(AppIcons.Check) else ImageVector.vectorResource(AppIcons.Add),
+                actionLabel ?: if (saved) "Remove from library" else "Save to library",
+                enabled = enabled, onClick = onSave,
+            )
+        }
+        return
+    }
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
         ShuffleButton(onShuffle, onSmartShuffle, Modifier.size(56.dp), enabled = enabled, compact = true)
         androidx.compose.material3.Button(
@@ -882,7 +952,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
  * the play row and its tools — inside it.
  */
 @Composable
-private fun CollectionHero(
+internal fun CollectionHero(
     title: String,
     subtitle: String,
     explicit: Boolean,
@@ -892,7 +962,10 @@ private fun CollectionHero(
     buttons: @Composable () -> Unit,
     band: com.opentune.ui.components.RubberBandOverscroll? = null,
     listState: androidx.compose.foundation.lazy.LazyListState? = null,
+    /** "Album" or "Playlist", leading the Poster layout's counts line. */
+    kind: String? = null,
 ) {
+    val poster = posterLayout()
     ListHero(
         cover = { m ->
             when {
@@ -905,6 +978,18 @@ private fun CollectionHero(
         listState = listState,
     ) {
         Text(title, style = MaterialTheme.typography.displaySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (poster) {
+            // The title, who it's by in spaced capitals, the buttons, then what it is and how long:
+            // "ALBUM · 9 SONGS · 42 MIN", over a hairline where the songs begin.
+            if (subtitle.isNotBlank()) PosterCaps(subtitle, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.86f))
+            Spacer(Modifier.height(24.dp))
+            buttons()
+            // "42m" reads "42 MIN" in capitals, as "1h 5m" reads "1 HR 5 MIN".
+            val counts = meta.replace(" • ", " · ").replace(Regex("""(\d+)m\b"""), "$1 min").replace(Regex("""(\d+)h\b"""), "$1 hr")
+            PosterCaps(listOfNotNull(kind?.let { com.opentune.ui.theme.tr(it) }, counts.ifBlank { null }).joinToString(" · "), Modifier.padding(top = 22.dp))
+            androidx.compose.material3.HorizontalDivider(Modifier.padding(top = 20.dp, bottom = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+            return@ListHero
+        }
         if (subtitle.isNotBlank()) {
             com.opentune.ui.components.SubtitleLine(
                 subtitle,
@@ -1097,6 +1182,7 @@ fun CollectionScreen(
                                         fallbackCover = fallbackCover,
                                         band = band,
                                         listState = listState,
+                                        kind = if (isAlbum) "Album" else "Playlist",
                                         buttons = {
                                             val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
                                             val saved = savedLists.any { it.browseId == c.browseId }
