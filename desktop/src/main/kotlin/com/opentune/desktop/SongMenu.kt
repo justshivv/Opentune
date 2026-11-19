@@ -5,8 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.ContextMenuArea
-import androidx.compose.foundation.ContextMenuItem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -70,6 +68,16 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -116,8 +124,11 @@ internal fun NoticePill(modifier: Modifier = Modifier) {
     }
 }
 
-/** One thing to do with a song, in the right-click menu and the ⋯ menu alike. */
-internal data class SongAction(val label: String, val icon: ImageVector, val run: () -> Unit)
+/**
+ * One thing to do with a song, in the right-click menu and the ⋯ menu alike. [group] puts it
+ * with its kind (playing, keeping, going to), and the menus draw a hairline between groups.
+ */
+internal data class SongAction(val label: String, val icon: ImageVector, val group: Int = 0, val run: () -> Unit)
 
 /**
  * What can be done with [song], as on the phone and the web player: play it next or last,
@@ -150,19 +161,19 @@ internal fun songActions(song: Song, queueIndex: Int? = null, onAddToPlaylist: (
             if (queueIndex < queue.lastIndex) add(SongAction("Move down", Icons.Rounded.ArrowDownward) { Player.move(queueIndex, queueIndex + 1) })
             add(SongAction("Remove from queue", Icons.Rounded.Close) { Player.removeAt(queueIndex) })
         }
-        if (youTube) add(SongAction("Start radio", Icons.Rounded.Radio) { Player.startRadio(song); Notice.show("Radio from ${song.title}") })
+        if (youTube) add(SongAction("Start radio", Icons.Rounded.Radio, 0) { Player.startRadio(song); Notice.show("Radio from ${song.title}") })
         add(
-            if (isLiked) SongAction("Remove from Liked songs", Icons.Rounded.Favorite) { Library.setLiked(song, false) }
-            else SongAction("Like", Icons.Rounded.FavoriteBorder) { Library.setLiked(song, true) },
+            if (isLiked) SongAction("Remove from Liked songs", Icons.Rounded.Favorite, 1) { Library.setLiked(song, false) }
+            else SongAction("Like", Icons.Rounded.FavoriteBorder, 1) { Library.setLiked(song, true) },
         )
-        add(SongAction("Add to playlist…", Icons.AutoMirrored.Rounded.PlaylistAdd, onAddToPlaylist))
+        add(SongAction("Add to playlist…", Icons.AutoMirrored.Rounded.PlaylistAdd, 1, onAddToPlaylist))
         song.artistId?.takeIf { it.startsWith("UC") }?.let { id ->
-            add(SongAction("Go to artist", Icons.Rounded.Person) { open(ShelfItem(song.artist, "Artist", null, null, id)) })
+            add(SongAction("Go to artist", Icons.Rounded.Person, 2) { open(ShelfItem(song.artist, "Artist", null, null, id)) })
         }
         song.albumId?.let { id ->
-            add(SongAction("Go to album", Icons.Rounded.Album) { open(ShelfItem(song.albumName ?: song.title, song.artist, song.thumbnailUrl, null, id)) })
+            add(SongAction("Go to album", Icons.Rounded.Album, 2) { open(ShelfItem(song.albumName ?: song.title, song.artist, song.thumbnailUrl, null, id)) })
         }
-        if (youTube) add(SongAction("Copy link", Icons.Rounded.Link) {
+        if (youTube) add(SongAction("Copy link", Icons.Rounded.Link, 3) {
             copyText("https://music.youtube.com/watch?v=${song.videoId}")
             Notice.show("Link copied")
         })
@@ -175,34 +186,61 @@ internal fun copyText(text: String) {
     }
 }
 
-/** [content] with [song]'s actions on a right click, and the add-to-playlist menu they can open. */
+/**
+ * [content] with [song]'s actions in the web player's menu on a right click, opening at the
+ * pointer, or from the keyboard with the menu key or Shift+F10 while the row has focus; and the
+ * add-to-playlist menu they can open, in the same place.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 internal fun SongContextMenu(song: Song, queueIndex: Int? = null, content: @Composable () -> Unit) {
     var adding by remember { mutableStateOf(false) }
+    var at by remember { mutableStateOf<IntOffset?>(null) }
+    var place by remember { mutableStateOf(IntOffset.Zero) }
+    var box by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val actions = songActions(song, queueIndex) { adding = true }
-    Box {
-        ContextMenuArea(items = { actions.map { a -> ContextMenuItem(a.label, a.run) } }) { content() }
-        AddToPlaylistMenu(song, adding) { adding = false }
+    Box(
+        Modifier.onSizeChanged { box = it }
+            .onPointerEvent(PointerEventType.Press) { e ->
+                if (e.buttons.isSecondaryPressed) {
+                    val p = e.changes.first().position
+                    at = IntOffset(p.x.roundToInt(), p.y.roundToInt())
+                    place = at!!
+                    e.changes.forEach { it.consume() }
+                }
+            }
+            .onKeyEvent { e ->
+                val asked = e.type == KeyEventType.KeyDown && (e.key == Key.Menu || (e.isShiftPressed && e.key == Key.F10))
+                if (asked) { at = IntOffset(box.width / 2, box.height / 2); place = at!! }
+                asked
+            },
+    ) {
+        content()
+        at?.let { point ->
+            WebMenu(MenuAnchor.At(point), onDismiss = { at = null }, label = song.title) { SongActionItems(actions) }
+        }
+        AddToPlaylistMenu(song, adding, at = place) { adding = false }
     }
 }
 
-/** The ⋯ button on a row, opening the same actions as a right click. */
+/** A song's actions as menu items, with a hairline between playing, keeping and going to. */
+@Composable
+private fun SongActionItems(actions: List<SongAction>) {
+    actions.forEachIndexed { i, a ->
+        if (i > 0 && a.group != actions[i - 1].group) WebMenuSeparator()
+        WebMenuItem(a.label, a.icon, onClick = a.run)
+    }
+}
+
+/** The ⋯ button on a row, opening the same actions as a right click, under it at its right edge. */
 @Composable
 internal fun SongMoreButton(song: Song, queueIndex: Int? = null, size: androidx.compose.ui.unit.Dp = 32.dp) {
     var open by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
     val actions = songActions(song, queueIndex) { adding = true }
     Box {
-        HoverIcon(Icons.Rounded.MoreHoriz, "More", size = size, iconSize = 19.dp) { open = true }
-        DropdownMenu(open, onDismissRequest = { open = false }) {
-            actions.forEach { a ->
-                DropdownMenuItem(
-                    text = { Text(a.label) },
-                    leadingIcon = { Icon(a.icon, null, Modifier.size(20.dp)) },
-                    onClick = { open = false; a.run() },
-                )
-            }
-        }
+        HoverIcon(Icons.Rounded.MoreHoriz, "More options for ${song.title}", size = size, iconSize = 19.dp) { open = true }
+        if (open) WebMenu(MenuAnchor.BelowEnd, onDismiss = { open = false }, label = song.title) { SongActionItems(actions) }
         AddToPlaylistMenu(song, adding) { adding = false }
     }
 }
@@ -305,14 +343,14 @@ internal fun QueuePage(queue: List<Song>, index: Int) {
 internal fun ListMoreButton(songs: List<Song>, link: String?) {
     var open by remember { mutableStateOf(false) }
     Box {
-        GlassCircle(Icons.Rounded.MoreHoriz, "More", onClick = { open = true })
-        DropdownMenu(open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Play next") }, leadingIcon = { Icon(Icons.AutoMirrored.Rounded.PlaylistPlay, null) }, enabled = songs.isNotEmpty(),
-                onClick = { open = false; Player.playNext(songs); Notice.show("Playing next") })
-            DropdownMenuItem(text = { Text("Add to queue") }, leadingIcon = { Icon(Icons.AutoMirrored.Rounded.QueueMusic, null) }, enabled = songs.isNotEmpty(),
-                onClick = { open = false; Player.addToQueue(songs); Notice.show("Added to queue") })
-            if (link != null) DropdownMenuItem(text = { Text("Copy link") }, leadingIcon = { Icon(Icons.Rounded.Link, null) },
-                onClick = { open = false; copyText(link); Notice.show("Link copied") })
+        CircleButton(Icons.Rounded.MoreHoriz, "More options", enabled = songs.isNotEmpty() || link != null) { open = true }
+        if (open) WebMenu(MenuAnchor.BelowEnd, onDismiss = { open = false }, label = "More options") {
+            WebMenuItem("Play next", Icons.AutoMirrored.Rounded.PlaylistPlay, enabled = songs.isNotEmpty()) { Player.playNext(songs); Notice.show("Playing next") }
+            WebMenuItem("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic, enabled = songs.isNotEmpty()) { Player.addToQueue(songs); Notice.show("Added to queue") }
+            if (link != null) {
+                WebMenuSeparator()
+                WebMenuItem("Copy link", Icons.Rounded.Link) { copyText(link); Notice.show("Link copied") }
+            }
         }
     }
 }

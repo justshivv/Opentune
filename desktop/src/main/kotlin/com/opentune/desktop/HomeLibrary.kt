@@ -1,29 +1,31 @@
 package com.opentune.desktop
 
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -31,9 +33,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material3.Icon
@@ -55,10 +59,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.opentune.data.history.DailyMixes
 import com.opentune.data.history.PlayRecord
 import com.opentune.data.history.SpeedDial
@@ -87,9 +93,10 @@ private fun rememberHistory(): List<PlayRecord> {
 // ---- Home --------------------------------------------------------------------
 
 /**
- * Home, filled as the phone fills it: moods and genres to start from, your
- * speed dial and daily mixes made from what you play here, then YouTube
- * Music's rows (quick picks as a grid of songs), page after page as you
+ * Home, headed as the web player's: the greeting in the accent over "What's playing?", with a
+ * button to load the recommendations again. Then, filled as the phone fills it: the last song
+ * you played, your mixes and most played, what you played lately in rows, moods and genres to
+ * start from, then YouTube Music's rows (quick picks as rows of songs), page after page as you
  * scroll, carrying on with new releases and the charts when they run out.
  */
 @Composable
@@ -132,6 +139,11 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
             loadingMore = false
         }
     }
+    // The heading's refresh: the feed from the start again, as the web's button does.
+    fun refresh() {
+        shelves = null; next = null; extrasDone = false
+        load()
+    }
     LaunchedEffect(Unit) { load() }
     val list = rememberLazyListState()
     val nearEnd by remember {
@@ -152,27 +164,32 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
     LaunchedEffect(Unit) { runCatching { com.opentune.data.config.RemoteConfig.refresh() } }
     val banners = runtime.banners.filter { "web" in it.platforms && it.id !in closedBanners }
     val featured = runtime.playlists.takeIf { com.opentune.data.config.HomeDismissals.showsPlaylists(it.map { p -> p.id }, closedPlaylists) }.orEmpty()
-    ScrollPage("Home", greeting(), state = list) {
+    ScrollPage(
+        "What's playing?", state = list, eyebrow = greeting(), webGutter = true,
+        trailing = { RefreshButton(spinning = loaded == null && !failed, onClick = ::refresh) },
+    ) {
         banners.forEach { b -> item(key = "banner:${b.id}") { DashboardBanner(b) } }
         recent.firstOrNull()?.let { last -> item(key = "hero") { JumpBackIn(last, recent) } }
         if (mixes.isNotEmpty() || speedDial.isNotEmpty()) item(key = "picks") {
-            Section("Top picks for you") { TopPicks(mixes, speedDial.take(8), onOpenMix = { onOpenAny(it) }) }
+            ShelfSection("Top picks for you") { TopPicks(mixes, speedDial.take(8), onOpenMix = { onOpenAny(it) }) }
         }
-        if (recent.isNotEmpty()) item(key = "recents") { SongGrid("Recents", recent.take(32)) }
+        if (recent.isNotEmpty()) item(key = "recents") { SongGrid("Recently played", recent.take(32)) }
         if (featured.isNotEmpty()) item(key = "featured") {
-            Section(runtime.title("featured-playlists", "From the community"), onClose = {
-                com.opentune.data.config.HomeDismissals.dismissPlaylists(featured.map { it.id })
+            ShelfSection(runtime.title("featured-playlists", "From the community"), action = {
+                CircleButton(Icons.Rounded.Close, "Hide these playlists", size = 32.dp, iconSize = 16.dp, ring = false) {
+                    com.opentune.data.config.HomeDismissals.dismissPlaylists(featured.map { it.id })
+                }
             }) {
-                HRow(16.dp) {
-                    items(featured) { p ->
-                        val card = ShelfItem(p.title, "Playlist", p.artwork, null, p.browseId)
-                        Card(card) { onOpen(card) }
+                val since = remember { System.nanoTime() }
+                ShelfScroller(ShelfKind.SQUARE) {
+                    shelfItems(featured.map { p -> ShelfItem(p.title, "OpenTune picks", p.artwork, null, p.browseId) }, ShelfKind.SQUARE, since) { _, card ->
+                        SquareLockup(card, onOpen = { onOpen(card) })
                     }
                 }
             }
         }
         if (moods.isNotEmpty()) item(key = "moods") {
-            Section("Find your mood") { MoodTiles(moods) { onOpenAny(MoodKey(it.title, it.browseId, it.params)) } }
+            ShelfSection("Find your mood") { MoodTiles(moods) { onOpenAny(MoodKey(it.title, it.browseId, it.params)) } }
         }
         when {
             failed -> item(key = "failed") { Message("Couldn't load Home", "Check your connection and try again.", action = "Try again" to ::load) }
@@ -190,72 +207,86 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
     }
 }
 
-/** A row of songs (quick picks, trending): shown as columns of song rows, as BitChord's desktop shows them, not as cards. */
+/**
+ * Home's refresh (.ot-circle-button): a 44px disc of the faintest fill, stronger under the
+ * pointer; its arrows turn while the feed loads.
+ */
+@Composable
+private fun RefreshButton(spinning: Boolean, onClick: () -> Unit) {
+    val still = stillMotion()
+    val turn = if (spinning && !still) {
+        rememberInfiniteTransition(label = "refresh").animateFloat(0f, 360f, infiniteRepeatable(tween(1000, easing = LinearEasing)), label = "refresh turn").value
+    } else 0f
+    CircleButton(
+        Icons.Rounded.Refresh, "Refresh recommendations", enabled = !spinning, size = 44.dp, iconSize = 20.dp, ring = false,
+        iconModifier = Modifier.graphicsLayer { rotationZ = turn }, onClick = onClick,
+    )
+}
+
+/** A row of songs (quick picks, trending): shown as columns of song rows, as the web player shows them, not as cards. */
 private fun isSongShelf(shelf: Pages.Shelf) =
     shelf.title.trim().equals("Quick picks", ignoreCase = true) || shelf.items.size >= 8 && shelf.items.count { it.videoId != null } * 10 >= shelf.items.size * 9
 
-/** Good morning, afternoon or evening, as Home on the phone greets you. */
+/** The web player's greeting: late night, morning, afternoon or evening. */
 private fun greeting(): String = when (java.time.LocalTime.now().hour) {
+    in 0..4 -> "Late night"
     in 5..11 -> "Good morning"
     in 12..16 -> "Good afternoon"
     else -> "Good evening"
 }
 
-/** A titled part of a page, with its grey line under the title. */
-@Composable
-private fun Section(title: String, subtitle: String? = null, onShowAll: (() -> Unit)? = null, onClose: (() -> Unit)? = null, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionHeader(title, subtitle, onShowAll, onClose)
-        content()
-    }
-}
-
-@Composable
-private fun SectionHeader(title: String, subtitle: String? = null, onShowAll: (() -> Unit)? = null, onClose: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = GUTTER), verticalAlignment = Alignment.Bottom) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp)
-            subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp)) }
-        }
-        if (onShowAll != null) {
-            Text(
-                "Show all  ›", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onShowAll).padding(horizontal = 10.dp, vertical = 4.dp),
-            )
-        }
-        if (onClose != null) HoverIcon(Icons.Rounded.Close, "Hide", size = 30.dp, iconSize = 17.dp, onClick = onClose)
-    }
-}
-
-/** A banner from the dashboard: its title and words, its button, and a cross to close it for good. */
+/**
+ * A banner from the dashboard, as the web draws it (.ot-banner): a softly tinted card with 18px
+ * corners, its title in 15px, its words in grey, its button an accent pill, and a cross in the
+ * corner to close it for good.
+ */
 @Composable
 private fun DashboardBanner(banner: com.opentune.data.config.RemoteBanner) {
     val links = androidx.compose.ui.platform.LocalUriHandler.current
-    Row(
-        Modifier.padding(horizontal = GUTTER).fillMaxWidth().clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer).padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(banner.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            if (banner.body.isNotBlank()) Text(banner.body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            androidx.compose.material3.Button(onClick = { runCatching { links.openUri(banner.url) } }, modifier = Modifier.padding(top = 6.dp)) { Text(banner.action) }
+    val shape = RoundedCornerShape(18.dp)
+    // The accent at 12% over the faintest fill, as color-mix(keyColor 12%, systemQuinary).
+    val tintFill = androidx.compose.ui.graphics.lerp(WebInk.quinary, WebInk.key.copy(alpha = 1f), 0.12f)
+    Box(Modifier.padding(horizontal = LocalGutter.current).fillMaxWidth().clip(shape).background(tintFill)) {
+        Column(Modifier.padding(start = 20.dp, end = 52.dp, top = 18.dp, bottom = 18.dp)) {
+            Text(banner.title, style = WebType.title3Emph, color = WebInk.primary, modifier = Modifier.padding(bottom = 4.dp))
+            if (banner.body.isNotBlank()) Text(banner.body, style = WebType.bodyTall, color = WebInk.secondary, modifier = Modifier.widthIn(max = 520.dp))
+            val source = remember { MutableInteractionSource() }
+            Text(
+                "${banner.action} ↗", style = WebType.bodyEmph, color = Color.White,
+                modifier = Modifier.padding(top = 12.dp).pressScale(source).clip(CircleShape).background(WebInk.keyFill)
+                    .clickable(interactionSource = source, indication = null, role = Role.Button) { runCatching { links.openUri(banner.url) } }
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+            )
         }
-        HoverIcon(Icons.Rounded.Close, "Dismiss", size = 32.dp, iconSize = 18.dp) { com.opentune.data.config.HomeDismissals.dismissBanner(banner.id) }
+        // The cross in the corner, 10px in, closing the banner for good.
+        Box(Modifier.align(Alignment.TopEnd).padding(10.dp)) {
+            CircleButton(Icons.Rounded.Close, "Dismiss ${banner.title}", size = 32.dp, iconSize = 16.dp, ring = false) {
+                com.opentune.data.config.HomeDismissals.dismissBanner(banner.id)
+            }
+        }
     }
 }
 
-/** One of Home's rows: its title, and its cards in a row that scrolls sideways. */
+/**
+ * One of Home's rows of cards (ShelfView): its title and its cards, an artist's round, each
+ * sized to share the width, that scroll sideways under the page's arrows. A song plays from its
+ * card, with the rest of the row after it; anything else opens.
+ */
 @Composable
 internal fun ShelfRow(shelf: Pages.Shelf, onOpen: (ShelfItem) -> Unit) {
-    Section(shelf.title) {
-        val songs = remember(shelf) { shelf.items.mapNotNull(Pages::songOf) }
-        HRow(16.dp) {
-            items(shelf.items) { item ->
-                Card(item) {
+    val songs = remember(shelf) { shelf.items.mapNotNull(Pages::songOf) }
+    val artists = shelf.items.isNotEmpty() && shelf.items.all { it.browseId?.startsWith("UC") == true }
+    val kind = if (artists) ShelfKind.CIRCLE else ShelfKind.SQUARE
+    val since = remember(shelf) { System.nanoTime() }
+    ShelfSection(shelf.title) {
+        ShelfScroller(kind) {
+            shelfItems(shelf.items, kind, since) { _, item ->
+                if (artists) {
+                    CircleLockup(item, onOpen = { onOpen(item) })
+                } else {
                     val song = Pages.songOf(item)
-                    if (song != null) Player.playAll(songs, songs.indexOfFirst { it.videoId == song.videoId }.coerceAtLeast(0)) else onOpen(item)
+                    val play = { if (song != null) Player.playAll(songs, songs.indexOfFirst { it.videoId == song.videoId }.coerceAtLeast(0)) else onOpen(item) }
+                    SquareLockup(item, onOpen = play, song = song)
                 }
             }
         }
@@ -264,51 +295,12 @@ internal fun ShelfRow(shelf: Pages.Shelf, onOpen: (ShelfItem) -> Unit) {
 
 /** A shelf's shape, shimmering, while Home loads. */
 @Composable
-internal fun ShelfPlaceholder() {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Placeholder(Modifier.padding(horizontal = GUTTER).width(180.dp).height(22.dp), RoundedCornerShape(8.dp))
-        Row(Modifier.padding(horizontal = GUTTER), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            repeat(6) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Placeholder(Modifier.size(160.dp), MaterialTheme.shapes.medium)
-                    Placeholder(Modifier.width(120.dp).height(12.dp), RoundedCornerShape(6.dp))
-                    Placeholder(Modifier.width(80.dp).height(10.dp), RoundedCornerShape(5.dp))
-                }
-            }
-        }
-    }
-}
+internal fun ShelfPlaceholder() = ShelfSkeleton(ShelfKind.SQUARE)
 
-/** Songs as four rows that scroll sideways in columns, each with its cover, title and artist. */
+/** Songs as four rows that scroll sideways in columns, each with its cover, title and artist (the web's TrackShelf). */
 @Composable
 internal fun SongGrid(title: String, songs: List<Song>, rows: Int = 4) {
-    val queue by Player.queue.collectAsState()
-    val index by Player.index.collectAsState()
-    val playingId = queue.getOrNull(index)?.videoId
-    Section(title) {
-        val shownRows = rows.coerceAtMost(songs.size).coerceAtLeast(1)
-        HGrid(shownRows, 64.dp * shownRows - 4.dp, spacing = 8.dp) {
-            items(songs) { song ->
-                val hover = remember { MutableInteractionSource() }
-                Row(
-                    Modifier.width(320.dp).height(60.dp).hoverWash(hover, RoundedCornerShape(10.dp))
-                        .clickable(interactionSource = hover, indication = null) { Player.playAll(songs, songs.indexOf(song)) }
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Cover(song.thumbnailUrl, 48.dp, RoundedCornerShape(8.dp))
-                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                        Text(
-                            song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = if (song.videoId == playingId) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        }
-    }
+    TrackShelf(title, songs, rows = rows)
 }
 
 /**
@@ -319,26 +311,26 @@ internal fun SongGrid(title: String, songs: List<Song>, rows: Int = 4) {
 @Composable
 private fun JumpBackIn(song: Song, recent: List<Song>) {
     val accent = coverAccent(song.thumbnailUrl)
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(Web.ArtLarge)
     val hover = remember { MutableInteractionSource() }
-    androidx.compose.foundation.layout.BoxWithConstraints(
-        Modifier.padding(horizontal = GUTTER).fillMaxWidth().height(250.dp).hoverLift(hover, 1.005f)
+    BoxWithConstraints(
+        Modifier.padding(horizontal = LocalGutter.current).fillMaxWidth().height(240.dp)
             .shadow(24.dp, shape, ambientColor = accent, spotColor = accent).clip(shape).hoverable(hover),
     ) {
         // The cover gives way first as the card narrows, so the words and buttons never squeeze.
-        val cover = when { maxWidth >= 620.dp -> 194.dp; maxWidth >= 440.dp -> 140.dp; else -> null }
+        val cover = when { maxWidth >= 620.dp -> 184.dp; maxWidth >= 440.dp -> 136.dp; else -> null }
         val roomy = maxWidth >= 540.dp
         SoftBackdrop(song.thumbnailUrl, Modifier.fillMaxSize())
         Box(Modifier.matchParentSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.55f), 0.6f to accent.copy(alpha = 0.25f), 1f to Color.Black.copy(alpha = 0.15f))))
         Row(Modifier.fillMaxSize().padding(28.dp), verticalAlignment = Alignment.CenterVertically) {
-            cover?.let { Cover(song.thumbnailUrl, it, RoundedCornerShape(16.dp), Modifier.shadow(28.dp, RoundedCornerShape(16.dp))) }
-            Column(Modifier.padding(start = if (cover != null) 28.dp else 0.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("JUMP BACK IN", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.75f), letterSpacing = 1.2.sp, maxLines = 1, softWrap = false)
-                Text(song.title, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(song.artist, style = MaterialTheme.typography.titleMedium, color = Color.White.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            cover?.let { Cover(song.thumbnailUrl, it, RoundedCornerShape(Web.ArtMedium), Modifier.shadow(28.dp, RoundedCornerShape(Web.ArtMedium))) }
+            Column(Modifier.padding(start = if (cover != null) 28.dp else 0.dp).weight(1f)) {
+                Text("JUMP BACK IN", style = webType(11f, 14f, 700, 0.12f), color = Color.White.copy(alpha = 0.75f), maxLines = 1, softWrap = false)
+                Text(song.title, style = WebType.header(34f, -0.02f), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                Text(song.artist, style = WebType.title3, color = Color.White.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     PrimaryButton("Play", Icons.Rounded.PlayArrow) { Player.playAll(recent, 0) }
-                    SecondaryButton(if (roomy) "Shuffle recents" else "Shuffle", androidx.compose.material.icons.Icons.Rounded.Shuffle) { Player.playAll(recent.shuffled(), 0) }
+                    SecondaryButton(if (roomy) "Shuffle recents" else "Shuffle", Icons.Rounded.Shuffle) { Player.playAll(recent.shuffled(), 0) }
                 }
             }
         }
@@ -346,72 +338,80 @@ private fun JumpBackIn(song: Song, recent: List<Song>) {
 }
 
 /**
- * Top picks: tall cards, your daily mixes as a burst of colour with three
+ * Top picks: tall cards in the shelf's columns, your daily mixes as a burst of colour with three
  * of their covers in circles, then the songs you play most as full covers.
  */
 @Composable
 private fun TopPicks(mixes: List<DailyMixes.Mix>, most: List<ShelfItem>, onOpenMix: (DailyMixes.Mix) -> Unit) {
     val songs = remember(most) { most.mapNotNull(Pages::songOf) }
-    HRow(14.dp) {
-        items(mixes, key = { "mix" + it.id }) { mix -> PickCard(label = "Made for you", title = mix.title, line = mix.subtitle, colourOf = mix.covers.firstOrNull(), onClick = { onOpenMix(mix) }) {
-            MixCircles(mix.covers.filterNotNull())
-        } }
-        items(most, key = { "most" + (it.videoId ?: it.title) }) { item ->
-            PickCard(label = "Played most", title = item.title, line = item.subtitle, colourOf = item.thumbnailUrl, fullCover = item.thumbnailUrl, onClick = {
-                val at = songs.indexOfFirst { it.videoId == item.videoId }
-                if (at >= 0) Player.playAll(songs, at)
-            })
+    val picks: List<Any> = mixes + most
+    val since = remember { System.nanoTime() }
+    ShelfScroller(ShelfKind.SQUARE) {
+        shelfItems(picks, ShelfKind.SQUARE, since) { _, pick ->
+            when (pick) {
+                is DailyMixes.Mix -> PickCard(label = "Made for you", title = pick.title, line = pick.subtitle, colourOf = pick.covers.firstOrNull(), onClick = { onOpenMix(pick) }) {
+                    MixCircles(pick.covers.filterNotNull())
+                }
+                is ShelfItem -> PickCard(label = "Played most", title = pick.title, line = pick.subtitle, colourOf = pick.thumbnailUrl, fullCover = pick.thumbnailUrl, onClick = {
+                    val at = songs.indexOfFirst { it.videoId == pick.videoId }
+                    if (at >= 0) Player.playAll(songs, at)
+                })
+            }
         }
     }
 }
 
-/** A tall card: a cover filling it, or a colour from [colourOf] with [art] on it; its kind, title and a line at the foot. */
+/**
+ * A tall card, 3:4, with the web's 20px corners: a cover filling it, or a colour from [colourOf]
+ * with [art] on it; its kind, title and a line at the foot. It lifts a little under the pointer
+ * as a cover does.
+ */
 @Composable
 private fun PickCard(label: String, title: String, line: String, colourOf: String?, fullCover: String? = null, onClick: () -> Unit, art: @Composable () -> Unit = {}) {
     val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
     val base = MaterialTheme.colorScheme.surfaceContainerHigh
     val colour = rememberCoverColor(colourOf, base)
-    val shape = RoundedCornerShape(14.dp)
-    Box(
-        Modifier.width(196.dp).height(262.dp).hoverLift(hover, 1.03f).clip(shape)
-            .background(Brush.linearGradient(listOf(lerpColor(colour, Color.White, 0.12f), lerpColor(colour, Color.Black, 0.35f))))
-            .clickable(interactionSource = hover, indication = null, onClick = onClick),
-    ) {
-        if (fullCover != null) Cover(fullCover, 262.dp, shape, Modifier.fillMaxSize()) else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { art() }
-        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.78f))))
-        Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f))
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(line, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+    val shape = RoundedCornerShape(Web.ArtMedium)
+    Box(Modifier.width(LocalColumnWidth.current).hoverable(hover)) {
+        LockupArt(
+            fullCover, shape, hovered, onClick, title, aspect = 0.75f,
+            art = { m ->
+                Box(m.background(Brush.linearGradient(listOf(lerpColor(colour, Color.White, 0.12f), lerpColor(colour, Color.Black, 0.35f))))) {
+                    if (fullCover != null) CoverFill(fullCover, Modifier.fillMaxSize()) else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { art() }
+                    Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.78f))))
+                    Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
+                        Text(label, style = WebType.callout, color = Color.White.copy(alpha = 0.75f))
+                        Text(title, style = WebType.title3Emph, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(line, style = WebType.callout, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            },
+        )
     }
 }
 
 private fun lerpColor(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
 
-/** Three covers in overlapping circles, as a mix's card shows who's in it. */
+/** Three covers in overlapping circles, as a mix's card shows who's in it, sized to the card. */
 @Composable
 private fun MixCircles(covers: List<String>) {
-    Box(Modifier.size(170.dp).padding(bottom = 40.dp)) {
-        covers.getOrNull(0)?.let { Cover(it, 104.dp, CircleShape, Modifier.align(Alignment.TopStart).padding(top = 6.dp, start = 8.dp)) }
-        covers.getOrNull(1)?.let { Cover(it, 70.dp, CircleShape, Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) }
-        covers.getOrNull(2)?.let { Cover(it, 58.dp, CircleShape, Modifier.align(Alignment.BottomCenter)) }
+    BoxWithConstraints(Modifier.fillMaxWidth(0.86f).aspectRatio(1f).padding(bottom = 40.dp)) {
+        val w = maxWidth
+        covers.getOrNull(0)?.let { Cover(it, w * 0.6f, CircleShape, Modifier.align(Alignment.TopStart).padding(top = 6.dp, start = 8.dp)) }
+        covers.getOrNull(1)?.let { Cover(it, w * 0.41f, CircleShape, Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) }
+        covers.getOrNull(2)?.let { Cover(it, w * 0.34f, CircleShape, Modifier.align(Alignment.BottomCenter)) }
     }
 }
 
-/** Moods and genres as coloured tiles, two rows that scroll sideways. */
+/** Moods and genres as the web's browse tiles, two rows that scroll sideways. */
 @Composable
 private fun MoodTiles(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
     val palette = listOf(0xFF2E7D32, 0xFF1565C0, 0xFF6A1B9A, 0xFFC62828, 0xFFEF6C00, 0xFF00838F, 0xFFAD1457, 0xFF4E342E, 0xFF283593, 0xFF9E9D24)
-    HGrid(2, 176.dp, spacing = 12.dp, rowSpacing = 12.dp) {
-        items(moods, key = { it.title }) { m ->
-            val hover = remember { MutableInteractionSource() }
-            val colour = Color(palette[(m.title.hashCode() and 0x7fffffff) % palette.size])
-            Box(
-                Modifier.width(200.dp).height(82.dp).hoverLift(hover, 1.03f).clip(RoundedCornerShape(12.dp))
-                    .background(Brush.linearGradient(listOf(colour, lerpColor(colour, Color.Black, 0.35f))))
-                    .clickable(interactionSource = hover, indication = null) { onOpen(m) }.padding(14.dp),
-            ) { Text(m.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 2) }
+    val since = remember { System.nanoTime() }
+    ShelfScroller(ShelfKind.TILES) {
+        shelfItems(moods, ShelfKind.TILES, since, key = { it.title }) { _, m ->
+            CategoryTile(m.title, Color(palette[(m.title.hashCode() and 0x7fffffff) % palette.size])) { onOpen(m) }
         }
     }
 }
@@ -424,7 +424,7 @@ private fun MoodTiles(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
 @Composable
 internal fun NewPage(onOpen: (ShelfItem) -> Unit) {
     val shelves by produceState<List<Pages.Shelf>?>(null) { value = runCatching { Pages.moreForHome() }.getOrDefault(emptyList()) }
-    ScrollPage("Explore", "New releases and what's climbing the charts") {
+    ScrollPage("Explore", "New releases and what's climbing the charts", webGutter = true) {
         when (val loaded = shelves) {
             null -> items(3) { ShelfPlaceholder() }
             else -> if (loaded.isEmpty()) item { Message("Nothing new could be loaded", "Check your connection and try again.") }
@@ -435,28 +435,15 @@ internal fun NewPage(onOpen: (ShelfItem) -> Unit) {
     }
 }
 
-/** A daily mix: four of its covers, its name and who's in it. */
+/** A daily mix as a card: four of its covers, its name and who's in it, and the play disc under the pointer. */
 @Composable
 private fun MixCard(mix: DailyMixes.Mix, onOpen: () -> Unit) {
-    val hover = remember { MutableInteractionSource() }
-    val hovered by hover.collectIsHoveredAsState()
-    Column(Modifier.width(180.dp).hoverLift(hover).clip(MaterialTheme.shapes.medium).clickable(interactionSource = hover, indication = null, onClick = onOpen)) {
-        Box {
-            Mosaic(mix.covers.filterNotNull(), Modifier.size(180.dp))
-            androidx.compose.animation.AnimatedVisibility(
-                hovered, enter = androidx.compose.animation.fadeIn(Motion.fade(160)), exit = androidx.compose.animation.fadeOut(Motion.fade(120)),
-                modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
-            ) {
-                Box(
-                    Modifier.size(42.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)
-                        .clickable { Player.playAll(mix.songs, 0) },
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.PlayArrow, "Play ${mix.title}", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(26.dp)) }
-            }
-        }
-        Text(mix.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-        Text(mix.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-    }
+    SquareLockup(
+        ShelfItem(mix.title, mix.subtitle, mix.covers.firstOrNull(), null, null),
+        onOpen = onOpen,
+        art = { m -> Mosaic(mix.covers.filterNotNull(), m, RoundedCornerShape(0.dp)) },
+        onPlay = { Player.playAll(mix.songs, 0) },
+    )
 }
 
 /** A mood or genre's own page: its rows of playlists. */
@@ -465,7 +452,7 @@ internal fun MoodPage(mood: MoodKey, onOpen: (ShelfItem) -> Unit) {
     val shelves by produceState<List<Pages.Shelf>?>(null, mood) {
         value = runCatching { Pages.shelves(mood.browseId, mood.params) }.getOrDefault(emptyList())
     }
-    ScrollPage(mood.title) {
+    ScrollPage(mood.title, webGutter = true) {
         when (val loaded = shelves) {
             null -> items(3) { ShelfPlaceholder() }
             else -> if (loaded.isEmpty()) item { Message("Nothing here right now", "Try another mood or genre.") }
@@ -488,8 +475,8 @@ internal fun MixPage(mix: DailyMixes.Mix) {
 // ---- Library -----------------------------------------------------------------
 
 /**
- * The Library, as the phone opens it: your year so far, shortcuts to liked
- * songs, what you played and your server, your playlists as tiles, what you
+ * The Library, as the phone opens it, drawn as the web player's pages: your year so far,
+ * shortcuts to liked songs, what you played and your server, your playlists as cards, what you
  * play most this month (songs and artists), and the last songs you played.
  */
 @Composable
@@ -513,66 +500,65 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
     val onAccount by produceState(emptyList<Pages.Shelf>(), signedIn, accountName) {
         value = if (signedIn) runCatching { Pages.accountLibrary() }.getOrDefault(emptyList()) else emptyList()
     }
-    ScrollPage("Library") {
+    val since = remember { System.nanoTime() }
+    ScrollPage("Library", webGutter = true) {
         item(key = "year") { YearCard(year) }
         item(key = "shortcuts") {
-            HRow(12.dp) {
-                item { Shortcut(Icons.Rounded.Favorite, "Liked songs", songCount(liked.size), heart = true) { onShelf(Shelf.LIKED) } }
-                item { Shortcut(Icons.Rounded.History, "Recently played", if (recent.isEmpty()) "Nothing yet" else "${recent.size} songs") { onShelf(Shelf.RECENT) } }
-                if (server != null) item { Shortcut(Icons.Rounded.Storage, "Your server", server!!.url.substringAfter("://").substringBefore('/')) { onShelf(Shelf.SERVER) } }
-                item { Shortcut(Icons.Rounded.Add, "New playlist", "Start one here") { naming = true } }
+            Tiles {
+                Shortcut(Icons.Rounded.Favorite, "Liked songs", songCount(liked.size), heart = true) { onShelf(Shelf.LIKED) }
+                Shortcut(Icons.Rounded.History, "Recently played", if (recent.isEmpty()) "Nothing yet" else "${recent.size} songs") { onShelf(Shelf.RECENT) }
+                server?.let { s -> Shortcut(Icons.Rounded.Storage, "Your server", s.url.substringAfter("://").substringBefore('/')) { onShelf(Shelf.SERVER) } }
+                Shortcut(Icons.Rounded.Add, "New playlist", "Start one here") { naming = true }
             }
         }
         item(key = "playlists") {
-            Section("Playlists", if (playlists.isEmpty()) "Make one with New playlist" else songCountOf(playlists.size, "playlist"), onShowAll = { onShelf(Shelf.PLAYLISTS) }.takeIf { playlists.isNotEmpty() }) {
+            ShelfSection(
+                "Playlists", if (playlists.isEmpty()) "Make one with New playlist" else songCountOf(playlists.size, "playlist"),
+                onSeeAll = { onShelf(Shelf.PLAYLISTS) }.takeIf { playlists.isNotEmpty() },
+            ) {
                 if (playlists.isEmpty()) {
                     Text(
-                        "Playlists you make show here. Add songs to one with the playlist button on any song.",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = GUTTER),
+                        "Playlists you make show here. Add songs to one from any song's menu.",
+                        style = WebType.body, color = WebInk.secondary, modifier = Modifier.padding(horizontal = LocalGutter.current),
                     )
                 } else {
-                    HRow(16.dp) {
-                        items(playlists, key = { it.id }) { p ->
-                            val hover = remember { MutableInteractionSource() }
-                            Column(Modifier.width(170.dp).hoverLift(hover).clip(MaterialTheme.shapes.medium).clickable(interactionSource = hover, indication = null) { onPlaylist(p.id) }) {
-                                Mosaic(p.covers, Modifier.size(170.dp))
-                                Text(p.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                                Text(songCount(p.songs.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                    ShelfScroller(ShelfKind.SQUARE) {
+                        shelfItems(playlists, ShelfKind.SQUARE, since, key = { it.id }) { _, p ->
+                            SquareLockup(
+                                ShelfItem(p.name, songCount(p.songs.size), p.covers.firstOrNull(), null, null),
+                                onOpen = { onPlaylist(p.id) },
+                                art = { m -> Mosaic(p.covers, m, RoundedCornerShape(0.dp)) },
+                                onPlay = { Player.playAll(p.songs.map { it.toSong() }, 0) }.takeIf { p.songs.isNotEmpty() },
+                            )
                         }
                     }
                 }
             }
         }
         if (signedIn) item(key = "ytm-liked") {
-            Section("On YouTube Music", accountName?.name) {
-                HRow(12.dp) {
-                    item {
-                        Shortcut(Icons.Rounded.Favorite, "Liked music", "Your likes on YouTube Music", heart = true) {
-                            onOpenAny(ShelfItem("Liked music", "Playlist", null, null, "VLLM"))
-                        }
+            ShelfSection("On YouTube Music", accountName?.name) {
+                Tiles {
+                    Shortcut(Icons.Rounded.Favorite, "Liked music", "Your likes on YouTube Music", heart = true) {
+                        onOpenAny(ShelfItem("Liked music", "Playlist", null, null, "VLLM"))
                     }
-                    item {
-                        Shortcut(Icons.Rounded.History, "History", "What you played on YouTube Music") {
-                            onOpenAny(ShelfItem("History", "Playlist", null, null, "FEmusic_history"))
-                        }
+                    Shortcut(Icons.Rounded.History, "History", "What you played on YouTube Music") {
+                        onOpenAny(ShelfItem("History", "Playlist", null, null, "FEmusic_history"))
                     }
                 }
             }
         }
         onAccount.forEach { shelf -> item(key = "ytm:${shelf.title}") { ShelfRow(shelf) { onOpenAny(it) } } }
         if (mixes.isNotEmpty()) item(key = "mixes") {
-            Section("Your mixes", "Made fresh each day from what you play") {
-                HRow(16.dp) {
-                    items(mixes, key = { it.id }) { mix -> MixCard(mix, onOpen = { onOpenAny(mix) }) }
+            ShelfSection("Your mixes", "Made fresh each day from what you play") {
+                ShelfScroller(ShelfKind.SQUARE) {
+                    shelfItems(mixes, ShelfKind.SQUARE, since, key = { it.id }) { _, mix -> MixCard(mix, onOpen = { onOpenAny(mix) }) }
                 }
             }
         }
         if (month.topSongs.isNotEmpty()) item(key = "top-songs") {
-            Section("On repeat this month", "${month.plays} plays, ${month.minutes} minutes") {
+            ShelfSection("On repeat this month", "${month.plays} plays, ${month.minutes} minutes") {
                 val songs = month.topSongs.mapNotNull { it.song }.take(10)
-                Column(Modifier.padding(horizontal = 16.dp)) {
+                Column(Modifier.padding(horizontal = LocalGutter.current).widthIn(max = 720.dp)) {
                     month.topSongs.take(5).forEachIndexed { i, e ->
                         RankRow(i + 1, e) { e.song?.let { s -> Player.playAll(songs, songs.indexOfFirst { it.videoId == s.videoId }.coerceAtLeast(0)) } }
                     }
@@ -580,24 +566,16 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
             }
         }
         if (month.topArtists.isNotEmpty()) item(key = "top-artists") {
-            Section("Your top artists", "This month") {
-                HRow(20.dp) {
-                    items(month.topArtists.take(12), key = { it.title }) { a ->
-                        Column(Modifier.width(120.dp).clip(RoundedCornerShape(16.dp)).clickable { a.song?.let { Player.playAll(listOf(it), 0) } }, horizontalAlignment = Alignment.CenterHorizontally) {
-                            Cover(a.thumbnailUrl, 120.dp, CircleShape)
-                            Text(a.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                            Text("${a.plays} plays", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+            ShelfSection("Your top artists", "This month") {
+                ShelfScroller(ShelfKind.CIRCLE) {
+                    shelfItems(month.topArtists.take(12), ShelfKind.CIRCLE, since, key = { it.title }) { _, a ->
+                        CircleLockup(ShelfItem(a.title, "", a.thumbnailUrl, null, null), onOpen = { a.song?.let { Player.playAll(listOf(it), 0) } }, line = "${a.plays} plays")
                     }
                 }
             }
         }
         if (recent.isNotEmpty()) item(key = "recent") {
-            Section("Recently played", onShowAll = { onShelf(Shelf.RECENT) }) {
-                Column(Modifier.padding(horizontal = 16.dp)) {
-                    recent.take(6).forEachIndexed { i, s -> SongLine(s) { Player.playAll(recent, i) } }
-                }
-            }
+            TrackShelf("Recently played", recent, onSeeAll = { onShelf(Shelf.RECENT) })
         }
     }
     if (naming) {
@@ -611,6 +589,15 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
 private fun songCount(n: Int) = if (n == 1) "1 song" else "$n songs"
 private fun songCountOf(n: Int, what: String) = if (n == 1) "1 $what" else "$n ${what}s"
 
+/** The Library's tiles, wrapping onto a second line when the window is narrow. */
+@Composable
+private fun Tiles(content: @Composable () -> Unit) {
+    FlowRow(
+        Modifier.padding(horizontal = LocalGutter.current).fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) { content() }
+}
+
 /**
  * Your year so far, as the phone's Library card shows it: minutes, plays,
  * songs and artists, with the song you've played most and its cover.
@@ -620,35 +607,35 @@ private fun YearCard(summary: Wrapped.Summary) {
     val top = summary.topSongs.firstOrNull()
     val base = MaterialTheme.colorScheme.surfaceContainerHigh
     val colour = rememberCoverColor(top?.thumbnailUrl, base)
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(Web.ArtMedium)
     Box(
-        Modifier.padding(horizontal = GUTTER).fillMaxWidth().clip(shape)
+        Modifier.padding(horizontal = LocalGutter.current).fillMaxWidth().clip(shape)
             .background(Brush.linearGradient(listOf(tint(colour, base, 0.55f), tint(colour, base, 0.18f)))),
     ) {
-        Row(Modifier.padding(22.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Your ${java.time.Year.now().value} so far", style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.8f))
+        Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Your ${java.time.Year.now().value} so far", style = WebType.bodyEmph, color = Color.White.copy(alpha = 0.8f))
                 if (summary.isEmpty) {
-                    Text("Play some music and your year shows here", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Play some music and your year shows here", style = WebType.title2, color = Color.White, modifier = Modifier.padding(top = 8.dp))
                 } else {
-                    Text("${"%,d".format(summary.minutes)} minutes", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = Color.White)
-                    Row(horizontalArrangement = Arrangement.spacedBy(22.dp), modifier = Modifier.padding(top = 4.dp)) {
+                    Text("${"%,d".format(summary.minutes)} minutes", style = WebType.header(34f, -0.02f), color = Color.White, modifier = Modifier.padding(top = 8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.padding(top = 14.dp)) {
                         Stat("${summary.plays}", "plays")
                         Stat("${summary.songs}", "songs")
                         Stat("${summary.artists}", "artists")
                     }
                     summary.topArtists.firstOrNull()?.let {
-                        Text("Top artist: ${it.title}", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.85f), modifier = Modifier.padding(top = 6.dp))
+                        Text("Top artist: ${it.title}", style = WebType.body, color = Color.White.copy(alpha = 0.85f), modifier = Modifier.padding(top = 14.dp))
                     }
                 }
             }
             if (top != null) {
-                Column(Modifier.padding(start = 20.dp).width(150.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.clip(RoundedCornerShape(14.dp)).clickable { top.song?.let { Player.playAll(listOf(it), 0) } }) {
-                        Cover(top.thumbnailUrl, 150.dp, RoundedCornerShape(14.dp))
-                    }
-                    Text(top.title, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                    Text("Played ${top.plays} times", color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.bodySmall)
+                val hover = remember { MutableInteractionSource() }
+                val hovered by hover.collectIsHoveredAsState()
+                Column(Modifier.padding(start = 20.dp).width(150.dp).hoverable(hover), horizontalAlignment = Alignment.CenterHorizontally) {
+                    LockupArt(top.thumbnailUrl, RoundedCornerShape(Web.ArtMedium), hovered, { top.song?.let { Player.playAll(listOf(it), 0) } }, "Play ${top.title}")
+                    Text(top.title, color = Color.White, style = WebType.bodyEmph, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                    Text("Played ${top.plays} times", color = Color.White.copy(alpha = 0.75f), style = WebType.callout)
                 }
             }
         }
@@ -658,71 +645,61 @@ private fun YearCard(summary: Wrapped.Summary) {
 @Composable
 private fun Stat(value: String, label: String) {
     Column {
-        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
-        Text(label, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.75f))
+        Text(value, style = WebType.title2, color = Color.White)
+        Text(label, style = WebType.callout, color = Color.White.copy(alpha = 0.75f))
     }
 }
 
-/** A wide tile leading into part of the Library. */
+/**
+ * A wide tile leading into part of the Library, drawn as the web's Settings head card
+ * (.ot-set-hero): 18px corners on the faintest fill, stronger under the pointer, an icon on a
+ * 12px-cornered mark (the accent's for liked songs), the title in 15px and a grey line.
+ */
 @Composable
 private fun Shortcut(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, heart: Boolean = false, onClick: () -> Unit) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    val fill by animateColorAsState(onSurface.copy(alpha = if (hovered) 0.12f else 0.07f), tween(140), label = "shortcut")
+    val focused by hover.collectIsFocusedAsState()
+    val fill by animateColorAsState(if (hovered || focused) WebInk.quaternary else WebInk.quinary, tween(150), label = "shortcut")
     Row(
-        Modifier.width(250.dp).height(76.dp).clip(RoundedCornerShape(16.dp)).background(fill).hoverable(hover)
-            .clickable(interactionSource = hover, indication = null, onClick = onClick).padding(horizontal = 14.dp),
+        Modifier.pressScale(hover).width(250.dp).clip(RoundedCornerShape(18.dp)).background(fill).hoverable(hover)
+            .clickable(interactionSource = hover, indication = null, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "$title, $subtitle" }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(
-                if (heart) Brush.linearGradient(listOf(Color(0xFF7B5CFF), Color(0xFFE0E0FF))) else Brush.linearGradient(listOf(onSurface.copy(alpha = 0.14f), onSurface.copy(alpha = 0.08f))),
-            ),
+            Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(if (heart) WebInk.keyFill else WebInk.quaternary),
             contentAlignment = Alignment.Center,
-        ) { Icon(icon, null, tint = if (heart) Color.White else onSurface, modifier = Modifier.size(24.dp)) }
-        Column(Modifier.padding(start = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        ) { Icon(icon, null, tint = if (heart) Color.White else WebInk.primary, modifier = Modifier.size(22.dp)) }
+        Column(Modifier.padding(start = 14.dp)) {
+            Text(title, style = WebType.title3Emph, color = WebInk.primary, maxLines = 1)
+            Text(subtitle, style = WebType.callout, color = WebInk.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
 
-/** A numbered row in a top list. */
+/** A numbered row in a top list, drawn as a song in a shelf of rows: 55px, the 40px cover, 13px and 12px lines. */
 @Composable
 private fun RankRow(rank: Int, entry: Wrapped.Entry, onClick: () -> Unit) {
     val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    val fill by animateColorAsState(if (hovered) WebInk.rowHover else WebInk.rowHover.copy(alpha = 0f), tween(if (hovered) 0 else 200), label = "rank fill")
     Row(
-        Modifier.fillMaxWidth().hoverWash(hover, RoundedCornerShape(12.dp)).clickable(interactionSource = hover, indication = null, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().height(55.dp).clip(RoundedCornerShape(Web.TrackRow)).background(fill).hoverable(hover)
+            .clickable(interactionSource = hover, indication = null, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "Play ${entry.title}" }
+            .padding(end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("$rank", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(32.dp))
-        Cover(entry.thumbnailUrl, 48.dp, RoundedCornerShape(8.dp))
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Text(entry.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(entry.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("$rank", style = WebType.title3Emph, color = WebInk.secondary, modifier = Modifier.width(32.dp).padding(start = 8.dp))
+        Box(Modifier.size(40.dp).clip(RoundedCornerShape(Web.ArtSmall)).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
+            CoverFill(entry.thumbnailUrl, Modifier.fillMaxSize())
         }
-        Text("${entry.plays} plays", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-/** A song in a short list on a page that isn't only songs. */
-@Composable
-private fun SongLine(song: Song, onClick: () -> Unit) {
-    val hover = remember { MutableInteractionSource() }
-    Row(
-        Modifier.fillMaxWidth().hoverWash(hover, RoundedCornerShape(12.dp)).clickable(interactionSource = hover, indication = null, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Cover(song.thumbnailUrl, 48.dp, RoundedCornerShape(8.dp))
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Text(song.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                listOfNotNull(song.artist.takeIf { it.isNotBlank() }, song.durationText).joinToString(" • "),
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(entry.title, style = WebType.body, color = WebInk.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(entry.subtitle, style = WebType.callout, color = WebInk.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        Text("${entry.plays} plays", style = WebType.callout, color = WebInk.secondary)
     }
 }

@@ -8,6 +8,14 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -88,35 +96,48 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
     val signature by produceState<ArtistSignature?>(null, name, ui.artistSignatures, ui.signatureApi) {
         value = if (ui.artistSignatures) ArtistSignatures.signatureFor(name, ui.signatureApi) else null
     }
+    val still = stillMotion()
     val loaded = page
     val songs = loaded?.songs.orEmpty()
     val list = androidx.compose.foundation.lazy.rememberLazyListState()
-    Box(Modifier.fillMaxSize()) {
-    LazyColumn(state = list, contentPadding = PaddingValues(bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val pageWidth = maxWidth
+    // The web's hero: the photo across the page at about 1.93:1, never taller than 70% of the window.
+    val heroHeight = minOf(pageWidth / 1.93f, maxHeight * 0.7f).coerceAtLeast(320.dp)
+    CompositionLocalProvider(LocalGutter provides Web.gutter(pageWidth), LocalPageWidth provides pageWidth) {
+    LazyColumn(state = list, contentPadding = PaddingValues(bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(36.dp)) {
         item(key = "hero") {
             val background = MaterialTheme.colorScheme.background
-            Box(Modifier.fillMaxWidth().height(460.dp).clipToBounds()) {
-                AnimatedContent(hero ?: loaded?.thumbnailUrl ?: item.thumbnailUrl, transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(300)) }, label = "artist photo") { url ->
-                    // The photo drifts up at half the scroll, so it slides away slower than the page.
+            Box(Modifier.fillMaxWidth().height(heroHeight).clipToBounds()) {
+                AnimatedContent(hero ?: loaded?.thumbnailUrl ?: item.thumbnailUrl, transitionSpec = { fadeIn(tween(350)) togetherWith fadeOut(tween(300)) }, label = "artist photo") { url ->
+                    // As on the web (.ot-parallax): over the first 640px of scrolling the photo drifts down
+                    // by 28% of its height and grows to 1.08, so it slides away slower than the page.
                     Artwork(url, Modifier.fillMaxSize().graphicsLayer {
-                        if (list.firstVisibleItemIndex == 0) translationY = list.firstVisibleItemScrollOffset * 0.5f
+                        if (list.firstVisibleItemIndex == 0 && !still) {
+                            val t = (list.firstVisibleItemScrollOffset / 640.dp.toPx()).coerceIn(0f, 1f)
+                            translationY = size.height * 0.28f * t
+                            val grow = 1f + 0.08f * t
+                            scaleX = grow; scaleY = grow
+                        }
                     }, androidx.compose.ui.graphics.RectangleShape)
                 }
-                Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.15f), 0.55f to Color.Transparent, 1f to background)))
+                // The photo melts into the page at its foot, as the web's masked frame does.
+                Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 0.8f to background.copy(alpha = 0.7f), 1f to background)))
                 Column(
-                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 18.dp),
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = LocalGutter.current, end = LocalGutter.current, bottom = 24.dp).riseIn(delayMs = 70),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    NameOrSignature(name, signature)
+                    NameOrSignature(name, signature, pageWidth)
                     (loaded?.monthlyListenerCount ?: loaded?.subscriberCountText)?.let {
-                        Text(it, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.8f))
+                        Text(it, style = WebType.calloutEmph, color = Color.White.copy(alpha = 0.64f))
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RoundButton(Icons.Rounded.Shuffle, "Shuffle", 46.dp, solid = false, enabled = songs.isNotEmpty()) { Player.playAll(songs.shuffled(), 0) }
-                        RoundButton(Icons.Rounded.PlayArrow, "Play", 58.dp, solid = true, enabled = songs.isNotEmpty()) { Player.playAll(songs, 0) }
+                    // Shuffle · Play · Radio, as the web's artist page has them.
+                    Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RoundButton(Icons.Rounded.Shuffle, "Shuffle $name", 40.dp, solid = false, enabled = songs.isNotEmpty()) { Player.playAll(songs.shuffled(), 0) }
+                        RoundButton(Icons.Rounded.PlayArrow, "Play $name", 56.dp, solid = true, enabled = songs.isNotEmpty()) { Player.playAll(songs, 0) }
                         // A radio from the artist's best-known song: their music and music like it.
-                        RoundButton(Icons.Rounded.Radio, "Artist radio", 46.dp, solid = false, enabled = songs.isNotEmpty()) {
+                        RoundButton(Icons.Rounded.Radio, "$name radio", 40.dp, solid = false, enabled = songs.isNotEmpty()) {
                             Player.startRadio(songs.first()); Notice.show("Radio from $name")
                         }
                     }
@@ -130,13 +151,14 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
             items(loaded.sections.filter { it.items.isNotEmpty() }) { shelf -> ShelfRow(Pages.Shelf(shelf.title, shelf.items), onOpen) }
             loaded.description?.takeIf { it.isNotBlank() }?.let { story ->
                 item(key = "about") {
-                    Column(Modifier.padding(horizontal = GUTTER).widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("About", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    // About (ArtistPage.tsx): the title as a shelf's, the story in 13px grey, at most 720 wide.
+                    Column(Modifier.padding(horizontal = LocalGutter.current).padding(bottom = 4.dp).widthIn(max = 720.dp)) {
+                        Text("About $name", style = WebType.title2, modifier = Modifier.semantics { heading() })
                         var open by remember { mutableStateOf(false) }
                         Text(
-                            story, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            story, style = WebType.bodyTall, color = WebInk.secondary,
                             maxLines = if (open) Int.MAX_VALUE else 5, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.clip(MaterialTheme.shapes.small).clickable { open = !open },
+                            modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = if (open) "Show less" else "Show more") { open = !open },
                         )
                     }
                 }
@@ -144,11 +166,12 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
         }
     }
     }
+    }
 }
 
 /** The signature in white with "Signed by" under it, or the name in big type when there isn't one (or until it draws). */
 @Composable
-private fun NameOrSignature(name: String, signature: ArtistSignature?) {
+private fun NameOrSignature(name: String, signature: ArtistSignature?, pageWidth: androidx.compose.ui.unit.Dp) {
     val context = LocalPlatformContext.current
     // Loaded and turned to white ink before it's shown, so the name doesn't blink out for an empty space.
     val ink by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, signature?.imageUrl) {
@@ -169,26 +192,42 @@ private fun NameOrSignature(name: String, signature: ArtistSignature?) {
         if (signed) {
             Text(
                 buildAnnotatedString { append("Signed by "); withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(name) } },
-                style = MaterialTheme.typography.titleMedium, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center,
+                style = WebType.title3, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center,
             )
         } else {
+            // The web's artist name: 800 weight, clamp(34px, 5vw, 64px), a soft shadow under it over the photo.
+            val size = ((pageWidth + Web.Sidebar).value * 0.05f).coerceIn(34f, 64f)
             Text(
-                name, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold, color = Color.White,
-                textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 32.dp),
+                name, color = Color.White, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                style = webType(size, size * 1.05f, 800).copy(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.35f), androidx.compose.ui.geometry.Offset(0f, 2f), 20f)),
+                modifier = Modifier.semantics { heading() },
             )
         }
     }
 }
 
+/**
+ * The hero's round buttons (ArtistPage.tsx): Play [solid], 56px in the accent with a white
+ * triangle; the others 40px of dark glass over the photograph, a little darker under the
+ * pointer. Each gives a little when pressed.
+ */
 @Composable
 private fun RoundButton(icon: ImageVector, label: String, size: androidx.compose.ui.unit.Dp, solid: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    val hover = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    val fill = when {
+        solid -> WebInk.keyFill
+        hovered && enabled -> Color.Black.copy(alpha = 0.4f)
+        else -> Color.Black.copy(alpha = 0.3f)
+    }
     Box(
-        Modifier.size(size).hoverLift(hover, 1.06f).shadow(if (solid) 12.dp else 0.dp, CircleShape).clip(CircleShape)
-            .background(if (solid) Color.White else Color.White.copy(alpha = 0.16f))
-            .clickable(enabled = enabled, interactionSource = hover, indication = null, onClick = onClick),
+        Modifier.pressScale(source).size(size).shadow(if (solid) 14.dp else 0.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.65f), spotColor = Color.Black.copy(alpha = 0.65f))
+            .clip(CircleShape).background(fill)
+            .hoverable(source)
+            .clickable(enabled = enabled, interactionSource = source, indication = null, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.4f },
         contentAlignment = Alignment.Center,
-    ) { Icon(icon, label, tint = if (solid) Color.Black else Color.White, modifier = Modifier.size(size * 0.48f)) }
+    ) { Icon(icon, label, tint = Color.White, modifier = Modifier.size(if (solid) 26.dp else 18.dp)) }
 }
 
 /**

@@ -152,7 +152,7 @@ internal fun railAccent(): Color {
 }
 
 /** The web player's type, as tokens.css and opentune.css set it, in the theme's own face. */
-private object WebType {
+private object ChromeType {
     @Composable fun body(size: Int = 13, line: Int = 16, weight: FontWeight = FontWeight.Normal): TextStyle =
         MaterialTheme.typography.bodyMedium.copy(fontSize = size.sp, lineHeight = line.sp, fontWeight = weight, letterSpacing = 0.sp)
 }
@@ -266,7 +266,7 @@ private fun SideHead(folded: Boolean, fold: Float, names: Float, onHome: () -> U
             Spacer(Modifier.width(8.dp))
             Text(
                 "OpenTune", maxLines = 1, softWrap = false, color = ink,
-                style = WebType.body(19, 24, FontWeight.Bold).copy(letterSpacing = (-0.19).sp),
+                style = ChromeType.body(19, 24, FontWeight.Bold).copy(letterSpacing = (-0.19).sp),
                 modifier = Modifier.graphicsLayer { alpha = names },
             )
         }
@@ -298,7 +298,7 @@ private fun SideHeading(text: String, fold: Float) {
     ) {
         Text(
             text, maxLines = 1, softWrap = false, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = WebType.body(12, 15, FontWeight.SemiBold),
+            style = ChromeType.body(12, 15, FontWeight.SemiBold),
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).graphicsLayer { alpha = 1f - fold },
         )
     }
@@ -339,7 +339,7 @@ private fun SideRow(icon: ImageVector, label: String, selected: Boolean, folded:
             // Folded, the name only fades: it stays for screen readers, and the tooltip names the icon.
             Text(
                 label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, color = ink,
-                style = WebType.body(15, 22),
+                style = ChromeType.body(15, 22),
                 modifier = Modifier.graphicsLayer { alpha = names },
             )
         }
@@ -347,7 +347,7 @@ private fun SideRow(icon: ImageVector, label: String, selected: Boolean, folded:
     if (!folded) row() else TooltipArea(
         tooltip = {
             Text(
-                label, style = WebType.body(12, 15, FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface,
+                label, style = ChromeType.body(12, 15, FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.shadow(6.dp, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest).padding(horizontal = 10.dp, vertical = 6.dp),
             )
@@ -585,20 +585,20 @@ private fun Lcd(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier) {
                 Column {
                     Text(
                         song.title.ifBlank { if (loading) "Loading…" else "" }, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = WebType.body(13, 16, FontWeight.SemiBold),
+                        style = ChromeType.body(13, 16, FontWeight.SemiBold),
                     )
                     val problem = error
                     if (problem != null) {
                         // What went wrong, and the two ways on: try again, or move to the next song.
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(problem, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.error, style = WebType.body(12, 15, FontWeight.Medium), modifier = Modifier.weight(1f, fill = false))
+                            Text(problem, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.error, style = ChromeType.body(12, 15, FontWeight.Medium), modifier = Modifier.weight(1f, fill = false))
                             LcdLink("Try again", Player::toggle)
                             LcdLink("Skip", Player::next)
                         }
                     } else {
                         Text(
                             song.artist.ifBlank { if (loading) "Loading…" else "" }, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, style = WebType.body(12, 15, FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, style = ChromeType.body(12, 15, FontWeight.Medium),
                         )
                     }
                 }
@@ -607,7 +607,7 @@ private fun Lcd(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier) {
         SeekLine(progress, Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 20.dp), onLine) { scrub = it }
         if (soften > 0f) {
             val at = scrub?.let { (it * progress.durationMs).toLong() } ?: progress.positionMs
-            val timeStyle = WebType.body(11, 13, FontWeight.SemiBold)
+            val timeStyle = ChromeType.body(11, 13, FontWeight.SemiBold)
             Text(Time.format(at), style = timeStyle, modifier = Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 11.dp).graphicsLayer { alpha = soften })
             Text(
                 "-" + Time.format((progress.durationMs - at).coerceAtLeast(0)), style = timeStyle,
@@ -623,7 +623,7 @@ private fun LcdLink(text: String, onClick: () -> Unit) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     Text(
-        text, maxLines = 1, style = WebType.body(12, 15, FontWeight.Medium).copy(
+        text, maxLines = 1, style = ChromeType.body(12, 15, FontWeight.Medium).copy(
             textDecoration = if (hovered) androidx.compose.ui.text.style.TextDecoration.Underline else null,
         ),
         modifier = Modifier.padding(start = 8.dp).hoverable(hover).clickable(interactionSource = hover, indication = null, role = Role.Button, onClick = onClick),
@@ -708,7 +708,7 @@ private fun PanelSwitch(selected: SidePanel, modifier: Modifier, onPick: (SidePa
                     Modifier.width(widths[i]).fillMaxHeight().clip(CircleShape).hoverable(hover)
                         .selectable(chosen, interactionSource = hover, indication = FocusRing(CircleShape), role = Role.Tab) { onPick(p) },
                     contentAlignment = Alignment.Center,
-                ) { Text(p.label, color = ink, maxLines = 1, softWrap = false, style = WebType.body(13, 16, FontWeight.SemiBold)) }
+                ) { Text(p.label, color = ink, maxLines = 1, softWrap = false, style = ChromeType.body(13, 16, FontWeight.SemiBold)) }
             }
         }
     }
@@ -738,11 +738,11 @@ private fun UpNextPanel(queue: List<Song>, index: Int) {
             Text(
                 from?.let { "Playing from $it" } ?: if (upcoming.size == 1) "1 song after this one" else "${upcoming.size} songs after this one",
                 maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = WebType.body(12, 15), modifier = Modifier.weight(1f),
+                style = ChromeType.body(12, 15), modifier = Modifier.weight(1f),
             )
             if (upcoming.isNotEmpty()) {
                 Text(
-                    "Clear", color = key, style = WebType.body(14, 20, FontWeight.Medium),
+                    "Clear", color = key, style = ChromeType.body(14, 20, FontWeight.Medium),
                     modifier = Modifier.padding(horizontal = 4.dp).clip(RoundedCornerShape(6.dp))
                         .clickable(role = Role.Button) { Player.clearUpcoming(); Notice.show("Queue cleared") }
                         .padding(horizontal = 6.dp, vertical = 3.dp),
@@ -758,10 +758,10 @@ private fun UpNextPanel(queue: List<Song>, index: Int) {
                 Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(bottom = 80.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
             ) {
-                Text("Nothing in Up next", style = WebType.body(12, 16, FontWeight.SemiBold))
+                Text("Nothing in Up next", style = ChromeType.body(12, 16, FontWeight.SemiBold))
                 Text(
                     if (playback.autoplay) "AutoPlay will find similar music when this song ends." else "Songs you play next show here.",
-                    style = WebType.body(12, 16), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = ChromeType.body(12, 16), color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp),
                 )
             }
@@ -825,12 +825,12 @@ private fun UpNextRow(song: Song, at: Int, modifier: Modifier, lifted: Boolean) 
                 }
             }
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = WebType.body())
-                Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, style = WebType.body())
+                Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = ChromeType.body())
+                Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, style = ChromeType.body())
             }
             Box(Modifier.width(40.dp), contentAlignment = Alignment.CenterEnd) {
                 Text(
-                    song.durationText.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = WebType.body(),
+                    song.durationText.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = ChromeType.body(),
                     modifier = Modifier.graphicsLayer { alpha = 1f - tools },
                 )
                 // Always there, only faded out, so its menu stays open once the pointer moves onto it.
@@ -862,8 +862,8 @@ private fun NowPlayingCards(song: Song, queue: List<Song>, index: Int, onLyrics:
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.72f))))
                 Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 16.dp, end = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.Bottom) {
                     Column(Modifier.weight(1f).padding(bottom = 4.dp)) {
-                        Text(song.title, color = Color.White, style = WebType.body(17, 22, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(song.artist, color = Color.White.copy(alpha = 0.75f), style = WebType.body(13, 18), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(song.title, color = Color.White, style = ChromeType.body(17, 22, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(song.artist, color = Color.White.copy(alpha = 0.75f), style = ChromeType.body(13, 18), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     LikeButton(isLiked, { Library.setLiked(song, !isLiked) }, idle = Color.White.copy(alpha = 0.85f), size = 22.dp)
                 }
@@ -874,7 +874,7 @@ private fun NowPlayingCards(song: Song, queue: List<Song>, index: Int, onLyrics:
         val next = queue.drop(index + 1).take(4)
         if (next.isNotEmpty()) item(key = "next") {
             Column(Modifier.fillMaxWidth().clip(card).background(quinaryFill()).padding(vertical = 10.dp)) {
-                Text("Next up", style = WebType.body(15, 20, FontWeight.SemiBold), modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                Text("Next up", style = ChromeType.body(15, 20, FontWeight.SemiBold), modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 next.forEachIndexed { i, s ->
                     val hover = remember { MutableInteractionSource() }
                     Row(
@@ -885,8 +885,8 @@ private fun NowPlayingCards(song: Song, queue: List<Song>, index: Int, onLyrics:
                     ) {
                         Artwork(s.thumbnailUrl, Modifier.size(40.dp), RoundedCornerShape(10.dp))
                         Column(Modifier.padding(start = 12.dp)) {
-                            Text(s.title, style = WebType.body(), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(s.artist, style = WebType.body(), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(s.title, style = ChromeType.body(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(s.artist, style = ChromeType.body(), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -909,7 +909,7 @@ private fun LyricsPreview(song: Song, colour: Color, onMore: () -> Unit) {
     }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(colour).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Lyrics", style = WebType.body(15, 20, FontWeight.SemiBold), color = Color.White.copy(alpha = 0.85f), modifier = Modifier.weight(1f))
+            Text("Lyrics", style = ChromeType.body(15, 20, FontWeight.SemiBold), color = Color.White.copy(alpha = 0.85f), modifier = Modifier.weight(1f))
             if (lyrics != null) CardChip("Show more", onMore)
         }
         Spacer(Modifier.height(10.dp))
@@ -923,7 +923,7 @@ private fun LyricsPreview(song: Song, colour: Color, onMore: () -> Unit) {
                         shown.forEachIndexed { i, line ->
                             Text(
                                 lyricDisplayText(line).ifBlank { "♪" },
-                                style = WebType.body(17, 23, FontWeight.Bold),
+                                style = ChromeType.body(17, 23, FontWeight.Bold),
                                 color = Color.White.copy(alpha = if (i == 0) 1f else 0.55f - i * 0.12f),
                                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(vertical = 2.dp),
                             )
@@ -931,8 +931,8 @@ private fun LyricsPreview(song: Song, colour: Color, onMore: () -> Unit) {
                     }
                 }
             }
-            lyrics is Lyrics.Plain -> Text(lyrics.text.lines().filter { it.isNotBlank() }.take(3).joinToString("\n"), style = WebType.body(15, 21, FontWeight.SemiBold), color = Color.White, maxLines = 3)
-            else -> Text("No lyrics for this one", style = WebType.body(13, 18), color = Color.White.copy(alpha = 0.7f))
+            lyrics is Lyrics.Plain -> Text(lyrics.text.lines().filter { it.isNotBlank() }.take(3).joinToString("\n"), style = ChromeType.body(15, 21, FontWeight.SemiBold), color = Color.White, maxLines = 3)
+            else -> Text("No lyrics for this one", style = ChromeType.body(13, 18), color = Color.White.copy(alpha = 0.7f))
         }
     }
 }
@@ -944,7 +944,7 @@ private fun CardChip(text: String, onClick: () -> Unit, ink: Color = Color.White
     val hovered by hover.collectIsHoveredAsState()
     val back by animateColorAsState(fill.copy(alpha = if (hovered) 0.24f else 0.14f), tween(150), label = "chip")
     Text(
-        text, style = WebType.body(12, 15, FontWeight.SemiBold), color = ink,
+        text, style = ChromeType.body(12, 15, FontWeight.SemiBold), color = ink,
         modifier = Modifier.pressGive(hover, to = 0.96f).clip(CircleShape).background(back).hoverable(hover)
             .clickable(interactionSource = hover, indication = FocusRing(CircleShape), role = Role.Button, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 5.dp),
@@ -970,11 +970,11 @@ private fun AboutArtist(song: Song, onOpenArtist: (ShelfItem) -> Unit) {
         Box(Modifier.fillMaxWidth().height(170.dp)) {
             Artwork(apple ?: page?.thumbnailUrl ?: song.thumbnailUrl, Modifier.fillMaxSize(), RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f))))
-            Text("About the artist", style = WebType.body(15, 20, FontWeight.SemiBold), color = Color.White, modifier = Modifier.padding(16.dp))
+            Text("About the artist", style = ChromeType.body(15, 20, FontWeight.SemiBold), color = Color.White, modifier = Modifier.padding(16.dp))
         }
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(name, style = WebType.body(17, 22, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(name, style = ChromeType.body(17, 22, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (artistId != null) {
                     CardChip(
                         "View artist", { onOpenArtist(ShelfItem(name, "Artist", page?.thumbnailUrl, null, artistId)) },
@@ -983,10 +983,10 @@ private fun AboutArtist(song: Song, onOpenArtist: (ShelfItem) -> Unit) {
                 }
             }
             (page?.monthlyListenerCount ?: page?.subscriberCountText)?.let {
-                Text(it, style = WebType.body(12, 15), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(it, style = ChromeType.body(12, 15), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             page?.description?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = WebType.body(13, 18), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 5, overflow = TextOverflow.Ellipsis)
+                Text(it, style = ChromeType.body(13, 18), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 5, overflow = TextOverflow.Ellipsis)
             }
         }
     }

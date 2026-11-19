@@ -54,13 +54,15 @@ import org.jetbrains.skia.RuntimeShaderBuilder
 internal fun Modifier.liquidGlass(haze: HazeState, shape: Shape, film: Color): Modifier {
     val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
     var at by remember { mutableStateOf(Offset.Zero) }
+    val lens = remember { LensCache() }
+    androidx.compose.runtime.DisposableEffect(lens) { onDispose { lens.close() } }
     return this
         .onGloballyPositioned { at = it.positionOnScreen() }
         .drawBehind {
             val outline = shape.createOutline(size, layoutDirection, this)
             val clip = Path().apply { addOutline(outline) }
             clipPath(clip) {
-                drawBent(haze, at, cornerOf(outline))
+                drawBent(haze, at, cornerOf(outline), lens)
                 drawRect(film)
                 drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.10f else 0.16f), 0.45f to Color.Transparent))
             }
@@ -88,29 +90,58 @@ private fun cornerOf(outline: Outline): Float = when (outline) {
     else -> 0f
 }
 
+/**
+ * One glass's lens filter and paint, made once and again only when its size or corners change,
+ * and released with the glass. Made afresh on every draw, a window of glass redrawing as the page
+ * scrolled left a trail of native Skia objects behind it, and many of them crashed Skia.
+ */
+private class LensCache {
+    private var key: Long = 0
+    var paint: org.jetbrains.skia.Paint? = null
+        private set
+    private val parts = mutableListOf<org.jetbrains.skia.impl.Managed>()
+
+    fun paintFor(w: Float, h: Float, corner: Float, bezel: Float, sigma: Float): org.jetbrains.skia.Paint {
+        val k = (w.toInt().toLong() shl 40) xor (h.toInt().toLong() shl 20) xor (corner.toInt().toLong() shl 8) xor bezel.toInt().toLong()
+        paint?.let { if (k == key) return it }
+        close()
+        key = k
+        val builder = RuntimeShaderBuilder(LENS).apply {
+            uniform("size", w, h)
+            uniform("radius", minOf(corner, w / 2f, h / 2f))
+            uniform("bezel", bezel)
+            uniform("depth", bezel)
+            uniform("aberration", 0.12f)
+        }
+        val bent = ImageFilter.makeRuntimeShader(builder, "content", null)
+        val blurred = ImageFilter.makeBlur(sigma, sigma, FilterTileMode.CLAMP, bent, null)
+        val lifted = ImageFilter.makeColorFilter(LIFT, blurred, null)
+        val made = org.jetbrains.skia.Paint().apply { imageFilter = lifted }
+        parts += listOf(builder, bent, blurred, lifted, made)
+        paint = made
+        return made
+    }
+
+    fun close() {
+        parts.asReversed().forEach { runCatching { it.close() } }
+        parts.clear()
+        paint = null
+    }
+}
+
 /** What's behind, from the window's recorded areas, through the lens, the blur and the colour lift. */
-private fun DrawScope.drawBent(haze: HazeState, at: Offset, corner: Float) {
-    val areas = haze.areas.filter { it.contentLayer != null && !it.drawingNow() }.sortedBy { it.zIndex }
-    if (areas.isEmpty()) return
+private fun DrawScope.drawBent(haze: HazeState, at: Offset, corner: Float, lens: LensCache) {
     val w = size.width
     val h = size.height
+    // Nothing to bend on glass with no area (a hidden or collapsed one).
+    if (w < 1f || h < 1f) return
+    val areas = haze.areas.filter { it.contentLayer != null && !it.drawingNow() }.sortedBy { it.zIndex }
+    if (areas.isEmpty()) return
     val bezel = minOf(22.dp.toPx(), w / 2f, h / 2f)
-    val lens = RuntimeShaderBuilder(LENS).apply {
-        uniform("size", w, h)
-        uniform("radius", minOf(corner, w / 2f, h / 2f))
-        uniform("bezel", bezel)
-        uniform("depth", bezel)
-        uniform("aberration", 0.12f)
-    }
-    val sigma = 5.dp.toPx() / 2f
-    val filter = ImageFilter.makeColorFilter(
-        LIFT,
-        ImageFilter.makeBlur(sigma, sigma, FilterTileMode.CLAMP, ImageFilter.makeRuntimeShader(lens, "content", null), null),
-        null,
-    )
+    val paint = lens.paintFor(w, h, corner, bezel, 5.dp.toPx() / 2f)
     drawIntoCanvas { canvas ->
         val native = canvas.nativeCanvas
-        native.saveLayer(org.jetbrains.skia.Rect.makeWH(w, h), org.jetbrains.skia.Paint().apply { imageFilter = filter })
+        native.saveLayer(org.jetbrains.skia.Rect.makeWH(w, h), paint)
         for (area in areas) {
             val layer = area.contentLayer ?: continue
             translate(area.positionOnScreen.x - at.x, area.positionOnScreen.y - at.y) { drawLayer(layer) }

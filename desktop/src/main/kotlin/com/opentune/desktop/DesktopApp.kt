@@ -367,13 +367,14 @@ private fun Pages(
     AnimatedContent(
         page,
         transitionSpec = {
-            // A desktop page changes with a quick fade and a short rise, not the phone's
-            // full-page slides and scales: moving a whole window of covers each frame stutters.
+            // A desktop page changes with a fade and a short rise, as the web player's pages come in
+            // (10px over 320ms on its emphasized curve), not the phone's full-page slides and scales:
+            // moving a whole window of covers each frame stutters.
             val back = initialState.opened != null && targetState.opened == null
-            val rise = (if (still) 0 else if (back) -12 else 16) * pxPerDp
-            (fadeIn(tween(if (still) 120 else 200, delayMillis = if (still) 0 else 40)) +
-                slideInVertically(tween(260, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))) { rise.toInt() }) togetherWith
-                fadeOut(tween(if (still) 90 else 110))
+            val rise = (if (still) 0 else if (back) -8 else 10) * pxPerDp
+            (fadeIn(tween(if (still) 120 else 220, delayMillis = if (still) 0 else 30)) +
+                slideInVertically(tween(320, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))) { rise.toInt() }) togetherWith
+                fadeOut(tween(if (still) 90 else 120))
         },
         label = "page",
         modifier = Modifier.fillMaxSize(),
