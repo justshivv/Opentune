@@ -268,7 +268,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             // arrives once it is; a timed-out wait skipped the clips for good,
             // until the song was left and returned to. collectLatest cancels
             // this wait when the song changes, so waiting is safe.
-            val duration = player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
+            // A song another device plays (Connect) never plays here, so this player never says
+            // its length: that device's own figure for it is taken, or its lyrics stayed loading.
+            // This player's exact figure still comes first when it has the song too.
+            val duration = combine(player.durationOf, remote) { (id, ms), far ->
+                ms.takeIf { id == song.videoId && it > 0 }
+                    ?: far?.state?.track?.takeIf { it.id == song.videoId }?.lengthMs?.takeIf { it > 0 } ?: 0L
+            }.first { it > 0 }
             // Plain text often means a synced source was busy just then; the
             // repository asks again a little later and sends better lyrics on.
             LyricsRepository.lyricsUpdates(song.videoId, song.title, song.artist, duration).collect { found ->
