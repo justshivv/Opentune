@@ -214,7 +214,7 @@ private fun rememberPlaylistRows(nav: LibraryNav): List<LibraryPlaylistRow> {
     val ytPlaylists = if (signedIn) remember(cachedPlaylists, playlists) { PlaylistLinks.unlinked(cachedPlaylists, playlists) } else emptyList()
     // Counted over the whole history, so off the main thread and kept as Home keeps its own
     // (see HomeDerived): coming back to Library shows the last count at once.
-    val playCounts = com.opentune.ui.home.rememberHomeDerived("library:playCounts", records, initial = emptyMap<String, Int>()) {
+    val playCounts = com.opentune.ui.home.rememberHomeDerived("library:plays", records, initial = emptyMap<String, Int>()) {
         records.groupingBy { it.videoId }.eachCount()
     }
     // Kept until what they're made from changes: made afresh on every recomposition of Library
