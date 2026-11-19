@@ -95,6 +95,21 @@ object LastFm {
         }
     }
 
+    /**
+     * This phone's sign-in, for another of the person's devices the person chose to sign in
+     * too (sealed end to end by the pairing). A session key works only with the application
+     * key that made it, so that key goes with it. Its secret goes only when it's the person's
+     * own application: OpenTune's is in every OpenTune build already and never needs to travel.
+     */
+    fun shared(): com.opentune.data.account.PairingExtras.LastFm? {
+        val p = prefs ?: return null
+        val session = p.getString(K_SESSION, null) ?: return null
+        val user = p.getString(K_USER, null) ?: return null
+        val key = apiKey.takeIf { it.isNotBlank() } ?: return null
+        val own = key != com.opentune.core.BuildConfig.LASTFM_API_KEY
+        return com.opentune.data.account.PairingExtras.LastFm(session, user, key, secret.takeIf { own && it.isNotBlank() })
+    }
+
     fun signOut() {
         prefs?.edit {
             remove(K_SESSION)

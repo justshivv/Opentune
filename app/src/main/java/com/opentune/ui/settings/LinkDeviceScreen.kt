@@ -162,7 +162,10 @@ fun LinkDeviceScreen(
                                 )
                             }
                             Step(2, "Add the companion extension", "It lets the page reach YouTube Music from your own browser. Choose Get the Extension in the web player.")
-                            Step(3, "Connect it to this phone", "See and control what plays on the computer from here, and move the music between them.", last = true) {
+                            Step(3, "Share your Discord sign-in", "Optional. In the web player's Discord settings, choose Sign in with your phone, then scan the code with this phone and approve.") {
+                                Buttons({ SheetButton("Open the camera", onClick = ::camera, icon = ImageVector.vectorResource(AppIcons.CameraAlt)) })
+                            }
+                            Step(4, "Connect it to this phone","See and control what plays on the computer from here, and move the music between them.", last = true) {
                                 Buttons({ SheetButton("Your devices", onClick = onConnect, icon = ImageVector.vectorResource(AppIcons.Devices), tone = SheetTone.Primary) })
                             }
                             Note(ImageVector.vectorResource(AppIcons.Lock), "Your library and settings there stay in that browser.")

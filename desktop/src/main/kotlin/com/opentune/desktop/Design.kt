@@ -443,18 +443,20 @@ internal fun TrackRow(i: Int, song: Song, songs: List<Song>, onRemove: ((Song) -
     }
 }
 
-/** A row's artist as a link to their page, when the song knows it. */
+/** A row's artist as a link to their page, found first when the song doesn't say (see SongLinks). */
 @Composable
 private fun artistLink(song: Song): (() -> Unit)? {
-    val open = LocalOpen.current
-    return song.artistId?.takeIf { it.startsWith("UC") }?.let { id -> { open(ShelfItem(song.artist, "Artist", null, null, id)) } }
+    val openArtist = rememberOpenArtist()
+    if (song.artist.isBlank() || (song.artistId == null && !com.opentune.data.isYouTubeId(song.videoId))) return null
+    return { openArtist(song, null) }
 }
 
-/** A row's album as a link to its page, when the song knows it. */
+/** A row's album as a link to its page, found first when the song doesn't say (see SongLinks). */
 @Composable
 private fun albumLink(song: Song): (() -> Unit)? {
-    val open = LocalOpen.current
-    return song.albumId?.let { id -> { open(ShelfItem(song.albumName ?: song.title, "Album • ${song.artist}", song.thumbnailUrl, null, id)) } }
+    val openAlbum = rememberOpenAlbum()
+    if (song.albumId == null && !com.opentune.data.isYouTubeId(song.videoId)) return null
+    return { openAlbum(song) }
 }
 
 /** A list's tracks still on their way: striped rows of the right shape, shimmering. */

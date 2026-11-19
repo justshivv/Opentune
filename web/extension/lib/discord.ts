@@ -561,6 +561,17 @@ export async function disconnect(): Promise<DiscordState> {
 
 export const DISCORD_ORIGINS = ['https://discord.com/*'];
 
+/** Keeps [token] once Discord confirms whose it is (the phone's, handed over by discordPhone.ts). */
+export async function keepToken(token: string): Promise<DiscordState> {
+  const user = await userInfo(token);
+  closeGateway();
+  gatewayStatus = 'off';
+  gatewayProblem = null;
+  await browser.storage.local.set({ [ACCOUNT_KEY]: { token, user } satisfies Account, [ENABLED_KEY]: true });
+  await announce();
+  return discordState();
+}
+
 /** Opens the extension's connect page: the permission prompt only follows a click there. */
 export async function openConnectPage(): Promise<void> {
   await browser.tabs.create({ url: browser.runtime.getURL('/discord.html') });

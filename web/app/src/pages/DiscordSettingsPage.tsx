@@ -1,5 +1,6 @@
 import { PageHeader } from '@/components/PageHeader';
 import { useDiscord } from '@/extension/useDiscord';
+import { DiscordPhoneSignIn } from './DiscordPhoneSignIn';
 import { DiscordIntegration, DiscordSettings } from './IntegrationSettings';
 import { settingsUi } from './settingsStyles';
 
@@ -17,10 +18,13 @@ export default function DiscordSettingsPage() {
           </div>
         </section>
         {status.state === 'ready' && !status.discord.connected && (
-          <p className={settingsUi.footer}>
-            Connect opens a page from the extension that reads your Discord session from a discord.com tab. The web player never
-            sees it. This uses your account’s own token, which Discord’s terms don’t allow.
-          </p>
+          <>
+            <p className={settingsUi.footer}>
+              Connect opens a page from the extension that reads your Discord session from a discord.com tab. The web player never
+              sees it. This uses your account’s own token, which Discord’s terms don’t allow.
+            </p>
+            {status.discord.available && <DiscordPhoneSignIn />}
+          </>
         )}
         {status.state === 'ready' && status.discord.connected && (
           <>

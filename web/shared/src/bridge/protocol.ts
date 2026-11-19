@@ -16,7 +16,7 @@ export const BRIDGE_CHANNEL = 'opentune-bridge';
 export const EVENTS_PORT = 'opentune-events';
 
 /** What the installed extension can do; `ping` reports it. */
-export type Capability = 'yt' | 'yt.auth' | 'yt.stats' | 'addon' | 'lyrics' | 'spotify' | 'discord';
+export type Capability = 'yt' | 'yt.auth' | 'yt.stats' | 'addon' | 'lyrics' | 'spotify' | 'discord' | 'discord.phone';
 
 export type BrowserFamily = 'chromium' | 'firefox';
 
@@ -222,6 +222,22 @@ export interface BridgeMethods {
   /** Forgets the account and closes the gateway. */
   'discord.disconnect': { params: Record<string, never>; result: DiscordState };
   'discord.setEnabled': { params: { enabled: boolean }; result: DiscordState };
+  /**
+   * "Sign in with your phone" (`discord.phone`): a one-use public key for the code the phone
+   * scans, its private half kept in the extension. `access` false: discord.com isn't allowed yet.
+   */
+  'discord.phoneOffer': { params: Record<string, never>; result: { publicKey: string; expires: number; access: boolean } };
+  /**
+   * What the phone sent, passed on unopened: its public key and the sealed sign-in. The
+   * extension opens it, keeps the account, and seals `answer` for the phone (`took` says what
+   * it kept). Refused with `forbidden` when it wasn't sealed for this code.
+   */
+  'discord.phoneAccept': {
+    params: { phoneKey: string; sealed: string };
+    result: { state: DiscordState; answer: string; took: string[] };
+  };
+  /** Opens the extension's page that allows discord.com (a browser prompt needs a click there). */
+  'discord.allowAccess': { params: Record<string, never>; result: Record<string, never> };
   /** Publishes the playing track; null clears the card (a pause, or the player emptied). */
   'discord.presence': {
     params: { track: DiscordNowPlaying | null; options: DiscordPresenceOptions };

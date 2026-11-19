@@ -84,7 +84,6 @@ import dev.chrisbanes.haze.hazeSource
 import com.opentune.core.BuildConfig
 import com.opentune.data.settings.AppFont
 import com.opentune.data.settings.AppSettings
-import com.opentune.data.settings.ControlStyle
 import com.opentune.data.settings.EQ_BANDS_HZ
 import com.opentune.data.settings.EqPreset
 import com.opentune.data.settings.GlassStyle
@@ -498,7 +497,6 @@ private fun AppearanceSection() {
         CardHeading("Now Playing")
         RowsCard {
             MenuRow("Player background", choices = PlayerBackground.entries, selected = theme.playerBackground, label = { it.label }) { v -> AppSettings.updateTheme { it.copy(playerBackground = v) } }
-            MenuRow("Player buttons", choices = ControlStyle.entries, selected = ui.controlStyle, label = { it.label }, summary = { it.summary }) { v -> AppSettings.updateUi { it.copy(controlStyle = v) } }
             MenuRow("Player opens", choices = PlayerMotion.entries, selected = ui.playerMotion, label = { it.label }, summary = { it.summary }) { v -> AppSettings.updateUi { it.copy(playerMotion = v) } }
         }
         if (TrayPrefs.supported || WindowsFrame.isWindows) {

@@ -12,6 +12,7 @@ import {
   type Capability,
 } from '@opentune/shared/bridge';
 import * as discord from '../lib/discord';
+import * as discordPhone from '../lib/discordPhone';
 import { grantedOrigins, lyricsFetch, requestOrigins } from '../lib/lyricsFetch';
 import { installRules } from '../lib/rules';
 import { authState, invalidateAccounts, isSessionCookie, selectChannel, setConnected } from '../lib/ytAuth';
@@ -25,7 +26,7 @@ const ALLOWED_ORIGINS = new Set(__SITE_ORIGINS__);
 const OWN_ORIGIN = new URL(browser.runtime.getURL('/')).origin;
 
 /** Grows as each phase lands its methods; Discord only in builds that include it. */
-const CAPABILITIES: Capability[] = ['addon', 'yt', 'yt.auth', 'yt.stats', 'lyrics', 'spotify', ...(discord.AVAILABLE ? (['discord'] as const) : [])];
+const CAPABILITIES: Capability[] = ['addon', 'yt', 'yt.auth', 'yt.stats', 'lyrics', 'spotify', ...(discord.AVAILABLE ? (['discord', 'discord.phone'] as const) : [])];
 
 function originOf(sender: Browser.runtime.MessageSender): string | null {
   if (sender.origin) return sender.origin;
@@ -152,6 +153,17 @@ async function handle(request: BridgeRequest): Promise<BridgeResponse> {
           request.id,
           await discord.setEnabled((request as BridgeRequest<'discord.setEnabled'>).params.enabled === true),
         );
+      case 'discord.phoneOffer':
+        return okResponse<'discord.phoneOffer'>(request.id, await discordPhone.phoneOffer());
+      case 'discord.phoneAccept': {
+        const { phoneKey, sealed } = (request as BridgeRequest<'discord.phoneAccept'>).params;
+        if (typeof phoneKey !== 'string' || typeof sealed !== 'string') return errorResponse(request.id, 'forbidden', 'Not a phone’s packet.');
+        return okResponse<'discord.phoneAccept'>(request.id, await discordPhone.phoneAccept(phoneKey, sealed));
+      }
+      case 'discord.allowAccess':
+        if (!discord.AVAILABLE) return errorResponse(request.id, 'unsupported', 'This build of the extension leaves Discord out.');
+        await discordPhone.openAccessPage();
+        return okResponse<'discord.allowAccess'>(request.id, {});
       case 'discord.presence': {
         const { track, options } = (request as BridgeRequest<'discord.presence'>).params;
         await discord.setPresence(track, options);

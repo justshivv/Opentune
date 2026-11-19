@@ -281,7 +281,7 @@ private fun SyncedLyrics(song: Song, lyrics: Lyrics.Synced, offset: Long, transl
                 drawRect(LYRIC_FADE, blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
             },
     ) {
-        itemsIndexed(lyrics.lines, key = { i, l -> "$i:${l.startMs}" }) { i, line ->
+        itemsIndexed(lyrics.lines, key = { i, l -> "$i:${l.startMs}" }, contentType = { i, _ -> i }) { i, line ->
             // Only the line being sung follows the clock; the rest stay as they are, so the
             // 25-a-second position updates redraw one row rather than the whole list.
             LyricRow(line, i == active, if (i == active) at else 0L, translated.getOrNull(i)) { Player.seekTo((line.startMs - offset).coerceAtLeast(0)) }
@@ -520,7 +520,9 @@ private fun PlayerSyncedLyrics(
                 drawRect(PLAYER_LYRIC_FADE, blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
             },
     ) {
-        itemsIndexed(lyrics.lines, key = { i, l -> "$i:${l.startMs}" }) { i, line ->
+        // Each line keeps its own row: reused for another line, a row's blur layer showed the old
+        // line's text through the new one's, so lines seemed written over each other.
+        itemsIndexed(lyrics.lines, key = { i, l -> "$i:${l.startMs}" }, contentType = { i, _ -> i }) { i, line ->
             PlayerLyricRow(
                 line, distance = if (active < 0) i + 1 else i - active, at = if (i == active) at else 0L,
                 translation = translated.getOrNull(i), size = size, blur = blur,
@@ -574,7 +576,14 @@ private fun PlayerLyricRow(
         Modifier.fillMaxWidth().clip(shape).background(fill).hoverable(hover)
             .clickable(interactionSource = hover, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .then(if (soft > 0.05f) Modifier.blur(soft.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded) else Modifier),
+            // One layer that's always there, its blur set as it's drawn: adding and taking away
+            // the blur modifier as a line came near and went made a new layer each time, and
+            // one could keep a picture of what it showed before.
+            .graphicsLayer {
+                val r = soft.dp.toPx()
+                renderEffect = if (soft > 0.05f) androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Decal) else null
+                clip = false
+            },
         horizontalAlignment = if (second) Alignment.End else Alignment.Start,
     ) {
         val style = playerBigLyric(size)

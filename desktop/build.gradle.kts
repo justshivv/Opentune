@@ -35,6 +35,8 @@ val sharedFromCore = listOf(
     "com/opentune/data/DebugLog.kt",
     "com/opentune/data/AppLog.kt",
     "com/opentune/data/TrackIds.kt",
+    // Matching a video's song to its album track, for Go to album.
+    "com/opentune/data/AlbumMatch.kt",
     "com/opentune/data/UnmeteredNetwork.kt",
     "com/opentune/data/settings/AppSettings.kt",
     "com/opentune/data/history/ListeningHistoryTarget.kt",
