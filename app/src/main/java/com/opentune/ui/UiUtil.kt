@@ -111,8 +111,16 @@ class LoaderViewModel<T>(private val key: String, private val load: suspend () -
         }
     }
 
+    private var loading: kotlinx.coroutines.Job? = null
+
+    /**
+     * Loads again. A reload still on its way is called off: the newer one is what's wanted
+     * (after an account switch, say), and the older finishing last would put back what it
+     * found, and end the newer one's [refreshing] before it was done.
+     */
     fun reload(keepContent: Boolean = false, quiet: Boolean = false) {
-        viewModelScope.launch {
+        loading?.cancel()
+        loading = viewModelScope.launch {
             val hasContent = keepContent && _state.value is UiState.Success
             if (hasContent) {
                 if (!quiet) _refreshing.value = true
