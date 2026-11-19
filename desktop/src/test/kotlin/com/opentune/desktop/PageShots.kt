@@ -175,5 +175,56 @@ class PageShots {
         shoot("page-library-songs-narrow", 760, 1000, 3_000) { Page { LibraryHome({}, {}, {}) } }
         shoot("page-liked", 1660, 1000, 3_000) { Page { LibraryPage(Shelf.LIKED, {}, {}) } }
         shoot("page-history", 1660, 1000, 3_000) { Page { LibraryPage(Shelf.RECENT, {}, {}) } }
+        shoot("page-dialog-new-signed-out", 700, 520, 1_500) { Page { NewPlaylistDialog(onDismiss = {}) {} } }
+    }
+
+    /** The account's library as YouTube Music sends it: Liked Music and Connect's playlist among the playlists, as they come. */
+    private fun signedInLibrary(): AccountLibrary.State {
+        val list = songs(14)
+        fun cover(i: Int) = "https://i.ytimg.com/vi/${ids[i % ids.size]}/hqdefault.jpg"
+        return AccountLibrary.State(
+            signedIn = true, loaded = true, readAt = System.currentTimeMillis(),
+            playlists = listOf(
+                ShelfItem("Liked Music", "Auto playlist", null, null, "VLLM"),
+                ShelfItem("Road trip", "Playlist • 42 songs", cover(2), null, "VLPLroadtrip"),
+                ShelfItem("OpenTune Connect", "Playlist • Private", null, null, "VLPLconnect"),
+                ShelfItem("Focus", "Playlist • 18 songs", cover(5), null, "VLPLfocus"),
+                ShelfItem("Road trip", "Playlist • 42 songs", cover(2), null, "PLroadtrip"),
+            ),
+            albums = listOf(ShelfItem("After Hours", "Album • The Weeknd • 2020", cover(0), null, "MPREb_after")),
+            artists = listOf(ShelfItem("Daft Punk", "1.2M subscribers", cover(5), null, "UCdaftpunk")),
+            // Liked on the account: some only there, one liked here too.
+            liked = list.drop(6).take(6) + list[1],
+            saved = list.takeLast(2),
+        )
+    }
+
+    @Test fun signedIn() {
+        Library.useFile(java.nio.file.Files.createTempDirectory("pageshots").resolve("desktop.json").toFile())
+        val list = songs(14)
+        list.take(3).forEach { Library.setLiked(it, true) }
+        Library.createPlaylist("Late night drive").also { id -> list.drop(4).take(5).forEach { Library.addToPlaylist(id, it) } }
+        list.forEach { Library.played(it) }
+        AccountLibrary.preload(signedInLibrary())
+        try {
+            listOf("songs", "artists", "albums", "playlists", "overview").forEachIndexed { i, name ->
+                shoot("page-library-signed-in-$name", 1660, 1100, 4_000) { Page { LibraryHome({}, {}, {}, startTab = i) } }
+            }
+            shoot("page-liked-signed-in", 1660, 1000, 3_000) { Page { LibraryPage(Shelf.LIKED, {}, {}) } }
+            shoot("page-history-signed-in", 1660, 1000, 3_000) { Page { LibraryPage(Shelf.RECENT, {}, {}) } }
+            shoot("page-playlists-signed-in", 1660, 900, 4_000) { Page { LibraryPage(Shelf.PLAYLISTS, {}, {}) } }
+            shoot("page-dialog-new-signed-in", 700, 520, 1_500) { Page { NewPlaylistDialog(onDismiss = {}) {} } }
+            shoot("page-dialog-privacy", 700, 420, 1_500) { Page { PagePrivacyDialog(com.opentune.data.model.PlaylistPrivacy.UNLISTED, {}) {} } }
+            // A playlist the account owns: who can see it in the head, a button to take each song out.
+            val owned = list.take(6).mapIndexed { i, s -> s.copy(setVideoId = "set$i") }
+            Pages.keepListing("VLPLroadtrip", Pages.Listing(owned, owned = true, privacy = com.opentune.data.model.PlaylistPrivacy.PRIVATE))
+            shoot("page-account-playlist", 1660, 1000, 4_000) {
+                Page { CollectionPage(ShelfItem("Road trip", "Playlist • You • 2025", owned.first().thumbnailUrl, null, "VLPLroadtrip")) }
+            }
+            // The window: the sidebar lists the account's playlists after yours, without Liked Music or Connect's.
+            shoot("page-window-signed-in", 1660, 1000, 5_000) { DesktopApp() }
+        } finally {
+            AccountLibrary.preload(AccountLibrary.State())
+        }
     }
 }
