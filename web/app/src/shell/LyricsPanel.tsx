@@ -430,7 +430,8 @@ function CanvasBackdrop({ url }: { url: string }) {
   );
 }
 
-const panel = 'group/panel relative isolate flex min-h-0 flex-1 flex-col overflow-hidden';
+// Fades in once loaded: am-lyrics arrives a moment after the panel opens, and used to pop in.
+const panel = 'group/panel relative isolate flex min-h-0 flex-1 flex-col overflow-hidden animate-fade-in';
 // The full-screen player's column (report §7): lines 26px, then 30px from 980px, 36px from 1320px and 42px from 1680px.
 const fullSizes =
   '[--opentune-lyric-size:26px] min-[980px]:[--opentune-lyric-size:30px] min-[1320px]:[--opentune-lyric-size:36px] min-[1680px]:[--opentune-lyric-size:42px]';

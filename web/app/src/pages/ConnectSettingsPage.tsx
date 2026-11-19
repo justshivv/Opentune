@@ -1,9 +1,9 @@
-import { Check, Copy } from 'lucide-react';
+import { AudioLines, Check, Copy } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { renderSVG } from 'uqr';
 import { PageHeader } from '@/components/PageHeader';
-import { disconnectAll, ensureGroup, joinGroup, setAccountSync, setDeviceName, setEnabled, useConnect } from '@/connect/connect';
+import { disconnectAll, ensureGroup, joinGroup, setAccountSync, setDeviceName, setEnabled, transferTo, useConnect } from '@/connect/connect';
 import { DeviceIcon, doing } from '@/connect/parts';
 import { Toggle } from './IntegrationSettings';
 import { settingsUi } from './settingsStyles';
@@ -11,6 +11,10 @@ import { settingsUi } from './settingsStyles';
 const primary = 'flex-none rounded-pill bg-key-bg px-5 py-2 type-body-emphasized text-white disabled:opacity-45';
 const secondary = 'flex-none rounded-pill bg-quaternary px-4 py-2 type-body-emphasized text-primary disabled:opacity-45';
 const field = 'min-w-0 flex-1 rounded-[12px] border-0 bg-quaternary px-3 py-2.5 type-body text-primary';
+// A device, as in the player's Devices panel: its icon on a tile, its name over what it's doing,
+// the playing mark at the end. A click moves the music there.
+const deviceRow = 'relative grid w-full grid-cols-[40px_minmax(0,1fr)_24px] items-center gap-x-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-quaternary hairline-[68px]';
+const deviceTile = 'grid size-10 place-items-center rounded-[10px] bg-quaternary text-secondary';
 
 /**
  * Settings › Your devices: this browser among the person's phones and
@@ -113,19 +117,26 @@ export default function ConnectSettingsPage() {
           />
         </section>
 
-        <h3 className={settingsUi.sectionHeader}>{view?.devices.length ? 'Here now' : 'No other device is here right now'}</h3>
-        {!!view?.devices.length && (
+        <h3 className={settingsUi.sectionHeader}>Here now</h3>
+        {view ? (
           <section className={settingsUi.group}>
-            {view.devices.map((d) => (
-              <div key={d.id} className={`${settingsUi.controlRow} gap-3`}>
-                <span className="text-secondary"><DeviceIcon form={d.form} /></span>
-                <span className={settingsUi.rowText}>
-                  <span>{d.name || 'Another device'}</span>
-                  {doing(d) && <span className={settingsUi.rowDetail}>{doing(d)}</span>}
-                </span>
-              </div>
-            ))}
+            {[{ id: view.myId, name: `${saved.name || 'This browser'} (this browser)`, form: 'web' as const, line: null }, ...view.devices.map((d) => ({ id: d.id, name: d.name || 'Another device', form: d.form, line: doing(d) }))].map((d) => {
+              const active = view.activeId === d.id;
+              return (
+                <button key={d.id} className={deviceRow} onClick={() => transferTo(d.id)} title={active ? 'Playing here' : 'Play here'}>
+                  <span className={deviceTile}><DeviceIcon form={d.form} /></span>
+                  <span className="min-w-0">
+                    <span className={`block truncate type-body-emphasized ${active ? 'text-key' : 'text-primary'}`}>{d.name}</span>
+                    <span className={`block truncate type-callout ${active ? 'text-key' : 'text-secondary'}`}>{d.line ?? (active ? 'Playing here' : 'Ready to play')}</span>
+                  </span>
+                  {active ? <AudioLines size={18} className="text-key" /> : <span />}
+                </button>
+              );
+            })}
           </section>
+        ) : null}
+        {view && !view.devices.length && (
+          <p className={settingsUi.footer}>{view.relays ? 'Open OpenTune on your phone and it shows up here.' : 'Connecting…'}</p>
         )}
 
         <section className={`${settingsUi.group} mt-5 p-4`}>

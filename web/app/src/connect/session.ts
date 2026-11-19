@@ -39,7 +39,10 @@ export interface ConnectPlayer {
 export interface Snapshot {
   track: CTrack | null;
   private: boolean;
+  /** Moving: the clock other devices run on for this one. Not while it stalls to load. */
   playing: boolean;
+  /** Meant to play, stalled or not: starting to play is judged by this, so a stall ending isn't a start. */
+  wants?: boolean;
   pos: number;
   /** What comes after [track]. */
   queue: CTrack[];
@@ -194,7 +197,8 @@ export class ConnectSession {
     const now = this.player.snapshot();
     this.mine = now;
     if (!now) return this.refresh();
-    const started = now.playing && !before?.playing;
+    const meant = (s: Snapshot | null | undefined) => !!(s?.wants ?? s?.playing);
+    const started = meant(now) && !meant(before);
     // Taking the music: a new song, or starting it. Pausing leaves it where it was taken.
     if (now.track?.id !== before?.track?.id || now.private !== before?.private || started) this.mineAt = this.clock();
     if (started) for (const d of this.devices.values()) if (d.state?.playing) this.command(d.id, 'pause', { quiet: true });
