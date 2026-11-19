@@ -1307,6 +1307,8 @@ fun PlayerLayout(
                                             },
                                             firstFill = Color.White.copy(alpha = 0.14f),
                                             secondFill = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            // The Poster layout's clear glass, as on the buttons by the title.
+                                            glass = com.opentune.ui.components.posterLayout(),
                                             modifier = Modifier.weight(1f),
                                             first = { enabled ->
                                                 // Its two halves split by a hairline; the fill is the morphing one behind.
@@ -1736,7 +1738,9 @@ private fun StarButton(liked: Boolean, onClick: () -> Unit) {
         pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 500f))
     }
     Box(
-        Modifier.size(46.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f))
+        Modifier.size(46.dp)
+            // The Poster layout's clear glass, like the menu beside it.
+            .then(if (com.opentune.ui.components.posterLayout()) Modifier.posterGlass(CircleShape) else Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.14f)))
             .clickable(indication = com.opentune.ui.components.FocusRing(CircleShape), interactionSource = null) {
                 haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE)
                 if (!liked) pops++

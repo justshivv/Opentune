@@ -210,7 +210,7 @@ fun SongMenuSheet(
                 }
             }
         }
-        HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        MenuGroupBreak()
     }
     val body: @Composable ColumnScope.() -> Unit = {
         // Menu picks play the card out as they act.
@@ -255,7 +255,7 @@ fun SongMenuSheet(
                 }
             }
             if (top != null || tools != null) {
-                HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                MenuGroupBreak()
                 top?.invoke(this, close)
                 tools?.invoke(this, close)
             }
@@ -524,6 +524,16 @@ private fun QuickAction(icon: ImageVector, label: String, active: Boolean, progr
             fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp), maxLines = 1)
         else Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp), maxLines = 1)
     }
+}
+
+/**
+ * Between a menu's groups: a rule across, or in the Poster layout, whose rows each carry their
+ * own hairline, a little space, so no second line sits against a row's.
+ */
+@Composable
+fun MenuGroupBreak() {
+    if (posterLayout()) androidx.compose.foundation.layout.Spacer(Modifier.height(10.dp))
+    else HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
 
 @Composable

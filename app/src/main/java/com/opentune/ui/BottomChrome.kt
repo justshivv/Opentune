@@ -369,21 +369,37 @@ private fun PosterChrome(c: ChromeContent, fold: () -> Float, onExpand: () -> Un
  * The Poster dock's focus pill: a pill of lit glass behind the open place. Picking another,
  * it jumps: lifts off and swells as it leaves, flies across, then lands on the new place with
  * a small squash and settles. [still] (reduced motion) just slides it over.
+ *
+ * Its motion counts each drawn frame as at most [PILL_FRAME_MS] of time. A tab whose page is
+ * heavy to build (Home, rebuilt when it's gone back to) holds up the first frames for about
+ * as long as the jump lasts; on the frame clock the pill had landed by the time anything was
+ * drawn, so it seemed to appear there. This way it waits, then makes the whole jump.
  */
 @Composable
 private fun PosterLens(index: Int, slot: Dp, visible: Boolean, still: Boolean) {
-    val x = remember { Animatable(index.toFloat()) }
-    // 0 resting, 1 at the top of the jump; dipping below 0 is the squash as it lands.
-    val hop = remember { Animatable(0f) }
+    val pill = remember { PillMotion(index.toFloat()) }
     LaunchedEffect(index) {
-        if (x.targetValue == index.toFloat()) return@LaunchedEffect
-        if (still) { x.animateTo(index.toFloat(), tween(220)); return@LaunchedEffect }
-        kotlinx.coroutines.coroutineScope {
-            launch { x.animateTo(index.toFloat(), spring(dampingRatio = 0.74f, stiffness = 230f)) }
-            launch {
-                hop.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
-                hop.animateTo(0f, spring(dampingRatio = 0.38f, stiffness = 260f))
+        val target = index.toFloat()
+        if (pill.x == target && pill.settled()) return@LaunchedEffect
+        if (still) {
+            val from = pill.x
+            var t = 0f
+            var last = -1L
+            while (t < 1f) {
+                val now = withFrameNanos { it }
+                if (last >= 0) t = (t + ((now - last) / 1_000_000f).coerceAtMost(PILL_FRAME_MS) / 220f).coerceAtMost(1f)
+                last = now
+                pill.x = from + (target - from) * FastOutSlowInEasing.transform(t)
             }
+            return@LaunchedEffect
+        }
+        pill.takeOff()
+        var last = -1L
+        while (true) {
+            val now = withFrameNanos { it }
+            if (last >= 0) pill.step(target, ((now - last) / 1_000_000f).coerceAtMost(PILL_FRAME_MS))
+            last = now
+            if (pill.x == target && pill.settled()) break
         }
     }
     val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(240), label = "posterLensAlpha")
@@ -394,8 +410,8 @@ private fun PosterLens(index: Int, slot: Dp, visible: Boolean, still: Boolean) {
             .fillMaxHeight()
             .graphicsLayer {
                 this.alpha = alpha
-                val h = hop.value
-                translationX = x.value * slot.toPx()
+                val h = pill.hop
+                translationX = pill.x * slot.toPx()
                 // Up in the air it rises and grows; landing (h below 0) it squashes wide and low.
                 translationY = -3.dp.toPx() * h.coerceAtLeast(0f)
                 scaleX = 1f + 0.12f * h.coerceAtLeast(0f) - 0.10f * h.coerceAtMost(0f)
@@ -407,6 +423,62 @@ private fun PosterLens(index: Int, slot: Dp, visible: Boolean, still: Boolean) {
             .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.09f))))
             .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.40f), Color.White.copy(alpha = 0.06f))), shape),
     )
+}
+
+/** The longest a frame counts for in the dock pill's motion, in milliseconds. */
+private const val PILL_FRAME_MS = 20f
+
+/**
+ * The dock pill's jump, stepped by hand so each frame's time can be capped: its place, a spring
+ * toward the open slot (damping 0.74, stiffness 230), and its height, which rises over the
+ * first 150 ms and then falls back on a looser spring (0.38, 260), dipping below rest as it
+ * lands: the squash.
+ */
+private class PillMotion(start: Float) {
+    var x by mutableFloatStateOf(start)
+    var hop by mutableFloatStateOf(0f)
+    private var vx = 0f
+    private var vh = 0f
+    /** How far into the rise, in milliseconds; past [RISE_MS] the height is on its spring. */
+    private var lift = RISE_MS
+    /** The height the rise started from: picked again mid-jump, it carries on from where it is. */
+    private var from = 0f
+
+    fun takeOff() {
+        from = hop.coerceAtLeast(0f)
+        lift = 0f
+    }
+
+    fun settled() = kotlin.math.abs(vx) < 0.001f && kotlin.math.abs(hop) < 0.001f && kotlin.math.abs(vh) < 0.001f && lift >= RISE_MS
+
+    fun step(target: Float, ms: Float) {
+        // Small steps keep the springs steady whatever the frame's length.
+        var left = ms / 1000f
+        while (left > 0f) {
+            val dt = minOf(left, 0.004f)
+            left -= dt
+            vx += (-X_STIFF * (x - target) - X_DAMP * vx) * dt
+            x += vx * dt
+            if (lift < RISE_MS) {
+                lift += dt * 1000f
+                hop = from + (1f - from) * FastOutSlowInEasing.transform((lift / RISE_MS).coerceAtMost(1f))
+                vh = 0f
+            } else {
+                vh += (-H_STIFF * hop - H_DAMP * vh) * dt
+                hop += vh * dt
+            }
+        }
+        if (kotlin.math.abs(x - target) < 0.001f && kotlin.math.abs(vx) < 0.001f) { x = target; vx = 0f }
+        if (lift >= RISE_MS && kotlin.math.abs(hop) < 0.001f && kotlin.math.abs(vh) < 0.001f) { hop = 0f; vh = 0f }
+    }
+
+    private companion object {
+        const val RISE_MS = 150f
+        const val X_STIFF = 230f
+        val X_DAMP = 2f * 0.74f * kotlin.math.sqrt(230f)
+        const val H_STIFF = 260f
+        val H_DAMP = 2f * 0.38f * kotlin.math.sqrt(260f)
+    }
 }
 
 /** One of the Poster dock's destinations: its icon over its name, a soft pill behind the open one. */

@@ -212,6 +212,14 @@ class DockScreenshotTest {
             at = t
             save("dock-poster-jump-$t", idle = false)
         }
+        // And back to Home: the same jump the other way.
+        selected = 0
+        at = 0L
+        for (t in listOf(80L, 200L, 1500L)) {
+            compose.mainClock.advanceTimeBy(t - at)
+            at = t
+            save("dock-poster-home-$t", idle = false)
+        }
     }
 
     private fun save(name: String, idle: Boolean = true) {

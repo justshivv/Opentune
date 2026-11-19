@@ -867,7 +867,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
                     Text(c.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            com.opentune.ui.components.MenuGroupBreak()
         },
     ) {
         val card = com.opentune.ui.components.LocalFloatingCard.current

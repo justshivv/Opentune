@@ -1,5 +1,6 @@
 package com.opentune.ui.player
 
+import com.opentune.ui.components.posterGlass
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onPlaced
@@ -457,6 +458,8 @@ fun MorphPill(
     modifier: Modifier = Modifier,
     /** When the cover is flying, the pill follows that same transition clock. */
     progress: (() -> Float?)? = null,
+    /** The Poster layout's clear glass on each set, in place of the two fills. */
+    glass: Boolean = false,
     first: @Composable (enabled: Boolean) -> Unit,
     secondContent: @Composable (enabled: Boolean) -> Unit,
 ) {
@@ -488,6 +491,7 @@ fun MorphPill(
                 clip = true
             }
             .drawBehind {
+                if (glass) return@drawBehind
                 val p = currentProgress()
                 val w = pillWidth(widths[0], widths[1], p)
                 drawRoundRect(
@@ -502,10 +506,11 @@ fun MorphPill(
             // stopping at their own ends, a lit button showed a second edge inside the pill's.
             fun overhang(i: Int): Float =
                 (pillWidth(widths[0], widths[1], currentProgress()) - widths[i]) / 2f
-            Box(Modifier.zIndex(if (second) 0f else 1f).sweepMask(old = true, set = 0, widths, currentProgress)) {
+            val backing = if (glass) Modifier.posterGlass(androidx.compose.foundation.shape.RoundedCornerShape(percent = 50)) else Modifier
+            Box(Modifier.zIndex(if (second) 0f else 1f).sweepMask(old = true, set = 0, widths, currentProgress).then(backing)) {
                 androidx.compose.runtime.CompositionLocalProvider(LocalPillOverhang provides { overhang(0) }) { first(!second) }
             }
-            Box(Modifier.zIndex(if (second) 1f else 0f).sweepMask(old = false, set = 1, widths, currentProgress)) {
+            Box(Modifier.zIndex(if (second) 1f else 0f).sweepMask(old = false, set = 1, widths, currentProgress).then(backing)) {
                 androidx.compose.runtime.CompositionLocalProvider(LocalPillOverhang provides { overhang(1) }) { secondContent(second) }
             }
         },
