@@ -1,5 +1,6 @@
 package com.opentune.ui.components
 
+import kotlinx.coroutines.async
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.drawBehind
@@ -417,29 +418,38 @@ fun CollectionContextMenu(
     val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
     val inAccount = accountLists.any { it.browseId?.removePrefix("VL") == list.browseId.removePrefix("VL") }
     val kind = if (list.type == BrowseType.ALBUM) "album" else "playlist"
-    // Add to playlist: the list's songs are read, then the playlist picker takes over from the menu.
+    // Add to playlist: the picker takes over from the menu at once while the list's songs are
+    // read behind it (that can take seconds); a playlist picked meanwhile is filled when they're in.
     var adding by remember { mutableStateOf(false) }
     if (adding) {
-        var songs by remember { mutableStateOf<List<com.opentune.data.model.Song>?>(null) }
-        LaunchedEffect(list.browseId) {
-            songs = try {
-                com.opentune.data.MusicRepository.collection(list.browseId).songs
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                emptyList()
+        val songs = remember(list.browseId) {
+            listScope.async {
+                try {
+                    com.opentune.data.MusicRepository.collection(list.browseId).songs
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    emptyList()
+                }
             }
         }
-        val found = songs
-        when {
-            found == null -> Unit
-            found.isEmpty() -> LaunchedEffect(Unit) {
+        var loaded by remember { mutableStateOf<List<com.opentune.data.model.Song>?>(null) }
+        LaunchedEffect(songs) {
+            val found = songs.await()
+            loaded = found
+            if (found.isEmpty()) {
                 com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't read the {0}'s songs", kind), context)
                 adding = false
                 onDismiss()
             }
-            else -> AddAllToPlaylistDialog(found, onDismiss = { adding = false; onDismiss() }, onDone = { adding = false; onDismiss() })
         }
+        AddAllToPlaylistDialog(
+            songs = loaded,
+            stand = com.opentune.data.model.Song(list.browseId, list.title, list.subtitle, list.thumbnailUrl),
+            withSongs = { block -> listScope.launch { songs.await().takeIf { it.isNotEmpty() }?.let(block) } },
+            onDismiss = { adding = false; onDismiss() },
+            onDone = { adding = false; onDismiss() },
+        )
         return
     }
     val entries = buildList {
@@ -468,3 +478,6 @@ fun CollectionContextMenu(
     }
     ContextMenu(anchor, onDismiss = { if (!adding) onDismiss() }, entries = entries, liftCorner = liftCorner, preview = preview)
 }
+
+/** Where a long-press menu's "Add to playlist" reads a list's songs: it outlives the menu, so a playlist picked before they're in still gets them. */
+private val listScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)

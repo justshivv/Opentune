@@ -198,7 +198,24 @@ private fun androidx.compose.foundation.layout.RowScope.BarAction(icon: ImageVec
 
 /** Picks one of your playlists (or a new one) and adds every song in [songs] to it, skipping those already there. */
 @Composable
-internal fun AddAllToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit, onDone: () -> Unit) {
+internal fun AddAllToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit, onDone: () -> Unit) =
+    AddAllToPlaylistDialog(songs, stand = null, withSongs = { it(songs) }, onDismiss, onDone)
+
+/**
+ * The same, opened before the songs are in: an album's or playlist's long-press menu fetches
+ * its songs, which can take seconds, and the picker shouldn't wait for that. Until [songs]
+ * arrive the picker shows [stand] (the list itself) as what's being added, and a playlist
+ * picked meanwhile is filled through [withSongs] once they're in, even if the picker has
+ * closed by then.
+ */
+@Composable
+internal fun AddAllToPlaylistDialog(
+    songs: List<Song>?,
+    stand: Song?,
+    withSongs: (block: (List<Song>) -> Unit) -> Unit,
+    onDismiss: () -> Unit,
+    onDone: () -> Unit,
+) {
     val context = LocalContext.current.applicationContext
     val all by LibraryStore.playlists.collectAsState()
     val playlists = remember(all) { all.filter { it.spotifyId == null } }
@@ -207,31 +224,37 @@ internal fun AddAllToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit, on
     val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
     val account by com.opentune.data.library.LibraryCache.playlists.collectAsState()
     val owned by com.opentune.data.library.LibraryCache.owned.collectAsState()
-    val online = signedIn && songs.any { isYouTubeId(it.videoId) }
+    // Still loading, the songs are taken to be YouTube Music's, as an album's or playlist's are.
+    val online = signedIn && (songs == null || songs.any { isYouTubeId(it.videoId) })
     val accountPlaylists = if (online) remember(account, owned, playlists) { com.opentune.data.library.PlaylistLinks.pickable(account, owned, playlists) } else emptyList()
-    val ids = remember(songs) { songs.mapTo(HashSet()) { it.videoId } }
-    fun addTo(id: String) {
+    val ids = remember(songs) { songs.orEmpty().mapTo(HashSet()) { it.videoId } }
+    fun addTo(id: String, these: List<Song>) {
         val have = LibraryStore.playlist(id)?.songs?.map { it.videoId }?.toHashSet().orEmpty()
-        val fresh = songs.filter { it.videoId !in have }
+        val fresh = these.filter { it.videoId !in have }
         if (fresh.isNotEmpty()) LibraryStore.addAllToPlaylist(id, fresh)
     }
     PlaylistPicker(
-        songs = songs,
+        songs = songs ?: listOfNotNull(stand),
         local = playlists.map { p ->
-            localTarget(p, p.songs.count { it.videoId in ids }, add = { addTo(p.id) }, remove = { LibraryStore.removeSongsFromPlaylist(p.id, ids) })
+            localTarget(p, p.songs.count { it.videoId in ids }, add = { withSongs { these -> addTo(p.id, these) } },
+                remove = { withSongs { these -> LibraryStore.removeSongsFromPlaylist(p.id, these.mapTo(HashSet()) { it.videoId }) } })
         },
         account = accountPlaylists.map { p ->
             accountTarget(p, null, add = {
-                com.opentune.data.library.PlaylistSync.addAllToAccountPlaylist(p.playlistId, songs) { ok ->
-                    if (!ok) com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add them to {0}", p.title), context)
+                withSongs { these ->
+                    com.opentune.data.library.PlaylistSync.addAllToAccountPlaylist(p.playlistId, these) { ok ->
+                        if (!ok) com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add them to {0}", p.title), context)
+                    }
                 }
             })
         },
         online = online,
         onCreate = { name, privacy ->
             val id = LibraryStore.createPlaylist(name, privacy = privacy)
-            addTo(id)
-            com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added {0} to {1}", songs.size, name), context)
+            withSongs { these ->
+                addTo(id, these)
+                com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added {0} to {1}", these.size, name), context)
+            }
             onDone()
         },
         onDone = onDone,

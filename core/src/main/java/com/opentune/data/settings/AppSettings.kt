@@ -596,8 +596,8 @@ data class InterfaceSettings(
     val performanceProfile: PerformanceProfile = PerformanceProfile.PERFORMANCE,
     /** Player backgrounds and their glow hold still instead of drifting (Battery saver). */
     val stillBackdrops: Boolean = false,
-    /** The rate high performance mode asks for, in Hz; 0 for the screen's fastest. */
-    val refreshRateHz: Int = 0,
+    /** The rate high performance mode asks for, in Hz; 0 (saved by older versions) counts as 60. */
+    val refreshRateHz: Int = 60,
     /** How the full player rises over the page and drops away. */
     val playerMotion: PlayerMotion = PlayerMotion.SPRING,
     /** How the player's cover gives way to the next song's. */

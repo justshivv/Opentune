@@ -185,13 +185,10 @@ class MainActivity : ComponentActivity() {
         val now = display.mode
         val modes = display.supportedModes
             .filter { it.physicalWidth == now.physicalWidth && it.physicalHeight == now.physicalHeight }
-        // Only 60, 90 and 120 Hz are offered; "fastest" (0, from before) is the fastest of those.
+        // Only 60, 90 and 120 Hz are offered; 0, saved by older versions, is 60 like a new install.
         val offered = modes.filter { it.refreshRate.roundToInt() in com.opentune.ui.settings.OFFERED_RATES }.ifEmpty { modes }
-        val best = when {
-            !on -> null
-            hz <= 0 -> offered.maxByOrNull { it.refreshRate }
-            else -> offered.minByOrNull { kotlin.math.abs(it.refreshRate - hz) }
-        }
+        val want = if (hz <= 0) 60 else hz
+        val best = if (!on) null else offered.minByOrNull { kotlin.math.abs(it.refreshRate - want) }
         val id = best?.modeId ?: 0
         if (window.attributes.preferredDisplayModeId != id) {
             window.attributes = window.attributes.apply { preferredDisplayModeId = id }

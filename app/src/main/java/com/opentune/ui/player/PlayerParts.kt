@@ -1462,7 +1462,10 @@ private fun MiniRow(
         val fold = com.opentune.ui.components.LocalPosterFold.current
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides ink.on) {
             Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
+                AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini",
+                    // Folded, the card is as tall as the round cover plus 3 dp each side: the cover moves
+                    // left to the same 3 dp, so it sits evenly in the card's round end.
+                    modifier = Modifier.weight(1f).graphicsLayer { translationX = -5.dp.toPx() * fold().coerceIn(0f, 1f) }) { s ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Artwork(
                             s.thumbnailUrl.artworkAt(ROW_ART_PX),

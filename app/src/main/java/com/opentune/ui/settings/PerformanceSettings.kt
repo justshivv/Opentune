@@ -38,10 +38,10 @@ import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
 
 /**
- * High performance mode and the refresh rate it asks for. Turning it on also
- * asks for unrestricted battery use: Android's battery saver throttles apps it
- * restricts, which shows up as dropped frames and a stutter on the first
- * scrolls after the app comes back.
+ * High performance mode and the refresh rate it asks for, 60 Hz unless a faster one is picked.
+ * Picking a faster one also asks for unrestricted battery use: Android's battery saver
+ * throttles apps it restricts, which shows up as dropped frames and a stutter on the first
+ * scrolls after the app comes back. At 60 Hz there's nothing to keep up, so it isn't asked.
  */
 @Composable
 internal fun HighPerformanceRows(ui: InterfaceSettings) {
@@ -56,11 +56,13 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
         onDispose { lifecycle.removeObserver(observer) }
     }
     val rates = remember { supportedRates(context) }
-    val chosen = ui.refreshRateHz.takeIf { it in rates } ?: rates.lastOrNull() ?: 60
-    // Already on (from before, or turned on elsewhere) but still restricted: asked once a run,
-    // here, rather than only at the moment the switch is flipped.
+    // 60 Hz unless a faster rate was picked (0, from older versions, is 60 too).
+    val chosen = ui.refreshRateHz.takeIf { it in rates } ?: rates.firstOrNull { it >= 60 } ?: rates.firstOrNull() ?: 60
+    val fast = ui.highRefreshRate && chosen > 60
+    // A faster rate already chosen (from before, or elsewhere) but still restricted: asked once
+    // a run, here, rather than only at the moment it's picked.
     LaunchedEffect(Unit) {
-        if (ui.highRefreshRate && !unrestricted && !askedThisRun) {
+        if (fast && !unrestricted && !askedThisRun) {
             askedThisRun = true
             askBattery = true
         }
@@ -69,10 +71,7 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
     ToggleRow(
         "High performance mode",
         ui.highRefreshRate,
-        { v ->
-            AppSettings.updateUi { it.copy(highRefreshRate = v) }
-            if (v && !unrestricted) { askedThisRun = true; askBattery = true }
-        },
+        { v -> AppSettings.updateUi { it.copy(highRefreshRate = v) } },
         summary = if (ui.highRefreshRate) com.opentune.i18n.Tr.f("{0} Hz requested. Android may lower it when needed.", chosen) else "Runs the screen at a faster rate while OpenTune is open, for smoother scrolling",
         icon = ImageVector.vectorResource(AppIcons.Speed),
     )
@@ -83,11 +82,14 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
                 options = rates,
                 selected = chosen,
                 label = { com.opentune.i18n.Tr.f("{0} Hz", it) },
-                onSelect = { hz -> AppSettings.updateUi { it.copy(refreshRateHz = hz) } },
+                onSelect = { hz ->
+                    AppSettings.updateUi { it.copy(refreshRateHz = hz) }
+                    if (hz > 60 && !unrestricted) { askedThisRun = true; askBattery = true }
+                },
             )
         })
     }
-    if (ui.highRefreshRate && !unrestricted) {
+    if (fast && !unrestricted) {
         RowDivider()
         SettingRow(
             "Allow unrestricted battery use",

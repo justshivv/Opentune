@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.vectorResource
@@ -30,7 +31,8 @@ import com.opentune.ui.theme.AppIcons
 /**
  * Discord's channel invite. The whole row is the button: it fills its slot in
  * the settings card edge to edge in the brand's blurple, so the card's own
- * rounded corners shape it. Pass a clip in [modifier] where it stands alone.
+ * rounded corners shape it; in the Poster layout, with no card, it rounds itself. Pass a clip
+ * in [modifier] where it stands alone.
  */
 @Composable
 internal fun CommunityBanner(modifier: Modifier = Modifier) {
@@ -38,6 +40,12 @@ internal fun CommunityBanner(modifier: Modifier = Modifier) {
     Row(
         modifier
             .fillMaxWidth()
+            // The Poster layout's groups have no card to shape it, so it rounds itself.
+            .then(
+                if (com.opentune.ui.components.posterLayout()) Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
+                else Modifier,
+            )
             .background(DISCORD_BLURPLE)
             .clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, com.opentune.ui.components.Support.DISCORD.toUri())) } }
             .padding(horizontal = 20.dp, vertical = 16.dp),
