@@ -119,7 +119,7 @@ Apps read the list each time they come to the front (at most every 10 minutes) a
 
 ## Keeping within the free plan
 
-Apps send their cumulative totals at most every three hours, or sooner once a day has ended, rather than after every song. Apps from before this change still send after every song; the Worker answers a report that comes within 20 minutes of the last one from the same installation with `429` and writes nothing, and those apps keep the totals and send them later. A report whose play count hasn't grown writes no rows. The public count, the badge and the add-on list are kept in the Worker's memory for a few minutes (a minute for the add-on list), so they don't read D1 each time.
+Apps send their cumulative totals at most every three hours, or sooner once a day has ended, rather than after every song. Apps from before this change still send after every song; the Worker answers a report that comes within 20 minutes of the last one from the same installation with `429` and writes nothing, and those apps keep the totals and send them later. A report whose play count hasn't grown writes no rows. The public count and the badges are counted once a day: the result is saved in D1 and shared by every Worker instance, and Shields.io is told to keep each badge for a day. The add-on list is kept in the Worker's memory for a minute. Summary tables kept by triggers mean none of these scan the activity history.
 
 ### Four-hour batches and listener cohorts
 

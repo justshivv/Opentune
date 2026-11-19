@@ -414,16 +414,17 @@ test('reports keep the summary tables in step with the activity they record', as
   assert.deepEqual([counts.installations, counts.daily, counts.weekly, counts.monthly], [2, 1, 2, 2]);
 });
 
-test('the shared public copy is counted once per refresh window, whichever instance asks', async () => {
+test('the shared public copy is counted once a day, whichever instance asks', async () => {
   const db = database();
   const day = '2026-10-09', at = Date.parse('2026-10-09T12:00:00Z');
   const report = n => ingest(db, {installationId:id.replace(/1$/, String(n)), days:[{day,version:'1.0.1',plays:1,timeZone:'Asia/Kolkata'}]}, now);
   await report(1);
-  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at)).daily, 1);
+  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at)).installations, 1);
   await report(2);
-  // Within the window every instance gets the saved copy without counting again.
-  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at + SNAPSHOT_MS - 1)).daily, 1);
+  assert.equal(SNAPSHOT_MS, 24 * 60 * 60_000);
+  // Within the day every instance gets the saved copy without counting again.
+  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at + SNAPSHOT_MS - 1)).installations, 1);
   // After it, the copy is counted again and saved for the others.
-  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at + SNAPSHOT_MS)).daily, 2);
-  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at + SNAPSHOT_MS + 1)).daily, 2);
+  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at + SNAPSHOT_MS)).installations, 2);
+  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at + SNAPSHOT_MS + 1)).installations, 2);
 });

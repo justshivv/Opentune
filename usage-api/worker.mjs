@@ -209,7 +209,7 @@ export function badge(counts, params = new URLSearchParams()) {
     : metric === 'weekly' ? counts.weekly
     : counts.monthly;
   const label = params.get('label') || (metric === 'installations' ? 'installs' : 'active');
-  return { schemaVersion: 1, label, message: shortCount(value), color: '1db954', cacheSeconds: 300 };
+  return { schemaVersion: 1, label, message: shortCount(value), color: '1db954', cacheSeconds: 86400 };
 }
 
 // Kept in this isolate's memory (one copy per Cloudflare location, gone when it
@@ -229,9 +229,9 @@ export function forget(db, key) { remembered.get(db)?.delete(key); }
 
 // The memory above is per instance, and Cloudflare starts new ones all the time, so on
 // its own it let nearly every badge request count again. This copy lives in D1 and is
-// shared by every instance: a request reads one row, and once it's [SNAPSHOT_MS] old,
-// one instance claims the refresh and counts again while the rest serve the copy.
-export const SNAPSHOT_MS = 10 * 60_000;
+// shared by every instance: a request reads one row, and once a day ([SNAPSHOT_MS]) one
+// instance claims the refresh and counts again while the rest serve the copy.
+export const SNAPSHOT_MS = 24 * 60 * 60_000;
 const changed = result => (result?.meta?.changes ?? result?.changes ?? 0) > 0;
 export async function sharedCounts(db, zone, now = Date.now()) {
   const [{results: [row]}] = await db.batch([db.prepare('SELECT payload, computed_at FROM public_snapshot WHERE zone=?').bind(zone)]);
@@ -316,10 +316,10 @@ export default {
       }
       if (request.method==='GET' && path==='/v1/public') {
         let zone;try { zone=reportZone(url.searchParams.get('timeZone') || 'Asia/Kolkata'); } catch(e) {return json({error:e.message},400);}
-        return json(await rememberFor(env.DB, 'public:'+zone, 300_000, () => sharedCounts(env.DB,zone)));
+        return json(await rememberFor(env.DB, 'public:'+zone, SNAPSHOT_MS, () => sharedCounts(env.DB,zone)));
       }
       if (request.method==='GET' && path==='/v1/badge') {
-        return json(badge(await rememberFor(env.DB, 'public:Asia/Kolkata', 300_000, () => sharedCounts(env.DB,'Asia/Kolkata')),url.searchParams));
+        return json(badge(await rememberFor(env.DB, 'public:Asia/Kolkata', SNAPSHOT_MS, () => sharedCounts(env.DB,'Asia/Kolkata')),url.searchParams));
       }
       if (request.method!=='POST' || !['/v1/activity','/v1/download'].includes(path)) return json({error:'Not found'},404);
       if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'JSON required'},415);
