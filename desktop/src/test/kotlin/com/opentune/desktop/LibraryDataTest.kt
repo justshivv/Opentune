@@ -5,6 +5,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.Text
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
@@ -82,6 +84,15 @@ class LibraryDataTest {
         runBlocking { kotlinx.coroutines.withTimeout(2_000) { while (LikedSongs.all.value.size != 1) kotlinx.coroutines.delay(10) } }
         assertEquals(listOf(here.videoId), LikedSongs.all.value.map { it.videoId })
         Library.setLiked(here, false)
+    }
+
+    /** A cover's glyph is the icon's own outline, in its 24-unit viewport, drawn without a cached picture. */
+    @Test fun aCoversGlyphIsTheIconsPath() {
+        val heart = Icons.Rounded.Favorite
+        val bounds = glyphPath(heart).getBounds()
+        assertFalse(bounds.isEmpty)
+        assertTrue(bounds.left >= 0f && bounds.top >= 0f && bounds.right <= heart.viewportWidth && bounds.bottom <= heart.viewportHeight)
+        assertTrue(bounds.width > heart.viewportWidth * 0.6f)
     }
 
     @Test fun theStackGoesBackTheWayItCameAndDropsWhatsGone() {

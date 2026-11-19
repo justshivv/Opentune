@@ -132,6 +132,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -675,12 +676,48 @@ private fun RecentSearches(queries: List<String>, onPick: (String) -> Unit) {
 internal fun LibraryPage(shelf: Shelf, onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit, onOpenAny: (Any) -> Unit = {}) =
     LibraryShelfPage(shelf, onShelf, onPlaylist, onOpenAny)
 
-/** A list's own cover where it has no artwork: its icon on a gradient. */
+/**
+ * A list's own cover where it has no artwork: its icon on a gradient. The icon is drawn as its
+ * own path ([VectorGlyph]), not through an Icon: a card's cover sits in layers that lift, clip
+ * and zoom it, and a large Icon's cached picture drawn through them came out with grey and pale
+ * blocks cut across it on some graphics cards, as the old morphing play button did.
+ */
 @Composable
 internal fun IconCover(icon: ImageVector, colours: List<Color>, modifier: Modifier) {
     Box(modifier.background(Brush.linearGradient(colours)), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(84.dp))
+        VectorGlyph(icon, Color.White, Modifier.size(84.dp))
     }
+}
+
+/**
+ * [icon] drawn straight onto the canvas as a filled path in [tint], sized to [modifier]: no
+ * picture of it is cached or drawn offscreen, so it's drawn cleanly at any scale.
+ */
+@Composable
+internal fun VectorGlyph(icon: ImageVector, tint: Color, modifier: Modifier) {
+    val path = remember(icon) { glyphPath(icon) }
+    Canvas(modifier) {
+        val sx = size.width / icon.viewportWidth
+        val sy = size.height / icon.viewportHeight
+        scale(sx, sy, pivot = Offset.Zero) { drawPath(path, tint) }
+    }
+}
+
+/** Every path of [icon] as one, in its viewport's units. */
+internal fun glyphPath(icon: ImageVector): androidx.compose.ui.graphics.Path {
+    val out = androidx.compose.ui.graphics.Path()
+    fun walk(group: androidx.compose.ui.graphics.vector.VectorGroup) {
+        group.forEach { node ->
+            when (node) {
+                is androidx.compose.ui.graphics.vector.VectorPath -> out.addPath(
+                    androidx.compose.ui.graphics.vector.PathParser().addPathNodes(node.pathData).toPath().apply { fillType = node.pathFillType },
+                )
+                is androidx.compose.ui.graphics.vector.VectorGroup -> walk(node)
+            }
+        }
+    }
+    walk(icon.root)
+    return out
 }
 
 internal enum class Shelf(val label: String) { LIKED("Liked songs"), PLAYLISTS("Playlists"), SERVER("Your server"), RECENT("Recently played") }

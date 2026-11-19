@@ -775,7 +775,7 @@ private fun rememberPlaylistCards(
 ): List<LibCard> {
     val gradient = { colours: List<Color>, icon: ImageVector -> @Composable { m: Modifier -> IconCover(icon, colours, m) } }
     val newArt = remember { @Composable { m: Modifier ->
-        Box(m.background(WebInk.quinary), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, null, Modifier.size(48.dp), tint = PageInk.grey) }
+        Box(m.background(WebInk.quinary), contentAlignment = Alignment.Center) { VectorGlyph(Icons.Rounded.Add, PageInk.grey, Modifier.size(48.dp)) }
     } }
     val likedArt = remember { gradient(listOf(Color(0xFF5B3CFF), Color(0xFFB7A6FF)), Icons.Rounded.Favorite) }
     return remember(liked, entries) {
