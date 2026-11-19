@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react';
+import { Suspense, useRef, useState } from 'react';
 import { lazyRecovering } from '@/lib/staleBuild';
 import { useUi, type SidePanel as Panel } from '@/state/ui';
 import { motionAllowed } from './playerMorph';
@@ -20,7 +20,18 @@ export function SidePanel() {
   // it can't be seen leaving. Either way it goes at once.
   if (!panel && shown && (fullScreen || !motionAllowed())) setShown(null);
   const leaving = !panel && shown !== null;
-  if (!shown || fullScreen) return null;
+  // Which panel was showing before: moving from one to another while open, the new one fades in.
+  const before = useRef<Panel>(null);
+  // The panel that came in that way keeps its class while it's up, so a redraw can't cut it short.
+  const fadedIn = useRef<Panel>(null);
+  if (before.current !== null && shown !== null && before.current !== shown) fadedIn.current = shown;
+  if (shown) before.current = shown;
+  if (!shown || fullScreen) {
+    before.current = null;
+    fadedIn.current = null;
+    return null;
+  }
+  const swapped = fadedIn.current === shown;
 
   return (
     <aside
@@ -31,15 +42,17 @@ export function SidePanel() {
         if (leaving && e.target === e.currentTarget) setShown(null);
       }}
     >
-      {shown === 'up-next' ? (
-        <UpNext />
-      ) : shown === 'devices' ? (
-        <DevicesPanel />
-      ) : (
-        <Suspense fallback={null}>
-          <LyricsPanel />
-        </Suspense>
-      )}
+      <div key={shown} className={`flex min-h-0 flex-1 flex-col ${swapped ? 'ot-panel-swap' : ''}`}>
+        {shown === 'up-next' ? (
+          <UpNext />
+        ) : shown === 'devices' ? (
+          <DevicesPanel />
+        ) : (
+          <Suspense fallback={null}>
+            <LyricsPanel />
+          </Suspense>
+        )}
+      </div>
     </aside>
   );
 }
