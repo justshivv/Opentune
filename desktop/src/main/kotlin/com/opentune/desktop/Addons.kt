@@ -325,19 +325,16 @@ internal object AddonPairing {
 
     private fun now(s: Stored) = System.currentTimeMillis() + s.offset
 
-    private fun stored(): Stored? = runCatching { json.decodeFromString<Stored>(file.readText()) }.getOrNull()
+    private fun stored(): Stored? = runCatching { json.decodeFromString<Stored>(SecretVault.read(file)!!) }.getOrNull()
 
     private fun store(value: Stored?) {
         if (value == null) {
-            file.delete()
+            SecretVault.write(file, null)
             _until.value = 0
             return
         }
-        file.parentFile.mkdirs()
-        file.writeText(json.encodeToString(Stored.serializer(), value))
-        // The key signs as this computer: readable by this user only.
-        file.setReadable(false, false); file.setReadable(true, true)
-        file.setWritable(false, false); file.setWritable(true, true)
+        // The key signs as this computer: sealed by the vault with a key the system keeps.
+        SecretVault.write(file, json.encodeToString(Stored.serializer(), value))
         _until.value = value.expires
     }
 

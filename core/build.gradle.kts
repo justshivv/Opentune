@@ -101,6 +101,8 @@ val newPipeExtractorStripped = tasks.register<org.gradle.api.tasks.bundling.Jar>
 }
 
 dependencies {
+    // The models, lyrics parsing and room crypto every app shares (see shared/build.gradle.kts).
+    api(project(":shared"))
     // The apps use these types directly too, so they're passed on.
     api("androidx.core:core-ktx:1.15.0")
     api("androidx.work:work-runtime-ktx:2.10.1")

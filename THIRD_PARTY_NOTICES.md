@@ -93,3 +93,22 @@ the browser preview; it uses DM Sans and system fallbacks.
 The settings icons are Google's [Material Symbols](https://fonts.google.com/icons)
 in the Rounded style, licensed under the Apache License 2.0. In the app they
 are the `symbol_*` vector drawables, listed in `ui/theme/AppIcons.kt`.
+
+## Desktop app libraries
+
+The desktop app bundles these libraries, each under its own licence:
+
+| Library | Use | Licence |
+|---|---|---|
+| [JNA](https://github.com/java-native-access/jna) and JNA Platform | window frame, Windows data protection, macOS Keychain and libsecret calls | Apache 2.0 or LGPL 2.1 |
+| [SLF4J](https://www.slf4j.org/) API and simple logger | library logging into `desktop.log` | MIT |
+| [FFmpeg](https://ffmpeg.org/) through [JavaCPP Presets](https://github.com/bytedeco/javacpp-presets) | decoding | FFmpeg: LGPL 3 or later as built (`--enable-version3`, without the GPL parts). JavaCPP and JavaCV: Apache 2.0 or GPL 2 with the Classpath exception |
+| [jFLAC](https://github.com/nguillaumin/jflac) | FLAC decoding | LGPL 2.1 |
+| [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc) | the local library | Apache 2.0 |
+| [GraalJS](https://github.com/oracle/graaljs) | running YouTube's player script | Universal Permissive License 1.0 and MIT |
+| [Rhino](https://github.com/mozilla/rhino) | the same, where GraalJS can't start | MPL 2.0 |
+| [jsoup](https://jsoup.org/) | HTML parsing | MIT |
+| [JSON-java](https://github.com/stleary/JSON-java) | JSON | Public domain |
+| [Haze](https://github.com/chrisbanes/haze) | frosted glass | Apache 2.0 |
+| [MaterialKolor](https://github.com/jordond/MaterialKolor) | colour schemes from cover art | MIT |
+| [Coil](https://github.com/coil-kt/coil) | images | Apache 2.0 |

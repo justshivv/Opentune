@@ -12,6 +12,9 @@ import java.util.Map;
 public class Context {
     public static final int MODE_PRIVATE = 0;
 
+    /** The preferences that hold sign-ins: the YouTube Music cookies and the Subsonic token. */
+    private static final java.util.Set<String> SECRET = java.util.Set.of("account", "subsonic");
+
     private final File root;
     private final Map<String, SharedPreferences> prefs = new HashMap<>();
 
@@ -33,7 +36,7 @@ public class Context {
     }
 
     public synchronized SharedPreferences getSharedPreferences(String name, int mode) {
-        return prefs.computeIfAbsent(name, n -> new FilePreferences(new File(root, "prefs/" + n + ".properties")));
+        return prefs.computeIfAbsent(name, n -> new FilePreferences(new File(root, "prefs/" + n + ".properties"), SECRET.contains(n)));
     }
 
     /** There are no Android system services here; callers take null as "not available". */

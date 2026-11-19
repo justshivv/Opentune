@@ -1,6 +1,6 @@
 # Desktop upgrade plan
 
-Status: draft for approval. No code has changed for this plan yet. Nothing below Phase 1 starts until it is approved, and the decisions in "Conflicts that need a decision" are settled.
+Status: approved. Phase 1 is done (see "Phase 1 as built" below). The decisions in "Conflicts that need a decision" are still open.
 
 Estimates are in working days for one engineer who knows the codebase, and include tests. They are rough, and the native work (Phases 2 and 3) carries the most risk.
 
@@ -68,6 +68,16 @@ Each phase is one PR into `fix/crossfade-automix` unless you want them against `
 - Packaging: SHA-256 checksum file for every artifact in `desktop-release.yml`. Code signing steps for Windows (signtool with a certificate from secrets) and macOS (codesign and notarytool) that run only when the secrets exist, so forks still build. Linux packages get a detached GPG signature if a key is set. (2 days, more if certificates need buying)
 - Opt-in telemetry on desktop, matching whatever you decide for point 4. (0.5 day)
 - Write `docs/architecture-desktop.md` and `docs/security.md`, update `THIRD_PARTY_NOTICES.md`.
+
+#### Phase 1 as built
+
+- `:shared` exists (Kotlin Multiplatform, `jvm` target) with the models, lyrics parsing, album matching and room crypto. `:core` passes it on with `api`; the desktop depends on it directly. See [architecture-desktop.md](architecture-desktop.md).
+- `SecretVault` seals the YouTube Music cookies, the Subsonic token, the Last.fm session and the add-on device key with AES-256-GCM, the key kept by DPAPI, the macOS Keychain or the Secret Service. Without a keyring the app asks, as in point 5. Tested against a real GNOME Keyring on Linux. The Windows and macOS backends are untested until someone runs a build on those systems.
+- SLF4J's simple logger writes library logs into `desktop.log`.
+- An update check reads GitHub's latest release twice a day and shows a banner. It can be turned off.
+- The desktop install count is off unless turned on. It sends a random ID and the version, marked `-desktop`. The phone's default is unchanged until point 4 is decided.
+- Release files get a `.sha256` each and one `SHA256SUMS` list. Windows, macOS and Linux signing steps run when their secrets are set. None are set yet.
+- [security.md](security.md) and the desktop libraries in `THIRD_PARTY_NOTICES.md`.
 
 ### Phase 2: Audio engine (10 to 14 days, highest risk)
 

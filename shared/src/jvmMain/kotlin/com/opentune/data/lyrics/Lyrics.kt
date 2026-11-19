@@ -166,7 +166,7 @@ object LrcParser {
      * of time for each Chinese, Japanese or Korean character, less for each letter
      * of an alphabet, where several letters make a syllable.
      */
-    internal fun singingMs(text: String): Long {
+    fun singingMs(text: String): Long {
         var ms = 400L
         for (c in text) {
             if (!Character.isLetterOrDigit(c)) continue

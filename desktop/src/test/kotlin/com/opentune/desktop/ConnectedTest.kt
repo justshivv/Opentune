@@ -36,6 +36,7 @@ class ConnectedTest {
     fun thePhonesLastFmSignInIsKeptOnlyWithTheKeyThatMadeIt() {
         val dir = Files.createTempDirectory("lastfm").toFile()
         val file = java.io.File(dir, "lastfm.json")
+        SecretVault.start(dir, MemoryKeys())
         LastFmDesktop.useFile(file)
         try {
             val key = "b".repeat(32)
@@ -52,6 +53,9 @@ class ConnectedTest {
             if (java.nio.file.FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
                 assertEquals("rw-------", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(file.toPath())))
             }
+            // Sealed, so the session key isn't in the file to read.
+            assertTrue(SecretVault.isSealed(file))
+            assertFalse(file.readText().contains("s3ss"))
             // Signing out here forgets it here.
             LastFmDesktop.signOut()
             assertEquals(null, LastFmDesktop.state.value.session)

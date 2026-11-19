@@ -109,7 +109,7 @@ object AlbumCovers {
      */
     suspend fun coverFor(song: Song, durationMs: Long = 0): String? {
         if (!wants(song) || song.artist.isBlank() || song.title.isBlank()) return null
-        if (song.thumbnailUrl?.startsWith(LOCAL_ART) == true && hasLocalArt(song.thumbnailUrl)) return null
+        song.thumbnailUrl?.let { if (it.startsWith(LOCAL_ART) && hasLocalArt(it)) return null }
         val key = keyOf(song)
         cache[key]?.let { return it.ifEmpty { null } }
         val cleaned = TrackNameCleaner.clean(song.title, song.artist)

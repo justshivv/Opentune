@@ -369,8 +369,12 @@ fun DesktopApp(startPanel: SidePanel? = null, startAccountMenu: Boolean = false,
                 }
 
                 NoticePill(Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp))
+                // A newer release, until it's closed for that version (Updates).
+                UpdateBanner(Modifier.align(Alignment.TopCenter).padding(top = 56.dp))
                 if (helpOpen) ShortcutsDialog { helpOpen = false }
                 CommentsHost()
+                // Where no keyring answered: asked once how to keep sign-ins.
+                KeyringChoiceDialog()
             }
             }
         }

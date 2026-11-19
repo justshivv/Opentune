@@ -7,7 +7,7 @@ package com.opentune.data
  * and the artist line is written differently (`Asha Bhosle, Rahul Dev Burman`
  * for `Asha Bhosle & R. D. Burman`).
  */
-internal object AlbumMatch {
+object AlbumMatch {
     private val brackets = Regex("""\s*[(\[][^)\]]*[)\]]""")
     private val dashTail = Regex("""\s+[-–|]\s+.*$""")
     private val notWord = Regex("""[^\p{L}\p{N}]+""")

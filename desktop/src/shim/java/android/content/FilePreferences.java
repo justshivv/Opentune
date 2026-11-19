@@ -10,14 +10,33 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-/** [SharedPreferences] kept in a properties file, written whole on every change. */
+/**
+ * [SharedPreferences] kept in a properties file, written whole on every change.
+ * A [secret] one holds a sign-in and goes through the desktop's vault, which
+ * seals it with a key the system keeps (com.opentune.desktop.SecretVault).
+ */
 final class FilePreferences implements SharedPreferences {
     private final File file;
+    private final boolean secret;
     private final Properties values = new Properties();
 
     FilePreferences(File file) {
+        this(file, false);
+    }
+
+    FilePreferences(File file, boolean secret) {
         this.file = file;
-        if (file.exists()) {
+        this.secret = secret;
+        if (secret) {
+            String text = com.opentune.desktop.SecretVault.INSTANCE.read(file);
+            if (text != null) {
+                try {
+                    values.load(new java.io.StringReader(text));
+                } catch (IOException ignored) {
+                    // As below: unreadable reads as empty.
+                }
+            }
+        } else if (file.exists()) {
             try (InputStream in = new FileInputStream(file)) {
                 values.load(in);
             } catch (IOException ignored) {
@@ -103,6 +122,16 @@ final class FilePreferences implements SharedPreferences {
     }
 
     private boolean save() {
+        if (secret) {
+            java.io.StringWriter text = new java.io.StringWriter();
+            try {
+                values.store(text, null);
+                com.opentune.desktop.SecretVault.INSTANCE.write(file, text.toString());
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
         file.getParentFile().mkdirs();
         File tmp = new File(file.getParentFile(), file.getName() + ".tmp");
         try (OutputStream out = new FileOutputStream(tmp)) {

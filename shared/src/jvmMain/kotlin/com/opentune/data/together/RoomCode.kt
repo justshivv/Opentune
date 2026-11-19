@@ -117,7 +117,7 @@ class RoomKey(internal val bytes: ByteArray, private val tag: String) {
 private val gcmRandom = SecureRandom()
 
 /** AES-GCM: base64(iv || ciphertext), with [tag] as associated data. */
-internal fun gcmSeal(key: SecretKeySpec, tag: String, plain: String): String {
+fun gcmSeal(key: SecretKeySpec, tag: String, plain: String): String {
     val iv = ByteArray(12).also(gcmRandom::nextBytes)
     val c = Cipher.getInstance("AES/GCM/NoPadding")
     c.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, iv))
@@ -125,7 +125,7 @@ internal fun gcmSeal(key: SecretKeySpec, tag: String, plain: String): String {
     return java.util.Base64.getEncoder().encodeToString(iv + c.doFinal(plain.toByteArray()))
 }
 
-internal fun gcmOpen(key: SecretKeySpec, tag: String, sealed: String): String? = runCatching {
+fun gcmOpen(key: SecretKeySpec, tag: String, sealed: String): String? = runCatching {
     val all = java.util.Base64.getDecoder().decode(sealed)
     if (all.size < 12 + 16) return null
     val c = Cipher.getInstance("AES/GCM/NoPadding")
@@ -134,5 +134,5 @@ internal fun gcmOpen(key: SecretKeySpec, tag: String, sealed: String): String? =
     String(c.doFinal(all, 12, all.size - 12))
 }.getOrNull()
 
-internal fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
-internal fun String.hexToBytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+fun String.hexToBytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()

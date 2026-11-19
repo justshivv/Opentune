@@ -49,7 +49,7 @@ object ExploreFeed {
             shelf.items.filter { it.browseId != null }.map { Tile.Item(it, shelf.title, Kind.NEW) }
         }
         val chartTiles = chartShelves.flatMap { shelf ->
-            shelf.items.filter { it.browseId != null && !it.browseId.startsWith("UC") }.map { Tile.Item(it, shelf.title, Kind.CHART) }
+            shelf.items.filter { it.browseId?.startsWith("UC") == false }.map { Tile.Item(it, shelf.title, Kind.CHART) }
         }
         Canvas(artists, weave(listOf(moodTiles, newTiles, chartTiles)).distinctBy { it.key })
     }

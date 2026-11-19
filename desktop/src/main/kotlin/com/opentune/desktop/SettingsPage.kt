@@ -717,6 +717,8 @@ private fun AboutSection() {
             detail = "Settings and playlists are kept in ${appContext.getFilesDir().parentFile.absolutePath}.",
             leading = { androidx.compose.foundation.Image(rememberLogo(Logo.APP), null, Modifier.size(28.dp).clip(RoundedCornerShape(9.dp))) },
         )
+        SavedSignInsRow()
+        UpdateAndUsageRows()
         listOf(
             Triple("Source code", "GitHub", config.github) to (Icons.Rounded.Code to Color(0xFF24292F)),
             Triple("Community", "Discord", config.discord) to (null to Brand.Discord),

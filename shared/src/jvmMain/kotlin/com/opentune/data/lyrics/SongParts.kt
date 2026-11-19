@@ -32,7 +32,7 @@ object SongParts {
         return starts.firstOrNull { it > positionMs + 3_000 }
     }
 
-    internal fun inferred(lines: List<LyricLine>): List<Long> {
+    fun inferred(lines: List<LyricLine>): List<Long> {
         val keys = lines.map { key(it.text) }
         val counts = keys.filter { it.length >= MIN_KEY }.groupingBy { it }.eachCount()
         val top = counts.values.maxOrNull() ?: return emptyList()

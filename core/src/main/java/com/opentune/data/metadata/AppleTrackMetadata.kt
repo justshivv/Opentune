@@ -107,7 +107,7 @@ object AppleTrackMetadataRepository {
             val duration = (row["trackTimeMillis"] as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
             if (normal(title) != normal(song.title) || duration <= 0 || kotlin.math.abs(duration - durationMs) > 3_000) return@mapNotNull null
             if (wantedArtists.isEmpty() || !artists(artist).containsAll(wantedArtists)) return@mapNotNull null
-            if (!song.albumName.isNullOrBlank() && normalAlbum(album) != normalAlbum(song.albumName)) return@mapNotNull null
+            song.albumName?.takeIf { it.isNotBlank() }?.let { if (normalAlbum(album) != normalAlbum(it)) return@mapNotNull null }
             val id = (row["trackId"] as? JsonPrimitive)?.longOrNull?.takeIf { it > 0 } ?: return@mapNotNull null
             val url = row.text("trackViewUrl")?.toHttpUrlOrNull()?.takeIf {
                 it.isHttps && it.host in setOf("music.apple.com", "itunes.apple.com") && it.username.isEmpty() && it.password.isEmpty()

@@ -31,7 +31,7 @@ import org.json.JSONObject
  *
  * Sign-in is Last.fm's desktop flow: a token approved on last.fm in the
  * browser, then traded for a session key. No password passes through
- * OpenTune. Kept in ~/.opentune/lastfm.json.
+ * OpenTune. Kept in ~/.opentune/lastfm.json, sealed by [SecretVault].
  */
 object LastFmDesktop {
     private const val API = "https://ws.audioscrobbler.com/2.0/"
@@ -305,18 +305,10 @@ object LastFmDesktop {
     @Synchronized
     private fun update(change: (State) -> State) {
         _state.value = change(_state.value)
-        runCatching {
-            file.parentFile.mkdirs()
-            val tmp = File(file.parentFile, file.name + ".tmp")
-            // The session key and secret are for this user only (where the system has POSIX
-            // permissions), made so before anything is written into the file.
-            tmp.delete()
-            tmp.createNewFile()
-            runCatching { java.nio.file.Files.setPosixFilePermissions(tmp.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rw-------")) }
-            tmp.writeText(json.encodeToString(State.serializer(), _state.value))
-            if (!tmp.renameTo(file)) { file.delete(); tmp.renameTo(file) }
-        }
+        // The session key and secret: sealed by the vault with a key the system keeps.
+        runCatching { SecretVault.write(file, json.encodeToString(State.serializer(), _state.value)) }
+            .onFailure { System.err.println("[lastfm] not saved: ${it.message}") }
     }
 
-    private fun load(): State = runCatching { json.decodeFromString(State.serializer(), file.readText()) }.getOrDefault(State())
+    private fun load(): State = runCatching { json.decodeFromString(State.serializer(), SecretVault.read(file)!!) }.getOrDefault(State())
 }

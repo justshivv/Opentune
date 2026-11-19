@@ -21,6 +21,8 @@ internal val appContext by lazy { android.content.Context(File(System.getPropert
 
 fun main(args: Array<String>) {
     if ("--self-check" in args) return selfCheck()
+    // Library logs to desktop.log, set before any library asks for its logger.
+    Logging.install()
     CrashLog.install()
     CrashLog.startDiagnostics()
     // Before anything is drawn: a renderer that failed to start last time is passed over.
@@ -29,6 +31,8 @@ fun main(args: Array<String>) {
     // laid out waited two seconds on that on Windows.
     Thread({ runCatching { org.jetbrains.skia.FontMgr.default.let { it.familiesCount; it.matchFamilyStyle(null, org.jetbrains.skia.FontStyle.NORMAL) } } }, "font-warm")
         .apply { isDaemon = true; start() }
+    // The key the sign-ins are sealed with, from the system's keyring, before anything reads one.
+    SecretVault.start()
     // The shared settings and music server, as the phone starts them.
     AppSettings.init(appContext)
     // A setting changed in the last moment before closing is written on its way out.
@@ -40,6 +44,9 @@ fun main(args: Array<String>) {
     com.opentune.data.account.AccountStore.init(appContext)
     // Its library on YouTube Music, read in the background and again on each sign-in or sign-out.
     AccountLibrary.start()
+    // Whether a newer release is out, and the install count if the listener turned it on.
+    Updates.start()
+    DesktopUsage.start()
     // Listen together, run against this computer's player; a guest's controls go to the host.
     com.opentune.data.together.Together.init(appContext)
     com.opentune.data.lyrics.LyricsTranslator.init(appContext)
@@ -118,6 +125,21 @@ private fun selfCheck() {
             "ran"
         },
         "SQLite" to { "${Library.playlists.value.size} playlists, ${Library.liked.value.size} liked" },
+        // AES-GCM and the JNA platform classes on the trimmed runtime, with a key in memory only:
+        // this computer's keyring is left alone.
+        "Vault" to {
+            val dir = java.nio.file.Files.createTempDirectory("opentune-check").toFile()
+            try {
+                SecretVault.start(dir, InMemoryKeys())
+                val file = File(dir, "lastfm.json")
+                SecretVault.write(file, "check")
+                check(SecretVault.isSealed(file) && SecretVault.read(file) == "check") { "didn't seal and open" }
+                check(KeyBackend.forThisSystem(dir) != null || !(com.sun.jna.Platform.isWindows() || com.sun.jna.Platform.isMac() || com.sun.jna.Platform.isLinux())) { "no keyring backend" }
+                "sealed and opened"
+            } finally {
+                dir.deleteRecursively()
+            }
+        },
     )
     var failed = false
     for ((name, run) in checks) {

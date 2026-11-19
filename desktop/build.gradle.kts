@@ -25,7 +25,6 @@ val appVersionCode = Regex("""versionCode = (\d+)""").find(appBuild)!!.groupValu
 
 val coreSources = rootProject.file("core/src/main/java")
 val sharedFromCore = listOf(
-    "com/opentune/data/model/**",
     "com/opentune/data/innertube/Innertube.kt",
     "com/opentune/data/innertube/InnertubeParser.kt",
     "com/opentune/data/innertube/PlayerClient.kt",
@@ -35,8 +34,6 @@ val sharedFromCore = listOf(
     "com/opentune/data/DebugLog.kt",
     "com/opentune/data/AppLog.kt",
     "com/opentune/data/TrackIds.kt",
-    // Matching a video's song to its album track, for Go to album.
-    "com/opentune/data/AlbumMatch.kt",
     "com/opentune/data/UnmeteredNetwork.kt",
     "com/opentune/data/settings/AppSettings.kt",
     "com/opentune/data/history/ListeningHistoryTarget.kt",
@@ -52,12 +49,10 @@ val sharedFromCore = listOf(
     "com/opentune/data/covers/AppleArtistArt.kt",
     "com/opentune/data/covers/ArtistSignatures.kt",
     // Lyrics from every source the phone asks, without the romanizer (Android's ICU).
-    "com/opentune/data/lyrics/Lyrics.kt",
     "com/opentune/data/lyrics/LyricsRepository.kt",
     "com/opentune/data/lyrics/PodcastTranscripts.kt",
     "com/opentune/data/lyrics/LyricsTranslator.kt",
     "com/opentune/data/lyrics/LyricsQuality.kt",
-    "com/opentune/data/lyrics/SongParts.kt",
     "com/opentune/data/lyrics/BetterLyrics.kt",
     "com/opentune/data/lyrics/KuGou.kt",
     "com/opentune/data/lyrics/LyricsPlus.kt",
@@ -79,8 +74,6 @@ val sharedFromCore = listOf(
     "com/opentune/data/account/AccountStore.kt",
     "com/opentune/data/account/SessionPairing.kt",
     // Listen together: the room protocol as the phone and the web player speak it.
-    "com/opentune/data/together/RoomCode.kt",
-    "com/opentune/data/together/Schnorr.kt",
     "com/opentune/data/together/Nostr.kt",
     "com/opentune/data/together/Messages.kt",
     "com/opentune/data/together/RoomSession.kt",
@@ -217,6 +210,8 @@ val bytedecoPlatform = when (javafxPlatform) {
 }
 
 dependencies {
+    // Models, lyrics parsing, album matching and room crypto, shared with the phone.
+    implementation(project(":shared"))
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
     implementation(compose.materialIconsExtended)
@@ -245,10 +240,14 @@ dependencies {
     // The library (liked songs, playlists, every play) in SQLite.
     implementation("org.xerial:sqlite-jdbc:3.47.1.0")
     implementation("org.json:json:20240303")
+    // Where the libraries' SLF4J logging goes: standard error, which desktop.log copies (Logging).
+    implementation("org.slf4j:slf4j-simple:2.0.18")
     implementation("org.jflac:jflac-codec:1.5.2")
     implementation("com.google.zxing:core:3.5.4")
     // Windows' own frame and materials under the title bar the app draws: user32 and dwmapi, from Kotlin.
     implementation("net.java.dev.jna:jna:5.17.0")
+    // Windows data protection (DPAPI) for the vault key.
+    implementation("net.java.dev.jna:jna-platform:5.17.0")
 
     // The phone's colour engine (schemes from a seed or the cover) and the blur behind its glass.
     implementation("com.materialkolor:material-kolor:4.0.0")
@@ -277,6 +276,8 @@ dependencies {
 tasks.test {
     // The live check runs only when asked: -Dopentune.live=true
     systemProperty("opentune.live", System.getProperty("opentune.live") ?: "false")
+    // A key in memory, never this computer's keyring (see SecretVault).
+    systemProperty("opentune.vault", "memory")
     System.getProperty("opentune.video")?.let { systemProperty("opentune.video", it) }
     // Pictures of the window, drawn offscreen: -Dopentune.shots=/some/folder
     System.getProperty("opentune.shots")?.let { systemProperty("opentune.shots", it) }

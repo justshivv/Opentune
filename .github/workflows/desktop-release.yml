@@ -82,6 +82,18 @@ jobs:
     timeout-minutes: 60
     env:
       TAG: ${{ needs.release.outputs.tag }}
+      # Signing runs only where its secrets are set (see docs/security.md); without them the
+      # files are built and checksummed as before, unsigned.
+      WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+      MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -98,13 +110,56 @@ jobs:
       - name: RPM tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm
+      # A keychain of its own holding the Developer ID certificate, for codesign to find.
+      - name: Signing keychain (macOS)
+        if: runner.os == 'macOS' && env.MACOS_CERT_P12_BASE64 != '' && env.MACOS_SIGN_IDENTITY != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(openssl rand -hex 16)"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "MACOS_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
       - name: Installers
         shell: bash
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
           DISCORD_APP_ID: ${{ vars.DISCORD_APP_ID || secrets.DISCORD_APP_ID }}
-        run: ./gradlew --no-daemon ${{ matrix.tasks }} :desktop:createDistributable
+        run: |
+          set -euo pipefail
+          extra=()
+          # Signed with the Developer ID when the keychain step ran; notarized when Apple's account is set too.
+          if [ -n "${MACOS_KEYCHAIN:-}" ]; then
+            extra+=(-Pcompose.desktop.mac.sign=true "-Pcompose.desktop.mac.signing.identity=$MACOS_SIGN_IDENTITY" "-Pcompose.desktop.mac.signing.keychain=$MACOS_KEYCHAIN")
+          fi
+          ./gradlew --no-daemon ${{ matrix.tasks }} :desktop:createDistributable ${extra[@]+"${extra[@]}"}
+          if [ -n "${MACOS_KEYCHAIN:-}" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            ./gradlew --no-daemon :desktop:notarizeDmg ${extra[@]+"${extra[@]}"} \
+              "-Pcompose.desktop.mac.notarization.appleID=$APPLE_ID" \
+              "-Pcompose.desktop.mac.notarization.password=$APPLE_APP_PASSWORD" \
+              "-Pcompose.desktop.mac.notarization.teamID=$APPLE_TEAM_ID"
+            xcrun stapler staple desktop/build/compose/binaries/main/dmg/*.dmg
+          fi
+      # The app's own launcher, signed before it goes into the portable zip.
+      - name: Sign the launcher (Windows)
+        if: runner.os == 'Windows' && env.WINDOWS_CERT_PFX_BASE64 != ''
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match "\\x64\\" } | Sort-Object FullName -Descending | Select-Object -First 1
+          "SIGNTOOL=$($signtool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SIGN_PFX=$pfx" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          & $signtool.FullName sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfx /p $env:WINDOWS_CERT_PASSWORD "desktop/build/compose/binaries/main/app/OpenTune/OpenTune.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       # The packaged app on its own trimmed runtime: FFmpeg, GraalJS and SQLite must load there too.
       - name: Packaged app self-check
         if: runner.os != 'Windows'
@@ -134,8 +189,58 @@ jobs:
               ;;
           esac
           ls -la "$out"
+      - name: Sign the installers (Windows)
+        if: runner.os == 'Windows' && env.WINDOWS_CERT_PFX_BASE64 != ''
+        shell: pwsh
+        run: |
+          Get-ChildItem (Join-Path $env:RUNNER_TEMP "desktop") -Include *.msi,*.exe -Recurse | ForEach-Object {
+            & $env:SIGNTOOL sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $env:SIGN_PFX /p $env:WINDOWS_CERT_PASSWORD $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          Remove-Item $env:SIGN_PFX
+      # A detached signature beside each Linux package, from the project's release key.
+      - name: Sign the packages (Linux)
+        if: runner.os == 'Linux' && env.GPG_PRIVATE_KEY != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/gnupg" && mkdir -p -m 700 "$GNUPGHOME"
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          for f in "$RUNNER_TEMP"/desktop/*; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign "$f"
+          done
+          rm -rf "$GNUPGHOME"
+      # A SHA-256 beside each file, written after signing so it matches what's downloaded.
+      - name: Checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/desktop"
+          for f in OpenTune-*; do
+            case "$f" in *.sha256|*.asc) continue ;; esac
+            if command -v sha256sum > /dev/null; then sha256sum "$f" > "$f.sha256"; else shasum -a 256 "$f" > "$f.sha256"; fi
+          done
+          cat ./*.sha256
       - name: Attach to the release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" "$RUNNER_TEMP"/desktop/* --clobber --repo "${{ github.repository }}"
+
+  # One list of every desktop file's SHA-256, attached beside them.
+  checksums:
+    needs: [release, desktop]
+    if: needs.release.outputs.tag != ''
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: SHA256SUMS for the desktop files
+        run: |
+          set -euo pipefail
+          mkdir sums && cd sums
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern "OpenTune-$TAG-*.sha256"
+          cat ./*.sha256 | sort -k2 > "OpenTune-$TAG-desktop-SHA256SUMS.txt"
+          cat "OpenTune-$TAG-desktop-SHA256SUMS.txt"
+          gh release upload "$TAG" "OpenTune-$TAG-desktop-SHA256SUMS.txt" --clobber --repo "${{ github.repository }}"

@@ -169,8 +169,9 @@ class CarLibrary(private val context: Context) {
             val shelfSongs = shelf.items.mapNotNull { it.toSongOrNull() }
             listed[parent] = shelfSongs
             shelf.items.take(PER_SHELF).mapNotNull { item ->
-                val built = if (item.browseId != null) {
-                    browseFolder(item.browseId, item.title, item.subtitle, item.thumbnailUrl, shelf.title)
+                val browseId = item.browseId
+                val built = if (browseId != null) {
+                    browseFolder(browseId, item.title, item.subtitle, item.thumbnailUrl, shelf.title)
                 } else {
                     item.toSongOrNull()?.let { song(parent, it, group = shelf.title) }
                 }
