@@ -39,7 +39,10 @@ export function ShelfScroller({ kind, children }: { kind: ShelfKind; children: R
   const measure = useCallback(() => {
     const el = list.current;
     if (!el) return;
-    setEdges({ start: el.scrollLeft <= 2, end: el.scrollLeft + el.clientWidth >= el.scrollWidth - 2 });
+    const start = el.scrollLeft <= 2;
+    const end = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
+    // Runs on every scroll event: keep the same object unless an edge changed, so scrolling doesn't re-render the shelf.
+    setEdges((was) => (was.start === start && was.end === end ? was : { start, end }));
   }, []);
 
   useEffect(() => {

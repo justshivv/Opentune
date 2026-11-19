@@ -1,3 +1,4 @@
+import { MonitorSmartphone } from 'lucide-react';
 import { useState } from 'react';
 import {
   BackwardIcon,
@@ -18,14 +19,18 @@ import { usePlayer } from '@/state/player';
 import { useUi } from '@/state/ui';
 import { useLiquidGlass } from '@/lib/liquidGlass';
 import { Lcd } from './Lcd';
+import { useControlling } from '@/connect/connect';
+import { RemoteLcd } from '@/connect/RemoteLcd';
 
-const control = 'grid place-items-center rounded-[6px] disabled:opacity-40';
+// A soft fill on hover and a little give when pressed, as the full player's buttons have.
+const feedback = 'transition-[background-color,opacity,scale] duration-150 ease-out enabled:hover:bg-quinary enabled:active:scale-90';
+const control = `grid place-items-center rounded-[6px] ${feedback} disabled:opacity-40`;
 // Shuffle and repeat: secondary, and when on the key colour on a fill of it with a dot under (.ot-toggle).
 const toggle = `${control} ot-toggle size-7 text-secondary aria-pressed:text-key`;
 const transport = `${control} size-7 text-primary`;
-const action = 'grid h-7 w-6 place-items-center rounded-[4px] text-primary aria-pressed:text-key';
+const action = `grid h-7 w-6 place-items-center rounded-[4px] ${feedback} text-primary aria-pressed:text-key`;
 // The actions the volume level slides in over: they fade out while it's open.
-const fading = `${action} transition-opacity group-data-volume-open/actions:pointer-events-none group-data-volume-open/actions:opacity-0`;
+const fading = `${action} group-data-volume-open/actions:pointer-events-none group-data-volume-open/actions:opacity-0`;
 
 const slider = [
   'absolute top-1/2 right-[33px] mx-0 mb-0 -mt-2 block h-4 w-24 cursor-pointer appearance-none bg-transparent',
@@ -85,12 +90,17 @@ export function PlayerBar() {
   const toggleSidePanel = useUi((s) => s.toggleSidePanel);
   const lyrics = useLyrics();
   const hasLyrics = !!lyrics.data || sidePanel === 'lyrics';
-  const hasTrack = usePlayer((s) => s.nowPlaying !== null);
+  // Another of the person's devices playing: the bar shows and controls it (see Connect).
+  const remote = useControlling();
+  const hasTrack = usePlayer((s) => s.nowPlaying !== null) || !!remote;
   const videoId = usePlayer((s) => s.nowPlaying?.videoId ?? null);
-  const playing = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
-  const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0));
-  const shuffle = usePlayer((s) => s.shuffle);
-  const repeat = usePlayer((s) => s.repeat);
+  const playingHere = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
+  const playing = remote ? !!remote.state?.playing : playingHere;
+  const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0)) || !!remote;
+  const localShuffle = usePlayer((s) => s.shuffle);
+  const localRepeat = usePlayer((s) => s.repeat);
+  const shuffle = remote ? !!remote.state?.shuffle : localShuffle;
+  const repeat = remote ? (remote.state?.repeat ?? 'off') : localRepeat;
   const { togglePlay, next, previous, toggleShuffle, cycleRepeat } = usePlayer.getState();
   const [volumeOpen, setVolumeOpen] = useState(false);
   const glass = useLiquidGlass<HTMLDivElement>(24, 26);
@@ -136,7 +146,7 @@ export function PlayerBar() {
         </div>
 
         <div className="h-full min-w-0 px-4">
-          <Lcd />
+          {remote ? <RemoteLcd device={remote} /> : <Lcd />}
         </div>
 
         <div
@@ -165,6 +175,14 @@ export function PlayerBar() {
             onClick={() => toggleSidePanel('up-next')}
           >
             <UpNextIcon size={18} />
+          </button>
+          <button
+            className={`${fading} ${remote ? 'text-key' : ''}`}
+            aria-label="Devices"
+            aria-pressed={sidePanel === 'devices'}
+            onClick={() => toggleSidePanel('devices')}
+          >
+            <MonitorSmartphone size={18} />
           </button>
           <VolumeControl open={volumeOpen} onOpen={() => setVolumeOpen(true)} />
         </div>

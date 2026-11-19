@@ -11,6 +11,9 @@ import type { SourceState } from '@/lyrics/repository';
 import { enabledSources } from '@/lyrics/settings';
 import { sourceById, type LyricsSourceId } from '@/lyrics/sources';
 import { useLyrics, useLyricsUi } from '@/lyrics/useLyrics';
+import { seekRemote, useControlling } from '@/connect/connect';
+import { positionAt } from '@/connect/session';
+import { useShownNowPlaying } from '@/connect/shown';
 import { getAudio, usePlayer } from '@/state/player';
 import { LyricsSettings } from './LyricsSettings';
 
@@ -97,7 +100,12 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const element = useRef<AmLyricsElement | null>(null);
   const deck = usePlayer((s) => s.deck);
-  const videoId = usePlayer((s) => s.nowPlaying?.videoId);
+  const videoId = useShownNowPlaying()?.videoId;
+  // The person's other device playing (Connect): the lines follow its position, and a click seeks it.
+  const remote = useControlling();
+  const remoteRef = useRef(remote);
+  remoteRef.current = remote;
+  const far = !!remote;
 
   // Created by hand, with its TTML set before it's attached: am-lyrics starts
   // loading the moment it connects, and through React the properties arrive
@@ -114,7 +122,9 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
     el.toggleAttribute('data-full', full);
     const onLineClick = (event: Event) => {
       const timestamp = (event as CustomEvent<{ timestamp: number }>).detail?.timestamp;
-      if (typeof timestamp === 'number') usePlayer.getState().seek(timestamp / 1000);
+      if (typeof timestamp !== 'number') return;
+      if (remoteRef.current) seekRemote(timestamp);
+      else usePlayer.getState().seek(timestamp / 1000);
     };
     el.addEventListener('line-click', onLineClick);
     host.current?.append(el);
@@ -152,47 +162,89 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
   }, [ttml]);
 
   useEffect(() => {
+    const el = element.current;
+    if (!far || !el) return;
+    let frame = 0;
+    const tick = () => {
+      const d = remoteRef.current;
+      if (d) el.currentTime = positionAt(d, Date.now());
+      frame = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => cancelAnimationFrame(frame);
+  }, [far, videoId, ttml]);
+
+  useEffect(() => {
+    if (far) return;
     const audio = getAudio();
     const el = element.current;
     if (!audio || !el) return;
-    const clock = new LyricClock(audio.currentTime * 1000);
+    const clock = new LyricClock(audio.currentTime * 1000, false);
     let discontinuity = 0;
     let frame = 0;
+    let running = false;
     const tick = () => {
       const now = performance.now();
       // The reading and its stamp are taken together.
       el.currentTime = clock.frame(now, Math.trunc(audio.currentTime * 1000), now, discontinuity);
       frame = requestAnimationFrame(tick);
     };
+    // Stopped, seeking or waiting for data: the words stand still where the audio is. am-lyrics
+    // runs its word wipes on the page's own timeline, so they're paused as well, or a word
+    // went on lighting up through a pause and the highlight was ahead once the song went on.
     const hold = () => {
       cancelAnimationFrame(frame);
-      const ms = audio.currentTime * 1000;
+      running = false;
+      const ms = Math.trunc(audio.currentTime * 1000);
       clock.hold(ms, performance.now());
       el.currentTime = ms;
+      freeze(el, true);
     };
     const resume = () => {
+      if (audio.paused || audio.seeking) return;
+      if (running) return;
       cancelAnimationFrame(frame);
+      running = true;
+      const ms = Math.trunc(audio.currentTime * 1000);
+      el.currentTime = ms;
+      freeze(el, false);
+      resync(el, ms);
       clock.restart();
       frame = requestAnimationFrame(tick);
     };
     const onSeeking = () => {
       discontinuity++;
-      if (audio.paused) hold();
+      hold();
+    };
+    const onSeeked = () => {
+      const ms = Math.trunc(audio.currentTime * 1000);
+      el.currentTime = ms;
+      resync(el, ms);
+      resume();
+    };
+    const onWaiting = () => {
+      // Out of data mid-song: the audio stops while it loads, and so do the words.
+      if (!audio.paused) hold();
     };
     audio.addEventListener('seeking', onSeeking);
-    audio.addEventListener('seeked', onSeeking);
+    audio.addEventListener('seeked', onSeeked);
     audio.addEventListener('pause', hold);
+    audio.addEventListener('waiting', onWaiting);
+    audio.addEventListener('playing', resume);
     audio.addEventListener('play', resume);
-    if (audio.paused) hold();
+    if (audio.paused || audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) hold();
     else resume();
     return () => {
       cancelAnimationFrame(frame);
+      freeze(el, false);
       audio.removeEventListener('seeking', onSeeking);
-      audio.removeEventListener('seeked', onSeeking);
+      audio.removeEventListener('seeked', onSeeked);
       audio.removeEventListener('pause', hold);
+      audio.removeEventListener('waiting', onWaiting);
+      audio.removeEventListener('playing', resume);
       audio.removeEventListener('play', resume);
     };
-  }, [deck, videoId, ttml]);
+  }, [deck, videoId, ttml, far]);
 
   // am-lyrics renders and scrolls itself; it only needs the space. Full screen fades it out at the top and bottom.
   return (
@@ -207,6 +259,40 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
   );
 }
 
+/**
+ * Pauses (or plays again) am-lyrics' running word animations. They run on the page's timeline
+ * rather than the song's, so without this they carried on through a pause or a buffering stop.
+ */
+function freeze(el: AmLyricsElement, stop: boolean): void {
+  // Only the ones paused here are played again: am-lyrics pauses some itself while it rewinds.
+  const held = frozen.get(el) ?? [];
+  frozen.delete(el);
+  if (!stop) {
+    for (const animation of held) if (animation.playState === 'paused') animation.play();
+    return;
+  }
+  const root = el.shadowRoot;
+  if (!root || typeof root.getAnimations !== 'function') return;
+  const running = root.getAnimations().filter((animation) => animation.playState === 'running');
+  running.forEach((animation) => animation.pause());
+  frozen.set(el, [...held, ...running]);
+}
+
+const frozen = new WeakMap<AmLyricsElement, Animation[]>();
+
+/**
+ * Puts every running word wipe back where the song is. am-lyrics does this itself only for a
+ * jump of more than half a second; a pause, a buffering stop or a short seek left the wipes off
+ * by up to that much. Its own seek handling is used, so nothing is drawn differently.
+ */
+function resync(el: AmLyricsElement, ms: number): void {
+  const seekTo = (el as unknown as { _onTimeChanged?: (from: number, to: number) => void })._onTimeChanged;
+  if (typeof seekTo === 'function') seekTo.call(el, ms - RESYNC_FROM_MS, ms);
+}
+
+/** Further than am-lyrics' 500 ms, so it treats the update as a seek. */
+const RESYNC_FROM_MS = 1000;
+
 function useUngranted(): string[] {
   return useSyncExternalStore(onUngrantedChange, () => [...ungrantedOrigins].join(','), () => '')
     .split(',')
@@ -217,7 +303,7 @@ const NO_STATES: Partial<Record<LyricsSourceId, SourceState>> = {};
 
 /** The provider picker: which provider these lyrics are from, and the others' answers for this track. */
 function ProviderPicker({ current, full }: { current: LyricsSourceId | null; full: boolean }) {
-  const videoId = usePlayer((s) => s.nowPlaying?.videoId ?? '');
+  const videoId = useShownNowPlaying()?.videoId ?? '';
   const states = useLyricsUi((s) => s.states[videoId]) ?? NO_STATES;
   const picked = useLyricsUi((s) => s.picked[videoId]);
   const pick = useLyricsUi((s) => s.pick);
@@ -356,7 +442,7 @@ const fullSizes =
  */
 export function LyricsPanel({ variant = 'panel' }: { variant?: 'panel' | 'full' }) {
   const lyrics = useLyrics();
-  const hasTrack = usePlayer((s) => s.nowPlaying !== null);
+  const hasTrack = useShownNowPlaying() !== null;
   const ungranted = useUngranted();
   const canvas = useCanvas();
   const fontReady = useLyricFont();

@@ -5,10 +5,15 @@ import { createHashRouter, RouterProvider } from 'react-router';
 import { queryClient } from '@/lib/queryClient';
 import { installStaleBuildRecovery } from '@/lib/staleBuild';
 import { routes } from '@/routes';
+import { playOpening } from '@/shell/opening';
+import { useAppearance } from '@/state/appearance';
 import '@/styles/global.css';
 
 installStaleBuildRecovery();
 const router = createHashRouter(routes);
+
+// The opening, as on the phone, once per load: left out with motion off in Settings or reduced by the system.
+if (useAppearance.getState().motion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) playOpening();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -2,12 +2,13 @@ import { Suspense, useState } from 'react';
 import { lazyRecovering } from '@/lib/staleBuild';
 import { useUi, type SidePanel as Panel } from '@/state/ui';
 import { motionAllowed } from './playerMorph';
+import { DevicesPanel } from '@/connect/DevicesPanel';
 import { UpNext } from './UpNext';
 
 // am-lyrics is large; it loads the first time the panel opens (prompt §3).
 const LyricsPanel = lazyRecovering(() => import('./LyricsPanel').then((m) => ({ default: m.LyricsPanel })));
 
-/** Up Next / Lyrics glass panel (report §7). */
+/** Up Next / Lyrics / Devices glass panel (report §7). */
 export function SidePanel() {
   const panel = useUi((s) => s.sidePanel);
   // Hidden under the full-screen player, which has its own lyrics: one am-lyrics at a time.
@@ -24,7 +25,7 @@ export function SidePanel() {
   return (
     <aside
       className={`absolute inset-y-0 right-0 z-(--z-web-chrome) flex w-(--side-panel-width) flex-col glass-material shadow-glass max-sm:w-full ${leaving ? 'pointer-events-none animate-slide-out' : 'animate-slide-in'}`}
-      aria-label={shown === 'up-next' ? 'Up Next' : 'Lyrics'}
+      aria-label={shown === 'up-next' ? 'Up Next' : shown === 'devices' ? 'Devices' : 'Lyrics'}
       aria-hidden={leaving || undefined}
       onAnimationEnd={(e) => {
         if (leaving && e.target === e.currentTarget) setShown(null);
@@ -32,6 +33,8 @@ export function SidePanel() {
     >
       {shown === 'up-next' ? (
         <UpNext />
+      ) : shown === 'devices' ? (
+        <DevicesPanel />
       ) : (
         <Suspense fallback={null}>
           <LyricsPanel />

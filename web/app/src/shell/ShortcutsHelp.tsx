@@ -54,7 +54,7 @@ export function ShortcutsHelp() {
         <header className="flex items-center justify-between px-5 pt-[18px] pb-2">
           <h2 className="type-title-2-emphasized">Keyboard Shortcuts</h2>
           <button
-            className="grid size-[30px] place-items-center rounded-full bg-quaternary text-secondary"
+            className="grid size-[30px] place-items-center rounded-full bg-quaternary text-secondary transition-colors duration-150 hover:text-primary"
             aria-label="Close"
             onClick={() => setOpen(false)}
             autoFocus

@@ -335,7 +335,17 @@
   /* The names only fade: they stay readable to screen readers. The wordmark and the app link go out of
      reach as well, so the keyboard doesn't land on something that isn't there. */
   .ot-side[data-folded='true'] .ot-side-label { opacity: 0; transition: opacity .12s ease; }
-  .ot-side[data-folded='true'] :is(.ot-side-wordmark, .ot-side-android) { opacity: 0; visibility: hidden; transition: opacity .12s ease, visibility 0s linear .12s; }
+  .ot-side[data-folded='true'] .ot-side-android { opacity: 0; visibility: hidden; transition: opacity .12s ease, visibility 0s linear .12s; }
+  /* Folded, the rail keeps OpenTune's mark at its top, in the middle of the rail; only the name fades.
+     The unfold button sits over the mark, unseen until the pointer (or the keyboard) reaches the top. */
+  .ot-side-top { position: relative; }
+  .ot-side-wordmark-text { transition: opacity .22s ease .14s; }
+  .ot-side-mark { transition: opacity .15s ease; }
+  .ot-side[data-folded='true'] .ot-side-wordmark { min-width: 32px; padding-left: 3px; }
+  .ot-side[data-folded='true'] .ot-side-wordmark-text { opacity: 0; transition: opacity .12s ease; }
+  .ot-side[data-folded='true'] .ot-side-fold { position: absolute; left: 20px; top: 50%; translate: 0 -50%; opacity: 0; transition: opacity .15s ease, background-color .15s ease, color .15s ease; }
+  .ot-side[data-folded='true'] .ot-side-top:is(:hover, :focus-within) .ot-side-fold { opacity: 1; background: var(--systemQuinary); }
+  .ot-side[data-folded='true'] .ot-side-top:is(:hover, :focus-within) .ot-side-mark { opacity: 0; }
   /* Section names become a hairline between the groups of icons. */
   .ot-side[data-folded='true'] .ot-side-header { height: 1px; margin: 12px 4px; padding: 0; color: transparent; background: var(--labelDivider); transition: height .38s var(--ot-ease-settle), margin .38s var(--ot-ease-settle), padding .38s var(--ot-ease-settle), color .1s ease, background-color .2s ease .15s; }
   .ot-side[data-folded='true'] :is(.ot-side-extra, .ot-side-full) { max-height: 0; opacity: 0; transition: max-height .38s var(--ot-ease-settle), opacity .12s ease; }

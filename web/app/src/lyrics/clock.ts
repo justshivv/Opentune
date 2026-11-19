@@ -36,7 +36,12 @@ export class LyricClock {
   private glideStartMs = Number.NaN;
   private glideOffsetMs = 0;
 
-  constructor(startMs: number) {
+  /**
+   * [glideJumps] false lands an announced jump in one step. am-lyrics animates a jump back
+   * itself and resyncs its word wipes only on a step it sees as a seek; a glide reached it as
+   * many small steps, each one restarting its rewind, with the wipes left where they were.
+   */
+  constructor(startMs: number, private readonly glideJumps = true) {
     this.displayedMs = startMs;
   }
 
@@ -193,7 +198,7 @@ export class LyricClock {
 
   private jumpTo(nowMs: number): void {
     const offset = this.displayedMs - this.targetAt(nowMs);
-    if (Math.abs(offset) > GLIDE_MAX_MS) {
+    if (!this.glideJumps || Math.abs(offset) > GLIDE_MAX_MS) {
       this.displayedMs = this.targetAt(nowMs);
       this.glideStartMs = Number.NaN;
     } else {

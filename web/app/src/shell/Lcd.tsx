@@ -142,7 +142,7 @@ export function Lcd() {
             alt=""
             referrerPolicy="no-referrer"
             decoding="async"
-            className="size-full object-cover opacity-0 transition-opacity duration-200 ease-in data-loaded:opacity-100"
+            className="size-full object-cover opacity-0 transition-opacity duration-200 ease-out data-loaded:opacity-100"
             onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
           />
         )}

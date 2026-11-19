@@ -4,6 +4,17 @@ import { createPortal } from 'react-dom';
 import { useAddons } from '@/addons/client';
 import { usePlayer } from '@/state/player';
 import { qualityLabel } from './quality';
+/** How the music sounds on the person's other device playing it (Connect), in its own words. */
+export function RemoteQualityLabel({ text }: { text: string | null }) {
+  if (!text) return <span />;
+  const lossless = /lossless/i.test(text);
+  return (
+    <span className="ot-quality" data-lossless={lossless}>
+      {lossless ? <AudioLines size={17} /> : <span className="ot-hq" aria-hidden="true">HQ</span>}<span>{text}</span>
+    </span>
+  );
+}
+
 export function QualityLabel() {
   const track = usePlayer(s => s.nowPlaying);
   const status = usePlayer(s => s.status);

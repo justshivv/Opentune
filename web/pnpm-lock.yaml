@@ -216,6 +216,9 @@ importers:
       shaka-player:
         specifier: ^4.16.52
         version: 4.16.52
+      uqr:
+        specifier: 0.1.2
+        version: 0.1.2
       youtubei.js:
         specifier: ^18.1.0
         version: 18.1.0
@@ -1566,6 +1569,9 @@ packages:
       webpack:
         optional: true
 
+  uqr@0.1.2:
+    resolution: {integrity: sha512-MJu7ypHq6QasgF5YRTjqscSzQp/W11zoUk6kvmlH+fmWEs63Y0Eib13hYFwAzagRJcVY8WVnlV+eBDUGMJ5IbA==}
+
   vite@8.3.4:
     resolution: {integrity: sha512-IftLE8phJhdNRIGNEV4JCCvfNScoZQVfcXaN8TQropWGJtOHcu+iAB9pHcuGvmEb/kddw0LBe/jS8ztdC6xdiQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2727,6 +2733,8 @@ snapshots:
     optionalDependencies:
       rolldown: 1.2.14
       vite: 8.3.4(@types/node@22.20.5)(jiti@2.7.0)
+
+  uqr@0.1.2: {}
 
   vite@8.3.4(@types/node@22.20.5)(jiti@2.7.0):
     dependencies:

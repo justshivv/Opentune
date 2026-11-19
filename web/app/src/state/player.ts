@@ -193,6 +193,8 @@ function hintOf(track: Track): NowPlaying {
 // come back around as a control.
 
 export type PartyControl = { kind: 'toggle' } | { kind: 'next' } | { kind: 'previous' } | { kind: 'seek'; ms: number };
+/** What Connect can take over: the party's controls, and shuffle and repeat. */
+export type ConnectControl = PartyControl | { kind: 'shuffle' } | { kind: 'repeat' };
 
 export interface PartyHooks {
   /** The user did something to playback, or the queue moved on by itself. */
@@ -209,7 +211,26 @@ let partyHooks: PartyHooks | null = null;
 export function setPartyHooks(hooks: PartyHooks | null): void {
   partyHooks = hooks;
 }
-const intent = () => partyHooks?.onIntent();
+const intent = () => {
+  partyHooks?.onIntent();
+  connectHooks?.onIntent?.();
+};
+
+// ---- Connect's door (connect/connect.ts) --------------------------------------------
+//
+// While another of the person's devices is the one playing, this player's
+// play/pause, skips and seeks act on that device instead.
+
+export interface ConnectHooks {
+  /** True when another device took the control, so nothing happens here. */
+  intercept(control: ConnectControl): boolean;
+  /** The user did something to playback here. */
+  onIntent?(): void;
+}
+let connectHooks: ConnectHooks | null = null;
+export function setConnectHooks(hooks: ConnectHooks | null): void {
+  connectHooks = hooks;
+}
 
 // ---- Store ------------------------------------------------------------------------
 
@@ -378,11 +399,13 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   next() {
+    if (connectHooks?.intercept({ kind: 'next' })) return;
     if (partyHooks?.intercept({ kind: 'next' })) return;
     void advance(false).then(intent);
   },
 
   previous() {
+    if (connectHooks?.intercept({ kind: 'previous' })) return;
     if (partyHooks?.intercept({ kind: 'previous' })) return;
     const { index, queue, repeat } = get();
     const audio = getAudio();
@@ -394,6 +417,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   togglePlay() {
+    if (connectHooks?.intercept({ kind: 'toggle' })) return;
     const audio = getAudio();
     const { nowPlaying, status, index } = get();
     if (!nowPlaying) return;
@@ -411,6 +435,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   seek(seconds) {
+    if (connectHooks?.intercept({ kind: 'seek', ms: seconds * 1000 })) return;
     const audio = getAudio();
     if (!audio) {
       // A restored track not started yet: Play starts it from here.
@@ -425,6 +450,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   toggleShuffle() {
+    if (connectHooks?.intercept({ kind: 'shuffle' })) return;
     const { queue, index, shuffle } = get();
     const head = queue.slice(0, index + 1);
     const upcoming = queue.slice(index + 1);
@@ -447,6 +473,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   cycleRepeat() {
+    if (connectHooks?.intercept({ kind: 'repeat' })) return;
     const repeat: RepeatMode = { off: 'all', all: 'one', one: 'off' }[get().repeat] as RepeatMode;
     set({ repeat });
     saveSettings(get());
@@ -911,9 +938,9 @@ const PARTY_SOURCE: QueueSource = { title: 'Listen Together', type: 'queue' };
 
 export const partyPlayer = {
   /** Puts the party's running order on the player at [index], at [startSec]; starts it only when [play]. */
-  load(tracks: Track[], tiers: ('user' | 'autoplay')[], index: number, startSec: number, play: boolean): Promise<void> {
+  load(tracks: Track[], tiers: ('user' | 'autoplay')[], index: number, startSec: number, play: boolean, source: QueueSource = PARTY_SOURCE): Promise<void> {
     canonical = null;
-    usePlayer.setState({ queue: tracks.map((t, i) => asEntry(t, tiers[i] ?? 'user', PARTY_SOURCE)) });
+    usePlayer.setState({ queue: tracks.map((t, i) => asEntry(t, tiers[i] ?? 'user', source)) });
     return startAt(index, { startSec, autoplay: play });
   },
   play(): void {

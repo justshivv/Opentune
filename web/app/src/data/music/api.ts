@@ -2,7 +2,7 @@ import type { YTMusic, YTNodes } from 'youtubei.js/web';
 import type { Candidate } from '@/playback/queue/builder';
 import { getInnertube, getMusicClient, getSignedInnertube } from '@/playback/youtube/innertube';
 import { isExactArtistMatch, normalizedArtistName } from '@/lib/artistCredits';
-import { LIBRARY_SECTIONS, LIKED_MUSIC_PLAYLIST, type LibrarySection } from './library';
+import { CONNECT_PLAYLIST_TITLE, LIBRARY_SECTIONS, LIKED_MUSIC_PLAYLIST, type LibrarySection } from './library';
 import {
   mapAlbum,
   mapArtist,
@@ -190,13 +190,20 @@ export async function fetchLibrary(section: LibrarySection): Promise<Paged<Brows
   const grids = memo?.getType(YTNodes.Grid) ?? [];
   const lists = [...(memo?.getType(YTNodes.MusicShelf) ?? []), ...(memo?.getType(YTNodes.MusicPlaylistShelf) ?? [])];
   const carousels = memo?.getType(YTNodes.MusicCarouselShelf) ?? [];
-  const page = mapBrowse({ sections: [...grids, ...lists, ...carousels] }, title);
+  const page = withoutConnect(mapBrowse({ sections: [...grids, ...lists, ...carousels] }, title));
   // History is several lists ("Today", "Yesterday"); the rest is one grid or one list.
   const token = (grids[0]?.continuation ?? (lists.length === 1 ? lists[0]?.continuation : null)) || null;
   return { data: { ...page, title }, next: token ? () => orEnd(() => libraryContinuation(token, title), emptyPage(title)) : null };
 }
 
 const emptyPage = (title: string): BrowsePage => ({ title, shelves: [], grid: [], tracks: [] });
+
+/** Connect's playlist is only a place for its secret: left out of the library. */
+const withoutConnect = (page: BrowsePage): BrowsePage => ({
+  ...page,
+  grid: page.grid.filter((item) => item.title !== CONNECT_PLAYLIST_TITLE),
+  shelves: page.shelves.map((shelf) => ({ ...shelf, items: shelf.items.filter((item) => item.title !== CONNECT_PLAYLIST_TITLE) })),
+});
 
 async function libraryContinuation(token: string, title: string): Promise<Paged<BrowsePage>> {
   const yt = await getSignedInnertube();
@@ -210,7 +217,7 @@ async function libraryContinuation(token: string, title: string): Promise<Paged<
       : { type: 'MusicShelf', contents: contents?.contents ?? [] };
   const next = contents?.continuation || null;
   return {
-    data: mapBrowse({ sections: [section] }, title),
+    data: withoutConnect(mapBrowse({ sections: [section] }, title)),
     next: next ? () => orEnd(() => libraryContinuation(next, title), emptyPage(title)) : null,
   };
 }

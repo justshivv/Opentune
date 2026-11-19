@@ -26,7 +26,7 @@ export function Banner({ title, detail, action, onDismiss }: BannerProps) {
       <div className="shrink-0">{action}</div>
       {onDismiss && (
         <button
-          className="-mr-3.5 grid size-7 place-items-center rounded-full text-white opacity-85 hover:bg-[#ffffff26] hover:opacity-100"
+          className="-mr-3.5 grid size-7 place-items-center rounded-full text-white opacity-85 transition-[background-color,opacity] duration-150 hover:bg-[#ffffff26] hover:opacity-100"
           onClick={onDismiss}
           aria-label="Dismiss"
         >
@@ -38,5 +38,5 @@ export function Banner({ title, detail, action, onDismiss }: BannerProps) {
 }
 
 export const bannerButtonClass =
-  'inline-flex h-8 items-center whitespace-nowrap rounded-pill bg-white px-4 type-body-emphasized text-black hover:bg-[#ffffffe0]';
+  'inline-flex h-8 items-center whitespace-nowrap rounded-pill bg-white px-4 type-body-emphasized text-black transition-[background-color,scale] duration-150 hover:bg-[#ffffffe0] active:scale-96';
 

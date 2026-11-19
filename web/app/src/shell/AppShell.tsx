@@ -23,6 +23,8 @@ import { useAllowGate } from './AllowGate';
 import { Appearance } from './Appearance';
 import { MobileDock } from './MobileDock';
 import { RoomNotice } from './RoomNotice';
+import { AccountSyncAsk } from './AccountSyncAsk';
+import { initConnect } from '@/connect/connect';
 import { ShortcutsHelp } from './ShortcutsHelp';
 import { Sidebar } from './Sidebar';
 
@@ -123,6 +125,8 @@ export function AppShell() {
   const edge = useScrollEdge();
   // Plays into the account's YouTube Music history (Settings › Share Listening Activity).
   useEffect(() => startHistoryReporting(), []);
+  // Connect: this browser among the person's own devices (Settings › Your devices).
+  useEffect(() => initConnect(), []);
   // The sources the owner publishes ("Added by admin"), folded into the listener's list.
   useEffect(() => {
     const refresh = () => { if (document.visibilityState === 'visible') void syncPublished(); };
@@ -244,7 +248,7 @@ export function AppShell() {
           <FullScreenPlayer closing={!fullScreen} onClosed={() => setPlayerUp(false)} />
         </Suspense>
       )}
-      {gate}
+      {gate ?? <AccountSyncAsk />}
     </div>
   );
 }
