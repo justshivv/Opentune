@@ -557,6 +557,15 @@ private fun WindowRows() {
         own,
         { WindowsFrame.setOwnFrame(it) },
     )
+    if (WindowsFrame.isWindows) {
+        val renderer by WindowsFrame.renderer.collectAsState()
+        val inUse = WindowsFrame.drawingWith?.let { api -> WindowsFrame.Renderer.entries.firstOrNull { it.skiko == api } }
+        SegmentedRow(
+            "Renderer",
+            detail = "How the window is drawn${inUse?.let { " (now ${it.label})" } ?: ""}. Automatic is OpenGL, or Direct3D with Mica or Acrylic on. If OpenTune closes on its own as it opens, the next start moves to another by itself. Takes effect when OpenTune next opens.",
+            choices = WindowsFrame.Renderer.entries, selected = renderer, label = { it.label },
+        ) { WindowsFrame.setRenderer(it) }
+    }
     // A material needs the window made see-through, which happens only with the app's own title bar
     // on Windows 11, and only when the window opened with a material chosen.
     if (WindowsFrame.materialsPossible) {

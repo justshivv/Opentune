@@ -70,7 +70,7 @@ internal object WindowsFrame {
 
     private fun save() = runCatching {
         file.parentFile.mkdirs()
-        file.writeText(JSONObject().put("ownFrame", _ownFrame.value).put("material", _material.value.name).toString())
+        file.writeText(JSONObject().put("ownFrame", _ownFrame.value).put("material", _material.value.name).put("renderer", _renderer.value.name).toString())
     }
 
     // ---- At start --------------------------------------------------------------------
@@ -87,7 +87,8 @@ internal object WindowsFrame {
      * at creation, so a change between Off and a material takes effect at the next start.
      */
     val transparent: Boolean by lazy {
-        val wanted = drawn && isWindows11 && _material.value != Material.OFF
+        // A see-through window needs Direct3D: with OpenGL or software chosen, the material waits.
+        val wanted = drawn && isWindows11 && _material.value != Material.OFF && (drawingWith == null || drawingWith == "DIRECT3D")
         val ok = wanted && settleCheck()
         startGuard(ok)
         ok
@@ -114,11 +115,70 @@ internal object WindowsFrame {
     /** Marks this start as not yet settled, then settled after [SETTLE_MS] of running. */
     private fun startGuard(transparent: Boolean) = runCatching {
         startFile.parentFile.mkdirs()
-        startFile.writeText(JSONObject().put("pending", true).put("transparent", transparent).toString())
+        val api = (Renderer.entries.firstOrNull { it.skiko != null && it.skiko == drawingWith } ?: effective(_renderer.value, transparent)).name
+        startFile.writeText(JSONObject().put("pending", true).put("transparent", transparent).put("renderer", api).toString())
         Thread({
             Thread.sleep(SETTLE_MS)
-            runCatching { startFile.writeText(JSONObject().put("pending", false).put("transparent", transparent).toString()) }
+            runCatching { startFile.writeText(JSONObject().put("pending", false).put("transparent", transparent).put("renderer", api).toString()) }
         }, "window-settle").apply { isDaemon = true; start() }
+    }
+
+    // ---- How the window is drawn -------------------------------------------------------
+
+    /**
+     * Which of Skia's ways of drawing the window uses on Windows. Automatic is OpenGL, as
+     * BitChord's desktop app draws by default: Direct3D, Skia's own pick, stalled seconds as the
+     * window opened and then closed the app on some Windows 11 computers. Direct3D is still
+     * used for a see-through window (Mica or Acrylic), which needs it.
+     */
+    enum class Renderer(val label: String, val skiko: String?) {
+        AUTO("Automatic", null), OPENGL("OpenGL", "OPENGL"), DIRECT3D("Direct3D", "DIRECT3D"), SOFTWARE("Software", "SOFTWARE_FAST"),
+    }
+
+    private val _renderer = MutableStateFlow(
+        runCatching { Renderer.valueOf(saved().optString("renderer", Renderer.AUTO.name)) }.getOrDefault(Renderer.AUTO),
+    )
+    /** The renderer chosen for the next start; this one's is fixed when the window is made. */
+    val renderer: StateFlow<Renderer> = _renderer.asStateFlow()
+
+    fun setRenderer(r: Renderer) { _renderer.value = r; save() }
+
+    /** The renderer this run draws with, as Skia names it. */
+    @Volatile var drawingWith: String? = null
+        private set
+
+    /** What [r] comes to on this computer: Automatic is Direct3D for a see-through window, OpenGL otherwise. */
+    private fun effective(r: Renderer, seeThrough: Boolean): Renderer = when (r) {
+        Renderer.AUTO -> if (seeThrough) Renderer.DIRECT3D else Renderer.OPENGL
+        else -> r
+    }
+
+    /**
+     * Run first thing, before anything draws. On Windows, a plain window's start that didn't
+     * settle (closed within its first moments, with no report) moves the next start on: Direct3D
+     * to OpenGL, OpenGL to Software. The choice is saved, as BitChord saves OpenGL back after
+     * its other renderer fails, so a renderer this computer can't run never keeps the app shut.
+     */
+    fun chooseRenderer() {
+        if (!isWindows) return
+        val last = runCatching { JSONObject(startFile.readText()) }.getOrNull()
+        if (last != null && last.optBoolean("pending") && !last.optBoolean("transparent")) {
+            val failed = runCatching { Renderer.valueOf(last.optString("renderer", Renderer.OPENGL.name)) }.getOrDefault(Renderer.OPENGL)
+            val next = when (failed) {
+                Renderer.DIRECT3D -> Renderer.OPENGL
+                Renderer.OPENGL, Renderer.AUTO -> Renderer.SOFTWARE
+                Renderer.SOFTWARE -> null
+            }
+            if (next != null) {
+                System.err.println("OpenTune: the last start with ${failed.label} didn't settle; drawing with ${next.label} now")
+                _renderer.value = next
+                save()
+            }
+        }
+        val seeThrough = drawn && isWindows11 && _material.value != Material.OFF
+        val use = effective(_renderer.value, seeThrough)
+        drawingWith = use.skiko
+        use.skiko?.let { System.setProperty("skiko.renderApi", it) }
     }
 
     private const val SETTLE_MS = 20_000L

@@ -23,6 +23,12 @@ fun main(args: Array<String>) {
     if ("--self-check" in args) return selfCheck()
     CrashLog.install()
     CrashLog.startDiagnostics()
+    // Before anything is drawn: a renderer that failed to start last time is passed over.
+    WindowsFrame.chooseRenderer()
+    // The system's fonts read in the background while the rest starts: the first text the window
+    // laid out waited two seconds on that on Windows.
+    Thread({ runCatching { org.jetbrains.skia.FontMgr.default.let { it.familiesCount; it.matchFamilyStyle(null, org.jetbrains.skia.FontStyle.NORMAL) } } }, "font-warm")
+        .apply { isDaemon = true; start() }
     // The shared settings and music server, as the phone starts them.
     AppSettings.init(appContext)
     // A setting changed in the last moment before closing is written on its way out.
