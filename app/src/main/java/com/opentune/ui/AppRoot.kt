@@ -126,6 +126,8 @@ private const val SEARCH_ROUTE = "search"
 @Composable
 fun AppRoot(vm: PlayerViewModel) {
     val nav = rememberNavController()
+    // Pages opened by a tap, each once however fast the taps come (see PageOpener).
+    val pages = remember(nav) { PageOpener({ nav.currentBackStackEntry?.id }, { nav.navigate(it) }) }
     // With another of the person's devices playing, its song (see Connect).
     val song by vm.currentSong.collectAsState()
     val isPlaying by vm.isPlaying.collectAsState()
@@ -358,29 +360,29 @@ fun AppRoot(vm: PlayerViewModel) {
         },
     ) }
     val libraryNav = remember(nav) { LibraryNav(
-        downloads = { nav.navigate("downloads") },
-        downloaded = { id -> nav.navigate("downloaded/${Uri.encode(id)}") },
-        local = { nav.navigate("local") },
-        replay = { nav.navigate("replay") },
-        settings = { nav.navigate("settings") },
-        liked = { nav.navigate("liked") },
-        playlist = { id -> nav.navigate("playlist/${Uri.encode(id)}") },
+        downloads = { pages.open("downloads") },
+        downloaded = { id -> pages.open("downloaded/${Uri.encode(id)}") },
+        local = { pages.open("local") },
+        replay = { pages.open("replay") },
+        settings = { pages.open("settings") },
+        liked = { pages.open("liked") },
+        playlist = { id -> pages.open("playlist/${Uri.encode(id)}") },
         browse = { id -> nav.openBrowse(id) },
-        server = { nav.navigate("server") },
-        radio = { nav.navigate("radio") },
-        together = { nav.navigate("together") },
-        importPlaylist = { nav.navigate("import") },
-        wrapped = { nav.navigate("wrapped") },
-        history = { nav.navigate("history") },
-        smart = { id -> nav.navigate("smart/${Uri.encode(id)}") },
-        newSmart = { nav.navigate("smart-edit") },
+        server = { pages.open("server") },
+        radio = { pages.open("radio") },
+        together = { pages.open("together") },
+        importPlaylist = { pages.open("import") },
+        wrapped = { pages.open("wrapped") },
+        history = { pages.open("history") },
+        smart = { id -> pages.open("smart/${Uri.encode(id)}") },
+        newSmart = { pages.open("smart-edit") },
     ) }
     val serverNav = remember(nav) {
         ServerNav(
-            album = { id -> nav.navigate("server/album/${Uri.encode(id)}") },
-            artist = { id -> nav.navigate("server/artist/${Uri.encode(id)}") },
-            playlist = { id -> nav.navigate("server/playlist/${Uri.encode(id)}") },
-            artists = { nav.navigate("server/artists") },
+            album = { id -> pages.open("server/album/${Uri.encode(id)}") },
+            artist = { id -> pages.open("server/artist/${Uri.encode(id)}") },
+            playlist = { id -> pages.open("server/playlist/${Uri.encode(id)}") },
+            artists = { pages.open("server/artists") },
         )
     }
     // Links opened from outside: a song plays with its radio, anything else opens its page.
@@ -537,7 +539,7 @@ fun AppRoot(vm: PlayerViewModel) {
         else com.opentune.ui.search.SearchFocus.request()
     }
     val openMood: (com.opentune.data.model.MoodGenre) -> Unit = { mood ->
-        nav.navigate("mood/${Uri.encode(mood.browseId)}?params=${Uri.encode(mood.params.orEmpty())}&title=${Uri.encode(mood.title)}")
+        pages.open("mood/${Uri.encode(mood.browseId)}?params=${Uri.encode(mood.params.orEmpty())}&title=${Uri.encode(mood.title)}")
     }
 
     LaunchedEffect(Unit) { com.opentune.ui.components.Opening.played = true }
@@ -615,9 +617,9 @@ fun AppRoot(vm: PlayerViewModel) {
                 // Every page's account button opens the account menu, which leads here.
                 val accountMenu = remember(nav) {
                     com.opentune.ui.components.AccountMenuNav(
-                        addAccount = { nav.navigate("login") },
-                        manageAccounts = { nav.navigate("settings?page=account") },
-                        settings = { nav.navigate("settings") },
+                        addAccount = { pages.open("login") },
+                        manageAccounts = { pages.open("settings?page=account") },
+                        settings = { pages.open("settings") },
                     )
                 }
                 CompositionLocalProvider(LocalHazeState provides null, com.opentune.ui.components.LocalAccountMenu provides accountMenu) {
@@ -637,24 +639,24 @@ fun AppRoot(vm: PlayerViewModel) {
                                 contentPadding = content,
                                 actions = actions,
                                 onItemClick = openItem,
-                                onOpenSettings = { nav.navigate("settings") },
-                                onRecognize = { nav.navigate("recognize") },
+                                onOpenSettings = { pages.open("settings") },
+                                onRecognize = { pages.open("recognize") },
                                 covered = playerCovers,
-                                onOpenSpeedDial = { nav.navigate("speed-dial") },
+                                onOpenSpeedDial = { pages.open("speed-dial") },
                             )
                         }
                         page("speed-dial") {
                             com.opentune.ui.home.SpeedDialScreen(content, onItemClick = openItem, onBack = { nav.popBackStack() })
                         }
                         page(Tab.EXPLORE.route) {
-                            ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, onOpenSettings = { nav.navigate("settings") })
+                            ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, onOpenSettings = { pages.open("settings") })
                         }
                         page(Tab.PODCASTS.route) {
-                            com.opentune.ui.podcasts.PodcastsScreen(content, actions, onOpenShow = { id -> nav.navigate("podcast/${Uri.encode(id)}") }, onOpenSettings = { nav.navigate("settings") },
-                                onOpenAudiobooks = { nav.navigate("audiobooks") })
+                            com.opentune.ui.podcasts.PodcastsScreen(content, actions, onOpenShow = { id -> pages.open("podcast/${Uri.encode(id)}") }, onOpenSettings = { pages.open("settings") },
+                                onOpenAudiobooks = { pages.open("audiobooks") })
                         }
                         page("audiobooks") {
-                            com.opentune.ui.podcasts.AudiobooksScreen(content, onBack = { nav.popBackStack() }, onOpenBook = { id -> nav.navigate("audiobook/${Uri.encode(id)}") })
+                            com.opentune.ui.podcasts.AudiobooksScreen(content, onBack = { nav.popBackStack() }, onOpenBook = { id -> pages.open("audiobook/${Uri.encode(id)}") })
                         }
                         page("audiobook/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                             com.opentune.ui.podcasts.AudiobookScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
@@ -665,7 +667,7 @@ fun AppRoot(vm: PlayerViewModel) {
                                 content,
                                 actions,
                                 onBack = { nav.popBackStack() },
-                                onOpenShow = { id -> nav.navigate("podcast/${Uri.encode(id)}") },
+                                onOpenShow = { id -> pages.open("podcast/${Uri.encode(id)}") },
                             )
                         }
                         page(Tab.LIBRARY.route) {
@@ -680,9 +682,9 @@ fun AppRoot(vm: PlayerViewModel) {
                                 onPlayNext = vm::playNext,
                                 onAddToQueue = vm::addToQueue,
                                 onBrowse = { item: BrowseItem -> nav.openBrowse(item.browseId, item.type) },
-                                onRecognize = { nav.navigate("recognize") },
+                                onRecognize = { pages.open("recognize") },
                                 onOpenList = { list ->
-                                    list.playlistId?.let { nav.navigate("playlist/${Uri.encode(it)}") } ?: list.browseId?.let { nav.openBrowse(it) }
+                                    list.playlistId?.let { pages.open("playlist/${Uri.encode(it)}") } ?: list.browseId?.let { nav.openBrowse(it) }
                                 },
                                 explore = if (separateExplore) null else ({
                                     ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, showHeader = false)
@@ -694,14 +696,14 @@ fun AppRoot(vm: PlayerViewModel) {
                                 startPage = e.arguments?.getString("page"),
                                 contentPadding = content,
                                 onBack = { nav.popBackStack() },
-                                onOpenEqualizer = { nav.navigate("equalizer") },
-                                onOpenReplay = { nav.navigate("replay") },
-                                onOpenWrapped = { nav.navigate("wrapped") },
-                                onSignIn = { nav.navigate("login") },
-                                onOpenDownloads = { nav.navigate("downloads") },
-                                onOpenSpotify = { nav.navigate("import") },
-                                onOpenDevices = { nav.navigate("devices") },
-                                onOpenDiscord = { nav.navigate("discord-login") },
+                                onOpenEqualizer = { pages.open("equalizer") },
+                                onOpenReplay = { pages.open("replay") },
+                                onOpenWrapped = { pages.open("wrapped") },
+                                onSignIn = { pages.open("login") },
+                                onOpenDownloads = { pages.open("downloads") },
+                                onOpenSpotify = { pages.open("import") },
+                                onOpenDevices = { pages.open("devices") },
+                                onOpenDiscord = { pages.open("discord-login") },
                             )
                         }
                         page("discord-login") { entry ->
@@ -714,10 +716,10 @@ fun AppRoot(vm: PlayerViewModel) {
                             com.opentune.ui.settings.LinkDeviceScreen(
                                 content,
                                 onBack = { nav.popBackStack() },
-                                onSignIn = { nav.navigate("login") },
-                                onTogether = { nav.navigate("together") },
-                                onRemote = { nav.navigate("tv-remote") },
-                                onConnect = { nav.navigate("connect") },
+                                onSignIn = { pages.open("login") },
+                                onTogether = { pages.open("together") },
+                                onRemote = { pages.open("tv-remote") },
+                                onConnect = { pages.open("connect") },
                             )
                         }
                         page(
@@ -735,7 +737,7 @@ fun AppRoot(vm: PlayerViewModel) {
                                 if (nav.currentBackStackEntry == entry) nav.popBackStack()
                             }
                         }
-                        page("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }, onOpenList = { id -> nav.navigate("downloaded/${Uri.encode(id)}") }) }
+                        page("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }, onOpenList = { id -> pages.open("downloaded/${Uri.encode(id)}") }) }
                         page("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                             com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                         }
@@ -747,8 +749,8 @@ fun AppRoot(vm: PlayerViewModel) {
                             // Only while it's the page showing: one deleted from its editor leaves on its own
                             // once uncovered, and mustn't take the editor still sliding away with it.
                             com.opentune.ui.library.SmartPlaylistScreen(id, content, actions, onBack = { if (nav.currentBackStackEntry == e) nav.popBackStack() },
-                                onEdit = { nav.navigate("smart-edit?id=${Uri.encode(id)}") },
-                                onOpenPlaylist = { copy -> nav.navigate("playlist/${Uri.encode(copy)}") })
+                                onEdit = { pages.open("smart-edit?id=${Uri.encode(id)}") },
+                                onOpenPlaylist = { copy -> pages.open("playlist/${Uri.encode(copy)}") })
                         }
                         page("smart-edit?id={id}", listOf(navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null })) { e ->
                             val editing = e.arguments?.getString("id")
@@ -764,7 +766,7 @@ fun AppRoot(vm: PlayerViewModel) {
                         page("equalizer") { EqualizerScreen(content, onBack = { nav.popBackStack() }) }
                         page("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
                         page("history") { com.opentune.ui.library.ListeningHistoryScreen(content, actions, onBack = { nav.popBackStack() }) }
-                        page("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }, onOpenWrapped = { nav.navigate("wrapped") }) }
+                        page("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }, onOpenWrapped = { pages.open("wrapped") }) }
                         page("wrapped") { WrappedScreen(actions, onBack = { nav.popBackStack() }, player = vm.player) }
                         page("recognize?listen={listen}", listOf(navArgument("listen") { type = NavType.BoolType; defaultValue = false })) { e ->
                             com.opentune.ui.recognize.RecognizeScreen(
@@ -781,7 +783,7 @@ fun AppRoot(vm: PlayerViewModel) {
                                 actions,
                                 initialLink = e.arguments?.getString("link"),
                                 onBack = { nav.popBackStack() },
-                                onOpenPlaylist = { id -> nav.navigate("playlist/${Uri.encode(id)}") },
+                                onOpenPlaylist = { id -> pages.open("playlist/${Uri.encode(id)}") },
                                 onOpenExportify = { appContext.startActivity(android.content.Intent(appContext, com.opentune.ui.spotify.ExportifyActivity::class.java)) },
                             )
                         }
@@ -813,7 +815,7 @@ fun AppRoot(vm: PlayerViewModel) {
                                 onItemClick = openItem,
                                 onShowAll = { shelf ->
                                     shelf.moreBrowseId?.let { id ->
-                                        nav.navigate("artist-items/${Uri.encode(id)}?params=${Uri.encode(shelf.moreParams.orEmpty())}&title=${Uri.encode(shelf.title)}")
+                                        pages.open("artist-items/${Uri.encode(id)}?params=${Uri.encode(shelf.moreParams.orEmpty())}&title=${Uri.encode(shelf.title)}")
                                     }
                                 },
                             )
@@ -1023,6 +1025,26 @@ private fun PlayerStrip(vm: PlayerViewModel, onExpand: () -> Unit) {
         onNext = vm::skipNext,
         onExpand = onExpand,
     ) { m -> MiniPlayerBar(vm, onExpand = onExpand, modifier = m, inline = true) }
+}
+
+/**
+ * Opens pages for taps, each once: a second tap on the same tile or row, landing while the
+ * page it opened is still sliding in (the page under it still takes taps then), would open a
+ * second copy on top, and back would have to go through the same page twice. A page opened
+ * here and still on top isn't opened again by the same route; anything else opens as asked.
+ * [top] is the id of the back stack's top entry, read just before and just after [navigate].
+ */
+internal class PageOpener(private val top: () -> String?, private val navigate: (String) -> Unit) {
+    private var opened: Pair<String, String>? = null
+
+    fun open(route: String) {
+        val here = top()
+        if (here != null && opened == here to route) return
+        navigate(route)
+        // Only a page that went on top is held: one that took itself straight off again left
+        // the page under it on top, which this route must still open from.
+        opened = top()?.takeIf { it != here }?.let { it to route }
+    }
 }
 
 /** The ids of the entries on the back stack, top last. The whole stack is only public as this restricted, long-stable flow. */
