@@ -155,6 +155,9 @@ fun FloatingCard(
     // How far an expandable card has been pulled up past its half height, in px.
     var extra by remember { mutableFloatStateOf(0f) }
     var settling by remember { mutableStateOf<Job?>(null) }
+    // A finger on the sheet (its top, or its content scrolling it): its full height isn't
+    // measured again until it lets go. Plain, not state: only layout reads it.
+    val touching = remember { booleanArrayOf(false) }
     val card = remember {
         FloatingCardScope { after ->
             if (!closing) {
@@ -188,7 +191,8 @@ fun FloatingCard(
         // The screen behind frosted by the app itself; the window's blur only where that can't be done.
         // The theme look never frosts: the sheet is the app's own surface, solid,
         // so it starts where a failed frost ends up and skips the wait for one.
-        val themed = ui.sheetStyle == SheetStyle.THEME
+        val themed = ui.sheetStyle != SheetStyle.BLUR
+        val plain = ui.sheetStyle == SheetStyle.SOLID
         var frost by remember { mutableStateOf(if (ui.reduceBlur || themed) Frost.FAILED else Frost.PENDING) }
         val windowFrost = FrostBehind(enabled = !ui.reduceBlur && !themed, standIn = frost != Frost.FAILED)
         val frosted = windowFrost || frost == Frost.READY
@@ -265,8 +269,11 @@ fun FloatingCard(
                             velocity > FLING -> 0f
                             else -> if (extra > range / 2) range else 0f
                         }
-                        launch { animate(drag, 0f, velocity, spring(dampingRatio = 0.75f, stiffness = 500f)) { v, _ -> drag = v } }
-                        if (expandable) animate(extra, target, -velocity, spring(dampingRatio = 0.85f, stiffness = 420f)) { v, _ -> extra = v.coerceIn(0f, range) }
+                        // No bounce, and never past where the card rests: flung up from a pull, the
+                        // springs used to carry it on past the bottom of the screen, lifting the
+                        // card off it with a gap underneath, then bring it back with a wobble.
+                        launch { animate(drag, 0f, if (drag > 0f) velocity else 0f, spring(dampingRatio = 1f, stiffness = 500f)) { v, _ -> drag = v.coerceAtLeast(0f) } }
+                        if (expandable) animate(extra, target, -velocity, spring(dampingRatio = 1f, stiffness = 450f)) { v, _ -> extra = v.coerceIn(0f, range) }
                     }
                 }
                 /** Moves the card by [d] px (down positive): an expandable one grows or shrinks first, then the rest pulls it down. */
@@ -283,7 +290,9 @@ fun FloatingCard(
                             left -= take
                         }
                     }
-                    if (left != 0f) drag = (drag + if (drag + left < 0) left * 0.2f else left).coerceAtLeast(-24f)
+                    // Only ever down: the card sits on the bottom of the screen, and pushed up past
+                    // its full height it used to lift off it, leaving a gap below.
+                    if (left != 0f) drag = (drag + left).coerceAtLeast(0f)
                 }
                 // Scrolling the content up grows the card first; pulling it down
                 // at the top of the list shrinks it back to half.
@@ -292,6 +301,7 @@ fun FloatingCard(
                         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                             if (!expandable || source != NestedScrollSource.UserInput || available.y >= 0 || extra >= range) return Offset.Zero
                             settling?.cancel()
+                            touching[0] = true
                             val take = minOf(-available.y, range - extra)
                             extra += take
                             return Offset(0f, -take)
@@ -312,6 +322,7 @@ fun FloatingCard(
                         }
 
                         override suspend fun onPreFling(available: Velocity): Velocity {
+                            touching[0] = false
                             if (!expandable) return Velocity.Zero
                             // Carried down from the list: far enough or fast enough closes it, else back up.
                             if (drag > 0f) {
@@ -373,7 +384,9 @@ fun FloatingCard(
                                     // and just takes the height asked for, as before.
                                     val want = (halfPx + extra).roundToInt()
                                     val atRest = extra <= 0f || extra >= range
-                                    val pressing = fitContent && want.toFloat() >= naturalPx
+                                    // Not while a finger is on it: measuring the whole content's height
+                                    // on every frame of a pull held at the top was a stutter.
+                                    val pressing = fitContent && !touching[0] && want.toFloat() >= naturalPx
                                     val natural = if (fitContent && (atRest || pressing)) {
                                         runCatching { measurable.maxIntrinsicHeight(constraints.maxWidth) }.getOrNull()
                                             ?: runCatching {
@@ -429,8 +442,9 @@ fun FloatingCard(
                                     .background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.07f else 0.18f), 0.35f to Color.White.copy(alpha = 0f)))
                             } else {
                                 Modifier
-                                    // Solid, so its shadow never shows through.
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                    // Solid, so its shadow never shows through. Plain takes no colour
+                                    // from the page: a neutral near-black, or near-white in light mode.
+                                    .background(if (plain) (if (dark) PLAIN_DARK else PLAIN_LIGHT) else MaterialTheme.colorScheme.surfaceContainerHigh)
                             },
                         )
                         // The card's rim, drawn over the film: like the corners, its fade as
@@ -466,8 +480,9 @@ fun FloatingCard(
                             orientation = Orientation.Vertical,
                             enabled = dismissible,
                             state = rememberDraggableState { d -> pull(d) },
-                            onDragStarted = { settling?.cancel() },
+                            onDragStarted = { settling?.cancel(); touching[0] = true },
                             onDragStopped = { v ->
+                                touching[0] = false
                                 // Down hard from half height, or pulled well past it, closes; an
                                 // expanded card flung down only drops back to half.
                                 if (drag > with(density) { 110.dp.toPx() } || (v > 1400f && extra <= 1f)) card.close()
@@ -730,6 +745,9 @@ private fun Modifier.insetBy(insets: Density.() -> InsetsPx): Modifier = layout 
 }
 
 private const val EXIT_MS = 200L
+/** The Solid sheet style's fills: neutral, with nothing of the page's colour in them. */
+private val PLAIN_DARK = Color(0xFF161616)
+private val PLAIN_LIGHT = Color(0xFFF7F7F7)
 private const val KEPT_MS = 120L
 /** The longest a card waits for the blur behind it before rising without it. */
 private const val FROST_WAIT_MS = 180L

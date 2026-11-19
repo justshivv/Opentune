@@ -655,6 +655,7 @@ enum class PlayerMotion(val label: String, val summary: String) {
 enum class SheetStyle(val label: String, val summary: String) {
     BLUR("Blur", "A frosted blur of the page behind the sheet"),
     THEME("Dynamic theme", "The app's own theme, changing with the page the sheet opens over"),
+    SOLID("Solid", "A plain dark or light fill, with no blur and no colour from the page"),
 }
 
 /** The glass the floating parts of the app are made of. */
