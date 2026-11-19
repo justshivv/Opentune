@@ -1307,7 +1307,7 @@ internal fun DownloadQualityTag(entry: com.opentune.data.download.DownloadEntry)
             // Dolby's own logo for a Dolby file, the lossless wave for a lossless one.
             Icon(
                 ImageVector.vectorResource(if (dolby) AppIcons.Dolby else AppIcons.GraphicEq), null,
-                Modifier.size(if (dolby) 13.dp else 11.dp).padding(end = 1.dp), tint = colors.primary,
+                Modifier.size(if (dolby) 14.dp else 11.dp).padding(end = 1.dp), tint = colors.primary,
             )
             Spacer(Modifier.width(2.dp))
         }
