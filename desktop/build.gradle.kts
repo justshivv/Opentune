@@ -286,6 +286,9 @@ tasks.test {
 compose.desktop {
     application {
         mainClass = "com.opentune.desktop.MainKt"
+        // A native crash's report beside the app (the portable folder), as hs_err_pid….log, rather
+        // than wherever it happened to be started from; Java falls back to the temp folder if that can't be written.
+        jvmArgs += listOf("-XX:ErrorFile=\$APPDIR/../hs_err_pid%p.log")
         nativeDistributions {
             // What each system's own installer tools make; the AppImage and the portable zip are wrapped
             // around createDistributable's app image by CI (see packaging/appimage.sh).

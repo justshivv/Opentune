@@ -22,6 +22,7 @@ internal val appContext by lazy { android.content.Context(File(System.getPropert
 fun main(args: Array<String>) {
     if ("--self-check" in args) return selfCheck()
     CrashLog.install()
+    CrashLog.startDiagnostics()
     // The shared settings and music server, as the phone starts them.
     AppSettings.init(appContext)
     // A setting changed in the last moment before closing is written on its way out.
@@ -78,6 +79,8 @@ fun main(args: Array<String>) {
             transparent = WindowsFrame.transparent,
         ) {
             window.minimumSize = java.awt.Dimension(760, 520)
+            // Which of Skia's renderers this window drew with (DirectX, OpenGL, Metal or software), for the log.
+            androidx.compose.runtime.LaunchedEffect(Unit) { CrashLog.note("Renderer: ${runCatching { window.renderApi }.getOrNull()}") }
             DesktopWindow.style(window)
             DesktopWindow.window = window
             DesktopWindow.close = close
@@ -135,6 +138,67 @@ internal object CrashLog {
         }
     }
 
+    private val logFile = File(File(System.getProperty("user.home"), ".opentune"), "desktop.log")
+    @Volatile private var log: java.io.PrintStream? = null
+
+    /** A line in desktop.log, with the time. */
+    fun note(line: String) {
+        val out = log ?: return
+        synchronized(out) { out.println("${java.time.LocalTime.now().withNano(0)} $line"); out.flush() }
+    }
+
+    /**
+     * What the app does while it runs, in ~/.opentune/desktop.log (the run before kept as
+     * desktop.log.1): everything it prints, the system and the renderer at the start, the memory
+     * every ten seconds, and, whenever the window's thread stops answering for two seconds, what
+     * it's stuck doing. A freeze that ends with Windows closing the app leaves no crash report of
+     * its own; this says where it was.
+     */
+    fun startDiagnostics() = runCatching {
+        logFile.parentFile.mkdirs()
+        if (logFile.exists()) logFile.copyTo(File(logFile.parentFile, "desktop.log.1"), overwrite = true)
+        val file = java.io.PrintStream(java.io.FileOutputStream(logFile, false), true, "UTF-8")
+        log = file
+        // What the app prints goes to the console as before and to the log.
+        System.setOut(Tee(System.out, file))
+        System.setErr(Tee(System.err, file))
+        val rt = Runtime.getRuntime()
+        note("OpenTune ${System.getProperty("jpackage.app-version") ?: "dev"} on ${System.getProperty("os.name")} ${System.getProperty("os.version")} (${System.getProperty("os.arch")}), Java ${System.getProperty("java.version")}, ${rt.availableProcessors()} cores, up to ${rt.maxMemory() / 1_048_576} MB")
+        Thread({
+            var tick = 0
+            var stuckSince = 0L
+            var reportedAt = 0L
+            val answered = java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis())
+            while (true) {
+                Thread.sleep(500)
+                val now = System.currentTimeMillis()
+                java.awt.EventQueue.invokeLater { answered.set(System.currentTimeMillis()) }
+                val waited = now - answered.get()
+                if (waited > 2_000) {
+                    if (stuckSince == 0L) stuckSince = now
+                    // Once at two seconds, then every five while it lasts: where it is may move.
+                    if (now - reportedAt > 5_000) {
+                        reportedAt = now
+                        val edt = Thread.getAllStackTraces().entries.firstOrNull { it.key.name.startsWith("AWT-EventQueue") }
+                        note("The window has not answered for ${waited / 1000.0} s. Memory ${(rt.totalMemory() - rt.freeMemory()) / 1_048_576} of ${rt.maxMemory() / 1_048_576} MB. It is in:")
+                        edt?.value?.take(40)?.forEach { note("    at $it") }
+                    }
+                } else if (stuckSince != 0L) {
+                    note("The window answered again after ${(now - stuckSince) / 1000.0} s.")
+                    stuckSince = 0L; reportedAt = 0L
+                }
+                if (++tick % 20 == 0) note("Memory ${(rt.totalMemory() - rt.freeMemory()) / 1_048_576} of ${rt.maxMemory() / 1_048_576} MB")
+            }
+        }, "opentune-watchdog").apply { isDaemon = true; start() }
+    }
+
+    /** Writes to both streams. */
+    private class Tee(private val a: java.io.PrintStream, private val b: java.io.PrintStream) : java.io.PrintStream(a, true) {
+        override fun write(buf: ByteArray, off: Int, len: Int) { a.write(buf, off, len); runCatching { b.write(buf, off, len); b.flush() } }
+        override fun write(c: Int) { a.write(c); runCatching { b.write(c) } }
+        override fun flush() { a.flush(); runCatching { b.flush() } }
+    }
+
     /** Times of the window's recent errors, for telling one now and then from a flood. */
     private val recent = java.util.ArrayDeque<Long>()
 
@@ -171,5 +235,6 @@ internal object CrashLog {
             appendLine(error.stackTraceToString())
         }
         file.appendText(text)
+        note("Error on ${thread.name}, written to crash.log: $error")
     }
 }
