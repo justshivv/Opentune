@@ -441,7 +441,15 @@ class PlayerConnection(private val context: Context) {
         val controller = controller ?: return
         val item = controller.currentMediaItem ?: return
         val uri = if (on) videoStreamUri(item.mediaId) else trackUri(item.mediaId)
-        controller.replaceMediaItem(controller.currentMediaItemIndex, item.buildUpon().setUri(uri).build())
+        // A rendition swap, not a new song: replacing the playing item drops
+        // the playhead to the item's start, so the position and play state
+        // are carried across by hand.
+        val index = controller.currentMediaItemIndex
+        val position = controller.currentPosition
+        val playing = controller.isPlaying
+        controller.replaceMediaItem(index, item.buildUpon().setUri(uri).build())
+        if (position > 0) controller.seekTo(index, position)
+        if (playing) controller.play()
         _videoMode.value = on
     }
 
