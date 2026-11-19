@@ -43,31 +43,19 @@ class LiveCheck {
         val id = System.getProperty("opentune.video") ?: "dQw4w9WgXcQ"
         val stream = runBlocking { Streams.resolve(id, kind = Streams.Kind.OPUS) }
         println("LIVE opus: ${stream.mimeType} ${stream.kbps}kbps")
-        var played = 0L
         val enough = java.util.concurrent.CountDownLatch(1)
         var problem: String? = null
         var length = 0L
-        val out = object : PcmOut {
-            override fun open(format: javax.sound.sampled.AudioFormat) = format
-            override fun write(bytes: ByteArray, off: Int, len: Int): Int {
-                played += len / 4
-                if (played > 48_000 * 3) enough.countDown()
-                return len
-            }
-            override fun start() = Unit
-            override fun stop() = Unit
-            override fun flush() = Unit
-            override fun drain() = Unit
-            override fun close() = Unit
-            override val framePosition: Long get() = played
-            override fun setGainDb(db: Float) = true
-        }
+        val device = CaptureDevice.install()
         val engine = FfmpegEngine(
             Relay.addressOf(id, Streams.Kind.OPUS), startAtMs = { 0 }, autoplay = true,
-            onReady = { length = it }, onStarted = {}, onPlaying = {}, onEnd = {}, onError = { problem = it; enough.countDown() }, out = out,
+            onReady = { length = it }, onStarted = {}, onPlaying = {}, onEnd = {}, onError = { problem = it; enough.countDown() },
         )
+        Thread { while (device.frames < 48_000 * 5 && problem == null) Thread.sleep(50); enough.countDown() }.start()
         enough.await(60, java.util.concurrent.TimeUnit.SECONDS)
         engine.dispose()
+        val played = device.frames
+        AudioBus.reset()
         println("LIVE ffmpeg: ${played / 48} ms decoded of $length ms, problem $problem")
         assertEquals(null, problem)
         assertTrue(played > 48_000 * 3)
@@ -81,31 +69,6 @@ class LiveCheck {
         val url = JioSaavn.find(JioSaavn.Wanted("Kesariya", "Arijit Singh", "Brahmastra", 268.0), notes::add)
         println("LIVE JioSaavn: $url ${notes.joinToString()}")
         assertTrue(notes.joinToString(), url != null)
-    }
-
-    /** JavaFX opens the song through the relay and plays it; needs a display (xvfb-run on a server). */
-    @Test fun javaFxPlaysTheRelayedSong() {
-        assumeTrue(System.getProperty("opentune.live") == "true")
-        val ready = java.util.concurrent.CountDownLatch(1)
-        javafx.application.Platform.startup { ready.countDown() }
-        ready.await()
-        val opened = java.util.concurrent.CountDownLatch(1)
-        var error: String? = null
-        lateinit var player: javafx.scene.media.MediaPlayer
-        javafx.application.Platform.runLater {
-            player = javafx.scene.media.MediaPlayer(javafx.scene.media.Media(Relay.addressOf("dQw4w9WgXcQ")))
-            player.volume = 0.0
-            player.setOnReady { opened.countDown() }
-            player.setOnError { error = player.error?.message; opened.countDown() }
-            player.play()
-        }
-        assertTrue("never opened", opened.await(60, java.util.concurrent.TimeUnit.SECONDS))
-        assertEquals(null, error)
-        Thread.sleep(3_000)
-        val at = player.currentTime.toSeconds()
-        println("LIVE javafx: length ${player.totalDuration.toSeconds()}s, played to ${at}s")
-        assertTrue("didn't advance", at > 1.0)
-        javafx.application.Platform.runLater { player.dispose() }
     }
 
     /** The phone's lyrics sources, from the desktop: synced lyrics for a well-known song. */

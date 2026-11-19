@@ -176,10 +176,25 @@ class DesktopTest {
         assertNull(FfmpegEngine.filterChain(1f, flat))
         assertNull(FfmpegEngine.filterChain(1f, flat.copy(enabled = true)))
         assertEquals("atempo=1.250", FfmpegEngine.filterChain(1.25f, flat))
-        // A boost is taken off the whole curve, as the phone does, so it can't clip.
+        // A boost is taken back off the input first, as the phone does, so it can't clip.
         val bass = FfmpegEngine.filterChain(1f, flat.copy(enabled = true, bassDb = 6f))!!
-        assertTrue(bass, bass.contains("equalizer=f=1000:t=o:w=0.667:g=-6.00"))
-        assertFalse(bass, bass.contains("equalizer=f=25:"))
+        assertEquals("volume=-6.00dB,lowshelf=f=120:t=q:w=0.707:g=6.00", bass)
+        // The preamp alone, and a cut that needs no headroom.
+        assertEquals("volume=-3.00dB", FfmpegEngine.filterChain(1f, flat.copy(enabled = true, preampDb = -3f)))
+        val cut = FfmpegEngine.filterChain(1f, flat.copy(enabled = true, bands = List(15) { if (it == 8) -4f else 0f }))!!
+        assertEquals("equalizer=f=1000:t=o:w=0.667:g=-4.00", cut)
+        // A headphone curve's own filters, its preamp, and the room for its biggest lift.
+        val headphone = com.opentune.data.settings.HeadphoneEq(
+            "HD 600", "AutoEq", -2f,
+            listOf(
+                com.opentune.data.settings.ParametricFilter(com.opentune.data.settings.FilterType.LOW_SHELF, 105f, 4f, 0.7f),
+                com.opentune.data.settings.ParametricFilter(com.opentune.data.settings.FilterType.PEAK, 3200f, -3.5f, 2f),
+            ),
+        )
+        assertEquals(
+            "volume=-6.00dB,lowshelf=f=105:t=q:w=0.70:g=4.00,equalizer=f=3200:t=q:w=2.00:g=-3.50",
+            FfmpegEngine.filterChain(1f, flat.copy(enabled = true, headphone = headphone)),
+        )
         val left = FfmpegEngine.filterChain(1f, flat.copy(enabled = true, balance = -0.5f))!!
         assertEquals("pan=stereo|c0=1.000*c0|c1=0.500*c1", left)
     }

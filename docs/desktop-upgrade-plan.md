@@ -1,6 +1,6 @@
 # Desktop upgrade plan
 
-Status: approved. Phase 1 is done (see "Phase 1 as built" below). The decisions in "Conflicts that need a decision" are still open.
+Status: approved. Phases 1 and 2 are done (see "as built" under each). The decisions in "Conflicts that need a decision" are still open.
 
 Estimates are in working days for one engineer who knows the codebase, and include tests. They are rough, and the native work (Phases 2 and 3) carries the most risk.
 
@@ -86,6 +86,16 @@ Each phase is one PR into `fix/crossfade-automix` unless you want them against `
 - Gapless: decode the next track ahead and hand frames to the sink without a gap, using the encoder delay and padding FFmpeg reports. (2 days)
 - Crossfade on the same pipeline, reusing the phone's settings. (1 day)
 - EQ: a 10-band parametric EQ and preamp in the decode path (biquads in Kotlin, or FFmpeg `equalizer` filters as today), with presets shared with the phone. ReplayGain or loudness normalisation from YouTube's `loudnessDb`. (2 days)
+
+#### Phase 2 as built
+
+- otaudio on miniaudio 0.11.26, built per system by Gradle and loaded through JNA. Java Sound is the fallback. Checked here: built and run on Linux (ALSA, and the silent backend in tests), cross-compiled for Windows with MinGW (depends on KERNEL32 and msvcrt only). macOS is built by CI only.
+- JavaFX is gone. Everything plays through FFmpeg onto one bus at the device's rate: YouTube Opus with AAC as the fallback, JioSaavn, a Subsonic server's own file (no longer transcoded to MP3), and an add-on's FLAC.
+- Gapless and crossfade between any two songs, using the phone's crossfade setting. Skipping to the song already made ready starts it at once.
+- EQ: a real preamp, bass and treble as shelves, and the phone's parametric headphone filters (`HeadphoneEq`), all applied before boosts are taken back off. The desktop has a preamp slider. There's no headphone-curve picker yet; a curve set elsewhere applies.
+- Loudness levelling from YouTube's own figure, with Quiet, Normal and Loud levels.
+- Bit-perfect lossless as an opt-in, exclusive on WASAPI and ALSA. Core Audio and PulseAudio have no exclusive mode in miniaudio, so there it's the file's own format, shared.
+- Not done: WASAPI exclusive for the whole bus, since it would block other apps' sound and is only worth it for lossless, which bit-perfect covers. Also not done: ReplayGain tags from local files, which depends on the Phase 4 local library.
 
 ### Phase 3: Native integration (7 to 9 days)
 

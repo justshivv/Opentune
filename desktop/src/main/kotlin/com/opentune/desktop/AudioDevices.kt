@@ -12,8 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * Where the sound goes: the system's default output, or a device chosen in Settings, as
  * BitChord's desktop lets you choose. Kept by name, not by place in the list, since the
  * order changes as devices come and go; a chosen device that's gone plays on the default.
- * FFmpeg's and the FLAC engine's sound goes there; JavaFX's fallback player only ever plays
- * to the default.
+ * The list is miniaudio's where the native output loads ([NativeAudio]), else Java Sound's.
  */
 internal object AudioDevices {
     data class Device(val name: String, val description: String)
@@ -23,15 +22,34 @@ internal object AudioDevices {
     /** The chosen device's name, or blank for the system's default. */
     val selected: StateFlow<String> = _selected.asStateFlow()
 
+    private val _bitPerfect = MutableStateFlow(runCatching { prefs.getBoolean("bit_perfect", false) }.getOrDefault(false))
+    /**
+     * Settings → Playback → Bit-perfect lossless: an add-on's FLAC goes straight to the device
+     * at its own rate and depth, exclusive where the system allows (Windows, ALSA), with no
+     * equalizer, crossfade or volume levelling on it.
+     */
+    val bitPerfect: StateFlow<Boolean> = _bitPerfect.asStateFlow()
+
+    fun setBitPerfect(on: Boolean) {
+        if (on == _bitPerfect.value) return
+        _bitPerfect.value = on
+        runCatching { prefs.edit().putBoolean("bit_perfect", on).apply() }
+    }
+
     /** Every output that can play, as the system lists them now. */
-    fun available(): List<Device> = runCatching {
-        AudioSystem.getMixerInfo()
-            .filter { info ->
-                runCatching { AudioSystem.getMixer(info).isLineSupported(DataLine.Info(SourceDataLine::class.java, null)) }.getOrDefault(false)
-            }
-            .map { Device(it.name, it.description.orEmpty()) }
-            .distinctBy { it.name }
-    }.getOrDefault(emptyList())
+    fun available(): List<Device> {
+        if (NativeAudio.available) {
+            return NativeAudio.devices().map { Device(it.name, if (it.isDefault) "System default" else "") }.distinctBy { it.name }
+        }
+        return runCatching {
+            AudioSystem.getMixerInfo()
+                .filter { info ->
+                    runCatching { AudioSystem.getMixer(info).isLineSupported(DataLine.Info(SourceDataLine::class.java, null)) }.getOrDefault(false)
+                }
+                .map { Device(it.name, it.description.orEmpty()) }
+                .distinctBy { it.name }
+        }.getOrDefault(emptyList())
+    }
 
     fun select(name: String) {
         if (name == _selected.value) return
@@ -41,7 +59,7 @@ internal object AudioDevices {
         Player.restartOutput()
     }
 
-    /** The mixer to open, or null for the default (nothing chosen, or the chosen one is gone). */
+    /** The Java Sound mixer to open, or null for the default (nothing chosen, or the chosen one is gone). */
     fun mixer(): Mixer? {
         val name = _selected.value.takeIf { it.isNotBlank() } ?: return null
         return runCatching { AudioSystem.getMixerInfo().firstOrNull { it.name == name }?.let(AudioSystem::getMixer) }.getOrNull()

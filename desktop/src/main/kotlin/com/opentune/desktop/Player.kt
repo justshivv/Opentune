@@ -6,15 +6,8 @@ import com.opentune.data.innertube.InnertubeParser
 import com.opentune.data.isYouTubeId
 import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
-import com.opentune.data.settings.EQ_BANDS_HZ
 import com.opentune.data.subsonic.Subsonic
 import java.util.concurrent.ConcurrentHashMap
-import javafx.application.Platform
-import javafx.scene.media.EqualizerBand
-import javafx.scene.media.Media
-import javafx.scene.media.MediaPlayer
-import javafx.util.Duration
-import kotlin.math.pow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,14 +26,20 @@ import okhttp3.Request
 
 /**
  * The queue and the song playing. A song starts from YouTube (or your own
- * server) through JavaFX's media player, as it always has; meanwhile the
- * audio sources are asked for something better, as on the phone: a verified
- * FLAC from an add-on, played bit for bit by [FlacEngine], or JioSaavn's
- * 320 kbps AAC. Whichever answers takes over at the same moment in the song,
- * and the next song's sources are asked ahead, so it can start in its best
- * quality. When the queue runs out it carries on with YouTube Music's
- * up-next, when autoplay is on. The phone's speed, balance and equalizer
- * settings apply to JavaFX's playback; a lossless file plays untouched.
+ * server), decoded by FFmpeg onto the [AudioBus]; meanwhile the audio sources
+ * are asked for something better, as on the phone: a verified FLAC from an
+ * add-on, or JioSaavn's 320 kbps AAC. Whichever answers takes over at the same
+ * moment in the song, and the next song's sources are asked ahead, so it can
+ * start in its best quality.
+ *
+ * The next song decodes ahead into a voice of its own and starts on the sample
+ * after this one's last, or fades in over its end when a crossfade is set
+ * (Settings → Playback). The phone's speed, balance and equalizer settings
+ * apply to everything on the bus. With bit-perfect lossless on, an add-on's
+ * FLAC goes straight to the device at its own format instead, untouched.
+ *
+ * When the queue runs out it carries on with YouTube Music's up-next, when
+ * autoplay is on.
  */
 object Player {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -125,29 +124,30 @@ object Player {
     private var aheadJob: Job? = null
 
     init {
-        // A change in Settings reaches the song already playing.
+        // A change in Settings reaches the song already playing, and the one coming next.
         scope.launch {
             combine(AppSettings.sound, AppSettings.equalizer) { _, _ -> }.collect {
-                when (val e = synchronized(gate) { engine }) {
-                    is FxEngine -> onFx { e.player?.let(::applyEffects) }
-                    is FfmpegEngine -> e.refreshEffects()
-                    else -> Unit
-                }
+                synchronized(gate) { listOfNotNull(engine, incoming, prepared?.engine) }.forEach { (it as? FfmpegEngine)?.refreshEffects() }
             }
         }
-    }
-
-    private val fx by lazy {
-        // JavaFX's toolkit, started once, with no window of its own.
-        val ready = java.util.concurrent.CountDownLatch(1)
-        runCatching { Platform.startup { ready.countDown() } }.onFailure { ready.countDown() }
-        Platform.setImplicitExit(false)
-        ready.await()
-    }
-
-    internal fun onFx(block: () -> Unit) {
-        fx
-        if (Platform.isFxApplicationThread()) block() else Platform.runLater(block)
+        // Loudness turned on or off, or its level changed.
+        scope.launch {
+            AppSettings.playback.collect {
+                val e = synchronized(gate) { engine } as? FfmpegEngine ?: return@collect
+                val id = current?.videoId ?: return@collect
+                if (_quality.value?.source == "YouTube") e.voice.gain = loudnessGain(id)
+            }
+        }
+        // The next song made ready near the end, and the crossfade into it.
+        scope.launch {
+            while (true) {
+                delay(250)
+                runCatching { tick() }.onFailure { System.err.println("Player: $it") }
+            }
+        }
+        // A device unplugged: the bus opened another, maybe at another rate; the song starts again there.
+        AudioBus.onDeviceChanged = { restartOutput() }
+        applyVolume()
     }
 
     fun playAll(songs: List<Song>, start: Int, atMs: Long = 0) {
@@ -247,6 +247,8 @@ object Player {
 
     /** Asks the next song's sources ahead, after the queue's order changed. */
     private fun lookAheadNext() {
+        // What comes next may have changed: the one made ready is made again for whatever it is now.
+        synchronized(gate) { prepared?.let { if (!it.linked || crossfadeMs == 0L) { (engine as? FfmpegEngine)?.voice?.then = null; dropPrepared() } } }
         val following = _queue.value.getOrNull(_index.value + 1) ?: return
         aheadJob?.cancel()
         aheadJob = scope.launch { lookAhead(following) }
@@ -268,6 +270,7 @@ object Player {
         wanted = !wanted
         _wanted.value = wanted
         if (wanted) e.play() else e.pause()
+        if (!wanted) AudioBus.pause()
         synchronized(gate) { incoming }?.let { if (wanted) it.play() else it.pause() }
         _playing.value = wanted
     }
@@ -276,6 +279,7 @@ object Player {
         wanted = false
         _wanted.value = false
         synchronized(gate) { listOfNotNull(engine, incoming) }.forEach { it.pause() }
+        AudioBus.pause()
         _playing.value = false
     }
 
@@ -335,6 +339,8 @@ object Player {
 
     private fun applyVolume() {
         val v = _volume.value * fade
+        // Everything on the bus; a bit-perfect FLAC sets its device's own.
+        AudioBus.volume = v.toFloat()
         synchronized(gate) { listOfNotNull(engine, incoming) }.forEach { it.setVolume(v) }
     }
 
@@ -352,6 +358,8 @@ object Player {
     /** Moves to [ms] in the song; [byHand] when the listener did it, which a room hears about. */
     fun seekTo(ms: Long, byHand: Boolean = true) {
         if (byHand && intercept?.invoke(com.opentune.data.together.Together.Control.Seek(ms)) == true) return
+        // A chain or a fade set for the old place in the song is set again from the new one on the next tick.
+        synchronized(gate) { if (prepared?.linked == true) dropPrepared() }
         synchronized(gate) { engine }?.seek(ms)
         if (byHand) _seeks.tryEmit(Unit)
     }
@@ -361,7 +369,11 @@ object Player {
         if (current == null || synchronized(gate) { engine } == null) return
         val at = positionMs()
         val playing = wanted
-        open(_index.value, at)
+        synchronized(gate) { dropPrepared() }
+        // Closed first, so the device chosen now is the one it opens.
+        synchronized(gate) { engine?.let(::release); engine = null }
+        AudioBus.release()
+        open(_index.value, at.coerceAtLeast(1))
         if (!playing) pause()
     }
 
@@ -400,6 +412,9 @@ object Player {
 
     private fun open(i: Int, atMs: Long = 0) {
         val song = _queue.value.getOrNull(i) ?: return
+        // The song after this one, already decoding: it takes over at once.
+        val ready = synchronized(gate) { prepared?.takeIf { it.song.videoId == song.videoId && atMs == 0L && it.failed == null } }
+        if (ready != null) return adopt(ready, i, fresh = true)
         _index.value = i
         _error.value = null
         _loading.value = true
@@ -411,90 +426,77 @@ object Player {
         val gen = synchronized(gate) {
             upgradeJob?.cancel()
             aheadJob?.cancel()
-            incoming?.dispose(); incoming = null
-            engine?.dispose(); engine = null
+            dropPrepared()
+            fading.forEach { it.dispose() }; fading.clear()
+            incoming?.let(::release); incoming = null
+            engine?.let(::release); engine = null
             ++generation
         }
-        val ready = upgrades[song.videoId]?.takeIf { System.currentTimeMillis() - it.at < UPGRADE_KEEP_MS }
-        if (ready != null) start(song, gen, ready, takeover = false, atMs = atMs) else startBase(song, gen, atMs)
+        val found = upgrades[song.videoId]?.takeIf { System.currentTimeMillis() - it.at < UPGRADE_KEEP_MS }
+        if (found != null) start(song, gen, found, takeover = false, atMs = atMs) else startBase(song, gen, atMs)
+        followUp(song, i, gen)
+    }
+
+    /** Better sources for the song now playing, then the next song's, so it can start in its best quality. */
+    private fun followUp(song: Song, i: Int, gen: Int) {
         upgradeJob = scope.launch {
             findUpgrades(song, gen)
-            // Then the next song's, so it can start in its best quality.
             _queue.value.getOrNull(i + 1)?.let { following -> aheadJob = scope.launch { lookAhead(following) } }
         }
+        if (isYouTubeId(song.videoId)) scope.launch { applyLoudness(song.videoId, gen) }
+    }
+
+    /** Stops an engine for good; a bit-perfect one gives the device back before the bus takes it. */
+    private fun release(e: Engine) {
+        e.dispose()
+        if (e is FlacEngine) e.awaitClosed(1_000)
     }
 
     // ---- The song's first source -------------------------------------------------
 
     /**
-     * YouTube through the relay, or your server's MP3: what every song starts
-     * from. A YouTube song plays YouTube's Opus stream through FFmpeg where
-     * FFmpeg loads, and its AAC stream through JavaFX if that fails.
+     * YouTube through the relay, or your server's own file: what every song starts from.
+     * A YouTube song plays its Opus stream, YouTube's best; if that fails, its AAC one.
      */
-    private fun startBase(song: Song, gen: Int, atMs: Long = 0, opus: Boolean = isYouTubeId(song.videoId) && Ffmpeg.available) {
-        if (opus) return startOpus(song, gen, atMs)
-        val address = addressOf(song.videoId) ?: return fail(song, gen)
-        lateinit var e: FxEngine
-        e = FxEngine(
+    private fun startBase(song: Song, gen: Int, atMs: Long = 0, kind: Streams.Kind = Streams.Kind.OPUS) {
+        val address = addressOf(song.videoId, kind) ?: return fail(song, gen)
+        lateinit var e: FfmpegEngine
+        e = FfmpegEngine(
             address, startAtMs = { atMs }, autoplay = wanted,
             onReady = { ms ->
                 if (current(gen, e)) {
-                    _loading.value = false
                     if (ms > 0) _durationOf.value = song.videoId to ms
-                    if (_quality.value == null) _quality.value = baseQuality(song)
-                }
-            },
-            onStarted = {},
-            onPlaying = { on -> if (current(gen, e)) { _playing.value = on; if (on) _loading.value = false } },
-            onEnd = { if (current(gen, e)) ended() },
-            onError = { message ->
-                System.err.println("Player: ${song.videoId}: $message")
-                if (current(gen, e)) fail(song, gen)
-            },
-        )
-        synchronized(gate) {
-            if (gen != generation) return e.dispose()
-            engine = e
-        }
-        e.setVolume(_volume.value * fade)
-    }
-
-    /** YouTube's Opus stream, decoded by FFmpeg; on any failure, the AAC one from where it got to. */
-    private fun startOpus(song: Song, gen: Int, atMs: Long) {
-        lateinit var e: FfmpegEngine
-        e = FfmpegEngine(
-            Relay.addressOf(song.videoId, Streams.Kind.OPUS), startAtMs = { atMs }, autoplay = wanted,
-            onReady = { ms ->
-                if (current(gen, e)) {
-                    if (ms > 0) _durationOf.value = song.videoId to ms
-                    if (_quality.value == null) {
-                        _quality.value = Quality("YouTube", Streams.known(song.videoId, Streams.Kind.OPUS)?.let { "Opus ${it.kbps} kbps" } ?: "Opus")
-                    }
+                    if (_quality.value == null) _quality.value = baseQuality(song, kind)
                 }
             },
             onStarted = { if (current(gen, e)) _loading.value = false },
             onPlaying = { on -> if (current(gen, e)) { _playing.value = on; if (on) _loading.value = false } },
             onEnd = { if (current(gen, e)) ended() },
             onError = { message ->
-                System.err.println("Player: ${song.videoId}: Opus through FFmpeg failed ($message), trying AAC")
                 val mine = synchronized(gate) { (gen == generation && engine === e).also { if (it) engine = null } }
                 val at = runCatching { e.positionMs() }.getOrDefault(atMs)
                 e.dispose()
-                if (mine) {
+                if (!mine) return@FfmpegEngine
+                if (kind == Streams.Kind.OPUS && isYouTubeId(song.videoId)) {
+                    System.err.println("Player: ${song.videoId}: Opus failed ($message), trying AAC")
                     _quality.value = null
-                    startBase(song, gen, at, opus = false)
+                    startBase(song, gen, at, Streams.Kind.AAC)
+                } else {
+                    System.err.println("Player: ${song.videoId}: $message")
+                    fail(song, gen)
                 }
             },
         )
+        e.voice.gain = loudnessGain(song.videoId)
         synchronized(gate) {
             if (gen != generation) return e.dispose()
             engine = e
         }
-        e.setVolume(_volume.value * fade)
     }
 
-    private fun baseQuality(song: Song): Quality = when {
-        Subsonic.isSubsonic(song.videoId) -> Quality("Your server", "MP3 320 kbps")
+    private fun baseQuality(song: Song, kind: Streams.Kind): Quality = when {
+        Subsonic.isSubsonic(song.videoId) -> Quality("Your server", "Original file")
+        kind == Streams.Kind.OPUS -> Quality("YouTube", Streams.known(song.videoId, Streams.Kind.OPUS)?.let { "Opus ${it.kbps} kbps" } ?: "Opus")
         else -> Quality("YouTube", Streams.known(song.videoId)?.let { "AAC ${it.kbps} kbps" } ?: "AAC")
     }
 
@@ -517,6 +519,151 @@ object Player {
             // A song that ends isn't a skip pressed: a guest in a room doesn't send it to the host.
             skipNext()
         }
+    }
+
+    // ---- The next song, ready before it's needed ----------------------------------------
+
+    /** How long before the end the next song starts decoding. */
+    private const val PREPARE_AHEAD_MS = 30_000L
+
+    /**
+     * The song after this one, decoding into a queued voice on the bus: started on the exact
+     * sample the one before ends (gapless), or faded in over the last seconds (crossfade).
+     */
+    private class Prepared(val song: Song, val upgrade: Upgrade?) {
+        lateinit var engine: FfmpegEngine
+        /** The generation it plays as once it takes over; until then its callbacks are ignored. */
+        @Volatile var gen = -1
+        @Volatile var duration = 0L
+        @Volatile var failed: String? = null
+        /** Chained to the song before, or fading in over it. */
+        @Volatile var linked = false
+    }
+
+    private var prepared: Prepared? = null
+    /** Songs fading out under the next one, until their fade ends. */
+    private val fading = mutableListOf<Engine>()
+
+    /** Must be called holding [gate]. Undoes a chain or a crossfade set up into it. */
+    private fun dropPrepared() {
+        prepared?.let { p ->
+            (engine as? FfmpegEngine)?.voice?.let { v ->
+                if (v.then === p.engine.voice) v.then = null
+                if (v.fadeInto === p.engine.voice) { v.fadeInto = null; v.ramp(null); v.onFadedOut = null }
+            }
+            p.engine.dispose()
+        }
+        prepared = null
+    }
+
+    private val crossfadeMs: Long get() = AppSettings.playback.value.crossfadeSeconds.coerceIn(0, 12) * 1_000L
+
+    /** Every quarter second: starts the next song decoding near the end, and the crossfade into it. */
+    private fun tick() {
+        if (!wanted) return
+        val e = synchronized(gate) { engine } as? FfmpegEngine ?: return
+        if (incoming != null) return
+        val length = e.durationMs().takeIf { it > 0 } ?: return
+        val left = length - e.positionMs()
+        val nextIndex = when {
+            _repeat.value == Repeat.ONE || _sleep.value == Sleep.EndOfSong -> return
+            _index.value + 1 in _queue.value.indices -> _index.value + 1
+            _repeat.value == Repeat.ALL && _queue.value.isNotEmpty() -> 0
+            else -> return
+        }
+        val next = _queue.value[nextIndex]
+        val fade = crossfadeMs.takeIf { it > 0 && length > it * 3 }
+        val p = synchronized(gate) {
+            prepared?.takeIf { it.song.videoId != next.videoId || it.failed != null }?.let { dropPrepared() }
+            if (prepared == null && left <= PREPARE_AHEAD_MS + (fade ?: 0)) prepared = prepare(next)
+            prepared
+        } ?: return
+        if (p.linked) return
+        if (fade == null) {
+            // Gapless: it starts on the sample after this one's last.
+            AudioBus.chain(e.voice, p.engine.voice)
+            p.linked = true
+        } else if (left <= fade + 600 && p.engine.voice.primed) {
+            // Set a little ahead, from where the mixer is, so the fade starts on its frame and not on this tick.
+            p.linked = true
+            val rate = p.engine.voice.rate
+            val speed = AppSettings.sound.value.speed.toDouble().coerceIn(0.5, 2.0)
+            val fadeFrames = (minOf(fade, left).coerceAtLeast(500) * rate / 1000).toInt()
+            val leftFrames = (left / speed * rate / 1000).toLong()
+            val after = (leftFrames - fadeFrames - AudioBus.latency).coerceAtLeast(0).toInt()
+            e.voice.onFadedOut = { synchronized(gate) { fading.remove(e) }; e.dispose() }
+            // The next song shows the moment it starts coming in.
+            p.engine.voice.onFadeIn = {
+                val ok = synchronized(gate) { (engine === e && prepared === p).also { if (it) { fading += e; engine = null } } }
+                if (ok) adopt(p, nextIndex, fresh = false)
+            }
+            AudioBus.crossfade(e.voice, p.engine.voice, fadeFrames, after)
+        }
+    }
+
+    /** Must be called holding [gate]. A bit-perfect FLAC can't share the bus, so it isn't made ahead. */
+    private fun prepare(song: Song): Prepared? {
+        val upgrade = upgrades[song.videoId]?.takeIf { System.currentTimeMillis() - it.at < UPGRADE_KEEP_MS && !(it.flac != null && bitPerfect) }
+        val p = Prepared(song, upgrade)
+        val address = upgrade?.flac?.url ?: upgrade?.saavn ?: addressOf(song.videoId, Streams.Kind.OPUS) ?: return null
+        lateinit var e: FfmpegEngine
+        e = FfmpegEngine(
+            address, startAtMs = { 0 }, autoplay = false,
+            onReady = { ms -> p.duration = ms },
+            onStarted = { if (current(p.gen, e)) _loading.value = false },
+            onPlaying = { on -> if (current(p.gen, e)) _playing.value = on },
+            onEnd = { if (current(p.gen, e)) ended() },
+            onError = { message ->
+                System.err.println("Player: ${song.videoId}: the next song didn't load ahead: $message")
+                p.failed = message ?: "failed"
+                if (current(p.gen, e)) {
+                    synchronized(gate) { engine = null }
+                    startBase(song, p.gen, runCatching { e.positionMs() }.getOrDefault(0))
+                }
+            },
+            headers = upgrade?.flac?.headers ?: emptyMap(),
+            queued = true,
+        )
+        e.voice.gain = if (upgrade == null) loudnessGain(song.videoId) else 1f
+        p.engine = e
+        return p
+    }
+
+    /**
+     * Makes [p] the song playing, at [i]. [fresh] when it starts now (a skip, or the end of the one
+     * before without a chain), rather than having already taken over on the bus.
+     */
+    private fun adopt(p: Prepared, i: Int, fresh: Boolean) {
+        val gen = synchronized(gate) {
+            upgradeJob?.cancel()
+            aheadJob?.cancel()
+            prepared = null
+            if (fresh) {
+                fading.forEach { it.dispose() }; fading.clear()
+                incoming?.let(::release); incoming = null
+                engine?.let { old -> (old as? FfmpegEngine)?.voice?.then = null; release(old) }
+            }
+            engine = p.engine
+            ++generation
+        }
+        p.gen = gen
+        if (fresh) {
+            wanted = true
+            _wanted.value = true
+            // A fade set up for it is off: it starts now, at full level.
+            p.engine.voice.ramp(null)
+            p.engine.voice.onFadeIn = null
+            p.engine.voice.start()
+            if (wanted) AudioBus.resume()
+        }
+        _index.value = i
+        _error.value = null
+        _quality.value = p.upgrade?.let(::qualityOf) ?: baseQuality(p.song, Streams.Kind.OPUS)
+        _loading.value = !p.engine.voice.primed
+        _playing.value = wanted
+        if (p.duration > 0) _durationOf.value = p.song.videoId to p.duration
+        Library.played(p.song)
+        followUp(p.song, i, gen)
     }
 
     // ---- Better sources ------------------------------------------------------------
@@ -574,21 +721,37 @@ object Player {
         if (synchronized(gate) { gen == generation } && upgrade.rank > rankNow()) start(song, gen, upgrade, takeover = true)
     }
 
+    /** What a better source is called under the song. */
+    private fun qualityOf(upgrade: Upgrade, flac: FlacEngine? = null): Quality = upgrade.flac?.let { f ->
+        val heard = when {
+            flac == null -> AudioBus.rate.takeIf { it != f.rate }?.let { " · played at ${Addons.khz(it)}" }.orEmpty()
+            flac.output?.sampleSizeInBits == 16 && f.bits > 16 -> " · sound card at 16-bit"
+            flac.exclusive -> " · bit-perfect"
+            else -> ""
+        }
+        Quality(f.provider, "FLAC ${f.bits}-bit / ${Addons.khz(f.rate)}$heard", lossless = true)
+    } ?: Quality("JioSaavn", "AAC 320 kbps")
+
     /**
-     * Plays [upgrade]: taking over from what's playing at its position when
-     * [takeover], else from the start. The old engine plays on until the new
-     * one's first sound; if the new one fails, the old one simply carries on.
+     * Plays [upgrade]: taking over from what's playing at its position when [takeover],
+     * else from the start. On the bus the old song plays on until the new one's first
+     * sound; a bit-perfect FLAC needs the device to itself, so the old one stops first.
+     * If the new one fails, the old one carries on (or the song starts over from its
+     * first source, when the old one is gone).
      */
     private fun start(song: Song, gen: Int, upgrade: Upgrade, takeover: Boolean, atMs: Long = 0) {
-        val old = synchronized(gate) { engine.takeIf { takeover } }
-        val startAt: () -> Long = { old?.positionMs() ?: atMs }
-        lateinit var e: Engine
-        val quality: () -> Quality = {
-            upgrade.flac?.let { f ->
-                val sixteen = (e as? FlacEngine)?.output?.sampleSizeInBits == 16 && f.bits > 16
-                Quality(f.provider, "FLAC ${f.bits}-bit / ${Addons.khz(f.rate)}" + if (sixteen) " · sound card at 16-bit" else "", lossless = true)
-            } ?: Quality("JioSaavn", "AAC 320 kbps")
+        val direct = upgrade.flac != null && bitPerfect
+        var old = synchronized(gate) { engine.takeIf { takeover } }
+        var from = atMs
+        if (direct && old != null) {
+            from = old.positionMs()
+            synchronized(gate) { if (engine === old) engine = null; dropPrepared() }
+            release(old)
+            old = null
         }
+        if (direct) AudioBus.release()
+        val startAt: () -> Long = { old?.positionMs() ?: from }
+        lateinit var e: Engine
         val onStarted: () -> Unit = {
             val replaced = synchronized(gate) {
                 if (gen != generation || (incoming !== e && engine !== e)) return@synchronized null
@@ -599,7 +762,7 @@ object Player {
             }
             if (replaced != null) {
                 if (replaced !== e) replaced.dispose()
-                _quality.value = quality()
+                _quality.value = qualityOf(upgrade, e as? FlacEngine)
                 _loading.value = false
                 _playing.value = wanted
                 e.durationMs().takeIf { it > 0 }?.let { _durationOf.value = song.videoId to it }
@@ -617,28 +780,30 @@ object Player {
                 }
             }
             val at = runCatching { e.positionMs() }.getOrDefault(0L)
-            e.dispose()
+            release(e)
             if (fallBack) { _quality.value = null; startBase(song, gen, at) }
         }
         val onEnd: () -> Unit = { if (current(gen, e)) ended() }
-        e = if (upgrade.flac != null) {
-            val f = upgrade.flac
+        e = if (direct) {
+            val f = upgrade.flac!!
             FlacEngine(
                 source = { download(f.url, f.headers) }, startAtMs = startAt, autoplay = wanted,
                 onStarted = onStarted, onEnd = onEnd, onError = onError,
+                out = if (NativeAudio.available) NativePcmOut(AudioDevices.selected.value, exclusive = true) else SoundCard(),
             )
         } else {
-            FxEngine(
-                upgrade.saavn!!, startAtMs = startAt, autoplay = wanted,
+            FfmpegEngine(
+                upgrade.flac?.url ?: upgrade.saavn!!, startAtMs = startAt, autoplay = wanted,
                 onReady = {}, onStarted = onStarted,
                 onPlaying = { on -> if (current(gen, e)) _playing.value = on },
                 onEnd = onEnd, onError = onError,
+                headers = upgrade.flac?.headers ?: emptyMap(),
             )
         }
         e.setVolume(_volume.value * fade)
         synchronized(gate) {
-            if (gen != generation) return e.dispose()
-            if (takeover) { incoming?.dispose(); incoming = e } else engine = e
+            if (gen != generation) return release(e)
+            if (old != null) { incoming?.let(::release); incoming = e } else engine = e
         }
     }
 
@@ -662,98 +827,37 @@ object Player {
         return parts.fold(0) { total, p -> total * 60 + p }.toDouble().takeIf { it > 0 }
     }
 
-    // ---- JavaFX -------------------------------------------------------------------
+    /** For tests: where each song's first source is, in place of YouTube. */
+    @Volatile internal var sourceFor: ((String) -> String?)? = null
 
-    /** JavaFX's media player for one address: YouTube through the relay, a server, or JioSaavn. */
-    private class FxEngine(
-        private val address: String,
-        private val startAtMs: () -> Long,
-        private val autoplay: Boolean,
-        private val onReady: (Long) -> Unit,
-        private val onStarted: () -> Unit,
-        private val onPlaying: (Boolean) -> Unit,
-        private val onEnd: () -> Unit,
-        private val onError: (String?) -> Unit,
-    ) : Engine {
-        @Volatile var player: MediaPlayer? = null
-        @Volatile private var disposed = false
-        @Volatile private var started = false
-        @Volatile private var volume = 1.0
+    /** Settings → Playback → Bit-perfect lossless: an add-on's FLAC straight to the device at its own format. */
+    private val bitPerfect: Boolean get() = AudioDevices.bitPerfect.value
 
-        init {
-            onFx {
-                if (disposed) return@onFx
-                val m = runCatching { MediaPlayer(Media(address)) }.getOrElse { onError(it.message); return@onFx }
-                player = m
-                m.volume = volume
-                applyEffects(m)
-                m.setOnReady {
-                    if (disposed) return@setOnReady
-                    onReady(m.totalDuration?.toMillis()?.takeIf { it.isFinite() && it > 0 }?.toLong() ?: 0L)
-                    startAtMs().takeIf { it > 500 }?.let { m.seek(Duration.millis(it.toDouble())) }
-                    if (autoplay) m.play() else { started = true; onStarted() }
-                }
-                m.setOnPlaying {
-                    if (!started) { started = true; onStarted() }
-                    onPlaying(true)
-                }
-                m.setOnPaused { onPlaying(false) }
-                m.setOnStopped { onPlaying(false) }
-                m.setOnEndOfMedia { onEnd() }
-                m.setOnError { onError(m.error?.message) }
-            }
-        }
+    // ---- Loudness ------------------------------------------------------------------
 
-        override fun play() = onFx { player?.play() }
-        override fun pause() = onFx { player?.pause() }
-        override fun seek(ms: Long) = onFx { player?.seek(Duration.millis(ms.toDouble())) }
-        override fun positionMs(): Long = player?.currentTime?.toMillis()?.takeIf { it.isFinite() }?.toLong() ?: startAtMs()
-        override fun durationMs(): Long = player?.totalDuration?.toMillis()?.takeIf { it.isFinite() }?.toLong() ?: 0L
-        override fun setVolume(v: Double) {
-            volume = v
-            onFx { player?.volume = v }
-        }
-        override fun dispose() {
-            disposed = true
-            onFx { player?.dispose(); player = null }
-        }
+    /** YouTube's own loudness measure of each song, in dB against its reference. */
+    private val loudness = ConcurrentHashMap<String, Double>()
+
+    /** The voice gain for [id]: brought to YouTube's reference and the chosen level, as the phone does. */
+    private fun loudnessGain(id: String): Float {
+        val p = AppSettings.playback.value
+        val db = loudness[id]?.takeIf { p.loudnessNormalization } ?: return 1f
+        return Math.pow(10.0, Loudness.gainDb(db, p.volumeLevel) / 20.0).toFloat()
     }
 
-    /**
-     * Speed, balance and the equalizer, from the phone's settings. JavaFX
-     * has no preamp, so the curve is lowered by its biggest boost instead,
-     * as the phone takes that boost off the input to keep from clipping;
-     * bass and treble go on the bands below 120 Hz and above 8 kHz.
-     */
-    private fun applyEffects(m: MediaPlayer) {
-        val sound = AppSettings.sound.value
-        val eq = AppSettings.equalizer.value
-        m.rate = sound.speed.toDouble().coerceIn(0.25, 4.0)
-        m.balance = eq.balance.toDouble().coerceIn(-1.0, 1.0)
-        val equalizer = m.audioEqualizer
-        equalizer.bands.clear()
-        equalizer.isEnabled = eq.enabled
-        if (!eq.enabled) return
-        val gains = EQ_BANDS_HZ.mapIndexed { i, hz ->
-            (eq.bands.getOrNull(i) ?: 0f) + eq.preampDb +
-                (if (hz <= 120f) eq.bassDb else 0f) + (if (hz >= 8_000f) eq.trebleDb else 0f)
-        }
-        val headroom = (gains.maxOrNull() ?: 0f).coerceAtLeast(0f)
-        // Each band two-thirds of an octave wide, centred on its frequency.
-        val width = 2.0.pow(1.0 / 3) - 2.0.pow(-1.0 / 3)
-        EQ_BANDS_HZ.forEachIndexed { i, hz ->
-            val gain = (gains[i] - headroom).toDouble().coerceIn(EqualizerBand.MIN_GAIN, EqualizerBand.MAX_GAIN)
-            equalizer.bands += EqualizerBand(hz.toDouble(), hz * width, gain)
-        }
+    /** Reads the song's loudness from YouTube and, if it's still playing from YouTube, applies it. */
+    private suspend fun applyLoudness(id: String, gen: Int) {
+        if (!AppSettings.playback.value.loudnessNormalization) return
+        if (loudness[id] == null) Loudness.of(id)?.let { loudness[id] = it } ?: return
+        val e = synchronized(gate) { engine.takeIf { gen == generation } } as? FfmpegEngine ?: return
+        if (_quality.value?.source == "YouTube") e.voice.gain = loudnessGain(id)
     }
 
-    /**
-     * Where JavaFX reads [id] from: a song on your server as MP3, which JavaFX can play where it can't FLAC; anything
-     * else through the relay.
-     */
-    private fun addressOf(id: String): String? = when {
-        Subsonic.isSubsonic(id) -> Subsonic.streamUrl(id)?.replace("format=raw", "format=mp3&maxBitRate=320")
-        else -> Relay.addressOf(id)
+    /** Where a song's first source is read from: YouTube through the relay, or your server's own file. */
+    private fun addressOf(id: String, kind: Streams.Kind): String? = when {
+        sourceFor != null -> sourceFor?.invoke(id)
+        Subsonic.isSubsonic(id) -> Subsonic.streamUrl(id)
+        else -> Relay.addressOf(id, kind)
     }
 
     /** Adds YouTube Music's up-next for the last song, then runs [then]. */

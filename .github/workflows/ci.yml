@@ -215,6 +215,15 @@ jobs:
       - name: RPM tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm
+      # The sound output (desktop/native/otaudio.c) is built with MinGW's gcc on Windows.
+      - name: C compiler (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command gcc -ErrorAction SilentlyContinue)) {
+            if (Test-Path C:\mingw64\bin\gcc.exe) { "C:\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8 }
+            else { choco install mingw -y --no-progress; "C:\ProgramData\mingw64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8 }
+          }
       - name: Desktop tests and installers
         shell: bash
         env:

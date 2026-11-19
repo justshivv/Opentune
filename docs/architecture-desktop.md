@@ -33,10 +33,34 @@ All under `desktop/src/main/kotlin/com/opentune/desktop/`.
 | Start-up | `Main.kt`: logging, crash log, vault, renderer choice, shared services, then the window. |
 | Window | `DesktopWindow.kt`, `WindowsFrame.kt`, `Chrome.kt`, `Shell.kt` |
 | Pages | `DesktopApp.kt` (the root), `Pages.kt`, `PageStack.kt`, `PageKit.kt`, `HomeLibrary.kt`, `ArtistView.kt`, `Playlists.kt`, `SettingsPage.kt` |
-| Playback | `Player.kt`, `FfmpegEngine.kt`, `FlacEngine.kt`, `Streams.kt`, `Relay.kt`, `AudioDevices.kt` |
+| Playback | `Player.kt`, `AudioBus.kt`, `FfmpegEngine.kt`, `FlacEngine.kt`, `NativeAudio.kt`, `Loudness.kt`, `Streams.kt`, `Relay.kt`, `AudioDevices.kt`, and `desktop/native/otaudio.c` |
 | Sign-ins and secrets | `SecretVault.kt`, `KeyBackends.kt`, `VaultUi.kt`, `Account.kt`, `LastFmDesktop.kt` |
 | Services | `DesktopServices.kt` (logging setup, update check, opt-in install count), `DiscordPresence.kt`, `Addons.kt`, `ListenTogether.kt` |
 | Diagnostics | `CrashLog` in `Main.kt` |
+
+### Playback
+
+```
+source ─► FfmpegEngine (decode, resample to the device rate, EQ/speed filters) ─► Voice ─┐
+source ─► FfmpegEngine ─► Voice (queued: the next song) ────────────────────────────────┤
+                                                                                         ▼
+                               AudioBus mixer thread: sum voices in float, crossfade ramps,
+                               loudness gain, master volume, soft limit ─► BusDevice
+                                                                             │
+                     NativeBusDevice (otaudio ► miniaudio ► WASAPI / Core Audio / PulseAudio / ALSA)
+                     or JavaSoundBusDevice where otaudio won't load
+
+add-on FLAC with "Bit-perfect lossless" on ─► FlacEngine (jflac) ─► NativePcmOut, the file's own format,
+                                                                    exclusive where the system allows
+```
+
+- **otaudio** (`desktop/native/otaudio.c`) is a small C library on miniaudio (`third_party/miniaudio`): a playback device with a ring buffer in front of it. Kotlin writes into the ring through JNA and never runs on the audio thread. The `nativeAudio` Gradle task builds it with the system's C compiler (cc, or MinGW's gcc on Windows) into the resources under JNA's platform folder. Without a compiler a local build still works and plays through Java Sound; on CI a missing compiler fails the build.
+- **The bus** opens the device once, at the device's own rate, shared. Every song is decoded by FFmpeg into a voice at that rate, so any song can follow any other.
+- **Gapless**: about 30 seconds before the end, `Player.tick` decodes the next song into a queued voice and chains it. The mixer starts it on the sample after the last one of the song before, inside the same 10 ms chunk.
+- **Crossfade** (Settings → Playback): the fade is scheduled on the frame where it should begin, and the next song shows in the app when it starts coming in. Equal-power curves.
+- **Loudness**: YouTube's `loudnessDb` from the player response, applied as the voice's gain, with the phone's formula and levels. A soft limiter above 0.95 keeps boosts from clipping. Below it, samples pass unchanged.
+- **Bit-perfect lossless** (off by default): an add-on's FLAC skips the bus. The bus gives the device up, and the FLAC opens it at the file's rate and depth: exclusive on WASAPI and ALSA, shared elsewhere. No EQ, crossfade or levelling applies to it, and it isn't made ready ahead, so there's a short gap into and out of it.
+- **Tests** run on miniaudio's silent backend (`-Dopentune.audio=null`), which plays in real time to nothing. `CaptureDevice` stands in for the bus's device where a test needs to look at the samples.
 
 ### What starts, in order
 

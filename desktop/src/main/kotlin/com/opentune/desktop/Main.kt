@@ -125,6 +125,11 @@ private fun selfCheck() {
             "ran"
         },
         "SQLite" to { "${Library.playlists.value.size} playlists, ${Library.liked.value.size} liked" },
+        // The sound output built for this system, loaded from inside the app.
+        "Native audio" to {
+            check(NativeAudio.available) { "otaudio didn't load" }
+            "miniaudio on ${NativeAudio.backend}, ${NativeAudio.devices().size} output(s)"
+        },
         // AES-GCM and the JNA platform classes on the trimmed runtime, with a key in memory only:
         // this computer's keyring is left alone.
         "Vault" to {

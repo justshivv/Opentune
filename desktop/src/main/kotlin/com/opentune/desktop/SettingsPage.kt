@@ -276,9 +276,31 @@ private fun PlaybackSection() {
     val playback by AppSettings.playback.collectAsState()
     val sound by AppSettings.sound.collectAsState()
     val sleep by Player.sleep.collectAsState()
+    val bitPerfect by AudioDevices.bitPerfect.collectAsState()
     Section("Playback") {
         ToggleRow("Autoplay", "When the queue ends, keep going with similar songs", playback.autoplay, AppSettings::setAutoplay)
         OutputDeviceRow()
+        MenuRow(
+            "Crossfade", detail = "Off, each song starts on the sample after the last one ends",
+            choices = listOf(0, 2, 4, 6, 8, 10, 12), selected = playback.crossfadeSeconds.coerceIn(0, 12),
+            label = { if (it == 0) "Off" else "$it s" },
+        ) { s -> AppSettings.updatePlayback { it.copy(crossfadeSeconds = s) } }
+        ToggleRow(
+            "Even out loudness", "Brings YouTube songs to one level, using YouTube's own measure of each",
+            playback.loudnessNormalization, { on -> AppSettings.updatePlayback { it.copy(loudnessNormalization = on) } },
+        )
+        if (playback.loudnessNormalization) {
+            MenuRow(
+                "Level", choices = com.opentune.data.settings.VolumeLevel.entries, selected = playback.volumeLevel,
+                label = { it.label }, summary = { it.summary },
+            ) { level -> AppSettings.updatePlayback { it.copy(volumeLevel = level) } }
+        }
+        ToggleRow(
+            "Bit-perfect lossless",
+            if (NativeAudio.exclusiveSupported) "An add-on's FLAC goes to the device at its own rate and depth, with the device to itself. No equalizer, crossfade or levelling on it"
+            else "An add-on's FLAC goes to the device at its own rate and depth. No equalizer, crossfade or levelling on it",
+            bitPerfect, AudioDevices::setBitPerfect,
+        )
         SliderRow(
             "Speed", sound.speed, 0.5f..2f, "%.2f×".format(sound.speed),
             reset = if (sound.speed != 1f) ({ AppSettings.updateSound { it.copy(speed = 1f) } }) else null,
@@ -359,6 +381,11 @@ private fun EqualizerSection() {
                 }
             }
         }
+        SliderRow(
+            "Preamp", eq.preampDb, -12f..6f, "%+.1f dB".format(eq.preampDb),
+            detail = "Lifts or lowers everything before the bands; boosts are taken back off so nothing clips",
+            reset = if (eq.preampDb != 0f) ({ AppSettings.updateEqualizer { it.copy(preampDb = 0f) } }) else null,
+        ) { v -> AppSettings.updateEqualizer { it.copy(preampDb = (v * 2).toInt() / 2f) } }
         SliderRow("Bass", eq.bassDb, -12f..12f, "%+.1f dB".format(eq.bassDb)) { v -> AppSettings.updateEqualizer { it.copy(bassDb = (v * 10).toInt() / 10f) } }
         SliderRow("Treble", eq.trebleDb, -12f..12f, "%+.1f dB".format(eq.trebleDb)) { v -> AppSettings.updateEqualizer { it.copy(trebleDb = (v * 10).toInt() / 10f) } }
         SliderRow("Balance", eq.balance, -1f..1f, "%+.2f".format(eq.balance)) { v -> AppSettings.updateEqualizer { it.copy(balance = (v * 10).toInt() / 10f) } }
@@ -769,6 +796,7 @@ private fun OutputDeviceRow() {
         "Output device",
         choices = listOf("") + devices.map { it.name }.filter { it.isNotBlank() },
         selected = selected,
+        detail = AudioBus.description,
         label = { it.ifBlank { "The system's default" } },
         summary = { name -> devices.firstOrNull { it.name == name }?.description?.takeIf { it.isNotBlank() && it != name } },
         onOpen = { devices = AudioDevices.available() },

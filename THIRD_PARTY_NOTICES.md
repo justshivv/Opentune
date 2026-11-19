@@ -101,9 +101,10 @@ The desktop app bundles these libraries, each under its own licence:
 | Library | Use | Licence |
 |---|---|---|
 | [JNA](https://github.com/java-native-access/jna) and JNA Platform | window frame, Windows data protection, macOS Keychain and libsecret calls | Apache 2.0 or LGPL 2.1 |
+| [miniaudio](https://github.com/mackron/miniaudio) 0.11.26, in `third_party/miniaudio` | the sound output (`desktop/native/otaudio.c`) | Public domain (Unlicense) or MIT No Attribution |
 | [SLF4J](https://www.slf4j.org/) API and simple logger | library logging into `desktop.log` | MIT |
 | [FFmpeg](https://ffmpeg.org/) through [JavaCPP Presets](https://github.com/bytedeco/javacpp-presets) | decoding | FFmpeg: LGPL 3 or later as built (`--enable-version3`, without the GPL parts). JavaCPP and JavaCV: Apache 2.0 or GPL 2 with the Classpath exception |
-| [jFLAC](https://github.com/nguillaumin/jflac) | FLAC decoding | LGPL 2.1 |
+| [jFLAC](https://github.com/nguillaumin/jflac) | FLAC decoding for bit-perfect playback | LGPL 2.1 |
 | [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc) | the local library | Apache 2.0 |
 | [GraalJS](https://github.com/oracle/graaljs) | running YouTube's player script | Universal Permissive License 1.0 and MIT |
 | [Rhino](https://github.com/mozilla/rhino) | the same, where GraalJS can't start | MPL 2.0 |

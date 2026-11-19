@@ -145,6 +145,51 @@ val generateBuildConfig = tasks.register("generateBuildConfig") {
     }
 }
 
+/*
+ * otaudio, the desktop's sound output (native/otaudio.c on miniaudio), built with this
+ * system's C compiler: cc on Linux and macOS, MinGW's gcc on Windows. It goes in the
+ * resources under JNA's name for the system (linux-x86-64/libotaudio.so and so on), where
+ * JNA finds it at run time. Without a compiler the app still builds and plays through Java
+ * Sound; on CI a missing compiler fails the build, so no release ships without it.
+ */
+val nativeAudio = tasks.register("nativeAudio") {
+    val source = file("native/otaudio.c")
+    val header = rootProject.file("third_party/miniaudio/miniaudio.h")
+    val out = layout.buildDirectory.dir("native-audio")
+    inputs.files(source, header)
+    outputs.dir(out)
+    doLast {
+        val os = System.getProperty("os.name").lowercase()
+        val arm = System.getProperty("os.arch").let { it == "aarch64" || it == "arm64" }
+        val arch = if (arm) "aarch64" else "x86-64"
+        val (prefix, name) = when {
+            os.contains("win") -> "win32-$arch" to "otaudio.dll"
+            os.contains("mac") -> "darwin-$arch" to "libotaudio.dylib"
+            else -> "linux-$arch" to "libotaudio.so"
+        }
+        val dir = out.get().asFile.resolve(prefix).apply { deleteRecursively(); mkdirs() }
+        val target = dir.resolve(name)
+        val compiler = if (os.contains("win")) "gcc" else "cc"
+        val common = listOf("-O2", "-fvisibility=hidden", "-I", header.parentFile.absolutePath, source.absolutePath, "-o", target.absolutePath)
+        val command = when {
+            os.contains("win") -> listOf(compiler, "-shared", "-static-libgcc") + common + listOf("-lole32")
+            os.contains("mac") -> listOf(compiler, "-dynamiclib") + common +
+                listOf("-framework", "CoreFoundation", "-framework", "CoreAudio", "-framework", "AudioToolbox", "-lpthread", "-lm")
+            else -> listOf(compiler, "-shared", "-fPIC") + common + listOf("-ldl", "-lpthread", "-lm")
+        }
+        val found = runCatching { ProcessBuilder(compiler, "--version").redirectErrorStream(true).start().apply { inputStream.readBytes() }.waitFor() == 0 }.getOrDefault(false)
+        if (!found) {
+            check(System.getenv("CI") == null) { "No C compiler ($compiler) to build the sound output" }
+            logger.warn("No C compiler ($compiler): the desktop app plays through Java Sound only")
+            return@doLast
+        }
+        val process = ProcessBuilder(command).redirectErrorStream(true).start()
+        val log = process.inputStream.bufferedReader().readText()
+        check(process.waitFor() == 0) { "Building otaudio failed:\n$log" }
+        if (log.isNotBlank()) logger.info(log)
+    }
+}
+
 sourceSets {
     main {
         kotlin {
@@ -162,6 +207,8 @@ sourceSets {
             include("android/**", "org/schabi/newpipe/extractor/utils/JavaScript.java")
             include(sharedFromCore.filter { it.endsWith(".java") })
         }
+        // The sound output library built for this system (nativeAudio, below), where JNA looks for it.
+        resources.srcDir(nativeAudio)
     }
 }
 
@@ -175,8 +222,8 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
-// JavaFX plays the audio; its native parts differ by system.
-val javafxPlatform = run {
+// The system and processor, for FFmpeg's natives.
+val nativePlatform = run {
     val os = System.getProperty("os.name").lowercase()
     val arm = System.getProperty("os.arch").let { it == "aarch64" || it == "arm64" }
     when {
@@ -200,8 +247,8 @@ val newPipeForDesktop = tasks.register<Jar>("newPipeForDesktop") {
     }
 }
 
-// FFmpeg's natives, for the same system as JavaFX's.
-val bytedecoPlatform = when (javafxPlatform) {
+// FFmpeg's natives, for this system.
+val bytedecoPlatform = when (nativePlatform) {
     "win" -> "windows-x86_64"
     "mac" -> "macosx-x86_64"
     "mac-aarch64" -> "macosx-arm64"
@@ -266,9 +313,6 @@ dependencies {
     implementation("org.bytedeco:ffmpeg:7.1.1-1.5.12:$bytedecoPlatform")
     implementation("org.bytedeco:javacpp:1.5.12:$bytedecoPlatform")
 
-    for (module in listOf("base", "graphics", "media")) {
-        implementation("org.openjfx:javafx-$module:21.0.5:$javafxPlatform")
-    }
 
     testImplementation("junit:junit:4.13.2")
 }
@@ -278,6 +322,8 @@ tasks.test {
     systemProperty("opentune.live", System.getProperty("opentune.live") ?: "false")
     // A key in memory, never this computer's keyring (see SecretVault).
     systemProperty("opentune.vault", "memory")
+    // miniaudio's silent backend: the tests never open this computer's sound card.
+    systemProperty("opentune.audio", "null")
     System.getProperty("opentune.video")?.let { systemProperty("opentune.video", it) }
     // Pictures of the window, drawn offscreen: -Dopentune.shots=/some/folder
     System.getProperty("opentune.shots")?.let { systemProperty("opentune.shots", it) }

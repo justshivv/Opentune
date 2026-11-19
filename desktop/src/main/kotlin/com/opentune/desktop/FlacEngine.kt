@@ -16,7 +16,7 @@ import org.jflac.FLACDecoder
 import org.jflac.io.RandomFileInputStream
 import org.jflac.metadata.StreamInfo
 
-/** A song playing, whichever way: JavaFX for YouTube, JioSaavn and servers, [FlacEngine] for lossless files. */
+/** A song playing: [FfmpegEngine] on the bus for everything, [FlacEngine] for a bit-perfect FLAC. */
 internal interface Engine {
     fun play()
     fun pause()
@@ -28,7 +28,7 @@ internal interface Engine {
     fun dispose()
 }
 
-/** Where decoded samples go: the sound card, or in tests a stand-in. */
+/** Where a bit-perfect FLAC's samples go: the device through miniaudio, Java Sound, or in tests a stand-in. */
 internal interface PcmOut {
     /** Opens for [format], or for 16-bit at the same rate when the card won't take more; the format it opened. */
     fun open(format: AudioFormat): AudioFormat
@@ -85,7 +85,7 @@ internal class SoundCard : PcmOut {
 }
 
 /**
- * A FLAC file from an add-on, played bit for bit where the volume is full:
+ * A FLAC file from an add-on, with bit-perfect lossless on, played bit for bit where the volume is full:
  * decoded here (jflac) and sent to the sound card at the file's own sample
  * rate and bit depth. The file is saved to a temporary file as it arrives;
  * playing starts as soon as the first frames are in, and a seek within the
@@ -130,6 +130,14 @@ internal class FlacEngine(
 
     private val download = Thread({ fetch() }, "flac-download").apply { isDaemon = true; start() }
     private val player = Thread({ run() }, "flac-play").apply { isDaemon = true; priority = Thread.MAX_PRIORITY; start() }
+
+    /** Whether the device opened for this app alone (WASAPI or ALSA exclusive mode). */
+    val exclusive: Boolean get() = (out as? NativePcmOut)?.isExclusive == true
+
+    /** Waits up to [ms] for the device to be closed after [dispose], so another output can take it. */
+    fun awaitClosed(ms: Long) {
+        runCatching { player.join(ms) }
+    }
 
     /** Whether the whole file is saved, so a seek anywhere is immediate. */
     internal val arrivedAll: Boolean get() = complete
