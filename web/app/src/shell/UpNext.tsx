@@ -9,7 +9,7 @@ import { CROSSFADE_CHOICES, usePlayer } from '@/state/player';
 import { SLEEP_CHOICES, sleepLabel, useSleepTimer } from '@/state/sleepTimer';
 
 // The panel's square buttons: AutoPlay (the key colour when on) and the options menu.
-const square = 'grid size-7 place-items-center rounded-[6px] text-secondary hover:bg-quinary aria-pressed:text-key';
+const square = 'grid size-7 place-items-center rounded-[6px] text-secondary transition-colors duration-150 hover:bg-quinary aria-pressed:text-key';
 const list = 'flex flex-col';
 
 /** A row: 55px, [art] 40px [title] 1fr [right] 40px, gap 12px, radius 6px; a key-colour line where a drag would drop. */
@@ -39,7 +39,7 @@ function Row({
 
   return (
     <li
-      className="group/row relative grid h-[55px] grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-x-3 rounded-row px-2.5 hover:bg-quinary data-dragging:opacity-40 data-over:before:absolute data-over:before:inset-x-2.5 data-over:before:-top-px data-over:before:border-t-2 data-over:before:border-t-key"
+      className="group/row relative grid h-[55px] grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-x-3 rounded-row px-2.5 transition-[background-color,opacity] duration-150 ease-out hover:bg-quinary hover:duration-0 data-dragging:opacity-40 data-over:before:absolute data-over:before:inset-x-2.5 data-over:before:-top-px data-over:before:border-t-2 data-over:before:border-t-key"
       data-over={over || undefined}
       data-dragging={dragging || undefined}
       draggable

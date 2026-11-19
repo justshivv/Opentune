@@ -22,13 +22,15 @@ import { Lcd } from './Lcd';
 import { useControlling } from '@/connect/connect';
 import { RemoteLcd } from '@/connect/RemoteLcd';
 
-const control = 'grid place-items-center rounded-[6px] disabled:opacity-40';
+// A soft fill on hover and a little give when pressed, as the full player's buttons have.
+const feedback = 'transition-[background-color,opacity,scale] duration-150 ease-out enabled:hover:bg-quinary enabled:active:scale-90';
+const control = `grid place-items-center rounded-[6px] ${feedback} disabled:opacity-40`;
 // Shuffle and repeat: secondary, and when on the key colour on a fill of it with a dot under (.ot-toggle).
 const toggle = `${control} ot-toggle size-7 text-secondary aria-pressed:text-key`;
 const transport = `${control} size-7 text-primary`;
-const action = 'grid h-7 w-6 place-items-center rounded-[4px] text-primary aria-pressed:text-key';
+const action = `grid h-7 w-6 place-items-center rounded-[4px] ${feedback} text-primary aria-pressed:text-key`;
 // The actions the volume level slides in over: they fade out while it's open.
-const fading = `${action} transition-opacity group-data-volume-open/actions:pointer-events-none group-data-volume-open/actions:opacity-0`;
+const fading = `${action} group-data-volume-open/actions:pointer-events-none group-data-volume-open/actions:opacity-0`;
 
 const slider = [
   'absolute top-1/2 right-[33px] mx-0 mb-0 -mt-2 block h-4 w-24 cursor-pointer appearance-none bg-transparent',

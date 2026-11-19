@@ -36,8 +36,8 @@ export function Menu({ anchor, placement = 'below-end', onClose, label, children
       const below = anchor.y < window.innerHeight * 0.6;
       setPosition(
         below
-          ? { left, top: anchor.y + gap, maxHeight: window.innerHeight - anchor.y - 3 * gap }
-          : { left, bottom: window.innerHeight - anchor.y + gap, maxHeight: anchor.y - 3 * gap },
+          ? { left, top: anchor.y + gap, maxHeight: window.innerHeight - anchor.y - 3 * gap, transformOrigin: 'top left' }
+          : { left, bottom: window.innerHeight - anchor.y + gap, maxHeight: anchor.y - 3 * gap, transformOrigin: 'bottom left' },
       );
       return;
     }
@@ -45,11 +45,12 @@ export function Menu({ anchor, placement = 'below-end', onClose, label, children
     const gap = 6;
     setPosition(
       placement === 'above-start'
-        ? { left: Math.max(8, rect.left), bottom: window.innerHeight - rect.top + gap, maxHeight: rect.top - 2 * gap }
+        ? { left: Math.max(8, rect.left), bottom: window.innerHeight - rect.top + gap, maxHeight: rect.top - 2 * gap, transformOrigin: 'bottom left' }
         : {
             right: Math.max(8, window.innerWidth - rect.right),
             top: rect.bottom + gap,
             maxHeight: window.innerHeight - rect.bottom - 2 * gap,
+            transformOrigin: 'top right',
           },
     );
   }, [anchor, placement]);

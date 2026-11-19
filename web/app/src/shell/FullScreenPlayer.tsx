@@ -124,7 +124,7 @@ function Transport() {
 // Close, browser full screen, and the column toggles, in the corners.
 const chrome =
   'absolute z-1 grid size-8 place-items-center rounded-full text-secondary transition-[background-color,color] duration-100 ease-in hover:bg-quinary hover:text-primary';
-const artworkLayer = 'absolute inset-0 size-full rounded-[inherit] object-cover opacity-0 transition-opacity duration-300 ease-in';
+const artworkLayer = 'absolute inset-0 size-full rounded-[inherit] object-cover opacity-0 transition-opacity duration-300 ease-out';
 
 /** How long the pointer can rest before a playing music video hides its controls. */
 const IDLE_MS = 3000;
@@ -395,7 +395,7 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
               <MotionArtwork
                 key={motion.url}
                 motion={motion}
-                className="absolute inset-0 size-full rounded-[inherit] object-cover opacity-0 transition-opacity duration-600 ease-in data-ready:opacity-100"
+                className="absolute inset-0 size-full rounded-[inherit] object-cover opacity-0 transition-opacity duration-600 ease-out data-ready:opacity-100"
                 playing={playing}
               />
             )}
