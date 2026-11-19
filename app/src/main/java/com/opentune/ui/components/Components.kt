@@ -295,6 +295,8 @@ fun SongListItem(
     onSwipeRemove: (() -> Unit)? = null,
     /** This row's own key in the page's selection (see [LocalSongSelection]); the song's id unless it's in the list twice. */
     selectKey: String = song.videoId,
+    /** A small label before the artist, such as the Downloads page's quality ("Lossless"). */
+    tag: (@Composable () -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     // On a page where songs can be picked together: picking, a tap ticks the row instead of playing it.
@@ -376,10 +378,22 @@ fun SongListItem(
                     fontWeight = if (poster) FontWeight.Normal else FontWeight.Medium,
                     color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
-                SubtitleLine(
-                    listOfNotNull(song.artist.takeIf { it.isNotBlank() }, song.durationText).joinToString(" • "),
-                    explicit = song.isExplicit == true,
-                )
+                if (tag == null) {
+                    SubtitleLine(
+                        listOfNotNull(song.artist.takeIf { it.isNotBlank() }, song.durationText).joinToString(" • "),
+                        explicit = song.isExplicit == true,
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        tag()
+                        Spacer(Modifier.width(6.dp))
+                        SubtitleLine(
+                            listOfNotNull(song.artist.takeIf { it.isNotBlank() }, song.durationText).joinToString(" • "),
+                            explicit = song.isExplicit == true,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
+                }
             }
             if (selecting) {
                 SelectionTick(picked)

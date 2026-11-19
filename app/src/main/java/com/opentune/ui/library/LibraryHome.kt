@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateTo
 import com.opentune.ui.components.pinnedToTop
 import com.opentune.ui.components.menuClickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -1258,6 +1259,7 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
                         isPlaying = actions.isPlaying,
                         onPlayNext = { actions.playNext(song) },
                         onAddToQueue = { actions.addToQueue(song) },
+                        tag = if (e.state == DownloadState.DONE) ({ DownloadQualityTag(e) }) else null,
                     )
                 }
             }
@@ -1277,6 +1279,40 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
                 offerDownload = false,
             )
         }
+    }
+}
+
+/**
+ * A downloaded song's quality as a small label: Hi-Res Lossless, Lossless or Dolby in the
+ * accent colour, with the lossless wave, a lossy file's tier quietly in outline.
+ */
+@Composable
+internal fun DownloadQualityTag(entry: com.opentune.data.download.DownloadEntry) {
+    val tier = remember(entry.codec, entry.path, entry.bits, entry.sampleRate, entry.bytes, entry.source) {
+        val duration = entry.song.durationText?.split(':')?.mapNotNull { it.trim().toLongOrNull() }
+            ?.takeIf { it.isNotEmpty() }?.fold(0L) { acc, part -> acc * 60 + part }?.times(1000) ?: 0L
+        com.opentune.data.download.DownloadedCopy.tier(entry, duration)
+    }
+    val colors = MaterialTheme.colorScheme
+    val best = tier == com.opentune.data.download.DownloadedCopy.Tier.HI_RES || tier == com.opentune.data.download.DownloadedCopy.Tier.LOSSLESS || tier == com.opentune.data.download.DownloadedCopy.Tier.DOLBY || tier == com.opentune.data.download.DownloadedCopy.Tier.DOLBY_ATMOS
+    val shape = RoundedCornerShape(5.dp)
+    Row(
+        Modifier
+            .then(if (best) Modifier.background(colors.primary.copy(alpha = 0.14f), shape) else Modifier.border(1.dp, colors.outlineVariant, shape))
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (tier == com.opentune.data.download.DownloadedCopy.Tier.HI_RES || tier == com.opentune.data.download.DownloadedCopy.Tier.LOSSLESS) {
+            Icon(ImageVector.vectorResource(AppIcons.GraphicEq), null, Modifier.size(11.dp).padding(end = 1.dp), tint = colors.primary)
+            Spacer(Modifier.width(2.dp))
+        }
+        Text(
+            tier.label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = if (best) colors.primary else colors.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }
 

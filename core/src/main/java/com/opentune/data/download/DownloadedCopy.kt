@@ -41,6 +41,38 @@ object DownloadedCopy {
 
     fun lossless(entry: DownloadEntry): Boolean = codec(entry) in LOSSLESS
 
+    /** How a downloaded file is labelled on the Downloads page, best first. */
+    enum class Tier(val label: String) {
+        DOLBY_ATMOS("Dolby Atmos"),
+        DOLBY("Dolby"),
+        HI_RES("Hi-Res Lossless"),
+        LOSSLESS("Lossless"),
+        HIGH("High Quality"),
+        GOOD("Good Quality"),
+    }
+
+    /**
+     * The file's quality tier, named as the player's quality label names a stream: Dolby by its
+     * kind; lossless as Hi-Res past CD (more than 16-bit or 48 kHz); a lossy file as High Quality
+     * from 256 kbps (JioSaavn's 320 kbps AAC) and Good Quality below (YouTube's own streams).
+     * [durationMs] lets a lossy file's rate be measured from its size; 0 when not known.
+     */
+    fun tier(entry: DownloadEntry, durationMs: Long): Tier {
+        val codec = codec(entry)?.lowercase().orEmpty()
+        return when {
+            codec in DOLBY_ATMOS -> Tier.DOLBY_ATMOS
+            codec in DOLBY -> Tier.DOLBY
+            lossless(entry) && ((entry.bits ?: 0) > 16 || (entry.sampleRate ?: 0) > 48_000) -> Tier.HI_RES
+            lossless(entry) -> Tier.LOSSLESS
+            entry.source?.startsWith("JioSaavn") == true -> Tier.HIGH
+            (fileKbps(entry, durationMs) ?: 0) >= 256 -> Tier.HIGH
+            else -> Tier.GOOD
+        }
+    }
+
+    private val DOLBY_ATMOS = setOf("ec+3", "eac3-joc", "ac-4", "ac4")
+    private val DOLBY = setOf("ec-3", "eac3", "ac-3", "ac3")
+
     /** "FLAC · 24-bit / 96 kHz · Lossless Bridge", "AAC · JioSaavn · 320 kbps", "Opus · YouTube". */
     fun describe(entry: DownloadEntry): String {
         val codec = codec(entry)?.let { CODEC_LABELS[it] ?: it.uppercase() }

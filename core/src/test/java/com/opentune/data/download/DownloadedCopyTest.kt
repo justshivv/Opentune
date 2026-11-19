@@ -100,4 +100,19 @@ class DownloadedCopyTest {
         assertFalse(DownloadedCopy.canRedownloadLossless(youtube.copy(upgrade = DownloadUpgrade("w")), addonCanDownload = true))
         assertFalse(DownloadedCopy.canRedownloadLossless(youtube.copy(state = DownloadState.DOWNLOADING), addonCanDownload = true))
     }
+
+    @Test fun labelsEachDownloadByItsQuality() {
+        assertEquals(DownloadedCopy.Tier.HI_RES, DownloadedCopy.tier(done("/d/x.flac", "Lossless Bridge", 24, 96_000, "flac"), 0))
+        assertEquals(DownloadedCopy.Tier.HI_RES, DownloadedCopy.tier(done("/d/x.flac", "Lossless Bridge", 16, 96_000, "flac"), 0))
+        assertEquals(DownloadedCopy.Tier.LOSSLESS, DownloadedCopy.tier(done("/d/x.flac", "Lossless Bridge", 16, 44_100, "flac"), 0))
+        // An older lossless download with no depth or rate recorded is CD quality.
+        assertEquals(DownloadedCopy.Tier.LOSSLESS, DownloadedCopy.tier(done("/d/x.flac"), 0))
+        assertEquals(DownloadedCopy.Tier.LOSSLESS, DownloadedCopy.tier(done("/d/x.m4a", "Some add-on", 16, 48_000), 0))
+        assertEquals(DownloadedCopy.Tier.DOLBY_ATMOS, DownloadedCopy.tier(done("/d/x.m4a", codec = "ec+3"), 0))
+        assertEquals(DownloadedCopy.Tier.DOLBY, DownloadedCopy.tier(done("/d/x.m4a", codec = "ec-3"), 0))
+        assertEquals(DownloadedCopy.Tier.HIGH, DownloadedCopy.tier(done("/d/x.m4a", "JioSaavn · 320 kbps"), 0))
+        // YouTube's own file: Good Quality, unless its size says it's 256 kbps or more.
+        assertEquals(DownloadedCopy.Tier.GOOD, DownloadedCopy.tier(done("/d/x.webm").copy(bytes = 4_000_000), 200_000))
+        assertEquals(DownloadedCopy.Tier.HIGH, DownloadedCopy.tier(done("/d/x.m4a").copy(bytes = 8_000_000), 200_000))
+    }
 }
