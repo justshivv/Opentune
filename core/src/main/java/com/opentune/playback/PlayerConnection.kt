@@ -595,7 +595,12 @@ class PlayerConnection(private val context: Context) {
     private fun queueByHand(song: Song, next: Boolean) {
         val controller = controller ?: return
         if (controller.mediaItemCount == 0) return play(song)
-        val at = QueueTimeline.userInsertIndex(tiers(controller), controller.currentMediaItemIndex, next)
+        // Mixing: the song coming in is the one playing, as the player shows it. Counted from the
+        // one going out, Play next went in between the two, which called the mix off (the song
+        // coming in faded back out) and a song played at once from a room or another device
+        // played the song that had been coming in instead.
+        val current = MixState.showing.value?.index?.takeIf { it in 0 until controller.mediaItemCount } ?: controller.currentMediaItemIndex
+        val at = QueueTimeline.userInsertIndex(tiers(controller), current, next)
         controller.addMediaItem(at, song.copy(queueTier = QueueTier.USER).toMediaItem())
     }
 
