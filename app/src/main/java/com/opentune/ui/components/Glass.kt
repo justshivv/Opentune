@@ -371,14 +371,14 @@ private fun DrawScope.touchLight(touch: LiquidTouch, press: Float, dark: Boolean
 private fun lensDepth(wanted: Float, shortSide: Float): Float = minOf(wanted, shortSide * 0.42f).coerceAtLeast(0f)
 
 /**
- * The web player's Liquid Glass, for the Poster layout (web/app/src/lib/liquidGlass.ts and the
+ * The web player's Liquid Glass (web/app/src/lib/liquidGlass.ts and the
  * `.glass-pill[data-liquid]` rules): what's behind is bent strongly at the rim by a lens about
  * 22 dp deep, blurred only lightly (5 dp, so the bent colours stay sharp enough to read as
  * glass rather than frost), its colours lifted (saturation 1.8, a touch brighter), under a thin
  * [film] with a soft light across the top, and lit along the rim brightest at the top left.
- * It's the Liquid Glass style, drawn whatever the style is set to: [glass] draws it for that
- * style, and the Poster layout's glass ([posterGlass]) for it alone. Where the phone can't bend
- * the backdrop it falls back to the app's own [glass], frosted, under the same [film].
+ * It's the Liquid Glass glass style: [glass] draws it while that style is chosen, and so do the
+ * Poster layout's [posterGlass] and [posterSmoke]. Where the phone can't bend the backdrop it
+ * falls back to the app's own [glass], frosted, under the same [film].
  */
 @Composable
 fun Modifier.webLiquidGlass(shape: Shape, film: Color): Modifier {
