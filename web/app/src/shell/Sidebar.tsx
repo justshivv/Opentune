@@ -170,13 +170,14 @@ export function Sidebar() {
       >
         <div className="ot-side-top mt-2 flex h-18 items-center justify-between pr-3 pl-7">
           <PrefetchLink to="/home" className="ot-side-wordmark inline-flex items-center gap-2 rounded-[6px]" aria-label="OpenTune, Home" onClick={close}>
-            {/* White on dark, as Apple's own wordmark; it follows the label colour so it stays visible in light. */}
-            <LogoMark size={22} className="text-primary" />
-            <span className="type-[700_19px/24px] tracking-[-0.01em]">OpenTune</span>
+            {/* The wave alone, no tile: white on dark, it follows the label colour so it stays visible in light.
+                Folded, it stays as the rail's mark, and turns into the unfold button under the pointer. */}
+            <LogoMark size={26} bare className="ot-side-mark flex-none text-primary" />
+            <span className="ot-side-wordmark-text type-[700_19px/24px] tracking-[-0.01em]">OpenTune</span>
           </PrefetchLink>
           {/* Folds the sidebar to a rail of icons and back. Phones have the drawer instead. */}
           <button
-            className="grid size-8 flex-none place-items-center rounded-nav text-secondary transition-colors duration-150 hover:bg-quinary hover:text-primary max-sm:hidden"
+            className="ot-side-fold grid size-8 flex-none place-items-center rounded-nav text-secondary transition-colors duration-150 hover:bg-quinary hover:text-primary max-sm:hidden"
             onClick={toggleSidebar}
             aria-label={folded ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-expanded={!folded}
