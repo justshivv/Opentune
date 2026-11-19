@@ -258,9 +258,11 @@
 @container (min-width: 1020px) {
   .ot-set-frame { max-width: calc(204px + 48px + 680px + 2 * var(--body-gutter)); }
   .ot-set-layout { grid-template-columns: 204px minmax(0, 680px); column-gap: 48px; }
-  .ot-set-side { position: sticky; top: 24px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
+  /* The list of sections stays where it is as the rows scroll, below the frosted edge at the
+     page's top (.ot-scroll-edge, 64px) rather than under it; a section jumped to lands there too. */
+  .ot-set-side { position: sticky; top: 76px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
   .ot-set-jump { display: none !important; }
-  .ot-set-section { scroll-margin-top: 24px; }
+  .ot-set-section { scroll-margin-top: 76px; }
 }
 .ot-set-side button { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius-nav-item); font: var(--title-3); text-align: start; transition: background-color .15s; }
 .ot-set-side button:hover { background: var(--systemQuinary); }
