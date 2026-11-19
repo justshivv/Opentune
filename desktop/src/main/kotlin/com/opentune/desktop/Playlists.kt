@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
@@ -60,11 +61,17 @@ import com.opentune.data.model.Song
  * belongs to (where a right click was), or under that element's right edge.
  */
 @Composable
-internal fun AddToPlaylistMenu(song: Song, open: Boolean, at: IntOffset? = null, onDismiss: () -> Unit) {
+internal fun AddToPlaylistMenu(song: Song, open: Boolean, at: IntOffset? = null, withQueue: Boolean = false, onDismiss: () -> Unit) {
     val playlists by Library.playlists.collectAsState()
     var naming by remember { mutableStateOf(false) }
     if (open) {
         WebMenu(at?.let { MenuAnchor.At(it) } ?: MenuAnchor.BelowEnd, onDismiss = onDismiss, label = "Add ${song.title} to a playlist") {
+            // From a track row's + button: the queue first, then the playlists.
+            if (withQueue) {
+                WebMenuItem("Play next", Icons.AutoMirrored.Rounded.PlaylistPlay) { Player.playNext(listOf(song)); Notice.show("Playing next") }
+                WebMenuItem("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic) { Player.addToQueue(listOf(song)); Notice.show("Added to queue") }
+                WebMenuSeparator()
+            }
             WebMenuItem("New playlist…", Icons.Rounded.Add) { naming = true }
             if (playlists.isNotEmpty()) {
                 WebMenuSeparator()
@@ -87,22 +94,14 @@ internal fun AddToPlaylistMenu(song: Song, open: Boolean, at: IntOffset? = null,
     }
 }
 
-/** Asks for a playlist's name. */
+/** Asks for a playlist's name, in the pages' own dialog. */
 @Composable
-internal fun NameDialog(title: String, initial: String, confirm: String, onDismiss: () -> Unit, onDone: (String) -> Unit) {
-    var name by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("Name") }) },
-        confirmButton = { TextButton(onClick = { onDone(name) }, enabled = name.isNotBlank()) { Text(confirm) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}
+internal fun NameDialog(title: String, initial: String, confirm: String, onDismiss: () -> Unit, onDone: (String) -> Unit) =
+    PageNameDialog(title, initial, confirm, onDismiss, onDone)
 
 /**
- * Your playlists as cards in a grid that fills the width (the web's See All grids: columns at
- * least 170 wide, 20 apart, rows 24 apart), after a card to start a new one.
+ * Your playlists as cards in a grid that fills the width (columns at least 170 wide, 17 apart,
+ * rows 28 apart), after a card to start a new one.
  */
 @Composable
 internal fun PlaylistGrid(onOpen: (String) -> Unit) {
@@ -113,8 +112,8 @@ internal fun PlaylistGrid(onOpen: (String) -> Unit) {
     LazyVerticalGrid(
         GridCells.Adaptive(170.dp),
         contentPadding = PaddingValues(start = gutter, end = gutter, top = 20.dp, bottom = LocalPageBottom.current),
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
+        horizontalArrangement = Arrangement.spacedBy(17.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         item {
@@ -144,7 +143,10 @@ internal fun PlaylistGrid(onOpen: (String) -> Unit) {
     }
 }
 
-/** One playlist: play, shuffle, rename, delete, and its songs, each removable. */
+/**
+ * One of your playlists: its head (yours, so "Private"), Shuffle, Play, search in it, and the ⋯
+ * menu, which also renames and deletes it; then its songs, each with a button to take it out.
+ */
 @Composable
 internal fun PlaylistPage(id: String, onBack: () -> Unit) {
     val playlists by Library.playlists.collectAsState()
@@ -158,13 +160,15 @@ internal fun PlaylistPage(id: String, onBack: () -> Unit) {
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     CollectionLayout(playlist.name, playlist.covers.firstOrNull(), songs, failed = false, onRemove = { Library.removeFromPlaylist(id, it.videoId) },
-        empty = "No songs yet. Add songs from search, Home or the player with the playlist button.") {
+        empty = "Add songs from search, Home or the player with the + on any song.") {
         CollectionHero(
-            cover = { m -> Mosaic(playlist.covers, m) },
-            coverUrl = playlist.covers.firstOrNull(), kind = "Playlist", title = playlist.name, subtitle = "Made on this computer", songs = songs,
+            cover = { m -> Mosaic(playlist.covers, m, RoundedCornerShape(0.dp)) },
+            coverUrl = playlist.covers.firstOrNull(), kind = "Playlist", title = playlist.name, subtitle = "Private", songs = songs,
         ) {
-            CircleButton(Icons.Rounded.Edit, "Rename") { renaming = true }
-            CircleButton(Icons.Rounded.Delete, "Delete playlist") { deleting = true }
+            ListMoreButton(songs, link = null) {
+                WebMenuItem("Rename…", Icons.Rounded.Edit) { renaming = true }
+                WebMenuItem("Delete playlist…", Icons.Rounded.Delete) { deleting = true }
+            }
         }
     }
     if (renaming) {
@@ -174,13 +178,10 @@ internal fun PlaylistPage(id: String, onBack: () -> Unit) {
         }
     }
     if (deleting) {
-        AlertDialog(
-            onDismissRequest = { deleting = false },
-            title = { Text("Delete ${playlist.name}?") },
-            text = { Text("The playlist goes; the songs stay wherever else you keep them.") },
-            confirmButton = { TextButton(onClick = { deleting = false; Library.deletePlaylist(id); onBack() }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancel") } },
-        )
+        PageConfirmDialog(
+            "Delete ${playlist.name}?", "The playlist goes; the songs stay wherever else you keep them.", "Delete",
+            onDismiss = { deleting = false },
+        ) { deleting = false; Library.deletePlaylist(id); onBack() }
     }
 }
 

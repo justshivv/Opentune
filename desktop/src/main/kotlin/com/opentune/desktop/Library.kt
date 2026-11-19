@@ -22,8 +22,17 @@ import kotlinx.serialization.json.Json
  */
 object Library {
     @Serializable
-    data class Saved(val id: String, val title: String, val artist: String, val cover: String? = null, val length: String? = null) {
-        fun toSong() = Song(id, title, artist, cover, length)
+    data class Saved(
+        val id: String,
+        val title: String,
+        val artist: String,
+        val cover: String? = null,
+        val length: String? = null,
+        val album: String? = null,
+        val albumId: String? = null,
+        val artistId: String? = null,
+    ) {
+        fun toSong() = Song(id, title, artist, cover, length, artistId = artistId, albumId = albumId, albumName = album)
     }
 
     @Serializable
@@ -148,7 +157,7 @@ object Library {
     fun volume(): Double = volume
     fun setVolume(v: Double) = write { exec("INSERT OR REPLACE INTO settings(key, value) VALUES ('volume', ?)", v.toString()) }
 
-    private fun Song.saved() = Saved(videoId, title, artist, thumbnailUrl, durationText)
+    private fun Song.saved() = Saved(videoId, title, artist, thumbnailUrl, durationText, albumName?.takeIf { it.isNotBlank() }, albumId, artistId)
 
     // ---- The database -------------------------------------------------------------
 
@@ -170,16 +179,28 @@ object Library {
         publish()
     }
 
-    /** Every song's details, once, however many lists it's on. */
+    /**
+     * Every song's details, once, however many lists it's on. Saved again from somewhere that knows
+     * less (no album, say), it keeps what was known before rather than losing it.
+     */
     private fun Connection.keep(s: Saved) =
-        exec("INSERT OR REPLACE INTO songs(id, title, artist, cover, length) VALUES (?, ?, ?, ?, ?)", s.id, s.title, s.artist, s.cover, s.length)
+        exec(
+            "INSERT INTO songs(id, title, artist, cover, length, album, album_id, artist_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+                "ON CONFLICT(id) DO UPDATE SET title = excluded.title, artist = excluded.artist, cover = COALESCE(excluded.cover, cover), " +
+                "length = COALESCE(excluded.length, length), album = COALESCE(excluded.album, album), " +
+                "album_id = COALESCE(excluded.album_id, album_id), artist_id = COALESCE(excluded.artist_id, artist_id)",
+            s.id, s.title, s.artist, s.cover, s.length, s.album, s.albumId, s.artistId,
+        )
+
+    /** The columns a song is read back from, in [song]'s order. */
+    private const val SONG = "s.id, s.title, s.artist, s.cover, s.length, s.album, s.album_id, s.artist_id"
 
     @Synchronized
     private fun publish() {
         runCatching {
-            _liked.value = db.query("SELECT s.id, s.title, s.artist, s.cover, s.length FROM liked l JOIN songs s ON s.id = l.id ORDER BY l.at DESC, l.rowid DESC", row = ::song)
+            _liked.value = db.query("SELECT $SONG FROM liked l JOIN songs s ON s.id = l.id ORDER BY l.at DESC, l.rowid DESC", row = ::song)
             _recent.value = db.query(
-                "SELECT s.id, s.title, s.artist, s.cover, s.length FROM (SELECT id, MAX(rowid) AS last FROM plays GROUP BY id) p " +
+                "SELECT $SONG FROM (SELECT id, MAX(rowid) AS last FROM plays GROUP BY id) p " +
                     "JOIN songs s ON s.id = p.id ORDER BY p.last DESC LIMIT $RECENT",
                 row = ::song,
             )
@@ -188,16 +209,17 @@ object Library {
                 Playlist(
                     id, name,
                     db.query(
-                        "SELECT s.id, s.title, s.artist, s.cover, s.length FROM playlist_songs p JOIN songs s ON s.id = p.id WHERE p.playlist = ? ORDER BY p.position",
+                        "SELECT $SONG FROM playlist_songs p JOIN songs s ON s.id = p.id WHERE p.playlist = ? ORDER BY p.position",
                         id,
-                    ) { r -> Saved(r.getString(1), r.getString(2), r.getString(3), r.getString(4), r.getString(5)) },
+                    ) { r -> Saved(r.getString(1), r.getString(2), r.getString(3), r.getString(4), r.getString(5), r.getString(6), r.getString(7), r.getString(8)) },
                 )
             }
             volume = db.query("SELECT value FROM settings WHERE key = 'volume'") { it.getString(1).toDoubleOrNull() }.firstOrNull() ?: 0.8
         }.onFailure { System.err.println("Library: couldn't read: $it") }
     }
 
-    private fun song(r: java.sql.ResultSet) = Song(r.getString(1), r.getString(2), r.getString(3), r.getString(4), r.getString(5))
+    private fun song(r: java.sql.ResultSet) =
+        Song(r.getString(1), r.getString(2), r.getString(3), r.getString(4), r.getString(5), artistId = r.getString(8), albumId = r.getString(7), albumName = r.getString(6))
 
     private fun open(legacyFile: File): Connection {
         val folder = legacyFile.absoluteFile.parentFile.apply { mkdirs() }
@@ -211,6 +233,11 @@ object Library {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS playlists(id TEXT PRIMARY KEY, name TEXT NOT NULL, position INTEGER NOT NULL)")
             st.executeUpdate("CREATE TABLE IF NOT EXISTS playlist_songs(playlist TEXT NOT NULL, position INTEGER NOT NULL, id TEXT NOT NULL)")
             st.executeUpdate("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
+        }
+        // What a library from before these were kept lacks: each song's album and its artist's page.
+        val have = c.createStatement().use { st -> st.executeQuery("PRAGMA table_info(songs)").use { r -> buildSet { while (r.next()) add(r.getString("name")) } } }
+        c.createStatement().use { st ->
+            listOf("album", "album_id", "artist_id").filter { it !in have }.forEach { st.executeUpdate("ALTER TABLE songs ADD COLUMN $it TEXT") }
         }
         importLegacy(c, legacyFile)
         return c

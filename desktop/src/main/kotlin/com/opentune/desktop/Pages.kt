@@ -11,7 +11,8 @@ import kotlinx.coroutines.async
 
 /** What the desktop pages show, from YouTube Music through the shared client. */
 object Pages {
-    data class Shelf(val title: String, val items: List<ShelfItem>)
+    /** A row of cards; [subtitle] is YouTube's strapline, the grey line under its heading. */
+    data class Shelf(val title: String, val items: List<ShelfItem>, val subtitle: String = "")
 
     /** A page of Home's rows, and the token for the next page, null at the end. */
     data class HomePage(val shelves: List<Shelf>, val next: String?)
@@ -30,16 +31,58 @@ object Pages {
 
     private fun shelves(rows: List<com.opentune.data.model.HomeShelf>): List<Shelf> = rows
         // A genre's own card (FEmusic_…) needs the parameters a card doesn't carry, so it can't be opened from here.
-        .map { Shelf(it.title, it.items.filter { i -> i.videoId != null || (i.browseId != null && !i.browseId!!.startsWith("FEmusic_")) }) }
+        .map { Shelf(it.title, it.items.filter { i -> i.videoId != null || (i.browseId != null && !i.browseId!!.startsWith("FEmusic_")) }, it.subtitle) }
         .filter { it.items.isNotEmpty() }
 
-    /** Moods and genres, for the chips at the top of Home; read once a run. */
+    /** Moods and genres, for Explore's tiles and Home's row of them; read once a run. */
     @Volatile private var moodCache: List<com.opentune.data.model.MoodGenre>? = null
 
-    suspend fun moods(): List<com.opentune.data.model.MoodGenre> = moodCache ?: InnertubeParser
-        .parseMoodAndGenres(Innertube.browse("FEmusic_moods_and_genres"))
-        .flatMap { it.items }.distinctBy { it.title }.take(24)
-        .also { moodCache = it }
+    /** Each mood's own colour, as YouTube Music paints the stripe on its button, by the mood's name. */
+    private val moodColours = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    suspend fun moods(): List<com.opentune.data.model.MoodGenre> = moodCache ?: Innertube.browse("FEmusic_moods_and_genres").let { page ->
+        runCatching { collectStripes(page) }
+        InnertubeParser.parseMoodAndGenres(page).flatMap { it.items }.distinctBy { it.title }.take(24)
+    }.also { moodCache = it }
+
+    /** For pictures and tests: moods as if YouTube Music had sent them, with their colours and covers. */
+    internal fun preloadMoods(moods: List<com.opentune.data.model.MoodGenre>, colours: Map<String, Long> = emptyMap(), covers: Map<String, String> = emptyMap()) {
+        moodCache = moods
+        moodColours.putAll(colours)
+        moodCovers.putAll(covers)
+    }
+
+    /** The colour YouTube Music gives a mood's button, as 0xAARRGGBB, if it gave one. */
+    fun moodColour(title: String): Long? = moodColours[title]
+
+    /** Every navigation button's name and stripe colour in [json], wherever in the page it sits. */
+    private fun collectStripes(json: kotlinx.serialization.json.JsonElement) {
+        when (json) {
+            is kotlinx.serialization.json.JsonArray -> json.forEach(::collectStripes)
+            is kotlinx.serialization.json.JsonObject -> {
+                (json["musicNavigationButtonRenderer"] as? kotlinx.serialization.json.JsonObject)?.let { button ->
+                    val runs = ((button["buttonText"] as? kotlinx.serialization.json.JsonObject)?.get("runs") as? kotlinx.serialization.json.JsonArray)
+                    val name = runs?.joinToString("") { ((it as? kotlinx.serialization.json.JsonObject)?.get("text") as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty() }
+                    val stripe = ((button["solid"] as? kotlinx.serialization.json.JsonObject)?.get("leftStripeColor") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull()
+                    if (!name.isNullOrBlank() && stripe != null) moodColours[name] = stripe or 0xFF000000L
+                    return
+                }
+                json.values.forEach(::collectStripes)
+            }
+            else -> Unit
+        }
+    }
+
+    /** A mood's picture: the cover of the first playlist on its page, fetched once a run. */
+    private val moodCovers = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    suspend fun moodCover(mood: com.opentune.data.model.MoodGenre): String? {
+        mood.thumbnailUrl?.let { return it }
+        moodCovers[mood.title]?.let { return it.ifEmpty { null } }
+        val found = runCatching { shelves(mood.browseId, mood.params).firstNotNullOfOrNull { s -> s.items.firstNotNullOfOrNull { it.thumbnailUrl } } }.getOrNull()
+        moodCovers[mood.title] = found.orEmpty()
+        return found
+    }
 
     /** A page of shelves: a mood or genre, New releases, Charts. */
     suspend fun shelves(browseId: String, params: String? = null): List<Shelf> {
@@ -52,7 +95,8 @@ object Pages {
         listOf("FEmusic_new_releases", "FEmusic_charts").flatMap { id -> runCatching { shelves(id) }.getOrDefault(emptyList()) }
 
     /** A song as a Home card, for the shelves made from your own library. */
-    internal fun cardOf(song: Song): ShelfItem = ShelfItem(song.title, song.artist, song.thumbnailUrl, song.videoId, null, song.isExplicit == true)
+    internal fun cardOf(song: Song): ShelfItem =
+        ShelfItem(song.title, listOf("Song", song.artist).filter { it.isNotBlank() }.joinToString(" • "), song.thumbnailUrl, song.videoId, null, song.isExplicit == true)
 
     /**
      * Songs for [query]: YouTube Music's songs-only search, as the phone asks

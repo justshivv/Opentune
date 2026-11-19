@@ -67,8 +67,8 @@ internal object Web {
     val ArtLarge = 28.dp
     val TrackRow = 14.dp
 
-    /** The space between a shelf's columns once the window is wide (shelf.ts, --gap). */
-    val ShelfGap = 20.dp
+    /** The space between a shelf's cards. */
+    val ShelfGap = 17.dp
 
     /** The sidebar's width, which the web's breakpoints count as part of the viewport. */
     val Sidebar = 260.dp
@@ -81,8 +81,9 @@ internal object Web {
     /** tokens.css's --ease-out-panel. */
     val Panel = CubicBezierEasing(0.215f, 0.61f, 0.355f, 1f)
 
-    /** The page's side margin: tokens.css's --body-gutter, 40px once the viewport is 1000px wide, else 25px. */
-    fun gutter(pageWidth: Dp): Dp = if (pageWidth + Sidebar >= 1000.dp) 40.dp else 25.dp
+    /** The content pages' side margin: 20dp at any width, as the reference lays them out. */
+    @Suppress("UNUSED_PARAMETER")
+    fun gutter(pageWidth: Dp): Dp = PageGutter
 
     /** A page title's size, clamp(30px, 4vw, 44px) (opentune.css's --header-emphasized). */
     fun headerSize(pageWidth: Dp): Float = ((pageWidth + Sidebar).value * 0.04f).coerceIn(30f, 44f)

@@ -134,10 +134,10 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
                     }
                     // Shuffle · Play · Radio, as the web's artist page has them.
                     Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RoundButton(Icons.Rounded.Shuffle, "Shuffle $name", 40.dp, solid = false, enabled = songs.isNotEmpty()) { Player.playAll(songs.shuffled(), 0) }
-                        RoundButton(Icons.Rounded.PlayArrow, "Play $name", 56.dp, solid = true, enabled = songs.isNotEmpty()) { Player.playAll(songs, 0) }
+                        RoundButton(Icons.Rounded.Shuffle, "Shuffle $name", 48.dp, solid = false, enabled = songs.isNotEmpty()) { Player.playAll(songs.shuffled(), 0) }
+                        RoundButton(Icons.Rounded.PlayArrow, "Play $name", 62.dp, solid = true, enabled = songs.isNotEmpty()) { Player.playAll(songs, 0) }
                         // A radio from the artist's best-known song: their music and music like it.
-                        RoundButton(Icons.Rounded.Radio, "$name radio", 40.dp, solid = false, enabled = songs.isNotEmpty()) {
+                        RoundButton(Icons.Rounded.Radio, "$name radio", 48.dp, solid = false, enabled = songs.isNotEmpty()) {
                             Player.startRadio(songs.first()); Notice.show("Radio from $name")
                         }
                     }
@@ -207,19 +207,22 @@ private fun NameOrSignature(name: String, signature: ArtistSignature?, pageWidth
 }
 
 /**
- * The hero's round buttons (ArtistPage.tsx): Play [solid], 56px in the accent with a white
- * triangle; the others 40px of dark glass over the photograph, a little darker under the
- * pointer. Each gives a little when pressed.
+ * The hero's round buttons, as a list's head has them: Play [solid], white with a black
+ * triangle; the others of dark glass over the photograph, a little darker under the pointer.
+ * Each gives a little when pressed.
  */
 @Composable
 private fun RoundButton(icon: ImageVector, label: String, size: androidx.compose.ui.unit.Dp, solid: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
-    val fill = when {
-        solid -> WebInk.keyFill
-        hovered && enabled -> Color.Black.copy(alpha = 0.4f)
-        else -> Color.Black.copy(alpha = 0.3f)
-    }
+    val fill by androidx.compose.animation.animateColorAsState(
+        when {
+            solid -> if (hovered && enabled) Color(0xFFE6E6E6) else Color.White
+            hovered && enabled -> Color.Black.copy(alpha = 0.45f)
+            else -> Color.Black.copy(alpha = 0.3f)
+        },
+        tween(PAGE_HOVER_MS), label = "artist button",
+    )
     Box(
         Modifier.pressScale(source).size(size).shadow(if (solid) 14.dp else 0.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.65f), spotColor = Color.Black.copy(alpha = 0.65f))
             .clip(CircleShape).background(fill)
@@ -227,7 +230,7 @@ private fun RoundButton(icon: ImageVector, label: String, size: androidx.compose
             .clickable(enabled = enabled, interactionSource = source, indication = null, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .graphicsLayer { alpha = if (enabled) 1f else 0.4f },
         contentAlignment = Alignment.Center,
-    ) { Icon(icon, label, tint = Color.White, modifier = Modifier.size(if (solid) 26.dp else 18.dp)) }
+    ) { Icon(icon, label, tint = if (solid) Color.Black else Color.White, modifier = Modifier.size(if (solid) 28.dp else 20.dp)) }
 }
 
 /**

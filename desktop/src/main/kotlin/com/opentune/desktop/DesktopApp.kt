@@ -602,24 +602,10 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, onSearch: () -
     }
 }
 
-/** Every mood and genre as a coloured tile, in a grid that fills the width. */
+/** Every mood and genre as Explore's tiles: a band of its colour beside its cover dyed in it, in a grid that fills the width. */
 @Composable
 private fun BrowseTiles(moods: List<com.opentune.data.model.MoodGenre>, onOpen: (com.opentune.data.model.MoodGenre) -> Unit) {
-    val palette = listOf(0xFF2E7D32, 0xFF1565C0, 0xFF6A1B9A, 0xFFC62828, 0xFFEF6C00, 0xFF00838F, 0xFFAD1457, 0xFF4E342E, 0xFF283593, 0xFF9E9D24)
-    androidx.compose.foundation.layout.FlowRow(
-        Modifier.padding(horizontal = GUTTER).fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        moods.forEach { m ->
-            val hover = remember { MutableInteractionSource() }
-            val colour = Color(palette[(m.title.hashCode() and 0x7fffffff) % palette.size])
-            Box(
-                Modifier.width(210.dp).height(110.dp).hoverLift(hover, 1.03f).clip(RoundedCornerShape(14.dp))
-                    .background(Brush.linearGradient(listOf(colour, androidx.compose.ui.graphics.lerp(colour, Color.Black, 0.4f))))
-                    .clickable(interactionSource = hover, indication = null) { onOpen(m) }.padding(16.dp),
-            ) { Text(m.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 2) }
-        }
-    }
+    MoodGrid(moods, onOpen)
 }
 
 /** What you searched for lately, as chips; each comes off with its cross. */
@@ -656,32 +642,7 @@ private fun RecentSearches(queries: List<String>, onPick: (String) -> Unit) {
  * pages with a cover of their own, your playlists as tiles, your server.
  */
 @Composable
-internal fun LibraryPage(shelf: Shelf, onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit) {
-    val liked by Library.liked.collectAsState()
-    val played by Library.recent.collectAsState()
-    val server by Subsonic.server.collectAsState()
-    when (shelf) {
-        Shelf.LIKED -> CollectionLayout("Liked songs", liked.firstOrNull()?.thumbnailUrl, liked, failed = false, onRemove = { Library.setLiked(it, false) }, empty = "Click the heart on a song to keep it here.") {
-            CollectionHero(
-                cover = { m -> IconCover(Icons.Rounded.Favorite, listOf(Color(0xFF5B3CFF), Color(0xFFB7A6FF)), m) },
-                coverUrl = liked.firstOrNull()?.thumbnailUrl, kind = "Playlist", title = "Liked songs", subtitle = "Songs you hearted, newest first", songs = liked,
-            )
-        }
-        Shelf.RECENT -> CollectionLayout("Recently played", played.firstOrNull()?.thumbnailUrl, played, failed = false, empty = "Songs you play show here.") {
-            CollectionHero(
-                cover = { m -> IconCover(Icons.Rounded.History, listOf(Color(0xFF0F7B6C), Color(0xFF7FE0C8)), m) },
-                coverUrl = played.firstOrNull()?.thumbnailUrl, kind = "History", title = "Recently played", subtitle = "The last songs you played here", songs = played,
-            )
-        }
-        Shelf.PLAYLISTS -> Column(Modifier.fillMaxSize().padding(top = LocalPageTop.current + 28.dp)) {
-            Text("Playlists", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = GUTTER, vertical = 4.dp))
-            PlaylistGrid(onOpen = onPlaylist)
-        }
-        Shelf.SERVER -> Box(Modifier.fillMaxSize().padding(top = LocalPageTop.current + 12.dp)) {
-            if (server != null) ServerShelf() else Message("No music server connected", "Connect one in Settings.")
-        }
-    }
-}
+internal fun LibraryPage(shelf: Shelf, onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit) = LibraryShelfPage(shelf, onShelf, onPlaylist)
 
 /** A list's own cover where it has no artwork: its icon on a gradient. */
 @Composable
@@ -693,7 +654,10 @@ internal fun IconCover(icon: ImageVector, colours: List<Color>, modifier: Modifi
 
 internal enum class Shelf(val label: String) { LIKED("Liked songs"), PLAYLISTS("Playlists"), SERVER("Your server"), RECENT("Recently played") }
 
-/** An album, playlist or podcast: the head over a blur of its cover, then its tracks. */
+/**
+ * An album, playlist or podcast: the head (its cover large, what it is, who made it, the year
+ * and how long it runs), then its tracks.
+ */
 @Composable
 internal fun CollectionPage(item: ShelfItem) {
     var songs by remember(item) { mutableStateOf<List<Song>?>(null) }
@@ -702,16 +666,22 @@ internal fun CollectionPage(item: ShelfItem) {
         runCatching { Pages.songsOf(item.browseId!!) }.onSuccess { songs = it }.onFailure { failed = true }
     }
     val id = item.browseId.orEmpty()
+    val kinds = setOf("Album", "Single", "EP", "Playlist", "Podcast")
+    val album = id.startsWith("MPRE") || id.startsWith("OLAK")
     val kind = when {
         id.startsWith("MPSP") -> "Podcast"
-        id.startsWith("MPRE") || id.startsWith("OLAK") -> item.subtitle.substringBefore(" • ").takeIf { it in setOf("Album", "Single", "EP") } ?: "Album"
+        album -> item.subtitle.substringBefore(" • ").takeIf { it in setOf("Album", "Single", "EP") } ?: "Album"
         else -> "Playlist"
     }
-    CollectionLayout(item.title, item.thumbnailUrl, songs, failed) {
+    // "Album • The Weeknd • 2020": who made it on its own line, the year with the facts under it.
+    val parts = item.subtitle.split(" • ").map { it.trim() }.filter { it.isNotEmpty() && it !in kinds }
+    val year = parts.firstOrNull { it.length == 4 && it.all(Char::isDigit) }
+    val owner = parts.filter { it != year && !it.endsWith(" views") && !it.endsWith(" songs") && !it.endsWith(" tracks") }.joinToString(" • ")
+    CollectionLayout(item.title, item.thumbnailUrl, songs, failed, album = item.title.takeIf { album }) {
         CollectionHero(
-            cover = { m -> Cover(item.thumbnailUrl, 228.dp, RoundedCornerShape(14.dp), m) },
-            coverUrl = item.thumbnailUrl, kind = kind, title = item.title,
-            subtitle = item.subtitle.split(" • ").filter { it !in setOf("Album", "Single", "EP", "Playlist") }.joinToString(" • "),
+            cover = { m -> CoverFill(item.thumbnailUrl, m) },
+            coverUrl = item.thumbnailUrl, kind = listOfNotNull(kind, year).joinToString(" • "), title = item.title,
+            subtitle = owner,
             songs = songs,
             extra = { ListMoreButton(songs.orEmpty(), linkOf(id)) },
         )

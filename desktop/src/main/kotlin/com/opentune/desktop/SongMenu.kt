@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Radio
@@ -232,14 +233,15 @@ private fun SongActionItems(actions: List<SongAction>) {
     }
 }
 
-/** The ⋯ button on a row, opening the same actions as a right click, under it at its right edge. */
+/** The ⋯ button on a row ([vertical]: ⋮), opening the same actions as a right click, under it at its right edge. */
 @Composable
-internal fun SongMoreButton(song: Song, queueIndex: Int? = null, size: androidx.compose.ui.unit.Dp = 32.dp) {
+internal fun SongMoreButton(song: Song, queueIndex: Int? = null, size: androidx.compose.ui.unit.Dp = 32.dp, vertical: Boolean = false) {
     var open by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
     val actions = songActions(song, queueIndex) { adding = true }
     Box {
-        HoverIcon(Icons.Rounded.MoreHoriz, "More options for ${song.title}", size = size, iconSize = 19.dp) { open = true }
+        if (vertical) PageIconButton(Icons.Rounded.MoreVert, "More options for ${song.title}", iconSize = 22.dp, size = size) { open = true }
+        else HoverIcon(Icons.Rounded.MoreHoriz, "More options for ${song.title}", size = size, iconSize = 19.dp) { open = true }
         if (open) WebMenu(MenuAnchor.BelowEnd, onDismiss = { open = false }, label = song.title) { SongActionItems(actions) }
         AddToPlaylistMenu(song, adding) { adding = false }
     }
@@ -338,18 +340,25 @@ internal fun QueuePage(queue: List<Song>, index: Int) {
     }
 }
 
-/** For a list's own ⋯ menu: everything in it played next, at the end of the queue, or its link copied. */
+/**
+ * For a list's own ⋯ menu, a round button beside its Play: everything in it played next, at the
+ * end of the queue, or its link copied; then [more], what else the list allows (rename, delete).
+ */
 @Composable
-internal fun ListMoreButton(songs: List<Song>, link: String?) {
+internal fun ListMoreButton(songs: List<Song>, link: String?, size: androidx.compose.ui.unit.Dp = 62.dp, more: (@Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit)? = null) {
     var open by remember { mutableStateOf(false) }
     Box {
-        CircleButton(Icons.Rounded.MoreHoriz, "More options", enabled = songs.isNotEmpty() || link != null) { open = true }
+        PageRoundButton(Icons.Rounded.MoreHoriz, "More options", size = size, enabled = songs.isNotEmpty() || link != null || more != null) { open = true }
         if (open) WebMenu(MenuAnchor.BelowEnd, onDismiss = { open = false }, label = "More options") {
             WebMenuItem("Play next", Icons.AutoMirrored.Rounded.PlaylistPlay, enabled = songs.isNotEmpty()) { Player.playNext(songs); Notice.show("Playing next") }
             WebMenuItem("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic, enabled = songs.isNotEmpty()) { Player.addToQueue(songs); Notice.show("Added to queue") }
             if (link != null) {
                 WebMenuSeparator()
                 WebMenuItem("Copy link", Icons.Rounded.Link) { copyText(link); Notice.show("Link copied") }
+            }
+            if (more != null) {
+                WebMenuSeparator()
+                more()
             }
         }
     }

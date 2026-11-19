@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,28 +28,40 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -56,14 +70,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.opentune.data.history.DailyMixes
 import com.opentune.data.history.PlayRecord
@@ -77,7 +92,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** A mood or genre opened from Home's chips. */
+/** A mood or genre opened from Explore or Home's row of them. */
 internal data class MoodKey(val title: String, val browseId: String, val params: String?)
 
 /** Every play on this computer, newest first, read again when a new one is recorded. */
@@ -93,11 +108,11 @@ private fun rememberHistory(): List<PlayRecord> {
 // ---- Home --------------------------------------------------------------------
 
 /**
- * Home, headed as the web player's: the greeting in the accent over "What's playing?", with a
- * button to load the recommendations again. Then, filled as the phone fills it: the last song
- * you played, your mixes and most played, what you played lately in rows, moods and genres to
- * start from, then YouTube Music's rows (quick picks as rows of songs), page after page as you
- * scroll, carrying on with new releases and the charts when they run out.
+ * Home: the greeting with a button to load the recommendations again; any banners; then
+ * Recents, what you played lately as a grid of song rows four tall that scrolls sideways; your
+ * mixes and most played; then YouTube Music's rows (quick picks as rows of songs, the rest as
+ * square cards), page after page as you scroll, carrying on with new releases and the charts
+ * when they run out; moods to start from, and your liked songs.
  */
 @Composable
 internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
@@ -139,7 +154,7 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
             loadingMore = false
         }
     }
-    // The heading's refresh: the feed from the start again, as the web's button does.
+    // The heading's refresh: the feed from the start again.
     fun refresh() {
         shelves = null; next = null; extrasDone = false
         load()
@@ -165,41 +180,44 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
     val banners = runtime.banners.filter { "web" in it.platforms && it.id !in closedBanners }
     val featured = runtime.playlists.takeIf { com.opentune.data.config.HomeDismissals.showsPlaylists(it.map { p -> p.id }, closedPlaylists) }.orEmpty()
     ScrollPage(
-        "What's playing?", state = list, eyebrow = greeting(), webGutter = true,
+        greeting(), state = list, webGutter = true, spacing = 44.dp,
         trailing = { RefreshButton(spinning = loaded == null && !failed, onClick = ::refresh) },
     ) {
         banners.forEach { b -> item(key = "banner:${b.id}") { DashboardBanner(b) } }
-        recent.firstOrNull()?.let { last -> item(key = "hero") { JumpBackIn(last, recent) } }
-        if (mixes.isNotEmpty() || speedDial.isNotEmpty()) item(key = "picks") {
-            ShelfSection("Top picks for you") { TopPicks(mixes, speedDial.take(8), onOpenMix = { onOpenAny(it) }) }
+        if (recent.isNotEmpty()) item(key = "recents") {
+            SongGrid("Recents", recent.take(40), actions = {
+                PageIconButton(Icons.Rounded.Shuffle, "Shuffle recents") { Player.playAll(recent.shuffled(), 0) }
+            })
         }
-        if (recent.isNotEmpty()) item(key = "recents") { SongGrid("Recently played", recent.take(32)) }
+        if (mixes.isNotEmpty() || speedDial.isNotEmpty()) item(key = "picks") {
+            ShelfSection("Top picks for you", "Made from what you play") { TopPicks(mixes, speedDial.take(8), onOpenMix = { onOpenAny(it) }) }
+        }
         if (featured.isNotEmpty()) item(key = "featured") {
             ShelfSection(runtime.title("featured-playlists", "From the community"), action = {
-                CircleButton(Icons.Rounded.Close, "Hide these playlists", size = 32.dp, iconSize = 16.dp, ring = false) {
+                PageIconButton(Icons.Rounded.Close, "Hide these playlists") {
                     com.opentune.data.config.HomeDismissals.dismissPlaylists(featured.map { it.id })
                 }
             }) {
                 val since = remember { System.nanoTime() }
                 ShelfScroller(ShelfKind.SQUARE) {
-                    shelfItems(featured.map { p -> ShelfItem(p.title, "OpenTune picks", p.artwork, null, p.browseId) }, ShelfKind.SQUARE, since) { _, card ->
-                        SquareLockup(card, onOpen = { onOpen(card) })
+                    shelfItems(featured.map { p -> ShelfItem(p.title, "Playlist • OpenTune picks", p.artwork, null, p.browseId) }, ShelfKind.SQUARE, since) { _, card ->
+                        SquareLockup(card, onOpen = { onOpen(card) }, onPlay = rememberCardPlay(card))
                     }
                 }
             }
-        }
-        if (moods.isNotEmpty()) item(key = "moods") {
-            ShelfSection("Find your mood") { MoodTiles(moods) { onOpenAny(MoodKey(it.title, it.browseId, it.params)) } }
         }
         when {
             failed -> item(key = "failed") { Message("Couldn't load Home", "Check your connection and try again.", action = "Try again" to ::load) }
             loaded == null -> items(3, key = { "placeholder$it" }) { ShelfPlaceholder() }
             else -> {
-                itemsIndexed(loaded, key = { i, _ -> "yt$i" }) { _, shelf ->
-                    if (isSongShelf(shelf)) SongGrid(shelf.title, shelf.items.mapNotNull(Pages::songOf)) else ShelfRow(shelf, onOpen)
+                itemsIndexed(loaded, key = { i, _ -> "yt$i" }) { i, shelf ->
+                    if (isSongShelf(shelf)) SongGrid(shelf.title, shelf.items.mapNotNull(Pages::songOf), subtitle = shelf.subtitle) else ShelfRow(shelf, onOpen)
                 }
                 if (next != null || !extrasDone) item(key = "more") { ShelfPlaceholder() }
             }
+        }
+        if (moods.isNotEmpty() && loaded != null) item(key = "moods") {
+            ShelfSection("Moods & genres", onSeeAll = null) { MoodRow(moods) { onOpenAny(MoodKey(it.title, it.browseId, it.params)) } }
         }
         if (liked.isNotEmpty() && loaded != null) item(key = "liked") {
             ShelfRow(Pages.Shelf("From your liked songs", liked.take(20).map(Pages::cardOf)), onOpen)
@@ -207,10 +225,7 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
     }
 }
 
-/**
- * Home's refresh (.ot-circle-button): a 44px disc of the faintest fill, stronger under the
- * pointer; its arrows turn while the feed loads.
- */
+/** Home's refresh: a 40dp disc of the faintest fill, stronger under the pointer; its arrows turn while the feed loads. */
 @Composable
 private fun RefreshButton(spinning: Boolean, onClick: () -> Unit) {
     val still = stillMotion()
@@ -218,16 +233,16 @@ private fun RefreshButton(spinning: Boolean, onClick: () -> Unit) {
         rememberInfiniteTransition(label = "refresh").animateFloat(0f, 360f, infiniteRepeatable(tween(1000, easing = LinearEasing)), label = "refresh turn").value
     } else 0f
     CircleButton(
-        Icons.Rounded.Refresh, "Refresh recommendations", enabled = !spinning, size = 44.dp, iconSize = 20.dp, ring = false,
+        Icons.Rounded.Refresh, "Refresh recommendations", enabled = !spinning, size = 40.dp, iconSize = 20.dp, ring = false,
         iconModifier = Modifier.graphicsLayer { rotationZ = turn }, onClick = onClick,
     )
 }
 
-/** A row of songs (quick picks, trending): shown as columns of song rows, as the web player shows them, not as cards. */
+/** A row of songs (quick picks, trending): shown as columns of song rows, not as cards. */
 private fun isSongShelf(shelf: Pages.Shelf) =
     shelf.title.trim().equals("Quick picks", ignoreCase = true) || shelf.items.size >= 8 && shelf.items.count { it.videoId != null } * 10 >= shelf.items.size * 9
 
-/** The web player's greeting: late night, morning, afternoon or evening. */
+/** The greeting: late night, morning, afternoon or evening. */
 private fun greeting(): String = when (java.time.LocalTime.now().hour) {
     in 0..4 -> "Late night"
     in 5..11 -> "Good morning"
@@ -236,41 +251,58 @@ private fun greeting(): String = when (java.time.LocalTime.now().hour) {
 }
 
 /**
- * A banner from the dashboard, as the web draws it (.ot-banner): a softly tinted card with 18px
- * corners, its title in 15px, its words in grey, its button an accent pill, and a cross in the
- * corner to close it for good.
+ * A banner from the dashboard: a softly tinted card with 12dp corners, its title in bold, its
+ * words in grey, its button an accent pill, and a cross in the corner to close it for good.
  */
 @Composable
 private fun DashboardBanner(banner: com.opentune.data.config.RemoteBanner) {
     val links = androidx.compose.ui.platform.LocalUriHandler.current
-    val shape = RoundedCornerShape(18.dp)
-    // The accent at 12% over the faintest fill, as color-mix(keyColor 12%, systemQuinary).
+    val shape = RoundedCornerShape(12.dp)
+    // The accent at 12% over the faintest fill.
     val tintFill = androidx.compose.ui.graphics.lerp(WebInk.quinary, WebInk.key.copy(alpha = 1f), 0.12f)
     Box(Modifier.padding(horizontal = LocalGutter.current).fillMaxWidth().clip(shape).background(tintFill)) {
         Column(Modifier.padding(start = 20.dp, end = 52.dp, top = 18.dp, bottom = 18.dp)) {
-            Text(banner.title, style = WebType.title3Emph, color = WebInk.primary, modifier = Modifier.padding(bottom = 4.dp))
-            if (banner.body.isNotBlank()) Text(banner.body, style = WebType.bodyTall, color = WebInk.secondary, modifier = Modifier.widthIn(max = 520.dp))
+            Text(banner.title, style = PageType.cardTitle, color = PageInk.text, modifier = Modifier.padding(bottom = 4.dp))
+            if (banner.body.isNotBlank()) Text(banner.body, style = PageType.cardLine, color = PageInk.grey, modifier = Modifier.widthIn(max = 620.dp))
             val source = remember { MutableInteractionSource() }
             Text(
-                "${banner.action} ↗", style = WebType.bodyEmph, color = Color.White,
+                "${banner.action} ↗", style = PageType.button, color = Color.White,
                 modifier = Modifier.padding(top = 12.dp).pressScale(source).clip(CircleShape).background(WebInk.keyFill)
                     .clickable(interactionSource = source, indication = null, role = Role.Button) { runCatching { links.openUri(banner.url) } }
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
-        // The cross in the corner, 10px in, closing the banner for good.
-        Box(Modifier.align(Alignment.TopEnd).padding(10.dp)) {
-            CircleButton(Icons.Rounded.Close, "Dismiss ${banner.title}", size = 32.dp, iconSize = 16.dp, ring = false) {
-                com.opentune.data.config.HomeDismissals.dismissBanner(banner.id)
-            }
+        // The cross in the corner, closing the banner for good.
+        Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+            PageIconButton(Icons.Rounded.Close, "Dismiss ${banner.title}") { com.opentune.data.config.HomeDismissals.dismissBanner(banner.id) }
         }
     }
 }
 
 /**
- * One of Home's rows of cards (ShelfView): its title and its cards, an artist's round, each
- * sized to share the width, that scroll sideways under the page's arrows. A song plays from its
- * card, with the rest of the row after it; anything else opens.
+ * Plays an album or playlist card straight from the round button on its cover: its songs are
+ * fetched and played from the first. Null for a song (it plays from the card) or an artist.
+ */
+@Composable
+internal fun rememberCardPlay(item: ShelfItem): (() -> Unit)? {
+    val scope = rememberCoroutineScope()
+    val id = item.browseId?.takeIf { item.videoId == null && !it.startsWith("UC") } ?: return null
+    return remember(id) {
+        {
+            scope.launch {
+                runCatching { Pages.songsOf(id) }
+                    .onSuccess { if (it.isNotEmpty()) Player.playAll(it, 0) else Notice.show("Nothing to play in ${item.title}") }
+                    .onFailure { Notice.show("Couldn't play ${item.title}") }
+            }
+            Unit
+        }
+    }
+}
+
+/**
+ * One of Home's rows of cards: its title and strapline, and its cards (an artist's round) that
+ * scroll sideways under the page's arrows. A song plays from its card, with the rest of the row
+ * after it; anything else opens, and plays from the button over its cover.
  */
 @Composable
 internal fun ShelfRow(shelf: Pages.Shelf, onOpen: (ShelfItem) -> Unit) {
@@ -278,15 +310,15 @@ internal fun ShelfRow(shelf: Pages.Shelf, onOpen: (ShelfItem) -> Unit) {
     val artists = shelf.items.isNotEmpty() && shelf.items.all { it.browseId?.startsWith("UC") == true }
     val kind = if (artists) ShelfKind.CIRCLE else ShelfKind.SQUARE
     val since = remember(shelf) { System.nanoTime() }
-    ShelfSection(shelf.title) {
+    ShelfSection(shelf.title, shelf.subtitle) {
         ShelfScroller(kind) {
             shelfItems(shelf.items, kind, since) { _, item ->
                 if (artists) {
-                    CircleLockup(item, onOpen = { onOpen(item) })
+                    CircleLockup(item, onOpen = { onOpen(item) }, line = item.subtitle.takeIf { it.isNotBlank() && it != "Artist" })
                 } else {
                     val song = Pages.songOf(item)
                     val play = { if (song != null) Player.playAll(songs, songs.indexOfFirst { it.videoId == song.videoId }.coerceAtLeast(0)) else onOpen(item) }
-                    SquareLockup(item, onOpen = play, song = song)
+                    SquareLockup(item, onOpen = play, song = song, onPlay = if (song != null) play else rememberCardPlay(item))
                 }
             }
         }
@@ -297,49 +329,15 @@ internal fun ShelfRow(shelf: Pages.Shelf, onOpen: (ShelfItem) -> Unit) {
 @Composable
 internal fun ShelfPlaceholder() = ShelfSkeleton(ShelfKind.SQUARE)
 
-/** Songs as four rows that scroll sideways in columns, each with its cover, title and artist (the web's TrackShelf). */
+/** Songs as four rows that scroll sideways in columns, each with its cover, title, artist and ⋮ menu. */
 @Composable
-internal fun SongGrid(title: String, songs: List<Song>, rows: Int = 4) {
-    TrackShelf(title, songs, rows = rows)
+internal fun SongGrid(title: String, songs: List<Song>, rows: Int = 4, subtitle: String? = null, actions: (@Composable () -> Unit)? = null) {
+    TrackShelf(title, songs, rows = rows, subtitle = subtitle, actions = actions)
 }
 
 /**
- * The banner Home opens with: the last song you played, its cover large and
- * lifted on a wide card over a soft blur of itself in its own colours, with
- * Play to carry on and Shuffle for everything you played lately.
- */
-@Composable
-private fun JumpBackIn(song: Song, recent: List<Song>) {
-    val accent = coverAccent(song.thumbnailUrl)
-    val shape = RoundedCornerShape(Web.ArtLarge)
-    val hover = remember { MutableInteractionSource() }
-    BoxWithConstraints(
-        Modifier.padding(horizontal = LocalGutter.current).fillMaxWidth().height(240.dp)
-            .shadow(24.dp, shape, ambientColor = accent, spotColor = accent).clip(shape).hoverable(hover),
-    ) {
-        // The cover gives way first as the card narrows, so the words and buttons never squeeze.
-        val cover = when { maxWidth >= 620.dp -> 184.dp; maxWidth >= 440.dp -> 136.dp; else -> null }
-        val roomy = maxWidth >= 540.dp
-        SoftBackdrop(song.thumbnailUrl, Modifier.fillMaxSize())
-        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.55f), 0.6f to accent.copy(alpha = 0.25f), 1f to Color.Black.copy(alpha = 0.15f))))
-        Row(Modifier.fillMaxSize().padding(28.dp), verticalAlignment = Alignment.CenterVertically) {
-            cover?.let { Cover(song.thumbnailUrl, it, RoundedCornerShape(Web.ArtMedium), Modifier.shadow(28.dp, RoundedCornerShape(Web.ArtMedium))) }
-            Column(Modifier.padding(start = if (cover != null) 28.dp else 0.dp).weight(1f)) {
-                Text("JUMP BACK IN", style = webType(11f, 14f, 700, 0.12f), color = Color.White.copy(alpha = 0.75f), maxLines = 1, softWrap = false)
-                Text(song.title, style = WebType.header(34f, -0.02f), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                Text(song.artist, style = WebType.title3, color = Color.White.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
-                Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    PrimaryButton("Play", Icons.Rounded.PlayArrow) { Player.playAll(recent, 0) }
-                    SecondaryButton(if (roomy) "Shuffle recents" else "Shuffle", Icons.Rounded.Shuffle) { Player.playAll(recent.shuffled(), 0) }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Top picks: tall cards in the shelf's columns, your daily mixes as a burst of colour with three
- * of their covers in circles, then the songs you play most as full covers.
+ * Top picks: square cards, your daily mixes as a burst of their colour with three of their covers
+ * in circles, then the songs you play most as their covers.
  */
 @Composable
 private fun TopPicks(mixes: List<DailyMixes.Mix>, most: List<ShelfItem>, onOpenMix: (DailyMixes.Mix) -> Unit) {
@@ -349,54 +347,24 @@ private fun TopPicks(mixes: List<DailyMixes.Mix>, most: List<ShelfItem>, onOpenM
     ShelfScroller(ShelfKind.SQUARE) {
         shelfItems(picks, ShelfKind.SQUARE, since) { _, pick ->
             when (pick) {
-                is DailyMixes.Mix -> PickCard(label = "Made for you", title = pick.title, line = pick.subtitle, colourOf = pick.covers.firstOrNull(), onClick = { onOpenMix(pick) }) {
-                    MixCircles(pick.covers.filterNotNull())
+                is DailyMixes.Mix -> MixCard(pick, onOpen = { onOpenMix(pick) })
+                is ShelfItem -> {
+                    val song = Pages.songOf(pick)
+                    val play = {
+                        val at = songs.indexOfFirst { it.videoId == pick.videoId }
+                        if (at >= 0) Player.playAll(songs, at)
+                    }
+                    SquareLockup(pick.copy(subtitle = "Played most • ${pick.subtitle}"), onOpen = play, song = song, onPlay = play)
                 }
-                is ShelfItem -> PickCard(label = "Played most", title = pick.title, line = pick.subtitle, colourOf = pick.thumbnailUrl, fullCover = pick.thumbnailUrl, onClick = {
-                    val at = songs.indexOfFirst { it.videoId == pick.videoId }
-                    if (at >= 0) Player.playAll(songs, at)
-                })
             }
         }
     }
 }
 
-/**
- * A tall card, 3:4, with the web's 20px corners: a cover filling it, or a colour from [colourOf]
- * with [art] on it; its kind, title and a line at the foot. It lifts a little under the pointer
- * as a cover does.
- */
-@Composable
-private fun PickCard(label: String, title: String, line: String, colourOf: String?, fullCover: String? = null, onClick: () -> Unit, art: @Composable () -> Unit = {}) {
-    val hover = remember { MutableInteractionSource() }
-    val hovered by hover.collectIsHoveredAsState()
-    val base = MaterialTheme.colorScheme.surfaceContainerHigh
-    val colour = rememberCoverColor(colourOf, base)
-    val shape = RoundedCornerShape(Web.ArtMedium)
-    Box(Modifier.width(LocalColumnWidth.current).hoverable(hover)) {
-        LockupArt(
-            fullCover, shape, hovered, onClick, title, aspect = 0.75f,
-            art = { m ->
-                Box(m.background(Brush.linearGradient(listOf(lerpColor(colour, Color.White, 0.12f), lerpColor(colour, Color.Black, 0.35f))))) {
-                    if (fullCover != null) CoverFill(fullCover, Modifier.fillMaxSize()) else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { art() }
-                    Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.78f))))
-                    Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
-                        Text(label, style = WebType.callout, color = Color.White.copy(alpha = 0.75f))
-                        Text(title, style = WebType.title3Emph, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(line, style = WebType.callout, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            },
-        )
-    }
-}
-
-private fun lerpColor(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
-
 /** Three covers in overlapping circles, as a mix's card shows who's in it, sized to the card. */
 @Composable
 private fun MixCircles(covers: List<String>) {
-    BoxWithConstraints(Modifier.fillMaxWidth(0.86f).aspectRatio(1f).padding(bottom = 40.dp)) {
+    BoxWithConstraints(Modifier.fillMaxWidth(0.86f).aspectRatio(1f)) {
         val w = maxWidth
         covers.getOrNull(0)?.let { Cover(it, w * 0.6f, CircleShape, Modifier.align(Alignment.TopStart).padding(top = 6.dp, start = 8.dp)) }
         covers.getOrNull(1)?.let { Cover(it, w * 0.41f, CircleShape, Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) }
@@ -404,46 +372,109 @@ private fun MixCircles(covers: List<String>) {
     }
 }
 
-/** Moods and genres as the web's browse tiles, two rows that scroll sideways. */
+/** A daily mix as a square card: a burst of its colour with three of its covers, its name and who's in it, and the play button under the pointer. */
 @Composable
-private fun MoodTiles(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
-    val palette = listOf(0xFF2E7D32, 0xFF1565C0, 0xFF6A1B9A, 0xFFC62828, 0xFFEF6C00, 0xFF00838F, 0xFFAD1457, 0xFF4E342E, 0xFF283593, 0xFF9E9D24)
+private fun MixCard(mix: DailyMixes.Mix, onOpen: () -> Unit) {
+    val base = MaterialTheme.colorScheme.surfaceContainerHigh
+    val colour = rememberCoverColor(mix.covers.firstOrNull(), base)
+    SquareLockup(
+        ShelfItem(mix.title, "Mix • ${mix.subtitle}", mix.covers.firstOrNull(), null, null),
+        onOpen = onOpen,
+        art = { m ->
+            Box(m.background(Brush.linearGradient(listOf(androidx.compose.ui.graphics.lerp(colour, Color.White, 0.12f), androidx.compose.ui.graphics.lerp(colour, Color.Black, 0.35f)))), contentAlignment = Alignment.Center) {
+                MixCircles(mix.covers.filterNotNull())
+            }
+        },
+        onPlay = { Player.playAll(mix.songs, 0) },
+    )
+}
+
+/** A mood's tile with its cover, fetched as it first shows. */
+@Composable
+private fun MoodTileFor(mood: MoodGenre, modifier: Modifier, height: Dp, onOpen: () -> Unit) {
+    val cover by produceState(mood.thumbnailUrl, mood.title) { value = runCatching { Pages.moodCover(mood) }.getOrNull() }
+    MoodTile(mood.title, moodColour(mood.title), cover, onOpen, modifier, height)
+}
+
+/** Moods and genres as a row of tiles that scrolls sideways, for Home. */
+@Composable
+private fun MoodRow(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
     val since = remember { System.nanoTime() }
     ShelfScroller(ShelfKind.TILES) {
         shelfItems(moods, ShelfKind.TILES, since, key = { it.title }) { _, m ->
-            CategoryTile(m.title, Color(palette[(m.title.hashCode() and 0x7fffffff) % palette.size])) { onOpen(m) }
+            MoodTileFor(m, Modifier.width(LocalColumnWidth.current), 150.dp) { onOpen(m) }
         }
     }
 }
 
 /**
- * New: what's just come out and what's climbing, as BitChord's New tab has
- * it: new albums and singles as covers, trending songs in columns of rows,
- * then the charts.
+ * Every mood and genre as tiles in a grid across the width: five columns on a wide window, fewer
+ * as it narrows, 15dp apart.
+ */
+@Composable
+internal fun MoodGrid(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
+    val gap = 15.dp
+    BoxWithConstraints(Modifier.padding(horizontal = LocalGutter.current).fillMaxWidth()) {
+        val cols = when {
+            maxWidth >= 1000.dp -> 5
+            maxWidth >= 780.dp -> 4
+            maxWidth >= 540.dp -> 3
+            else -> 2
+        }
+        val cell = (maxWidth - gap * (cols - 1)) / cols
+        val since = remember { System.nanoTime() }
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            moods.chunked(cols).forEachIndexed { r, line ->
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    line.forEachIndexed { c, m ->
+                        Box(Modifier.riseIn(delayMs = ((r * cols + c).coerceAtMost(10)) * 25, distance = 10.dp, since = since)) {
+                            MoodTileFor(m, Modifier.width(cell), 188.dp) { onOpen(m) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Explore: every mood and genre as a grid of tiles, then what's just come out and what's
+ * climbing (new albums and singles as cards, trending songs in rows, then the charts).
  */
 @Composable
 internal fun NewPage(onOpen: (ShelfItem) -> Unit) {
+    val open = LocalOpen.current
+    val moods by produceState<List<MoodGenre>?>(null) { value = runCatching { Pages.moods() }.getOrDefault(emptyList()) }
     val shelves by produceState<List<Pages.Shelf>?>(null) { value = runCatching { Pages.moreForHome() }.getOrDefault(emptyList()) }
-    ScrollPage("Explore", "New releases and what's climbing the charts", webGutter = true) {
+    ScrollPage("Explore", webGutter = true, spacing = 44.dp) {
+        when (val m = moods) {
+            null -> item(key = "moods-wait") { MoodGridPlaceholder() }
+            else -> if (m.isNotEmpty()) item(key = "moods") {
+                ShelfSection("Moods & genres") { MoodGrid(m) { open(MoodKey(it.title, it.browseId, it.params)) } }
+            }
+        }
         when (val loaded = shelves) {
-            null -> items(3) { ShelfPlaceholder() }
-            else -> if (loaded.isEmpty()) item { Message("Nothing new could be loaded", "Check your connection and try again.") }
-                else items(loaded) { shelf ->
-                    if (isSongShelf(shelf)) SongGrid(shelf.title, shelf.items.mapNotNull(Pages::songOf)) else ShelfRow(shelf, onOpen)
+            null -> items(2, key = { "wait$it" }) { ShelfPlaceholder() }
+            else -> if (loaded.isEmpty()) {
+                if (moods?.isEmpty() == true) item(key = "none") { PageEmpty(Icons.Rounded.SearchOff, "Couldn't load Explore", "Check your connection and try again.") }
+            } else items(loaded, key = { "new:" + it.title }) { shelf ->
+                    if (isSongShelf(shelf)) SongGrid(shelf.title, shelf.items.mapNotNull(Pages::songOf), subtitle = shelf.subtitle) else ShelfRow(shelf, onOpen)
                 }
         }
     }
 }
 
-/** A daily mix as a card: four of its covers, its name and who's in it, and the play disc under the pointer. */
+/** The moods grid's shape, shimmering, while it loads. */
 @Composable
-private fun MixCard(mix: DailyMixes.Mix, onOpen: () -> Unit) {
-    SquareLockup(
-        ShelfItem(mix.title, mix.subtitle, mix.covers.firstOrNull(), null, null),
-        onOpen = onOpen,
-        art = { m -> Mosaic(mix.covers.filterNotNull(), m, RoundedCornerShape(0.dp)) },
-        onPlay = { Player.playAll(mix.songs, 0) },
-    )
+private fun MoodGridPlaceholder() {
+    Column(Modifier.padding(horizontal = LocalGutter.current), verticalArrangement = Arrangement.spacedBy(15.dp)) {
+        Placeholder(Modifier.padding(bottom = 1.dp).width(220.dp).height(26.dp), RoundedCornerShape(6.dp))
+        repeat(2) {
+            Row(horizontalArrangement = Arrangement.spacedBy(15.dp)) {
+                repeat(5) { Placeholder(Modifier.weight(1f).height(188.dp), RoundedCornerShape(10.dp)) }
+            }
+        }
+    }
 }
 
 /** A mood or genre's own page: its rows of playlists. */
@@ -452,35 +483,284 @@ internal fun MoodPage(mood: MoodKey, onOpen: (ShelfItem) -> Unit) {
     val shelves by produceState<List<Pages.Shelf>?>(null, mood) {
         value = runCatching { Pages.shelves(mood.browseId, mood.params) }.getOrDefault(emptyList())
     }
-    ScrollPage(mood.title, webGutter = true) {
+    ScrollPage(mood.title, eyebrow = "Mood & genre", webGutter = true, spacing = 44.dp) {
         when (val loaded = shelves) {
             null -> items(3) { ShelfPlaceholder() }
-            else -> if (loaded.isEmpty()) item { Message("Nothing here right now", "Try another mood or genre.") }
+            else -> if (loaded.isEmpty()) item { PageEmpty(Icons.Rounded.SearchOff, "Nothing here right now", "Try another mood or genre.") }
                 else items(loaded) { ShelfRow(it, onOpen) }
         }
     }
 }
 
-/** A daily mix: the head over a blur of its covers, then its songs. */
+/** A daily mix: the head, then its songs. */
 @Composable
 internal fun MixPage(mix: DailyMixes.Mix) {
     CollectionLayout(mix.title, mix.covers.firstOrNull(), mix.songs, failed = false) {
         CollectionHero(
-            cover = { m -> Mosaic(mix.covers.filterNotNull(), m) },
-            coverUrl = mix.covers.firstOrNull(), kind = "Made for you", title = mix.title, subtitle = mix.subtitle, songs = mix.songs,
+            cover = { m -> Mosaic(mix.covers.filterNotNull(), m, RoundedCornerShape(0.dp)) },
+            coverUrl = mix.covers.firstOrNull(), kind = "Mix • Made for you", title = mix.title, subtitle = mix.subtitle, songs = mix.songs,
+            extra = { ListMoreButton(mix.songs, link = null) },
         )
     }
 }
 
 // ---- Library -----------------------------------------------------------------
 
+/** The Library's tabs. */
+private enum class LibTab(val label: String) { SONGS("Songs"), ARTISTS("Artists"), ALBUMS("Albums"), PLAYLISTS("Playlists"), OVERVIEW("Overview") }
+
+/** Who a song is by, for the Artists tab: the first name of several. */
+private fun leadArtist(artist: String): String =
+    artist.split(", ", " & ", " x ", " X ", " feat. ", " ft. ", " featuring ", " and ").first().trim()
+
+/** An artist or album in the Library: who or what, a picture, where it opens (when it has a page), how many songs. */
+private data class LibEntry(val title: String, val line: String, val cover: String?, val browseId: String?, val songs: List<Song>, val round: Boolean)
+
+/** A card in the Playlists tab. */
+private class LibCard(
+    val title: String,
+    val line: String,
+    val cover: String?,
+    val onOpen: () -> Unit,
+    val onPlay: (() -> Unit)? = null,
+    val art: (@Composable (Modifier) -> Unit)? = null,
+)
+
+/** What a tab's content needs from the frame around it. */
+private class LibContext(
+    val query: String,
+    val az: Boolean,
+    val grid: Boolean,
+    val columns: Int,
+    val label: String,
+    /** Shows the Songs tab narrowed to [query], as an artist or album without a page of its own opens. */
+    val showSongs: (String) -> Unit,
+)
+
+private fun matches(q: String, vararg fields: String?) = q.isBlank() || fields.any { it?.contains(q.trim(), ignoreCase = true) == true }
+
 /**
- * The Library, as the phone opens it, drawn as the web player's pages: your year so far,
- * shortcuts to liked songs, what you played and your server, your playlists as cards, what you
- * play most this month (songs and artists), and the last songs you played.
+ * The frame of the Library, Liked songs and Recently played: a search box across the top that
+ * narrows the tab you're on, an A–Z switch and the grid/list switch beside it, then tabs spread
+ * across the width (Songs, Artists, Albums, and on the Library itself Playlists and an Overview)
+ * over a hairline, the chosen one underlined. Songs are the striped track rows; artists round
+ * photos; albums and playlists square cards; in a grid or a list.
  */
 @Composable
-internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit, onOpenAny: (Any) -> Unit) {
+private fun LibraryFrame(
+    label: String,
+    songs: List<Song>,
+    tabs: List<LibTab>,
+    empty: Triple<ImageVector, String, String>,
+    followed: List<ShelfItem> = emptyList(),
+    saved: List<ShelfItem> = emptyList(),
+    head: (@Composable () -> Unit)? = null,
+    playlists: (LazyListScope.(LibContext) -> Unit)? = null,
+    overview: (LazyListScope.() -> Unit)? = null,
+    startTab: Int = 0,
+) {
+    var tab by remember { mutableIntStateOf(startTab.coerceIn(0, tabs.lastIndex)) }
+    var query by remember { mutableStateOf("") }
+    var az by remember { mutableStateOf(false) }
+    var grid by remember { mutableStateOf(true) }
+    val shown = tabs.getOrElse(tab) { tabs.first() }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val width = maxWidth
+        val gutter = Web.gutter(width)
+        val room = width - gutter * 2
+        val columns = ((room + 17.dp) / (188.dp + 17.dp)).toInt().coerceAtLeast(2)
+        val ctx = LibContext(query, az, grid, columns, label) { q -> query = q; tab = tabs.indexOf(LibTab.SONGS).coerceAtLeast(0) }
+        val artists = remember(songs, followed) { libraryArtists(songs, followed) }
+        val albums = remember(songs, saved) { libraryAlbums(songs, saved) }
+        CompositionLocalProvider(LocalGutter provides gutter, LocalPageWidth provides width) {
+            LazyColumn(contentPadding = PaddingValues(top = LocalPageTop.current + 20.dp, bottom = LocalPageBottom.current)) {
+                head?.let { h -> item(key = "head") { Box(Modifier.padding(start = gutter, end = gutter, bottom = 22.dp)) { h() } } }
+                item(key = "bar") {
+                    Row(Modifier.padding(horizontal = gutter).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        PageSearchField(query, { query = it }, "Search your music", Modifier.weight(1f))
+                        Spacer(Modifier.width(10.dp))
+                        PageTextToggle("A–Z", az, if (az) "Sorted A to Z" else "Sort A to Z") { az = !az }
+                        Spacer(Modifier.width(4.dp))
+                        PageIconButton(
+                            if (grid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                            if (grid) "Show as a list" else "Show as a grid", size = 44.dp, iconSize = 22.dp,
+                        ) { grid = !grid }
+                    }
+                }
+                item(key = "tabs") {
+                    PageTabs(tabs.map { it.label }, tab, { tab = it }, Modifier.padding(start = gutter, end = gutter, top = 14.dp, bottom = 18.dp))
+                }
+                when (shown) {
+                    LibTab.SONGS -> songsTab(songs, ctx, empty)
+                    LibTab.ARTISTS -> entriesTab(artists, ctx, Triple(Icons.Rounded.Person, "No artists", "The artists of songs you keep show up here."), "artist")
+                    LibTab.ALBUMS -> entriesTab(albums, ctx, Triple(Icons.Rounded.Album, "No albums", "Albums you save, and the albums of songs you keep, show up here."), "album")
+                    LibTab.PLAYLISTS -> playlists?.invoke(this, ctx)
+                    LibTab.OVERVIEW -> overview?.invoke(this)
+                }
+            }
+        }
+    }
+}
+
+/** The artists of [songs] (each song under its first-named artist) after the ones you follow on YouTube Music. */
+private fun libraryArtists(songs: List<Song>, followed: List<ShelfItem>): List<LibEntry> {
+    val byName = LinkedHashMap<String, MutableList<Song>>()
+    songs.forEach { s -> leadArtist(s.artist).takeIf { it.isNotBlank() }?.let { byName.getOrPut(it.lowercase()) { mutableListOf() }.add(s) } }
+    val follows = followed.map { a ->
+        val mine = byName.remove(a.title.lowercase()).orEmpty()
+        LibEntry(a.title, if (mine.isEmpty()) "Artist" else songCount(mine.size), a.thumbnailUrl, a.browseId, mine, round = true)
+    }
+    return follows + byName.values.map { list ->
+        val name = leadArtist(list.first().artist)
+        LibEntry(name, songCount(list.size), list.first().thumbnailUrl, list.firstNotNullOfOrNull { it.artistId?.takeIf { id -> id.startsWith("UC") } }, list, round = true)
+    }
+}
+
+/** A part of the Overview tab, with room under it before the next. */
+private fun LazyListScope.section(key: String, content: @Composable () -> Unit) =
+    item(key = key) { Box(Modifier.padding(bottom = 44.dp)) { content() } }
+
+/** The albums of [songs] that know theirs, after the albums saved on YouTube Music. */
+private fun libraryAlbums(songs: List<Song>, saved: List<ShelfItem>): List<LibEntry> {
+    val byAlbum = LinkedHashMap<String, MutableList<Song>>()
+    songs.forEach { s -> s.albumName?.takeIf { it.isNotBlank() }?.let { byAlbum.getOrPut(it.lowercase()) { mutableListOf() }.add(s) } }
+    val keep = saved.map { a ->
+        val mine = byAlbum.remove(a.title.lowercase()).orEmpty()
+        LibEntry(a.title, a.subtitle, a.thumbnailUrl, a.browseId, mine, round = false)
+    }
+    return keep + byAlbum.values.map { list ->
+        val first = list.first()
+        LibEntry(first.albumName.orEmpty(), "Album • ${leadArtist(first.artist)}", first.thumbnailUrl, list.firstNotNullOfOrNull { it.albumId }, list, round = false)
+    }
+}
+
+private fun LazyListScope.noMatches(ctx: LibContext) {
+    item(key = "no-match") { PageEmpty(Icons.Rounded.SearchOff, "No matches", "Nothing in ${ctx.label} matches “${ctx.query.trim()}”.") }
+}
+
+/** The Songs tab: the striped rows (songs read best as rows; the grid view is for the other tabs). */
+private fun LazyListScope.songsTab(songs: List<Song>, ctx: LibContext, empty: Triple<ImageVector, String, String>) {
+    if (songs.isEmpty()) {
+        item(key = "empty") { PageEmpty(empty.first, empty.second, empty.third) }
+        return
+    }
+    val list = songs.filter { matches(ctx.query, it.title, it.artist, it.albumName) }
+        .let { if (ctx.az) it.sortedBy { s -> s.title.lowercase() } else it }
+    if (list.isEmpty()) return noMatches(ctx)
+    tracks(list)
+}
+
+/** The Artists or Albums tab: round photos or square covers in a grid, or rows in the list view. */
+private fun LazyListScope.entriesTab(entries: List<LibEntry>, ctx: LibContext, empty: Triple<ImageVector, String, String>, kind: String) {
+    if (entries.isEmpty()) {
+        item(key = "empty-$kind") { PageEmpty(empty.first, empty.second, empty.third) }
+        return
+    }
+    val list = entries.filter { matches(ctx.query, it.title, it.line) }.let { if (ctx.az) it.sortedBy { e -> e.title.lowercase() } else it }
+    if (list.isEmpty()) return noMatches(ctx)
+    if (ctx.grid) {
+        cardGrid(list, ctx.columns, key = { "$kind:${it.title}" }) { e -> LibEntryCard(e, ctx) }
+    } else {
+        itemsIndexed(list, key = { _, e -> "$kind-row:${e.title}" }) { i, e -> LibEntryRow(i, e, ctx) }
+    }
+}
+
+/** Lays [items] in rows of [columns] square cells for a LazyColumn, each row its own item so a long grid stays light. */
+private fun <T> LazyListScope.cardGrid(items: List<T>, columns: Int, key: (T) -> Any, cell: @Composable (T) -> Unit) {
+    val rows = items.chunked(columns)
+    itemsIndexed(rows, key = { i, r -> "grid$i:" + key(r.first()) }) { _, row ->
+        Row(Modifier.padding(start = LocalGutter.current, end = LocalGutter.current, bottom = 28.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(17.dp)) {
+            row.forEach { Box(Modifier.weight(1f)) { cell(it) } }
+            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+        }
+    }
+}
+
+/** Opens an artist or album: its page, when it has one, or else the Songs tab narrowed to it. */
+@Composable
+private fun entryOpen(e: LibEntry, ctx: LibContext): () -> Unit {
+    val open = LocalOpen.current
+    return {
+        if (e.browseId != null) open(ShelfItem(e.title, if (e.round) "Artist" else e.line, e.cover, null, e.browseId))
+        else ctx.showSongs(e.title)
+    }
+}
+
+@Composable
+private fun LibEntryCard(e: LibEntry, ctx: LibContext) {
+    val onOpen = entryOpen(e, ctx)
+    val play = if (e.songs.isNotEmpty()) ({ Player.playAll(e.songs, 0) }) else rememberCardPlay(ShelfItem(e.title, e.line, e.cover, null, e.browseId))
+    if (e.round) CircleLockup(ShelfItem(e.title, e.line, e.cover, null, e.browseId), onOpen, line = e.line, fill = true)
+    else SquareLockup(ShelfItem(e.title, e.line, e.cover, null, e.browseId), onOpen = onOpen, onPlay = play, fill = true)
+}
+
+/** An artist, album or playlist as a striped row: its picture, name and a grey line. */
+@Composable
+private fun LibListRow(i: Int, title: String, line: String, round: Boolean, onOpen: () -> Unit, picture: @Composable (Modifier) -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    val focused by source.collectIsFocusedAsState()
+    val stripe = if (i % 2 == 0) PageInk.stripe else PageInk.stripe.copy(alpha = 0f)
+    val fill by animateColorAsState(if (hovered || focused) PageInk.hover else stripe, tween(PAGE_HOVER_MS), label = "entry fill")
+    Row(
+        Modifier.padding(horizontal = LocalGutter.current).fillMaxWidth().height(70.dp).clip(RoundedCornerShape(4.dp)).background(fill)
+            .hoverable(source).clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onOpen)
+            .semantics { contentDescription = "$title, $line" }
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        picture(Modifier.size(56.dp).clip(if (round) CircleShape else RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh))
+        Column(Modifier.weight(1f).padding(start = 16.dp)) {
+            Text(title, style = PageType.rowTitle, color = PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (line.isNotBlank()) Text(line, style = PageType.cardLine, color = PageInk.grey, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun LibEntryRow(i: Int, e: LibEntry, ctx: LibContext) {
+    LibListRow(i, e.title, e.line, e.round, entryOpen(e, ctx)) { m -> Box(m) { CoverFill(e.cover, Modifier.fillMaxSize()) } }
+}
+
+/** The Playlists tab: a card to start one, yours, then the account's on YouTube Music. */
+private fun LazyListScope.playlistsTab(cards: List<LibCard>, ctx: LibContext) {
+    val list = cards.filterIndexed { i, c -> i == 0 || matches(ctx.query, c.title, c.line) }
+        .let { all -> if (ctx.az) listOf(all.first()) + all.drop(1).sortedBy { it.title.lowercase() } else all }
+    if (ctx.grid) {
+        cardGrid(list, ctx.columns, key = { "pl:${it.title}:${it.line}" }) { c ->
+            SquareLockup(ShelfItem(c.title, c.line, c.cover, null, null), onOpen = c.onOpen, onPlay = c.onPlay, art = c.art, fill = true)
+        }
+    } else {
+        itemsIndexed(list, key = { i, c -> "pl-row$i:${c.title}" }) { i, c ->
+            LibListRow(i, c.title, c.line, round = false, onOpen = c.onOpen) { m ->
+                Box(m) { if (c.art != null) c.art.invoke(Modifier.fillMaxSize()) else CoverFill(c.cover, Modifier.fillMaxSize()) }
+            }
+        }
+    }
+}
+
+/** Liked songs or Recently played's head over the frame: its name, how many and how long, Shuffle and Play. */
+@Composable
+private fun LibHead(title: String, songs: List<Song>) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = PageType.pageTitle, color = PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (songs.isNotEmpty()) Text(pageLengthLine(songs), style = PageType.meta, color = PageInk.grey, modifier = Modifier.padding(top = 4.dp))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            PageRoundButton(Icons.Rounded.Shuffle, "Shuffle $title", size = 52.dp, enabled = songs.isNotEmpty()) { Player.playAll(songs.shuffled(), 0) }
+            PageRoundButton(Icons.Rounded.PlayArrow, "Play $title", solid = true, size = 52.dp, iconSize = 28.dp, enabled = songs.isNotEmpty()) { Player.playAll(songs, 0) }
+        }
+    }
+}
+
+/**
+ * The Library: every song you keep (liked, or in one of your playlists) in the frame's tabs, with
+ * their artists and albums, your playlists (and the account's on YouTube Music), and an Overview
+ * of your year, your mixes and what's on repeat.
+ */
+@Composable
+internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit, onOpenAny: (Any) -> Unit, startTab: Int = 0) {
     val liked by Library.liked.collectAsState()
     val recent by Library.recent.collectAsState()
     val playlists by Library.playlists.collectAsState()
@@ -500,84 +780,79 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
     val onAccount by produceState(emptyList<Pages.Shelf>(), signedIn, accountName) {
         value = if (signedIn) runCatching { Pages.accountLibrary() }.getOrDefault(emptyList()) else emptyList()
     }
-    val since = remember { System.nanoTime() }
-    ScrollPage("Library", webGutter = true) {
-        item(key = "year") { YearCard(year) }
-        item(key = "shortcuts") {
-            Tiles {
-                Shortcut(Icons.Rounded.Favorite, "Liked songs", songCount(liked.size), heart = true) { onShelf(Shelf.LIKED) }
-                Shortcut(Icons.Rounded.History, "Recently played", if (recent.isEmpty()) "Nothing yet" else "${recent.size} songs") { onShelf(Shelf.RECENT) }
-                server?.let { s -> Shortcut(Icons.Rounded.Storage, "Your server", s.url.substringAfter("://").substringBefore('/')) { onShelf(Shelf.SERVER) } }
-                Shortcut(Icons.Rounded.Add, "New playlist", "Start one here") { naming = true }
-            }
+    val kept = remember(liked, playlists) { (liked + playlists.flatMap { p -> p.songs.map { it.toSong() } }).distinctBy { it.videoId } }
+    val accountPlaylists = onAccount.firstOrNull { it.title.contains("playlists", ignoreCase = true) }?.items.orEmpty()
+    val saved = onAccount.firstOrNull { it.title.contains("albums", ignoreCase = true) }?.items.orEmpty()
+    val followed = onAccount.firstOrNull { it.title.contains("artists", ignoreCase = true) }?.items.orEmpty()
+    val gradient = { colours: List<Color>, icon: ImageVector -> @Composable { m: Modifier -> IconCover(icon, colours, m) } }
+    val cards = buildList {
+        add(LibCard("New playlist", "Start one here", null, onOpen = { naming = true }, art = { m ->
+            Box(m.background(WebInk.quinary), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, null, Modifier.size(48.dp), tint = PageInk.grey) }
+        }))
+        add(LibCard("Liked songs", "Playlist • ${songCount(liked.size)}", null, onOpen = { onShelf(Shelf.LIKED) },
+            onPlay = { Player.playAll(liked, 0) }.takeIf { liked.isNotEmpty() }, art = gradient(listOf(Color(0xFF5B3CFF), Color(0xFFB7A6FF)), Icons.Rounded.Favorite)))
+        playlists.forEach { p ->
+            add(LibCard(p.name, "Playlist • ${songCount(p.songs.size)}", p.covers.firstOrNull(), onOpen = { onPlaylist(p.id) },
+                onPlay = { Player.playAll(p.songs.map { it.toSong() }, 0) }.takeIf { p.songs.isNotEmpty() }, art = { m -> Mosaic(p.covers, m, RoundedCornerShape(0.dp)) }))
         }
-        item(key = "playlists") {
-            ShelfSection(
-                "Playlists", if (playlists.isEmpty()) "Make one with New playlist" else songCountOf(playlists.size, "playlist"),
-                onSeeAll = { onShelf(Shelf.PLAYLISTS) }.takeIf { playlists.isNotEmpty() },
-            ) {
-                if (playlists.isEmpty()) {
-                    Text(
-                        "Playlists you make show here. Add songs to one from any song's menu.",
-                        style = WebType.body, color = WebInk.secondary, modifier = Modifier.padding(horizontal = LocalGutter.current),
-                    )
-                } else {
+        if (signedIn) {
+            add(LibCard("Liked music", "YouTube Music", null, onOpen = { onOpenAny(ShelfItem("Liked music", "Playlist", null, null, "VLLM")) },
+                art = gradient(listOf(Color(0xFFB3261E), Color(0xFFFF8A80)), Icons.Rounded.Favorite)))
+            add(LibCard("History", "YouTube Music", null, onOpen = { onOpenAny(ShelfItem("History", "Playlist", null, null, "FEmusic_history")) },
+                art = gradient(listOf(Color(0xFF0F7B6C), Color(0xFF7FE0C8)), Icons.Rounded.History)))
+            accountPlaylists.forEach { p -> add(LibCard(p.title, p.subtitle, p.thumbnailUrl, onOpen = { onOpenAny(p) })) }
+        }
+    }
+    val since = remember { System.nanoTime() }
+    LibraryFrame(
+        startTab = startTab,
+        label = "your library",
+        songs = kept,
+        tabs = listOf(LibTab.SONGS, LibTab.ARTISTS, LibTab.ALBUMS, LibTab.PLAYLISTS, LibTab.OVERVIEW),
+        empty = Triple(Icons.Rounded.LibraryMusic, "No songs", "Songs you like or add to a playlist show up here."),
+        followed = followed, saved = saved,
+        playlists = { ctx -> playlistsTab(cards, ctx) },
+        overview = {
+            section("year") { YearCard(year) }
+            section("shortcuts") {
+                Tiles {
+                    Shortcut(Icons.Rounded.Favorite, "Liked songs", songCount(liked.size), heart = true) { onShelf(Shelf.LIKED) }
+                    Shortcut(Icons.Rounded.History, "Recently played", if (recent.isEmpty()) "Nothing yet" else songCount(recent.size)) { onShelf(Shelf.RECENT) }
+                    server?.let { s -> Shortcut(Icons.Rounded.Storage, "Your server", s.url.substringAfter("://").substringBefore('/')) { onShelf(Shelf.SERVER) } }
+                    Shortcut(Icons.AutoMirrored.Rounded.QueueMusic, "All playlists", songCountOf(playlists.size, "playlist")) { onShelf(Shelf.PLAYLISTS) }
+                }
+            }
+            if (mixes.isNotEmpty()) section("mixes") {
+                ShelfSection("Your mixes", "Made fresh each day from what you play") {
                     ShelfScroller(ShelfKind.SQUARE) {
-                        shelfItems(playlists, ShelfKind.SQUARE, since, key = { it.id }) { _, p ->
-                            SquareLockup(
-                                ShelfItem(p.name, songCount(p.songs.size), p.covers.firstOrNull(), null, null),
-                                onOpen = { onPlaylist(p.id) },
-                                art = { m -> Mosaic(p.covers, m, RoundedCornerShape(0.dp)) },
-                                onPlay = { Player.playAll(p.songs.map { it.toSong() }, 0) }.takeIf { p.songs.isNotEmpty() },
-                            )
+                        shelfItems(mixes, ShelfKind.SQUARE, since, key = { it.id }) { _, mix -> MixCard(mix, onOpen = { onOpenAny(mix) }) }
+                    }
+                }
+            }
+            if (month.topSongs.isNotEmpty()) section("top-songs") {
+                ShelfSection("On repeat this month", "${month.plays} plays, ${month.minutes} minutes") {
+                    val songs = month.topSongs.mapNotNull { it.song }.take(10)
+                    Column(Modifier.padding(horizontal = LocalGutter.current).widthIn(max = 900.dp)) {
+                        month.topSongs.take(5).forEachIndexed { i, e ->
+                            RankRow(i + 1, e) { e.song?.let { s -> Player.playAll(songs, songs.indexOfFirst { it.videoId == s.videoId }.coerceAtLeast(0)) } }
                         }
                     }
                 }
             }
-        }
-        if (signedIn) item(key = "ytm-liked") {
-            ShelfSection("On YouTube Music", accountName?.name) {
-                Tiles {
-                    Shortcut(Icons.Rounded.Favorite, "Liked music", "Your likes on YouTube Music", heart = true) {
-                        onOpenAny(ShelfItem("Liked music", "Playlist", null, null, "VLLM"))
-                    }
-                    Shortcut(Icons.Rounded.History, "History", "What you played on YouTube Music") {
-                        onOpenAny(ShelfItem("History", "Playlist", null, null, "FEmusic_history"))
+            if (month.topArtists.isNotEmpty()) section("top-artists") {
+                ShelfSection("Your top artists", "This month") {
+                    ShelfScroller(ShelfKind.CIRCLE) {
+                        shelfItems(month.topArtists.take(12), ShelfKind.CIRCLE, since, key = { it.title }) { _, a ->
+                            CircleLockup(ShelfItem(a.title, "", a.thumbnailUrl, null, null), onOpen = { a.song?.let { Player.playAll(listOf(it), 0) } }, line = "${a.plays} plays")
+                        }
                     }
                 }
             }
-        }
-        onAccount.forEach { shelf -> item(key = "ytm:${shelf.title}") { ShelfRow(shelf) { onOpenAny(it) } } }
-        if (mixes.isNotEmpty()) item(key = "mixes") {
-            ShelfSection("Your mixes", "Made fresh each day from what you play") {
-                ShelfScroller(ShelfKind.SQUARE) {
-                    shelfItems(mixes, ShelfKind.SQUARE, since, key = { it.id }) { _, mix -> MixCard(mix, onOpen = { onOpenAny(mix) }) }
-                }
+            if (recent.isNotEmpty()) section("recent") {
+                TrackShelf("Recently played", recent, onSeeAll = { onShelf(Shelf.RECENT) })
             }
-        }
-        if (month.topSongs.isNotEmpty()) item(key = "top-songs") {
-            ShelfSection("On repeat this month", "${month.plays} plays, ${month.minutes} minutes") {
-                val songs = month.topSongs.mapNotNull { it.song }.take(10)
-                Column(Modifier.padding(horizontal = LocalGutter.current).widthIn(max = 720.dp)) {
-                    month.topSongs.take(5).forEachIndexed { i, e ->
-                        RankRow(i + 1, e) { e.song?.let { s -> Player.playAll(songs, songs.indexOfFirst { it.videoId == s.videoId }.coerceAtLeast(0)) } }
-                    }
-                }
-            }
-        }
-        if (month.topArtists.isNotEmpty()) item(key = "top-artists") {
-            ShelfSection("Your top artists", "This month") {
-                ShelfScroller(ShelfKind.CIRCLE) {
-                    shelfItems(month.topArtists.take(12), ShelfKind.CIRCLE, since, key = { it.title }) { _, a ->
-                        CircleLockup(ShelfItem(a.title, "", a.thumbnailUrl, null, null), onOpen = { a.song?.let { Player.playAll(listOf(it), 0) } }, line = "${a.plays} plays")
-                    }
-                }
-            }
-        }
-        if (recent.isNotEmpty()) item(key = "recent") {
-            TrackShelf("Recently played", recent, onSeeAll = { onShelf(Shelf.RECENT) })
-        }
-    }
+        },
+    )
     if (naming) {
         NameDialog("New playlist", "", "Create", onDismiss = { naming = false }) { name ->
             naming = false
@@ -586,10 +861,42 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
     }
 }
 
+/**
+ * One of the Library's lists opened on its own: Liked songs and Recently played in the Library's
+ * frame under their name with Shuffle and Play; every playlist as a grid; your server.
+ */
+@Composable
+internal fun LibraryShelfPage(shelf: Shelf, onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit) {
+    val liked by Library.liked.collectAsState()
+    val played by Library.recent.collectAsState()
+    val server by Subsonic.server.collectAsState()
+    when (shelf) {
+        Shelf.LIKED -> LibraryFrame(
+            label = "Liked songs", songs = liked, tabs = listOf(LibTab.SONGS, LibTab.ARTISTS, LibTab.ALBUMS),
+            empty = Triple(Icons.Rounded.FavoriteBorder, "No liked songs", "Click the heart on any song and it shows up here."),
+            head = { LibHead("Liked songs", liked) },
+        )
+        Shelf.RECENT -> LibraryFrame(
+            label = "Recently played", songs = played, tabs = listOf(LibTab.SONGS, LibTab.ARTISTS, LibTab.ALBUMS),
+            empty = Triple(Icons.Rounded.History, "Nothing here yet", "Songs you play show up here."),
+            head = { LibHead("Recently played", played) },
+        )
+        Shelf.PLAYLISTS -> CompositionLocalProvider(LocalGutter provides PageGutter) {
+            Column(Modifier.fillMaxSize().padding(top = LocalPageTop.current + 24.dp)) {
+                Text("Playlists", style = PageType.pageTitle, color = PageInk.text, modifier = Modifier.padding(horizontal = PageGutter))
+                PlaylistGrid(onOpen = onPlaylist)
+            }
+        }
+        Shelf.SERVER -> Box(Modifier.fillMaxSize().padding(top = LocalPageTop.current + 12.dp)) {
+            if (server != null) ServerShelf() else Message("No music server connected", "Connect one in Settings.")
+        }
+    }
+}
+
 private fun songCount(n: Int) = if (n == 1) "1 song" else "$n songs"
 private fun songCountOf(n: Int, what: String) = if (n == 1) "1 $what" else "$n ${what}s"
 
-/** The Library's tiles, wrapping onto a second line when the window is narrow. */
+/** The Overview's tiles, wrapping onto a second line when the window is narrow. */
 @Composable
 private fun Tiles(content: @Composable () -> Unit) {
     FlowRow(
@@ -607,35 +914,35 @@ private fun YearCard(summary: Wrapped.Summary) {
     val top = summary.topSongs.firstOrNull()
     val base = MaterialTheme.colorScheme.surfaceContainerHigh
     val colour = rememberCoverColor(top?.thumbnailUrl, base)
-    val shape = RoundedCornerShape(Web.ArtMedium)
+    val shape = RoundedCornerShape(12.dp)
     Box(
         Modifier.padding(horizontal = LocalGutter.current).fillMaxWidth().clip(shape)
             .background(Brush.linearGradient(listOf(tint(colour, base, 0.55f), tint(colour, base, 0.18f)))),
     ) {
         Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Your ${java.time.Year.now().value} so far", style = WebType.bodyEmph, color = Color.White.copy(alpha = 0.8f))
+                Text("YOUR ${java.time.Year.now().value} SO FAR", style = PageType.kicker, color = Color.White.copy(alpha = 0.8f))
                 if (summary.isEmpty) {
-                    Text("Play some music and your year shows here", style = WebType.title2, color = Color.White, modifier = Modifier.padding(top = 8.dp))
+                    Text("Play some music and your year shows here", style = PageType.heading, color = Color.White, modifier = Modifier.padding(top = 8.dp))
                 } else {
-                    Text("${"%,d".format(summary.minutes)} minutes", style = WebType.header(34f, -0.02f), color = Color.White, modifier = Modifier.padding(top = 8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.padding(top = 14.dp)) {
+                    Text("${"%,d".format(summary.minutes)} minutes", style = PageType.bigTitle(40f), color = Color.White, modifier = Modifier.padding(top = 8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(28.dp), modifier = Modifier.padding(top = 14.dp)) {
                         Stat("${summary.plays}", "plays")
                         Stat("${summary.songs}", "songs")
                         Stat("${summary.artists}", "artists")
                     }
                     summary.topArtists.firstOrNull()?.let {
-                        Text("Top artist: ${it.title}", style = WebType.body, color = Color.White.copy(alpha = 0.85f), modifier = Modifier.padding(top = 14.dp))
+                        Text("Top artist: ${it.title}", style = PageType.cardLine, color = Color.White.copy(alpha = 0.85f), modifier = Modifier.padding(top = 14.dp))
                     }
                 }
             }
             if (top != null) {
                 val hover = remember { MutableInteractionSource() }
                 val hovered by hover.collectIsHoveredAsState()
-                Column(Modifier.padding(start = 20.dp).width(150.dp).hoverable(hover), horizontalAlignment = Alignment.CenterHorizontally) {
-                    LockupArt(top.thumbnailUrl, RoundedCornerShape(Web.ArtMedium), hovered, { top.song?.let { Player.playAll(listOf(it), 0) } }, "Play ${top.title}")
-                    Text(top.title, color = Color.White, style = WebType.bodyEmph, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                    Text("Played ${top.plays} times", color = Color.White.copy(alpha = 0.75f), style = WebType.callout)
+                Column(Modifier.padding(start = 20.dp).width(160.dp).hoverable(hover), horizontalAlignment = Alignment.CenterHorizontally) {
+                    LockupArt(top.thumbnailUrl, CardShape, hovered, { top.song?.let { Player.playAll(listOf(it), 0) } }, "Play ${top.title}")
+                    Text(top.title, color = Color.White, style = PageType.cardTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                    Text(if (top.plays == 1) "Played once" else "Played ${top.plays} times", color = Color.White.copy(alpha = 0.75f), style = PageType.cardLine)
                 }
             }
         }
@@ -645,61 +952,62 @@ private fun YearCard(summary: Wrapped.Summary) {
 @Composable
 private fun Stat(value: String, label: String) {
     Column {
-        Text(value, style = WebType.title2, color = Color.White)
-        Text(label, style = WebType.callout, color = Color.White.copy(alpha = 0.75f))
+        Text(value, style = PageType.heading, color = Color.White)
+        Text(label, style = PageType.cardLine, color = Color.White.copy(alpha = 0.75f))
     }
 }
 
 /**
- * A wide tile leading into part of the Library, drawn as the web's Settings head card
- * (.ot-set-hero): 18px corners on the faintest fill, stronger under the pointer, an icon on a
- * 12px-cornered mark (the accent's for liked songs), the title in 15px and a grey line.
+ * A wide tile leading into part of the Library: 12dp corners on the faintest fill, stronger under
+ * the pointer, an icon on a mark (the accent's for liked songs), the title in bold and a grey line.
  */
 @Composable
-private fun Shortcut(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, heart: Boolean = false, onClick: () -> Unit) {
+private fun Shortcut(icon: ImageVector, title: String, subtitle: String, heart: Boolean = false, onClick: () -> Unit) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     val focused by hover.collectIsFocusedAsState()
-    val fill by animateColorAsState(if (hovered || focused) WebInk.quaternary else WebInk.quinary, tween(150), label = "shortcut")
+    val fill by animateColorAsState(if (hovered || focused) PageInk.hover else PageInk.stripe, tween(PAGE_HOVER_MS), label = "shortcut")
     Row(
-        Modifier.pressScale(hover).width(250.dp).clip(RoundedCornerShape(18.dp)).background(fill).hoverable(hover)
+        Modifier.pressScale(hover).width(270.dp).clip(RoundedCornerShape(10.dp)).background(fill).hoverable(hover)
             .clickable(interactionSource = hover, indication = null, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = "$title, $subtitle" }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(if (heart) WebInk.keyFill else WebInk.quaternary),
+            Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(if (heart) WebInk.keyFill else PageInk.button),
             contentAlignment = Alignment.Center,
-        ) { Icon(icon, null, tint = if (heart) Color.White else WebInk.primary, modifier = Modifier.size(22.dp)) }
+        ) { Icon(icon, null, tint = if (heart) Color.White else PageInk.text, modifier = Modifier.size(22.dp)) }
         Column(Modifier.padding(start = 14.dp)) {
-            Text(title, style = WebType.title3Emph, color = WebInk.primary, maxLines = 1)
-            Text(subtitle, style = WebType.callout, color = WebInk.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            Text(title, style = PageType.cardTitle, color = PageInk.text, maxLines = 1)
+            Text(subtitle, style = PageType.cardLine, color = PageInk.grey, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
-/** A numbered row in a top list, drawn as a song in a shelf of rows: 55px, the 40px cover, 13px and 12px lines. */
+/** A numbered row in a top list, striped as a track row: 70dp, the 56dp cover, 17sp lines. */
 @Composable
 private fun RankRow(rank: Int, entry: Wrapped.Entry, onClick: () -> Unit) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
-    val fill by animateColorAsState(if (hovered) WebInk.rowHover else WebInk.rowHover.copy(alpha = 0f), tween(if (hovered) 0 else 200), label = "rank fill")
+    val stripe = if (rank % 2 == 1) PageInk.stripe else PageInk.stripe.copy(alpha = 0f)
+    val fill by animateColorAsState(if (hovered) PageInk.hover else stripe, tween(PAGE_HOVER_MS), label = "rank fill")
     Row(
-        Modifier.fillMaxWidth().height(55.dp).clip(RoundedCornerShape(Web.TrackRow)).background(fill).hoverable(hover)
+        Modifier.fillMaxWidth().height(70.dp).clip(RoundedCornerShape(4.dp)).background(fill).hoverable(hover)
             .clickable(interactionSource = hover, indication = null, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = "Play ${entry.title}" }
-            .padding(end = 12.dp),
+            .padding(end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("$rank", style = WebType.title3Emph, color = WebInk.secondary, modifier = Modifier.width(32.dp).padding(start = 8.dp))
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(Web.ArtSmall)).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
+        Text("$rank", style = PageType.small, color = PageInk.grey, modifier = Modifier.width(40.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.size(56.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
             CoverFill(entry.thumbnailUrl, Modifier.fillMaxSize())
         }
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(entry.title, style = WebType.body, color = WebInk.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(entry.subtitle, style = WebType.callout, color = WebInk.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+            Text(entry.title, style = PageType.rowTitle, color = PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(entry.subtitle, style = PageType.cardLine, color = PageInk.grey, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text("${entry.plays} plays", style = WebType.callout, color = WebInk.secondary)
+        Text(if (entry.plays == 1) "1 play" else "${entry.plays} plays", style = PageType.small, color = PageInk.grey)
     }
 }
