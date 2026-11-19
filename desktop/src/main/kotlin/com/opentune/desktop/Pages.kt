@@ -153,30 +153,85 @@ object Pages {
         )
     }
 
-    /** The signed-in account's own library on YouTube Music: its playlists, albums and artists, each a row. */
-    suspend fun accountLibrary(): List<Shelf> = kotlinx.coroutines.coroutineScope {
-        listOf("Your YouTube Music playlists" to "FEmusic_liked_playlists", "Saved albums" to "FEmusic_liked_albums", "Artists you follow" to "FEmusic_library_corpus_artists")
-            .map { (title, id) ->
-                async {
-                    runCatching { InnertubeParser.parseLibraryItems(Innertube.browse(id)) }.getOrDefault(emptyList())
-                        // The "New playlist" tile has nothing to open.
-                        .filter { it.browseId != null || it.videoId != null }
-                        .let { Shelf(title, it) }
-                }
-            }.map { it.await() }.filter { it.items.isNotEmpty() }
-    }
-
     /** What YouTube Music suggests for what's typed so far. */
     suspend fun suggestions(input: String): List<String> =
         InnertubeParser.parseSearchSuggestions(Innertube.searchSuggestions(input)).distinct().take(8)
 
-    /** The songs behind a card: an album or playlist's tracks, an artist's top songs, a podcast's episodes. */
+    /** The songs behind a card: an album or playlist's tracks (every page of them), an artist's top songs, a podcast's episodes. */
     suspend fun songsOf(browseId: String): List<Song> {
+        if (browseId.startsWith("VL")) return listing(browseId).songs
         val page = Innertube.browse(browseId)
         if (browseId.startsWith("UC")) return InnertubeParser.parseArtistPage(page).songs
         if (browseId.startsWith("MPSP")) return PodcastParser.parseShow(browseId, page).episodes.map { it.toSong() }
         return InnertubeParser.parsePlaylistShelf(page)?.songs?.takeIf { it.isNotEmpty() }
             ?: InnertubeParser.collectSongsDeep(page)
+    }
+
+    /**
+     * An album or playlist as its page shows it: its songs, and for a playlist page whether the
+     * signed-in account owns it (and so can rename it, change who sees it, take songs out or
+     * delete it) and who can see it. [complete] is false while later pages are still coming.
+     */
+    data class Listing(
+        val songs: List<Song>,
+        val owned: Boolean = false,
+        val privacy: com.opentune.data.model.PlaylistPrivacy? = null,
+        val complete: Boolean = true,
+        val at: Long = System.currentTimeMillis(),
+    )
+
+    /** Lists read lately, by browse id, so going back to one (or opening it again) shows it at once. */
+    private val listings = object : LinkedHashMap<String, Listing>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Listing>?) = size > 40
+    }
+
+    /** The list last read for [browseId], when it was read whole in the last [maxAgeMs]. */
+    fun cachedListing(browseId: String, maxAgeMs: Long = 10 * 60_000L): Listing? = synchronized(listings) {
+        listings[browseId]?.takeIf { it.complete && System.currentTimeMillis() - it.at <= maxAgeMs }
+    }
+
+    /** Drops what was read for [browseId], after it's changed. */
+    fun forgetListing(browseId: String) {
+        synchronized(listings) { listings.remove(browseId); listings.remove("VL" + browseId.removePrefix("VL")) }
+    }
+
+    /** Drops every list read, as the account changes. */
+    fun forgetListings() {
+        synchronized(listings) { listings.clear() }
+    }
+
+    /** Keeps [listing] as read, as after an edit made here. */
+    fun keepListing(browseId: String, listing: Listing) {
+        synchronized(listings) { listings[browseId] = listing }
+    }
+
+    /**
+     * Reads [browseId]'s page and, for a playlist, every later page of its songs (a long one
+     * comes 100 at a time), telling [onPage] the list so far after each.
+     */
+    suspend fun listing(browseId: String, onPage: (Listing) -> Unit = {}): Listing {
+        if (!browseId.startsWith("VL")) return Listing(songsOf(browseId)).also { keepListing(browseId, it) }
+        val page = Innertube.browse(browseId)
+        val shelf = InnertubeParser.parsePlaylistShelf(page)
+        val songs = LinkedHashMap<String, Song>()
+        (shelf?.songs?.takeIf { it.isNotEmpty() } ?: InnertubeParser.collectSongsDeep(page)).forEach { songs.putIfAbsent(it.videoId, it) }
+        val owned = Innertube.cookie != null && InnertubeParser.isEditablePlaylist(browseId) && InnertubeParser.parsePlaylistOwned(page) == true
+        val privacy = if (owned) InnertubeParser.parsePlaylistPrivacy(page) else null
+        fun now(complete: Boolean) = Listing(songs.values.toList(), owned, privacy, complete)
+        var token = shelf?.continuation
+        if (token != null) onPage(now(complete = false))
+        val seen = HashSet<String>()
+        while (token != null && seen.add(token) && seen.size <= 100) {
+            val at = token
+            val next = runCatching { InnertubeParser.parsePlaylistContinuation(Innertube.browseContinuation(at)) }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }.getOrNull() ?: break
+            val before = songs.size
+            next.songs.forEach { songs.putIfAbsent(it.videoId, it) }
+            if (songs.size == before) break
+            onPage(now(complete = false))
+            token = next.continuation
+        }
+        return now(complete = true).also { keepListing(browseId, it) }
     }
 
     /** A card that plays on its own, as a song. */

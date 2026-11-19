@@ -86,21 +86,10 @@ object Library {
                 exec("DELETE FROM liked WHERE id = ?", song.videoId)
             }
         }
-        // Signed in, the like reaches YouTube Music too, as on the phone and the web player.
-        if (com.opentune.data.account.AccountStore.signedIn.value && com.opentune.data.isYouTubeId(song.videoId)) {
-            sync.launch {
-                runCatching {
-                    com.opentune.data.innertube.Innertube.rate(
-                        song.videoId,
-                        if (liked) com.opentune.data.model.LikeStatus.LIKE else com.opentune.data.model.LikeStatus.INDIFFERENT,
-                    )
-                }.onFailure { System.err.println("Library: couldn't send the like to YouTube Music: ${it.message}") }
-            }
-        }
+        // Signed in, the like reaches YouTube Music too, as on the phone and the web player, and
+        // shows in the account's Liked songs at once.
+        AccountLibrary.sendLike(song, liked)
     }
-
-    /** Sends likes to the account off the window's thread. */
-    private val sync = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
     fun played(song: Song) = write {
         keep(song.saved())

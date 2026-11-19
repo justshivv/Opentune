@@ -30,6 +30,8 @@ fun main(args: Array<String>) {
     com.opentune.data.config.HomeDismissals.init(appContext)
     // The YouTube Music account, before Home asks for anything: signed in, Home is your own.
     com.opentune.data.account.AccountStore.init(appContext)
+    // Its library on YouTube Music, read in the background and again on each sign-in or sign-out.
+    AccountLibrary.start()
     // Listen together, run against this computer's player; a guest's controls go to the host.
     com.opentune.data.together.Together.init(appContext)
     com.opentune.data.lyrics.LyricsTranslator.init(appContext)
