@@ -1364,8 +1364,10 @@ internal class DockInk(
 internal fun dockInk(): DockInk {
     val scheme = MaterialTheme.colorScheme
     val ui by AppSettings.ui.collectAsState()
+    // The two Liquid Glass styles: the web player's (Liquid Glass) and Apple's frosted one (Frosted).
+    val web = ui.glassStyle == GlassStyle.WEB
     val liquid =
-        LocalBackdrop.current != null && liquidGlassOn() && ui.glassStyle == GlassStyle.LIQUID
+        LocalBackdrop.current != null && liquidGlassOn() && (web || ui.glassStyle == GlassStyle.LIQUID)
     if (!liquid) {
         val a = scheme.primary
         // Over a glass dock with content showing through, the muted inactive tint
@@ -1400,7 +1402,9 @@ internal fun dockInk(): DockInk {
         on = Color.White, off = Color.White.copy(alpha = 0.92f), search = Color.White,
         lensTop = Color.Black.copy(alpha = 0.36f), lensBottom = Color.Black.copy(alpha = 0.28f),
         rimTop = Color.White.copy(alpha = 0.24f), rimBottom = Color.White.copy(alpha = 0.04f),
-        film = Color.Black.copy(alpha = if (dark) 0.14f else 0.28f),
+        // The web player's glass is barely blurred, so what's behind stays sharp under the names:
+        // it takes the Poster dock's smoke, under which white has always read.
+        film = if (web) com.opentune.ui.components.POSTER_SMOKE.copy(alpha = 0.42f) else Color.Black.copy(alpha = if (dark) 0.14f else 0.28f),
         shade = androidx.compose.ui.graphics.Shadow(
             Color.Black.copy(alpha = 0.35f),
             blurRadius = 6f

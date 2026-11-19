@@ -39,7 +39,7 @@ class LiquidTouchTest {
 
     @Before fun setUp() {
         AppSettings.init(ApplicationProvider.getApplicationContext())
-        AppSettings.updateUi { it.copy(liquidGlass = true, glassStyle = GlassStyle.LIQUID, reduceBlur = false, reduceAnimation = false, liteMode = false) }
+        AppSettings.updateUi { it.copy(glassStyle = GlassStyle.LIQUID, reduceBlur = false, reduceAnimation = false, liteMode = false) }
     }
 
     private fun show() {

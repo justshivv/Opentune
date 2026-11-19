@@ -59,7 +59,7 @@ class CoverFoldMotionTest {
             shuffle = false, repeatMode = Player.REPEAT_MODE_OFF, durationMs = 180_000,
             lyrics = LyricsState.NotFound, queue = songs, currentIndex = 0, upNext = emptyList(),
             sound = SoundSettings(), theme = ThemeSettings(), source = "Quick picks",
-            ui = InterfaceSettings(liquidGlass = false, playerStyle = PlayerStyle.APPLE_MUSIC, reduceAnimation = false, fullScreenCover = true),
+            ui = InterfaceSettings(playerStyle = PlayerStyle.APPLE_MUSIC, reduceAnimation = false, fullScreenCover = true),
         )
         compose.mainClock.autoAdvance = false
         compose.setContent {

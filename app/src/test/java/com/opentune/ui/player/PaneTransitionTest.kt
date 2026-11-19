@@ -91,7 +91,7 @@ class PaneTransitionTest {
             shuffle = false, repeatMode = Player.REPEAT_MODE_OFF, durationMs = 180_000,
             lyrics = LyricsState.NotFound, queue = listOf(song), currentIndex = 0, upNext = emptyList(),
             sound = SoundSettings(), theme = ThemeSettings(), source = null,
-            ui = InterfaceSettings(liquidGlass = false, playerStyle = style, reduceAnimation = false, fullScreenCover = fullCover),
+            ui = InterfaceSettings(playerStyle = style, reduceAnimation = false, fullScreenCover = fullCover),
         )
         compose.mainClock.autoAdvance = false
         compose.setContent {

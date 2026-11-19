@@ -64,7 +64,7 @@ class PillRowFitTest {
             shuffle = false, repeatMode = Player.REPEAT_MODE_OFF, durationMs = 467_000,
             lyrics = LyricsState.NotFound, queue = listOf(song), currentIndex = 0, upNext = emptyList(),
             sound = SoundSettings(), theme = ThemeSettings(), source = null,
-            ui = InterfaceSettings(liquidGlass = false, playerStyle = style, reduceAnimation = true, commentsButton = true),
+            ui = InterfaceSettings(playerStyle = style, reduceAnimation = true, commentsButton = true),
         )
         compose.mainClock.autoAdvance = false
         compose.setContent {

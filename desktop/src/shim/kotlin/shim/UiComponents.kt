@@ -15,9 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.GlassStyle
@@ -40,9 +38,10 @@ val LocalBackdrop = staticCompositionLocalOf<Any?> { null }
 fun liquidGlassOn(): Boolean = false
 
 /**
- * The phone's frosted glass: what's behind, blurred through Haze and washed
- * with the chosen glass style, with the same hairline edge; solid with blur
- * reduced or with nothing behind to blur.
+ * The phone's glass: Liquid Glass, as the web player's (the Liquid Glass style, the default),
+ * with blur on; Frosted (once called Liquid) is the frost alone here, as the desktop has no
+ * lens for Apple's look: what's behind, blurred through Haze, with the same hairline edge.
+ * Solid with blur reduced or with nothing behind to blur.
  */
 @Composable
 fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surfaceContainerHigh): Modifier {
@@ -50,48 +49,30 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     val haze = LocalHazeState.current
     val edge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
     val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
-    val look = glassLook(ui.glassStyle)
-    val colour = if (tint.alpha < 1f) tint else styleTint(ui.glassStyle, tint, MaterialTheme.colorScheme.primary, dark)
-    // Liquid Glass, as the web player's (the Liquid style, the default): with blur on, under the glass's own film.
-    if (haze != null && !ui.reduceBlur && ui.glassStyle == GlassStyle.LIQUID) {
-        val film = if (tint.alpha < 1f) tint.copy(alpha = minOf(tint.alpha, 0.55f)) else colour.copy(alpha = if (dark) 0.42f else 0.5f)
+    if (haze != null && !ui.reduceBlur && ui.glassStyle == GlassStyle.WEB) {
+        val film = if (tint.alpha < 1f) tint.copy(alpha = minOf(tint.alpha, 0.55f)) else tint.copy(alpha = if (dark) 0.42f else 0.5f)
         return this.liquidGlass(haze, shape, film).clip(shape)
     }
     val base = this.clip(shape)
     val filled = if (haze == null || ui.reduceBlur) {
-        base.background(if (tint.alpha < 1f) tint else colour.copy(alpha = 0.96f))
+        base.background(if (tint.alpha < 1f) tint else tint.copy(alpha = 0.96f))
     } else {
         base.hazeEffect(
             state = haze,
             style = HazeStyle(
                 backgroundColor = MaterialTheme.colorScheme.background,
-                tint = HazeTint(if (tint.alpha < 1f) tint else colour.copy(alpha = look.tintAlpha)),
-                blurRadius = look.blur,
-                noiseFactor = look.noise,
+                tint = HazeTint(if (tint.alpha < 1f) tint else tint.copy(alpha = FROST_FILM)),
+                blurRadius = FROST_BLUR,
+                noiseFactor = 0f,
             ),
         )
     }
     return filled.border(0.75.dp, edge, shape)
 }
 
-/** The numbers behind a [GlassStyle], as the phone's frosted glass uses them. */
-internal data class GlassLook(val blur: Dp, val tintAlpha: Float, val noise: Float)
-
-internal fun glassLook(style: GlassStyle): GlassLook = when (style) {
-    GlassStyle.FROSTED -> GlassLook(28.dp, 0.62f, 0.06f)
-    GlassStyle.CLEAR -> GlassLook(16.dp, 0.30f, 0f)
-    GlassStyle.HEAVY -> GlassLook(44.dp, 0.82f, 0.09f)
-    GlassStyle.TINTED -> GlassLook(30.dp, 0.58f, 0.05f)
-    GlassStyle.SMOKE -> GlassLook(34.dp, 0.70f, 0.04f)
-    GlassStyle.LIQUID -> GlassLook(20.dp, 0.30f, 0f)
-}
-
-/** The colour a [GlassStyle] washes the glass with, from the surface [base] and the [accent]. */
-internal fun styleTint(style: GlassStyle, base: Color, accent: Color, dark: Boolean): Color = when (style) {
-    GlassStyle.FROSTED, GlassStyle.CLEAR, GlassStyle.HEAVY, GlassStyle.LIQUID -> base
-    GlassStyle.TINTED -> lerp(base, accent, if (dark) 0.32f else 0.22f)
-    GlassStyle.SMOKE -> if (dark) lerp(base, Color.Black, 0.65f) else lerp(base, Color(0xFF3A3A42), 0.3f)
-}
+/** Frosted's frost, as the phone draws it without a lens. */
+private val FROST_BLUR = 20.dp
+private const val FROST_FILM = 0.30f
 
 /** The phone's haptics. A computer has nothing to buzz, so each is a no-op. */
 class Haptics {
@@ -116,6 +97,9 @@ internal fun posterLayout(): Boolean = false
 /** The Poster layout's smoked glass; on the desktop, the frosted glass. */
 @Composable
 internal fun Modifier.posterSmoke(shape: Shape): Modifier = glass(shape)
+
+/** The smoke the phone's Poster dock is made of, which its dock's Liquid Glass ink takes too. */
+internal val POSTER_SMOKE = Color(0xFF2A2D32)
 
 /** What's drawn on the Poster layout's smoked glass. */
 internal object PosterInk {

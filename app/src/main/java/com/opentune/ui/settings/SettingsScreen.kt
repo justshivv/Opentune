@@ -1469,25 +1469,12 @@ private fun settingsSections(
                 Entry("Lite three-dot menu", "song menu page animation performance low end") {
                     ToggleRow("Lite three-dot menu", ui.liteThreeDotMenu, { v -> AppSettings.updateUi { it.copy(liteThreeDotMenu = v) } }, summary = "The song menu opens as a plain page with no animation, lighter on low-end phones", icon = ImageVector.vectorResource(AppIcons.Speed))
                 },
-                Entry("Liquid Glass", "glass refraction apple lens") {
-                    ToggleRow(
-                        "Liquid Glass",
-                        ui.liquidGlass && liquidGlassSupported,
-                        { v -> AppSettings.updateUi { it.copy(liquidGlass = v) } },
-                        summary = if (liquidGlassSupported) "Bends and lifts what's behind the floating bars, like Apple's glass"
-                        else "Needs Android 13 or newer; frosted glass is used instead",
-                        icon = ImageVector.vectorResource(AppIcons.AutoAwesome),
-                        // The Liquid glass style is Liquid Glass whatever this says (liquidGlassOn).
-                        enabled = liquidGlassSupported && !ui.reduceBlur && ui.glassStyle != GlassStyle.LIQUID,
-                        disabledReason = when {
-                            !liquidGlassSupported -> null
-                            ui.reduceBlur -> "Off while Reduce dynamic blur is on"
-                            else -> "Always on with the Liquid glass style"
-                        },
-                    )
-                },
-                Entry("Glass style", "glass frosted blur clear heavy tinted smoke theme material") {
-                    NavRow("Glass style", { glassStyleDialog = true }, summary = ui.glassStyle.summary, icon = ImageVector.vectorResource(AppIcons.BlurOn), value = ui.glassStyle.label)
+                Entry("Glass style", "glass liquid glass refraction apple lens web frosted blur theme material poster classic") {
+                    // Both styles are Liquid Glass, in both page layouts (glass, posterGlass): without a
+                    // lens (before Android 13) they're the same frost, and with blur reduced the same fill.
+                    NavRow("Glass style", { glassStyleDialog = true }, summary = ui.glassStyle.summary, icon = ImageVector.vectorResource(AppIcons.BlurOn), value = ui.glassStyle.label,
+                        enabled = liquidGlassSupported && !ui.reduceBlur,
+                        disabledReason = if (ui.reduceBlur) "Solid fills while Reduce dynamic blur is on" else "Needs Android 13 or newer; frosted glass is used instead")
                 },
                 Entry("Choice menus", "popup sheet screen page list select choose menu dialog") {
                     NavRow("Choice menus", { choiceMenusDialog = true }, summary = ui.choiceMenus.summary, icon = ImageVector.vectorResource(AppIcons.Tune), value = ui.choiceMenus.label)

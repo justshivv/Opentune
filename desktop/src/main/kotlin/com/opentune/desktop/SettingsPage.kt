@@ -477,10 +477,17 @@ private fun AppearanceSection() {
         CardHeading("Glass and motion")
         RowsCard {
             ToggleRow("Blur effects", "Frosted glass on the player, the bars and the search box, blurring what scrolls under them", !ui.reduceBlur, { on -> AppSettings.updateUi { it.copy(reduceBlur = !on) } })
-            // Liquid Glass first, as the web player draws it (the default); the others are frosted.
+            // Liquid Glass first, as the web player draws it (the default), then Frosted, the
+            // phone's Apple-like lens style, which is the frost alone here as the desktop has no lens for it.
             if (!ui.reduceBlur) MenuRow(
-                "Glass", choices = GlassStyle.entries.sortedBy { if (it == GlassStyle.LIQUID) 0 else 1 }, selected = ui.glassStyle,
-                label = { if (it == GlassStyle.LIQUID) "Liquid Glass" else it.label }, summary = { it.summary },
+                "Glass", choices = GlassStyle.entries, selected = ui.glassStyle,
+                label = { it.label },
+                summary = {
+                    when (it) {
+                        GlassStyle.WEB -> "Clear glass that bends and brightens what's behind it at the edges, with a lit rim"
+                        GlassStyle.LIQUID -> "Soft, clear frost under a thin film"
+                    }
+                },
             ) { v -> AppSettings.updateUi { it.copy(glassStyle = v) } }
             ToggleRow("Smooth motion", "Pages glide in, covers lift under the pointer, rows rise into place", !ui.reduceAnimation, { on -> AppSettings.updateUi { it.copy(reduceAnimation = !on) } })
             ToggleRow("Artist signatures (beta)", "An artist's handwritten signature over their photo, in place of their name, when there's one", ui.artistSignatures, { on ->

@@ -34,7 +34,7 @@ class PosterTitleScreenshotTest {
 
     @Test fun posterTitle() {
         AppSettings.init(ApplicationProvider.getApplicationContext<Application>())
-        AppSettings.updateUi { it.copy(pageLayout = PageLayout.POSTER, liquidGlass = false, reduceBlur = true) }
+        AppSettings.updateUi { it.copy(pageLayout = PageLayout.POSTER, reduceBlur = true) }
         compose.setContent {
             MaterialTheme(darkColorScheme(surface = Color(0xFF2D3540), onSurface = Color.White, onSurfaceVariant = Color(0xFFB4BCC6))) {
                 androidx.compose.material3.Surface(color = Color(0xFF2D3540), contentColor = Color.White) {

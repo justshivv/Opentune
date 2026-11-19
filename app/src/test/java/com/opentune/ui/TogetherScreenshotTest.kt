@@ -47,7 +47,7 @@ class TogetherScreenshotTest {
     /** The room's island is glass; Robolectric can't draw the Liquid Glass shaders, so it's drawn frosted. */
     @Before fun plainGlass() {
         AppSettings.init(ApplicationProvider.getApplicationContext())
-        AppSettings.updateUi { it.copy(liquidGlass = false, reduceBlur = true, glassStyle = GlassStyle.FROSTED) }
+        AppSettings.updateUi { it.copy(reduceBlur = true, glassStyle = GlassStyle.LIQUID) }
     }
 
     private fun shoot(name: String, content: @androidx.compose.runtime.Composable () -> Unit) {

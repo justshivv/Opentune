@@ -40,7 +40,7 @@ class PosterLayoutScreenshotTest {
 
     @Before fun poster() {
         AppSettings.init(ApplicationProvider.getApplicationContext())
-        AppSettings.updateUi { it.copy(liquidGlass = false, reduceBlur = true, glassStyle = GlassStyle.FROSTED, pageLayout = PageLayout.POSTER, artistSignatures = false) }
+        AppSettings.updateUi { it.copy(reduceBlur = true, glassStyle = GlassStyle.LIQUID, pageLayout = PageLayout.POSTER, artistSignatures = false) }
     }
 
     private val actions = SongActions(null, false, { _, _, _, _ -> }, {}, {})

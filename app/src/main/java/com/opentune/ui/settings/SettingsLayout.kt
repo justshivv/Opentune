@@ -88,7 +88,7 @@ internal val SETTINGS_CATEGORIES = listOf(
                 "Page layout", "Page buttons", "Full-screen playlist covers", "Playlist page background", "Liked Music cover",
                 "Artist pages take the photo's colour", "Artist page shade", "Artist signatures", "Choice menus",
             ),
-            "Glass" to listOf("Liquid Glass", "Glass style", "Lighter Liquid Glass", "Frosted top edge", "Reduce dynamic blur", "Sheet style"),
+            "Glass" to listOf("Glass style", "Lighter Liquid Glass", "Frosted top edge", "Reduce dynamic blur", "Sheet style"),
             "Language and icon" to listOf("App language", "App icon"),
         ),
     ),

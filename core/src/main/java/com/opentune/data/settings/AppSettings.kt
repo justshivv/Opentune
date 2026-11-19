@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Stream quality ceilings [StreamResolver][com.opentune.data.innertube.StreamResolver]
@@ -434,7 +436,9 @@ val DEFAULT_SPONSORBLOCK_CATEGORIES = setOf("music_offtopic", "sponsor", "selfpr
 
 @Serializable
 data class InterfaceSettings(
-    val playlistGrid: Boolean = false,
+    // playlistGrid, read by nothing and offered nowhere, and liquidGlass, the Liquid Glass switch
+    // (both glass styles left are Liquid Glass), were dropped: saved settings still carrying
+    // them read as before, the keys ignored.
     /** Playlists on Library as a list down the page, grouped by where they're from, rather than a row of tiles. */
     val playlistList: Boolean = false,
     /** Playlists pinned to the top of Library, first pinned first: a local playlist's id, or a YouTube Music browse id. */
@@ -505,8 +509,6 @@ data class InterfaceSettings(
     val speedDial: Boolean = true,
     /** Listening streaks and small milestones under Home's greeting. */
     val homeStreaks: Boolean = true,
-    /** Refracting Liquid Glass on Android 13+; frosted blur otherwise. */
-    val liquidGlass: Boolean = true,
     /** Draw the played part of the seek bar as a moving wave. */
     val wavySeekbar: Boolean = false,
     /** How thick the seek bar's track is. */
@@ -568,7 +570,14 @@ data class InterfaceSettings(
     /** Add this phone to the app's anonymous usage counts (see Usage). */
     val countUsage: Boolean = true,
     /** How the glass of the dock, buttons and bars looks. */
-    val glassStyle: GlassStyle = GlassStyle.LIQUID,
+    val glassStyle: GlassStyle = GlassStyle.WEB,
+    /**
+     * The version of the glass style choices [glassStyle] was saved under, [GLASS_STYLE_VERSION]
+     * for anything made now. Settings saved before it was written down, when Liquid (now
+     * Frosted) was the default, have their style moved to the new default once on loading;
+     * see [migrateGlassStyle].
+     */
+    val glassStyleVersion: Int = GLASS_STYLE_VERSION,
     /** Whether a list of choices in Settings opens as a page of its own or a popup sheet. */
     val choiceMenus: ChoiceMenuStyle = ChoiceMenuStyle.SCREEN,
     /** Pages blur and fade out as they scroll under the status bar. */
@@ -669,16 +678,23 @@ enum class SheetStyle(val label: String, val summary: String) {
     SOLID("Solid", "A plain dark or light fill, with no blur and no colour from the page"),
 }
 
-/** The glass the floating parts of the app are made of. */
+/**
+ * The glass the floating parts of the app are made of, in the order Settings offers them.
+ * Saved by name, so the names stay whatever the styles are called on screen: [LIQUID] is the
+ * one shown as Frosted. The styles once offered beside these two, saved as FROSTED, CLEAR,
+ * HEAVY, TINTED and SMOKE, read back as the default, [WEB], since [AppSettings.json] coerces
+ * a value it doesn't know to the setting's default.
+ */
 @Serializable
 enum class GlassStyle(val label: String, val summary: String) {
-    FROSTED("Frosted", "Soft blur under a light film"),
-    CLEAR("Clear", "Thin glass that lets most of the colour through"),
-    HEAVY("Heavy frost", "Thick, milky glass that hides what's behind it"),
-    TINTED("Tinted", "Glass washed with your accent colour"),
-    SMOKE("Smoke", "Dark smoked glass with deep contrast"),
-    LIQUID("Liquid", "Apple's Liquid Glass: softly frosted, the edges bend and split the light, with a bright rim (Android 13+)"),
+    /** The web player's Liquid Glass, the one the Poster layout was made with. */
+    WEB("Liquid Glass", "Clear glass, lightly blurred, that bends and brightens what's behind it at the edges, with a lit rim (Android 13+)"),
+    /** Called Liquid once, and the default before [WEB]. */
+    LIQUID("Frosted", "Softly frosted glass whose edges bend and split the light, with a bright rim (Android 13+)"),
 }
+
+/** The version of the [GlassStyle] choices; see [InterfaceSettings.glassStyleVersion]. */
+const val GLASS_STYLE_VERSION = 2
 
 /** How strongly an artist's page takes the colour of their photo. */
 @Serializable
@@ -698,7 +714,7 @@ enum class ListBackground(val label: String, val summary: String) {
 /** What the buttons in a playlist, album, Liked or artist page's header (Play, Shuffle, Save, Follow) are made of. */
 @Serializable
 enum class PageButtons(val label: String, val summary: String) {
-    GLASS("Glass", "Liquid Glass that bends and blurs the cover or photo behind it, or frosted glass where Liquid Glass isn't available"),
+    GLASS("Glass", "Glass in the chosen glass style, over the cover or photo behind it, which Liquid Glass bends and frosted glass blurs"),
     ACCENT("Accent colour", "A solid fill in the colour of the page's cover or artist photo, with no blur"),
 }
 
@@ -994,8 +1010,16 @@ object AppSettings {
         val p = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         prefs = p
         connectivity = context.getSystemService(ConnectivityManager::class.java)
-        val stored = p.getString(K_STATE, null)?.let { runCatching { json.decodeFromString<SettingsState>(it) }.getOrNull() }
+        val saved = p.getString(K_STATE, null)?.let { runCatching { json.parseToJsonElement(it) }.getOrNull() }
+        val migrated = saved?.let(::migrateGlassStyle)
+        val stored = migrated?.let { runCatching { json.decodeFromJsonElement(SettingsState.serializer(), it) }.getOrNull() }
         publish(stored ?: migrateLegacy(p))
+        // Moved to the new glass style: written back at once, so it's moved only this once
+        // and a later choice of the old default (now Frosted) is kept.
+        if (stored != null && migrated !== saved) {
+            dirty.set(true)
+            persistJob = persistScope.launch { persistNow() }
+        }
     }
 
     private fun publish(stored: SettingsState) {
@@ -1087,7 +1111,8 @@ object AppSettings {
     fun exportJson(): JsonElement = json.encodeToJsonElement(SettingsState.serializer(), _state.value)
 
     fun importJson(element: JsonElement) {
-        val s = json.decodeFromJsonElement(SettingsState.serializer(), element)
+        // A backup made before the glass styles were renamed moves to the new default as an update would.
+        val s = json.decodeFromJsonElement(SettingsState.serializer(), migrateGlassStyle(element))
         update { s }
     }
 
@@ -1123,15 +1148,36 @@ object AppSettings {
 
 
 
+/**
+ * Settings as saved, with the glass style moved to the new default, [GlassStyle.WEB] (Liquid
+ * Glass), where it was saved before the styles changed. Then Liquid (now [GlassStyle.LIQUID],
+ * shown as Frosted) was the default, and with every default written out there's no telling
+ * whether it was picked; every other style saved then has since been dropped. So whatever was
+ * saved then is moved, once. Saved settings that carry [InterfaceSettings.glassStyleVersion]
+ * were saved since, and come back as they are (the same object), as does anything that isn't
+ * settings at all. Nothing else in them is touched.
+ */
+fun migrateGlassStyle(saved: JsonElement): JsonElement {
+    val root = saved as? JsonObject ?: return saved
+    val ui = root["ui"] as? JsonObject ?: return saved
+    if ("glassStyleVersion" in ui) return saved
+    val movedUi = buildMap {
+        putAll(ui)
+        if ("glassStyle" in ui) put("glassStyle", JsonPrimitive(GlassStyle.WEB.name))
+        put("glassStyleVersion", JsonPrimitive(GLASS_STYLE_VERSION))
+    }
+    return JsonObject(root + ("ui" to JsonObject(movedUi)))
+}
+
 /** [ui] as Lite mode sets it ([on]) or as it's set without it. */
 fun liteModeApplied(ui: InterfaceSettings, on: Boolean): InterfaceSettings {
     val d = InterfaceSettings()
     return if (on) ui.copy(
-        liteMode = true, reduceBlur = true, liquidGlass = false, frostedTopEdge = false, coverGlow = false,
+        liteMode = true, reduceBlur = true, frostedTopEdge = false, coverGlow = false,
         movingCover = false, homeMovingCovers = false, blurLyrics = false, wavySeekbar = false, openingAnimation = false,
         animatedCovers = false, spotifyCanvas = false,
     ) else ui.copy(
-        liteMode = false, reduceBlur = d.reduceBlur, liquidGlass = d.liquidGlass, frostedTopEdge = d.frostedTopEdge, coverGlow = d.coverGlow,
+        liteMode = false, reduceBlur = d.reduceBlur, frostedTopEdge = d.frostedTopEdge, coverGlow = d.coverGlow,
         movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics, openingAnimation = d.openingAnimation,
         animatedCovers = d.animatedCovers, spotifyCanvas = d.spotifyCanvas,
     )

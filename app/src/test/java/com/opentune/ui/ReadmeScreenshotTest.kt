@@ -84,7 +84,6 @@ class ReadmeScreenshotTest {
         val context = ApplicationProvider.getApplicationContext<android.app.Application>()
         AppSettings.init(context)
         LibraryStore.init(context)
-        AppSettings.updateUi { it.copy(liquidGlass = false) }
         val engine = FakeImageLoaderEngine.Builder().apply {
             art!!.listFiles { f -> f.extension == "jpg" }!!.forEach { f ->
                 val bmp = BitmapFactory.decodeFile(f.path)
@@ -142,7 +141,7 @@ class ReadmeScreenshotTest {
         sound = SoundSettings(), theme = theme, source = song.albumName,
         // Liquid Glass needs the GPU's shaders, which this software drawing can't run; the frosted look stands in.
         // The new designs move every frame while playing; a still needs that held, or the test never goes idle.
-        ui = com.opentune.data.settings.InterfaceSettings(liquidGlass = false, playerStyle = style, reduceAnimation = style != com.opentune.data.settings.PlayerStyle.CLASSIC, fullScreenCover = fullCover, controlStyle = controls),
+        ui = com.opentune.data.settings.InterfaceSettings(playerStyle = style, reduceAnimation = style != com.opentune.data.settings.PlayerStyle.CLASSIC, fullScreenCover = fullCover, controlStyle = controls),
     ).let { state -> @Composable { PlayerLayout(state, position = { position }, buffered = { position + 30_000 }, actions = noActions, initialLyrics = initialLyrics) } }
 
     @Test fun nowPlaying() = shoot("player", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000))
