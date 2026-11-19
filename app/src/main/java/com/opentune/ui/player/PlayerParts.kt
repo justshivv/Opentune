@@ -147,6 +147,7 @@ import coil3.request.allowHardware
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
+import com.opentune.ui.components.posterSmoke
 
 /**
  * The full player's backdrop, in the style chosen in settings. With
@@ -1350,7 +1351,9 @@ fun MiniPlayer(
         return
     }
 
-    val shape = RoundedCornerShape(22.dp)
+    // The Poster layout's card: rounder, in smoked glass, its cover and words larger.
+    val poster = com.opentune.ui.components.posterLayout()
+    val shape = RoundedCornerShape(if (poster) 30.dp else 22.dp)
     if (replica) {
         Box(modifier.background(replicaFace)) { MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, {}, {}, landing) }
         return
@@ -1366,7 +1369,7 @@ fun MiniPlayer(
                 translationY = offsetY.value
                 alpha = 1f - (offsetY.value / (dismissThreshold * 2.2f)).coerceIn(0f, 0.8f)
             }
-            .glass(shape, tint, swell = false)
+            .then(if (poster) Modifier.posterSmoke(shape) else Modifier.glass(shape, tint, swell = false))
             .pullToOpen(round = false, onOpen = onClick)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
@@ -1440,7 +1443,7 @@ fun MiniPlayer(
                 }
             },
     ) {
-        MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, onTogglePlay, onNext, landing)
+        MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, onTogglePlay, onNext, landing, poster)
     }
 }
 
@@ -1449,7 +1452,34 @@ fun MiniPlayer(
 private fun MiniRow(
     song: Song, isPlaying: Boolean, isBuffering: Boolean, hasNext: Boolean, progress: () -> Float,
     accent: Color, track: Color, onTogglePlay: () -> Unit, onNext: () -> Unit, landing: Modifier,
+    poster: Boolean = false,
 ) {
+    if (poster) {
+        // On smoked glass, drawn light: a larger cover, the title over the artist, then play
+        // and next as plain glyphs, as the Poster layout's reference has them.
+        val ink = com.opentune.ui.components.PosterInk
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides ink.on) {
+            Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(50.dp).then(landing), RoundedCornerShape(14.dp))
+                        Column(Modifier.padding(start = 14.dp)) {
+                            Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = ink.on)
+                            Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = ink.off)
+                        }
+                    }
+                }
+                Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onTogglePlay), contentAlignment = Alignment.Center) {
+                    if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize().padding(4.dp), strokeWidth = 2.dp, color = ink.on)
+                    Icon(if (isPlaying) ImageVector.vectorResource(AppIcons.Pause) else ImageVector.vectorResource(AppIcons.PlayArrow), if (isPlaying) "Pause" else "Play", Modifier.size(32.dp), tint = ink.on)
+                }
+                IconButton(onClick = onNext, enabled = hasNext) {
+                    Icon(ImageVector.vectorResource(AppIcons.SkipNext), "Next", Modifier.size(32.dp), tint = if (hasNext) ink.on else ink.off)
+                }
+            }
+        }
+        return
+    }
     Row(Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
             Row(verticalAlignment = Alignment.CenterVertically) {

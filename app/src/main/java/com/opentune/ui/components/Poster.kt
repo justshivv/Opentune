@@ -107,3 +107,24 @@ internal fun PosterRound(icon: ImageVector, label: String, enabled: Boolean = tr
 }
 
 internal val POSTER_ROUND = 52.dp
+
+/** The smoke the Poster layout's dock and mini player are made of. */
+internal val POSTER_SMOKE = Color(0xFF2A2D32)
+
+/**
+ * The Poster layout's smoked glass, for the dock and the mini player: the page blurred behind,
+ * a dark film over it whatever the theme, a thin light rim brighter along the top, and a soft
+ * shadow. What's on it is drawn light (see [PosterInk]).
+ */
+@Composable
+internal fun Modifier.posterSmoke(shape: androidx.compose.ui.graphics.Shape): Modifier = this
+    .shadow(16.dp, shape, ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f))
+    .glass(shape, tint = POSTER_SMOKE, swell = false)
+    .background(POSTER_SMOKE.copy(alpha = 0.55f), shape)
+    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.05f))), shape)
+
+/** What's drawn on [posterSmoke]: white, and a softer white for what's not picked. */
+internal object PosterInk {
+    val on = Color.White
+    val off = Color.White.copy(alpha = 0.62f)
+}

@@ -140,6 +140,31 @@ class DockScreenshotTest {
         }
     }
 
+    /** The Poster layout's chrome: the mini player and the dock in smoked glass, over a cover-coloured page. */
+    @Test fun posterChrome() {
+        com.opentune.data.settings.AppSettings.init(compose.activity)
+        com.opentune.data.settings.AppSettings.updateUi { it.copy(pageLayout = com.opentune.data.settings.PageLayout.POSTER, liquidGlass = false, reduceBlur = true) }
+        val song = com.opentune.data.model.Song("x", "Run For Roses", "NMIXX", null)
+        compose.setContent {
+            MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65))) { androidx.compose.material3.Surface(color = Color(0xFF34404E)) {
+                Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF5B6E86), Color(0xFF2B3442)))).padding(vertical = 24.dp)) {
+                    BottomChrome(
+                        inline = false,
+                        tabs = tabs(),
+                        selected = 0,
+                        onSelect = {},
+                        onExpand = {},
+                        searchSelected = false,
+                        onSearch = {},
+                        mini = { inline, m -> com.opentune.ui.player.MiniPlayer(song, isPlaying = true, isBuffering = false, hasNext = true, progress = { 0.4f },
+                            onTogglePlay = {}, onNext = {}, onPrevious = {}, onClick = {}, modifier = m, inline = inline) },
+                    )
+                }
+            } }
+        }
+        save("dock-poster")
+    }
+
     private fun save(name: String, idle: Boolean = true) {
         if (idle) compose.waitForIdle()
         val view = compose.activity.window.decorView

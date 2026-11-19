@@ -99,6 +99,7 @@ import com.opentune.data.settings.DockMotion
 import com.opentune.ui.components.glass
 import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
+import com.opentune.ui.components.posterSmoke
 
 /** Room the chrome takes when shown, for content padding. */
 val CHROME_TAB_HEIGHT = 64.dp
@@ -251,6 +252,11 @@ fun BottomChrome(
         { awayProgress.value },
         CHROME_TAB_HEIGHT + navBottom + 32.dp,
     )
+    // The Poster layout has a chrome of its own, which stays open as pages scroll.
+    if (com.opentune.ui.components.posterLayout()) {
+        PosterChrome(c, modifier)
+        return
+    }
     val chrome: @Composable (Boolean, () -> Float, Modifier) -> Unit = { folded, progress, m ->
         when (motion) {
             DockMotion.MINIMIZE -> MinimizeChrome(c, folded, progress, m)
@@ -296,6 +302,64 @@ private class ChromeContent(
     /** How far the dock and Search travel to clear the screen's edge. */
     val drop: Dp,
 )
+
+/**
+ * The Poster layout's chrome, in smoked glass: the now-playing card on top, and under it one
+ * dock with every destination and Search at its end, each as its icon over its name, the open
+ * one lit by a soft pill behind it. On pages where the dock slides away, the card drops into
+ * its place.
+ */
+@Composable
+private fun PosterChrome(c: ChromeContent, modifier: Modifier) {
+    val haptics = com.opentune.ui.components.rememberHaptics()
+    val pill = RoundedCornerShape(percent = 50)
+    Box(modifier.fillMaxWidth().padding(horizontal = 12.dp)
+        .height(if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT)) {
+        c.mini?.invoke(false, Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CHROME_MINI_HEIGHT)
+            .graphicsLayer { translationY = (CHROME_TAB_HEIGHT + CARD_GAP).toPx() * c.away() })
+        Row(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(CHROME_TAB_HEIGHT)
+                .graphicsLayer { translationY = c.drop.toPx() * c.away() }
+                .posterSmoke(pill)
+                .padding(DOCK_INSET),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            c.tabs.forEachIndexed { i, tab ->
+                val open = i == c.selected && !c.searchSelected
+                PosterDockItem(if (open) tab.selectedIcon else tab.icon, tab.label, open, Modifier.weight(1f)) {
+                    if (i != c.selected) haptics.tick()
+                    c.onSelect(i)
+                }
+            }
+            PosterDockItem(ImageVector.vectorResource(AppIcons.Search), "Search", c.searchSelected, Modifier.weight(1f),
+                onLongClick = { haptics.tick(); c.onSearchLongPress() }) {
+                if (!c.searchSelected) haptics.tick()
+                c.onSearch()
+            }
+        }
+    }
+}
+
+/** One of the Poster dock's destinations: its icon over its name, a soft pill behind the open one. */
+@Composable
+private fun PosterDockItem(icon: ImageVector, label: String, open: Boolean, modifier: Modifier, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+    val ink = com.opentune.ui.components.PosterInk
+    val fg by animateColorAsState(if (open) ink.on else ink.off, tween(260), label = "posterDock")
+    val glow by animateFloatAsState(if (open) 1f else 0f, tween(260), label = "posterDockPill")
+    val shape = RoundedCornerShape(percent = 50)
+    Column(
+        modifier.fillMaxHeight().clip(shape)
+            .background(Color.White.copy(alpha = 0.13f * glow), shape)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .semantics { role = Role.Tab; this.selected = open },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, null, Modifier.size(24.dp), tint = fg)
+        Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1,
+            modifier = Modifier.padding(top = 3.dp))
+    }
+}
 
 /** The spring each [DockMotion] runs on, from open to folded and back. */
 private fun motionSpring(motion: DockMotion): SpringSpec<Float> = when (motion) {
