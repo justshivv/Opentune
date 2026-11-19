@@ -52,17 +52,28 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.runtime.rememberCoroutineScope
+import com.opentune.data.innertube.InnertubeParser
 import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.Song
+import kotlinx.coroutines.launch
 
 /**
  * "Add to playlist" for [song], in the web player's menu: a new playlist, then each of yours,
- * those it's already in marked and out of reach. It opens [at] a point inside the element it
- * belongs to (where a right click was), or under that element's right edge.
+ * those it's already in marked and out of reach, then (signed in) the account's own playlists on
+ * YouTube Music. It opens [at] a point inside the element it belongs to (where a right click
+ * was), or under that element's right edge.
  */
 @Composable
 internal fun AddToPlaylistMenu(song: Song, open: Boolean, at: IntOffset? = null, withQueue: Boolean = false, onDismiss: () -> Unit) {
     val playlists by Library.playlists.collectAsState()
+    val account by AccountLibrary.state.collectAsState()
+    // Only a playlist that can take an edit: not an album's, a mix or Liked Music.
+    val onAccount = remember(account.playlists) {
+        AccountLibrary.shownPlaylists(account.playlists).filter { it.browseId?.let(InnertubeParser::isEditablePlaylist) == true }
+    }
+    val youTube = com.opentune.data.isYouTubeId(song.videoId)
     var naming by remember { mutableStateOf(false) }
     if (open) {
         WebMenu(at?.let { MenuAnchor.At(it) } ?: MenuAnchor.BelowEnd, onDismiss = onDismiss, label = "Add ${song.title} to a playlist") {
@@ -75,7 +86,7 @@ internal fun AddToPlaylistMenu(song: Song, open: Boolean, at: IntOffset? = null,
             WebMenuItem("New playlist…", Icons.Rounded.Add) { naming = true }
             if (playlists.isNotEmpty()) {
                 WebMenuSeparator()
-                WebMenuHeader("Add to")
+                WebMenuHeader(if (account.signedIn && youTube && onAccount.isNotEmpty()) "On this computer" else "Add to")
             }
             playlists.forEach { p ->
                 val has = p.songs.any { it.id == song.videoId }
@@ -84,13 +95,17 @@ internal fun AddToPlaylistMenu(song: Song, open: Boolean, at: IntOffset? = null,
                     Notice.show("Added to ${p.name}")
                 }
             }
+            // A song from your own server or a file can't go on a YouTube Music playlist.
+            if (account.signedIn && youTube && onAccount.isNotEmpty()) {
+                WebMenuSeparator()
+                WebMenuHeader("YouTube Music")
+                onAccount.forEach { p -> WebMenuItem(p.title, Icons.AutoMirrored.Rounded.QueueMusic) { AccountLibrary.addToPlaylist(p, song) } }
+            }
         }
     }
-    if (naming) {
-        NameDialog("New playlist", "", "Create", onDismiss = { naming = false }) { name ->
-            Library.addToPlaylist(Library.createPlaylist(name), song)
-            naming = false
-        }
+    if (naming) NewPlaylistDialog(first = song, onDismiss = { naming = false }) { made ->
+        naming = false
+        Notice.show(if (made is MadePlaylist.OnAccount) "Added to ${made.item.title} on YouTube Music" else "Added to the new playlist")
     }
 }
 
@@ -99,57 +114,60 @@ internal fun AddToPlaylistMenu(song: Song, open: Boolean, at: IntOffset? = null,
 internal fun NameDialog(title: String, initial: String, confirm: String, onDismiss: () -> Unit, onDone: (String) -> Unit) =
     PageNameDialog(title, initial, confirm, onDismiss, onDone)
 
+/** What a new playlist became: one kept on this computer, or one on the account. */
+internal sealed interface MadePlaylist {
+    data class Local(val id: String) : MadePlaylist
+    data class OnAccount(val item: ShelfItem) : MadePlaylist
+}
+
 /**
- * Your playlists as cards in a grid that fills the width (columns at least 170 wide, 17 apart,
- * rows 28 apart), after a card to start a new one.
+ * A new playlist, as the phone makes one: its name, and who can see it (Private, Unlisted or
+ * Public). Signed in, it's made on the account with that choice, [first] in it when given;
+ * signed out it stays on this computer, where the choice doesn't apply, so it's shown greyed
+ * with a line saying why.
  */
 @Composable
-internal fun PlaylistGrid(onOpen: (String) -> Unit) {
-    val playlists by Library.playlists.collectAsState()
-    var naming by remember { mutableStateOf(false) }
-    val gutter = LocalGutter.current
-    val since = remember { System.nanoTime() }
-    LazyVerticalGrid(
-        GridCells.Adaptive(170.dp),
-        contentPadding = PaddingValues(start = gutter, end = gutter, top = 20.dp, bottom = LocalPageBottom.current),
-        horizontalArrangement = Arrangement.spacedBy(17.dp),
-        verticalArrangement = Arrangement.spacedBy(28.dp),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        item {
-            val item = ShelfItem("New playlist", "Start one here", null, null, null)
-            SquareLockup(item, onOpen = { naming = true }, fill = true, art = { m ->
-                Box(m.background(WebInk.quinary), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Add, null, Modifier.size(40.dp), tint = WebInk.secondary)
-                }
-            })
-        }
-        itemsIndexed(playlists, key = { _, p -> p.id }) { i, p ->
-            Box(Modifier.riseIn(delayMs = (i + 1).coerceAtMost(7) * 35, distance = 12.dp, since = since)) {
-                SquareLockup(
-                    ShelfItem(p.name, if (p.songs.size == 1) "1 song" else "${p.songs.size} songs", p.covers.firstOrNull(), null, null),
-                    onOpen = { onOpen(p.id) }, fill = true,
-                    art = { m -> Mosaic(p.covers, m, RoundedCornerShape(0.dp)) },
-                    onPlay = { Player.playAll(p.songs.map { it.toSong() }, 0) }.takeIf { p.songs.isNotEmpty() },
-                )
+internal fun NewPlaylistDialog(first: Song? = null, onDismiss: () -> Unit, onMade: (MadePlaylist) -> Unit) {
+    val account by AccountLibrary.state.collectAsState()
+    // A song YouTube Music doesn't have (your server's, a file) can only go on one made here.
+    val onAccount = account.signedIn && (first == null || com.opentune.data.isYouTubeId(first.videoId))
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    PagePlaylistDialog(
+        "New playlist", "", "Create",
+        privacyOn = onAccount,
+        note = when {
+            onAccount -> null
+            account.signedIn -> "This song isn't on YouTube Music, so the playlist stays on this computer."
+            else -> "Sign in to YouTube Music to make it on your account and choose who sees it. Signed out, it stays on this computer."
+        },
+        busy = busy,
+        onDismiss = { if (!busy) onDismiss() },
+    ) { name, privacy ->
+        if (onAccount) {
+            busy = true
+            scope.launch {
+                runCatching { AccountLibrary.createPlaylist(name, privacy, listOfNotNull(first)) }
+                    .onSuccess { onMade(MadePlaylist.OnAccount(it)) }
+                    .onFailure { busy = false; Notice.show("Couldn't make the playlist on YouTube Music") }
             }
-        }
-    }
-    if (naming) {
-        NameDialog("New playlist", "", "Create", onDismiss = { naming = false }) { name ->
-            onOpen(Library.createPlaylist(name))
-            naming = false
+        } else {
+            val id = Library.createPlaylist(name)
+            first?.let { Library.addToPlaylist(id, it) }
+            onMade(MadePlaylist.Local(id))
         }
     }
 }
 
 /**
- * One of your playlists: its head (yours, so "Private"), Shuffle, Play, search in it, and the ⋯
- * menu, which also renames and deletes it; then its songs, each with a button to take it out.
+ * One of your playlists: its head (kept on this computer), Shuffle, Play, search in it, and the
+ * ⋯ menu, which also renames and deletes it and, signed in, saves a copy to YouTube Music; then
+ * its songs, each with a button to take it out.
  */
 @Composable
 internal fun PlaylistPage(id: String, onBack: () -> Unit) {
     val playlists by Library.playlists.collectAsState()
+    val account by AccountLibrary.state.collectAsState()
     val playlist = playlists.firstOrNull { it.id == id }
     if (playlist == null) {
         // Deleted, here or in another window: back to the list.
@@ -159,14 +177,18 @@ internal fun PlaylistPage(id: String, onBack: () -> Unit) {
     val songs = remember(playlist) { playlist.songs.map { it.toSong() } }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    var copying by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     CollectionLayout(playlist.name, playlist.covers.firstOrNull(), songs, failed = false, onRemove = { Library.removeFromPlaylist(id, it.videoId) },
         empty = "Add songs from search, Home or the player with the + on any song.") {
         CollectionHero(
             cover = { m -> Mosaic(playlist.covers, m, RoundedCornerShape(0.dp)) },
-            coverUrl = playlist.covers.firstOrNull(), kind = "Playlist", title = playlist.name, subtitle = "Private", songs = songs,
+            coverUrl = playlist.covers.firstOrNull(), kind = "Playlist", title = playlist.name, subtitle = "On this computer", songs = songs,
         ) {
             ListMoreButton(songs, link = null) {
                 WebMenuItem("Rename…", Icons.Rounded.Edit) { renaming = true }
+                if (account.signedIn) WebMenuItem("Save to YouTube Music…", Icons.Rounded.CloudUpload) { copying = true }
                 WebMenuItem("Delete playlist…", Icons.Rounded.Delete) { deleting = true }
             }
         }
@@ -175,6 +197,17 @@ internal fun PlaylistPage(id: String, onBack: () -> Unit) {
         NameDialog("Rename playlist", playlist.name, "Rename", onDismiss = { renaming = false }) { name ->
             Library.renamePlaylist(id, name)
             renaming = false
+        }
+    }
+    if (copying) {
+        // A copy on the account, with who can see it: the songs YouTube Music has go with it.
+        PagePlaylistDialog("Save to YouTube Music", playlist.name, "Save", privacyOn = true, busy = busy, onDismiss = { if (!busy) copying = false }) { name, privacy ->
+            busy = true
+            scope.launch {
+                runCatching { AccountLibrary.createPlaylist(name, privacy, songs) }
+                    .onSuccess { copying = false; busy = false; Notice.show("Saved $name to YouTube Music") }
+                    .onFailure { busy = false; Notice.show("Couldn't save it to YouTube Music") }
+            }
         }
     }
     if (deleting) {

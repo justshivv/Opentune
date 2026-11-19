@@ -66,6 +66,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -116,14 +117,14 @@ private fun rememberHistory(): List<PlayRecord> {
  */
 @Composable
 internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
-    var shelves by remember { mutableStateOf<List<Pages.Shelf>?>(null) }
-    var next by remember { mutableStateOf<String?>(null) }
-    var extrasDone by remember { mutableStateOf(false) }
+    var shelves by rememberSaveable { mutableStateOf<List<Pages.Shelf>?>(null) }
+    var next by rememberSaveable { mutableStateOf<String?>(null) }
+    var extrasDone by rememberSaveable { mutableStateOf(false) }
     var loadingMore by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val recent by Library.recent.collectAsState()
-    val liked by Library.liked.collectAsState()
+    val liked by LikedSongs.all.collectAsState()
     val history = rememberHistory()
     val moods by produceState(emptyList<MoodGenre>()) { value = runCatching { Pages.moods() }.getOrDefault(emptyList()) }
     fun load() {
@@ -159,7 +160,8 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
         shelves = null; next = null; extrasDone = false
         load()
     }
-    LaunchedEffect(Unit) { load() }
+    // Come back to (Back from an album opened here), it shows what it had rather than loading again.
+    LaunchedEffect(Unit) { if (shelves == null) load() }
     val list = rememberLazyListState()
     val nearEnd by remember {
         derivedStateOf {
@@ -444,8 +446,9 @@ internal fun MoodGrid(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
 @Composable
 internal fun NewPage(onOpen: (ShelfItem) -> Unit) {
     val open = LocalOpen.current
-    val moods by produceState<List<MoodGenre>?>(null) { value = runCatching { Pages.moods() }.getOrDefault(emptyList()) }
-    val shelves by produceState<List<Pages.Shelf>?>(null) { value = runCatching { Pages.moreForHome() }.getOrDefault(emptyList()) }
+    // Kept with the page, so Back to Explore finds it as it was, scrolled where it was.
+    val moods = rememberKept { runCatching { Pages.moods() }.getOrDefault(emptyList()) }
+    val shelves = rememberKept { runCatching { Pages.moreForHome() }.getOrDefault(emptyList()) }
     ScrollPage("Explore", webGutter = true, spacing = 44.dp) {
         when (val m = moods) {
             null -> item(key = "moods-wait") { MoodGridPlaceholder() }
@@ -480,9 +483,7 @@ private fun MoodGridPlaceholder() {
 /** A mood or genre's own page: its rows of playlists. */
 @Composable
 internal fun MoodPage(mood: MoodKey, onOpen: (ShelfItem) -> Unit) {
-    val shelves by produceState<List<Pages.Shelf>?>(null, mood) {
-        value = runCatching { Pages.shelves(mood.browseId, mood.params) }.getOrDefault(emptyList())
-    }
+    val shelves = rememberKept(mood) { runCatching { Pages.shelves(mood.browseId, mood.params) }.getOrDefault(emptyList()) }
     ScrollPage(mood.title, eyebrow = "Mood & genre", webGutter = true, spacing = 44.dp) {
         when (val loaded = shelves) {
             null -> items(3) { ShelfPlaceholder() }
@@ -518,6 +519,7 @@ private data class LibEntry(val title: String, val line: String, val cover: Stri
 
 /** A card in the Playlists tab. */
 private class LibCard(
+    val key: String,
     val title: String,
     val line: String,
     val cover: String?,
@@ -545,6 +547,10 @@ private fun matches(q: String, vararg fields: String?) = q.isBlank() || fields.a
  * across the width (Songs, Artists, Albums, and on the Library itself Playlists and an Overview)
  * over a hairline, the chosen one underlined. Songs are the striped track rows; artists round
  * photos; albums and playlists square cards; in a grid or a list.
+ *
+ * The tab, what's typed, A–Z, grid or list and how far it's scrolled are kept with the page, so
+ * coming back to it (Back from a playlist opened here, say) finds it as it was left. [loading]
+ * shows the rows' shapes rather than "nothing here" while the account's library is still read.
  */
 @Composable
 private fun LibraryFrame(
@@ -558,22 +564,30 @@ private fun LibraryFrame(
     playlists: (LazyListScope.(LibContext) -> Unit)? = null,
     overview: (LazyListScope.() -> Unit)? = null,
     startTab: Int = 0,
+    loading: Boolean = false,
 ) {
-    var tab by remember { mutableIntStateOf(startTab.coerceIn(0, tabs.lastIndex)) }
-    var query by remember { mutableStateOf("") }
-    var az by remember { mutableStateOf(false) }
-    var grid by remember { mutableStateOf(true) }
+    var tab by rememberSaveable { mutableIntStateOf(startTab.coerceIn(0, tabs.lastIndex)) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var az by rememberSaveable { mutableStateOf(false) }
+    var grid by rememberSaveable { mutableStateOf(true) }
+    val list = rememberLazyListState()
     val shown = tabs.getOrElse(tab) { tabs.first() }
+    // Worked out once for each change, not on every pass over the list: a big library is thousands.
+    val artists = remember(songs, followed) { libraryArtists(songs, followed) }
+    val albums = remember(songs, saved) { libraryAlbums(songs, saved) }
+    val shownSongs = remember(songs, query, az) {
+        songs.filter { matches(query, it.title, it.artist, it.albumName) }.let { if (az) it.sortedBy { s -> s.title.lowercase() } else it }
+    }
+    val shownArtists = remember(artists, query, az) { filterEntries(artists, query, az) }
+    val shownAlbums = remember(albums, query, az) { filterEntries(albums, query, az) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = maxWidth
         val gutter = Web.gutter(width)
         val room = width - gutter * 2
         val columns = ((room + 17.dp) / (188.dp + 17.dp)).toInt().coerceAtLeast(2)
         val ctx = LibContext(query, az, grid, columns, label) { q -> query = q; tab = tabs.indexOf(LibTab.SONGS).coerceAtLeast(0) }
-        val artists = remember(songs, followed) { libraryArtists(songs, followed) }
-        val albums = remember(songs, saved) { libraryAlbums(songs, saved) }
         CompositionLocalProvider(LocalGutter provides gutter, LocalPageWidth provides width) {
-            LazyColumn(contentPadding = PaddingValues(top = LocalPageTop.current + 20.dp, bottom = LocalPageBottom.current)) {
+            LazyColumn(state = list, contentPadding = PaddingValues(top = LocalPageTop.current + 20.dp, bottom = LocalPageBottom.current)) {
                 head?.let { h -> item(key = "head") { Box(Modifier.padding(start = gutter, end = gutter, bottom = 22.dp)) { h() } } }
                 item(key = "bar") {
                     Row(Modifier.padding(horizontal = gutter).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -591,9 +605,9 @@ private fun LibraryFrame(
                     PageTabs(tabs.map { it.label }, tab, { tab = it }, Modifier.padding(start = gutter, end = gutter, top = 14.dp, bottom = 18.dp))
                 }
                 when (shown) {
-                    LibTab.SONGS -> songsTab(songs, ctx, empty)
-                    LibTab.ARTISTS -> entriesTab(artists, ctx, Triple(Icons.Rounded.Person, "No artists", "The artists of songs you keep show up here."), "artist")
-                    LibTab.ALBUMS -> entriesTab(albums, ctx, Triple(Icons.Rounded.Album, "No albums", "Albums you save, and the albums of songs you keep, show up here."), "album")
+                    LibTab.SONGS -> songsTab(songs, shownSongs, ctx, empty, loading)
+                    LibTab.ARTISTS -> entriesTab(artists, shownArtists, ctx, Triple(Icons.Rounded.Person, "No artists", "The artists you follow, and those of songs you keep, show up here."), "artist", loading)
+                    LibTab.ALBUMS -> entriesTab(albums, shownAlbums, ctx, Triple(Icons.Rounded.Album, "No albums", "Albums you save, and the albums of songs you keep, show up here."), "album", loading)
                     LibTab.PLAYLISTS -> playlists?.invoke(this, ctx)
                     LibTab.OVERVIEW -> overview?.invoke(this)
                 }
@@ -602,11 +616,14 @@ private fun LibraryFrame(
     }
 }
 
+private fun filterEntries(entries: List<LibEntry>, query: String, az: Boolean) =
+    entries.filter { matches(query, it.title, it.line) }.let { if (az) it.sortedBy { e -> e.title.lowercase() } else it }
+
 /** The artists of [songs] (each song under its first-named artist) after the ones you follow on YouTube Music. */
 private fun libraryArtists(songs: List<Song>, followed: List<ShelfItem>): List<LibEntry> {
     val byName = LinkedHashMap<String, MutableList<Song>>()
     songs.forEach { s -> leadArtist(s.artist).takeIf { it.isNotBlank() }?.let { byName.getOrPut(it.lowercase()) { mutableListOf() }.add(s) } }
-    val follows = followed.map { a ->
+    val follows = followed.distinctBy { it.browseId ?: it.title.lowercase() }.map { a ->
         val mine = byName.remove(a.title.lowercase()).orEmpty()
         LibEntry(a.title, if (mine.isEmpty()) "Artist" else songCount(mine.size), a.thumbnailUrl, a.browseId, mine, round = true)
     }
@@ -624,7 +641,7 @@ private fun LazyListScope.section(key: String, content: @Composable () -> Unit) 
 private fun libraryAlbums(songs: List<Song>, saved: List<ShelfItem>): List<LibEntry> {
     val byAlbum = LinkedHashMap<String, MutableList<Song>>()
     songs.forEach { s -> s.albumName?.takeIf { it.isNotBlank() }?.let { byAlbum.getOrPut(it.lowercase()) { mutableListOf() }.add(s) } }
-    val keep = saved.map { a ->
+    val keep = saved.distinctBy { it.browseId ?: it.title.lowercase() }.map { a ->
         val mine = byAlbum.remove(a.title.lowercase()).orEmpty()
         LibEntry(a.title, a.subtitle, a.thumbnailUrl, a.browseId, mine, round = false)
     }
@@ -639,29 +656,26 @@ private fun LazyListScope.noMatches(ctx: LibContext) {
 }
 
 /** The Songs tab: the striped rows (songs read best as rows; the grid view is for the other tabs). */
-private fun LazyListScope.songsTab(songs: List<Song>, ctx: LibContext, empty: Triple<ImageVector, String, String>) {
-    if (songs.isEmpty()) {
-        item(key = "empty") { PageEmpty(empty.first, empty.second, empty.third) }
+private fun LazyListScope.songsTab(all: List<Song>, shown: List<Song>, ctx: LibContext, empty: Triple<ImageVector, String, String>, loading: Boolean) {
+    if (all.isEmpty()) {
+        if (loading) trackPlaceholders() else item(key = "empty") { PageEmpty(empty.first, empty.second, empty.third) }
         return
     }
-    val list = songs.filter { matches(ctx.query, it.title, it.artist, it.albumName) }
-        .let { if (ctx.az) it.sortedBy { s -> s.title.lowercase() } else it }
-    if (list.isEmpty()) return noMatches(ctx)
-    tracks(list)
+    if (shown.isEmpty()) return noMatches(ctx)
+    tracks(shown)
 }
 
 /** The Artists or Albums tab: round photos or square covers in a grid, or rows in the list view. */
-private fun LazyListScope.entriesTab(entries: List<LibEntry>, ctx: LibContext, empty: Triple<ImageVector, String, String>, kind: String) {
-    if (entries.isEmpty()) {
-        item(key = "empty-$kind") { PageEmpty(empty.first, empty.second, empty.third) }
+private fun LazyListScope.entriesTab(all: List<LibEntry>, shown: List<LibEntry>, ctx: LibContext, empty: Triple<ImageVector, String, String>, kind: String, loading: Boolean) {
+    if (all.isEmpty()) {
+        if (loading) item(key = "wait-$kind") { ShelfPlaceholder() } else item(key = "empty-$kind") { PageEmpty(empty.first, empty.second, empty.third) }
         return
     }
-    val list = entries.filter { matches(ctx.query, it.title, it.line) }.let { if (ctx.az) it.sortedBy { e -> e.title.lowercase() } else it }
-    if (list.isEmpty()) return noMatches(ctx)
+    if (shown.isEmpty()) return noMatches(ctx)
     if (ctx.grid) {
-        cardGrid(list, ctx.columns, key = { "$kind:${it.title}" }) { e -> LibEntryCard(e, ctx) }
+        cardGrid(shown, ctx.columns, key = { "$kind:${it.browseId ?: it.title}" }) { e -> LibEntryCard(e, ctx) }
     } else {
-        itemsIndexed(list, key = { _, e -> "$kind-row:${e.title}" }) { i, e -> LibEntryRow(i, e, ctx) }
+        itemsIndexed(shown, key = { _, e -> "$kind-row:${e.browseId ?: e.title}" }) { i, e -> LibEntryRow(i, e, ctx) }
     }
 }
 
@@ -722,16 +736,16 @@ private fun LibEntryRow(i: Int, e: LibEntry, ctx: LibContext) {
     LibListRow(i, e.title, e.line, e.round, entryOpen(e, ctx)) { m -> Box(m) { CoverFill(e.cover, Modifier.fillMaxSize()) } }
 }
 
-/** The Playlists tab: a card to start one, yours, then the account's on YouTube Music. */
+/** The Playlists tab: a card to start one, Liked songs, then every playlist (yours, then the account's). */
 private fun LazyListScope.playlistsTab(cards: List<LibCard>, ctx: LibContext) {
-    val list = cards.filterIndexed { i, c -> i == 0 || matches(ctx.query, c.title, c.line) }
-        .let { all -> if (ctx.az) listOf(all.first()) + all.drop(1).sortedBy { it.title.lowercase() } else all }
+    // The first two (New playlist, Liked songs) stay first, whatever's typed or sorted.
+    val fixed = cards.take(2)
+    val rest = cards.drop(2).filter { matches(ctx.query, it.title, it.line) }.let { if (ctx.az) it.sortedBy { c -> c.title.lowercase() } else it }
+    val list = fixed + rest
     if (ctx.grid) {
-        cardGrid(list, ctx.columns, key = { "pl:${it.title}:${it.line}" }) { c ->
-            SquareLockup(ShelfItem(c.title, c.line, c.cover, null, null), onOpen = c.onOpen, onPlay = c.onPlay, art = c.art, fill = true)
-        }
+        cardGrid(list, ctx.columns, key = { "pl:${it.key}" }) { c -> PlaylistCard(c) }
     } else {
-        itemsIndexed(list, key = { i, c -> "pl-row$i:${c.title}" }) { i, c ->
+        itemsIndexed(list, key = { _, c -> "pl-row:${c.key}" }) { i, c ->
             LibListRow(i, c.title, c.line, round = false, onOpen = c.onOpen) { m ->
                 Box(m) { if (c.art != null) c.art.invoke(Modifier.fillMaxSize()) else CoverFill(c.cover, Modifier.fillMaxSize()) }
             }
@@ -739,15 +753,72 @@ private fun LazyListScope.playlistsTab(cards: List<LibCard>, ctx: LibContext) {
     }
 }
 
-/** Liked songs or Recently played's head over the frame: its name, how many and how long, Shuffle and Play. */
 @Composable
-private fun LibHead(title: String, songs: List<Song>) {
+private fun PlaylistCard(c: LibCard) {
+    // An account playlist plays its songs from the button on its cover, fetched as it's pressed.
+    val play = c.onPlay ?: if (c.art == null && c.key.startsWith("yt:")) rememberCardPlay(ShelfItem(c.title, c.line, c.cover, null, c.key.removePrefix("yt:"))) else null
+    SquareLockup(ShelfItem(c.title, c.line, c.cover, null, null), onOpen = c.onOpen, onPlay = play, art = c.art, fill = true)
+}
+
+/**
+ * The Playlists tab's cards, and the Playlists page's: New playlist, Liked songs (the account's
+ * and this computer's, as one), then every playlist in the order the sidebar lists them.
+ */
+@Composable
+private fun rememberPlaylistCards(
+    liked: List<Song>,
+    entries: List<LibPlaylist>,
+    onNew: () -> Unit,
+    onShelf: (Shelf) -> Unit,
+    onPlaylist: (String) -> Unit,
+    onOpenAny: (Any) -> Unit,
+): List<LibCard> {
+    val gradient = { colours: List<Color>, icon: ImageVector -> @Composable { m: Modifier -> IconCover(icon, colours, m) } }
+    val newArt = remember { @Composable { m: Modifier ->
+        Box(m.background(WebInk.quinary), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, null, Modifier.size(48.dp), tint = PageInk.grey) }
+    } }
+    val likedArt = remember { gradient(listOf(Color(0xFF5B3CFF), Color(0xFFB7A6FF)), Icons.Rounded.Favorite) }
+    return remember(liked, entries) {
+        buildList {
+            add(LibCard("new", "New playlist", "Start one here", null, onOpen = onNew, art = newArt))
+            add(LibCard("liked", "Liked songs", "Playlist • ${songCount(liked.size)}", null, onOpen = { onShelf(Shelf.LIKED) },
+                onPlay = { Player.playAll(liked, 0) }.takeIf { liked.isNotEmpty() }, art = likedArt))
+            entries.forEach { e ->
+                when (e) {
+                    is LibPlaylist.Local -> {
+                        val p = e.playlist
+                        add(LibCard("local:${p.id}", p.name, "Playlist • ${songCount(p.songs.size)}", p.covers.firstOrNull(), onOpen = { onPlaylist(p.id) },
+                            onPlay = { Player.playAll(p.songs.map { it.toSong() }, 0) }.takeIf { p.songs.isNotEmpty() }, art = { m -> Mosaic(p.covers, m, RoundedCornerShape(0.dp)) }))
+                    }
+                    is LibPlaylist.OnAccount -> {
+                        val p = e.item
+                        add(LibCard("yt:${p.browseId}", p.title, p.subtitle.ifBlank { "Playlist" }, p.thumbnailUrl, onOpen = { onOpenAny(p) }))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Every playlist and the account's liked songs, as the Library and the sidebar show them. */
+@Composable
+private fun rememberLibraryPlaylists(): List<LibPlaylist> {
+    val local by Library.playlists.collectAsState()
+    val account by AccountLibrary.state.collectAsState()
+    return remember(local, account.playlists) { libraryPlaylists(local, account.playlists) }
+}
+
+/** Liked songs or Recently played's head over the frame: its name, how many and how long, Shuffle and Play, and [extra]. */
+@Composable
+private fun LibHead(title: String, songs: List<Song>, line: String? = null, extra: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = PageType.pageTitle, color = PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (songs.isNotEmpty()) Text(pageLengthLine(songs), style = PageType.meta, color = PageInk.grey, modifier = Modifier.padding(top = 4.dp))
+            val facts = listOfNotNull(songs.takeIf { it.isNotEmpty() }?.let(::pageLengthLine), line).joinToString(" • ")
+            if (facts.isNotBlank()) Text(facts, style = PageType.meta, color = PageInk.grey, modifier = Modifier.padding(top = 4.dp))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            extra?.invoke()
             PageRoundButton(Icons.Rounded.Shuffle, "Shuffle $title", size = 52.dp, enabled = songs.isNotEmpty()) { Player.playAll(songs.shuffled(), 0) }
             PageRoundButton(Icons.Rounded.PlayArrow, "Play $title", solid = true, size = 52.dp, iconSize = 28.dp, enabled = songs.isNotEmpty()) { Player.playAll(songs, 0) }
         }
@@ -755,13 +826,14 @@ private fun LibHead(title: String, songs: List<Song>) {
 }
 
 /**
- * The Library: every song you keep (liked, or in one of your playlists) in the frame's tabs, with
- * their artists and albums, your playlists (and the account's on YouTube Music), and an Overview
- * of your year, your mixes and what's on repeat.
+ * The Library: every song you keep (liked here or on the account, added to the account's
+ * library, or in one of your playlists) in the frame's tabs, with their artists and albums and
+ * those the account follows and saved, every playlist (yours, then the account's), and an
+ * Overview of your year, your mixes and what's on repeat.
  */
 @Composable
 internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit, onOpenAny: (Any) -> Unit, startTab: Int = 0) {
-    val liked by Library.liked.collectAsState()
+    val liked by LikedSongs.all.collectAsState()
     val recent by Library.recent.collectAsState()
     val playlists by Library.playlists.collectAsState()
     val server by Subsonic.server.collectAsState()
@@ -774,35 +846,14 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
     }
     val month = remember(history) { Wrapped.summarize(history, now - 30L * 86_400_000L, now) }
     val mixes = remember(history) { DailyMixes.build(history) }
-    // Signed in: the account's own library on YouTube Music too, as on the phone and the web player.
-    val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
-    val accountName by com.opentune.data.account.AccountStore.account.collectAsState()
-    val onAccount by produceState(emptyList<Pages.Shelf>(), signedIn, accountName) {
-        value = if (signedIn) runCatching { Pages.accountLibrary() }.getOrDefault(emptyList()) else emptyList()
+    // Signed in: the account's own library on YouTube Music too, read once and kept (see AccountLibrary).
+    val account by AccountLibrary.state.collectAsState()
+    LaunchedEffect(Unit) { AccountLibrary.refreshIfStale() }
+    val entries = rememberLibraryPlaylists()
+    val kept = remember(liked, account.saved, playlists) {
+        librarySongs(liked, account.saved, playlists.flatMap { p -> p.songs.map { it.toSong() } })
     }
-    val kept = remember(liked, playlists) { (liked + playlists.flatMap { p -> p.songs.map { it.toSong() } }).distinctBy { it.videoId } }
-    val accountPlaylists = onAccount.firstOrNull { it.title.contains("playlists", ignoreCase = true) }?.items.orEmpty()
-    val saved = onAccount.firstOrNull { it.title.contains("albums", ignoreCase = true) }?.items.orEmpty()
-    val followed = onAccount.firstOrNull { it.title.contains("artists", ignoreCase = true) }?.items.orEmpty()
-    val gradient = { colours: List<Color>, icon: ImageVector -> @Composable { m: Modifier -> IconCover(icon, colours, m) } }
-    val cards = buildList {
-        add(LibCard("New playlist", "Start one here", null, onOpen = { naming = true }, art = { m ->
-            Box(m.background(WebInk.quinary), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, null, Modifier.size(48.dp), tint = PageInk.grey) }
-        }))
-        add(LibCard("Liked songs", "Playlist • ${songCount(liked.size)}", null, onOpen = { onShelf(Shelf.LIKED) },
-            onPlay = { Player.playAll(liked, 0) }.takeIf { liked.isNotEmpty() }, art = gradient(listOf(Color(0xFF5B3CFF), Color(0xFFB7A6FF)), Icons.Rounded.Favorite)))
-        playlists.forEach { p ->
-            add(LibCard(p.name, "Playlist • ${songCount(p.songs.size)}", p.covers.firstOrNull(), onOpen = { onPlaylist(p.id) },
-                onPlay = { Player.playAll(p.songs.map { it.toSong() }, 0) }.takeIf { p.songs.isNotEmpty() }, art = { m -> Mosaic(p.covers, m, RoundedCornerShape(0.dp)) }))
-        }
-        if (signedIn) {
-            add(LibCard("Liked music", "YouTube Music", null, onOpen = { onOpenAny(ShelfItem("Liked music", "Playlist", null, null, "VLLM")) },
-                art = gradient(listOf(Color(0xFFB3261E), Color(0xFFFF8A80)), Icons.Rounded.Favorite)))
-            add(LibCard("History", "YouTube Music", null, onOpen = { onOpenAny(ShelfItem("History", "Playlist", null, null, "FEmusic_history")) },
-                art = gradient(listOf(Color(0xFF0F7B6C), Color(0xFF7FE0C8)), Icons.Rounded.History)))
-            accountPlaylists.forEach { p -> add(LibCard(p.title, p.subtitle, p.thumbnailUrl, onOpen = { onOpenAny(p) })) }
-        }
-    }
+    val cards = rememberPlaylistCards(liked, entries, onNew = { naming = true }, onShelf, onPlaylist, onOpenAny)
     val since = remember { System.nanoTime() }
     LibraryFrame(
         startTab = startTab,
@@ -810,7 +861,8 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
         songs = kept,
         tabs = listOf(LibTab.SONGS, LibTab.ARTISTS, LibTab.ALBUMS, LibTab.PLAYLISTS, LibTab.OVERVIEW),
         empty = Triple(Icons.Rounded.LibraryMusic, "No songs", "Songs you like or add to a playlist show up here."),
-        followed = followed, saved = saved,
+        followed = account.artists, saved = account.albums,
+        loading = account.loading,
         playlists = { ctx -> playlistsTab(cards, ctx) },
         overview = {
             section("year") { YearCard(year) }
@@ -819,7 +871,7 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
                     Shortcut(Icons.Rounded.Favorite, "Liked songs", songCount(liked.size), heart = true) { onShelf(Shelf.LIKED) }
                     Shortcut(Icons.Rounded.History, "Recently played", if (recent.isEmpty()) "Nothing yet" else songCount(recent.size)) { onShelf(Shelf.RECENT) }
                     server?.let { s -> Shortcut(Icons.Rounded.Storage, "Your server", s.url.substringAfter("://").substringBefore('/')) { onShelf(Shelf.SERVER) } }
-                    Shortcut(Icons.AutoMirrored.Rounded.QueueMusic, "All playlists", songCountOf(playlists.size, "playlist")) { onShelf(Shelf.PLAYLISTS) }
+                    Shortcut(Icons.AutoMirrored.Rounded.QueueMusic, "All playlists", songCountOf(entries.size, "playlist")) { onShelf(Shelf.PLAYLISTS) }
                 }
             }
             if (mixes.isNotEmpty()) section("mixes") {
@@ -854,9 +906,12 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
         },
     )
     if (naming) {
-        NameDialog("New playlist", "", "Create", onDismiss = { naming = false }) { name ->
+        NewPlaylistDialog(onDismiss = { naming = false }) { made ->
             naming = false
-            onPlaylist(Library.createPlaylist(name))
+            when (made) {
+                is MadePlaylist.Local -> onPlaylist(made.id)
+                is MadePlaylist.OnAccount -> onOpenAny(made.item)
+            }
         }
     }
 }
@@ -866,29 +921,61 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
  * frame under their name with Shuffle and Play; every playlist as a grid; your server.
  */
 @Composable
-internal fun LibraryShelfPage(shelf: Shelf, onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit) {
-    val liked by Library.liked.collectAsState()
+internal fun LibraryShelfPage(shelf: Shelf, onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit, onOpenAny: (Any) -> Unit = {}) {
+    val liked by LikedSongs.all.collectAsState()
     val played by Library.recent.collectAsState()
     val server by Subsonic.server.collectAsState()
+    val account by AccountLibrary.state.collectAsState()
     when (shelf) {
         Shelf.LIKED -> LibraryFrame(
             label = "Liked songs", songs = liked, tabs = listOf(LibTab.SONGS, LibTab.ARTISTS, LibTab.ALBUMS),
             empty = Triple(Icons.Rounded.FavoriteBorder, "No liked songs", "Click the heart on any song and it shows up here."),
-            head = { LibHead("Liked songs", liked) },
+            head = { LibHead("Liked songs", liked, line = if (account.signedIn) "ON THIS COMPUTER AND YOUTUBE MUSIC" else null) },
+            loading = account.loading,
         )
         Shelf.RECENT -> LibraryFrame(
             label = "Recently played", songs = played, tabs = listOf(LibTab.SONGS, LibTab.ARTISTS, LibTab.ALBUMS),
             empty = Triple(Icons.Rounded.History, "Nothing here yet", "Songs you play show up here."),
-            head = { LibHead("Recently played", played) },
+            head = {
+                LibHead("Recently played", played, line = "ON THIS COMPUTER", extra = if (account.signedIn) ({
+                    // What the account played anywhere, as YouTube Music keeps it: its own page.
+                    PageRoundButton(Icons.Rounded.History, "Your YouTube Music history", size = 52.dp) {
+                        onOpenAny(ShelfItem("Your YouTube Music history", "History • YouTube Music", null, null, "FEmusic_history"))
+                    }
+                }) else null)
+            },
         )
-        Shelf.PLAYLISTS -> CompositionLocalProvider(LocalGutter provides PageGutter) {
-            Column(Modifier.fillMaxSize().padding(top = LocalPageTop.current + 24.dp)) {
-                Text("Playlists", style = PageType.pageTitle, color = PageInk.text, modifier = Modifier.padding(horizontal = PageGutter))
-                PlaylistGrid(onOpen = onPlaylist)
-            }
-        }
+        Shelf.PLAYLISTS -> PlaylistsPage(liked, onShelf, onPlaylist, onOpenAny)
         Shelf.SERVER -> Box(Modifier.fillMaxSize().padding(top = LocalPageTop.current + 12.dp)) {
             if (server != null) ServerShelf() else Message("No music server connected", "Connect one in Settings.")
+        }
+    }
+}
+
+/** Every playlist as cards in a grid, under the page's name: the same cards as the Library's Playlists tab. */
+@Composable
+private fun PlaylistsPage(liked: List<Song>, onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit, onOpenAny: (Any) -> Unit) {
+    var naming by remember { mutableStateOf(false) }
+    val entries = rememberLibraryPlaylists()
+    val cards = rememberPlaylistCards(liked, entries, onNew = { naming = true }, onShelf, onPlaylist, onOpenAny)
+    val list = rememberLazyListState()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val gutter = Web.gutter(maxWidth)
+        val columns = ((maxWidth - gutter * 2 + 17.dp) / (188.dp + 17.dp)).toInt().coerceAtLeast(2)
+        CompositionLocalProvider(LocalGutter provides gutter, LocalPageWidth provides maxWidth) {
+            LazyColumn(state = list, contentPadding = PaddingValues(top = LocalPageTop.current + 24.dp, bottom = LocalPageBottom.current)) {
+                item(key = "title") { Text("Playlists", style = PageType.pageTitle, color = PageInk.text, modifier = Modifier.padding(start = gutter, end = gutter, bottom = 20.dp)) }
+                cardGrid(cards, columns, key = { "pl:${it.key}" }) { c -> PlaylistCard(c) }
+            }
+        }
+    }
+    if (naming) {
+        NewPlaylistDialog(onDismiss = { naming = false }) { made ->
+            naming = false
+            when (made) {
+                is MadePlaylist.Local -> onPlaylist(made.id)
+                is MadePlaylist.OnAccount -> onOpenAny(made.item)
+            }
         }
     }
 }

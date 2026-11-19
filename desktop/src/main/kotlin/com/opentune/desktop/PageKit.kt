@@ -29,7 +29,11 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Search
+import com.opentune.data.model.PlaylistPrivacy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -352,6 +356,103 @@ internal fun PageNameDialog(title: String, initial: String, confirm: String, onD
     }) {
         PageSearchField(name, { name = it }, "Name", Modifier.fillMaxWidth(), focus = focus, icon = false, onEnter = { if (name.isNotBlank()) onDone(name) })
     }
+}
+
+/** What each privacy means, in the phone's words (PlaylistPrivacy.kt). */
+internal val PlaylistPrivacy.meaning: String
+    get() = when (this) {
+        PlaylistPrivacy.PRIVATE -> "Only you can see it"
+        PlaylistPrivacy.UNLISTED -> "Anyone with the link can open it"
+        PlaylistPrivacy.PUBLIC -> "Anyone can find and open it"
+    }
+
+private val PlaylistPrivacy.icon: ImageVector
+    get() = when (this) {
+        PlaylistPrivacy.PRIVATE -> Icons.Rounded.Lock
+        PlaylistPrivacy.UNLISTED -> Icons.Rounded.Link
+        PlaylistPrivacy.PUBLIC -> Icons.Rounded.Public
+    }
+
+/**
+ * Who can see a playlist on YouTube Music: the phone's three choices (Private, Unlisted, Public)
+ * as pills in a row, the chosen one in the text colour, and what it means under them. Not
+ * [enabled], the row is greyed and out of reach.
+ */
+@Composable
+internal fun PagePrivacyChoice(selected: PlaylistPrivacy, onPick: (PlaylistPrivacy) -> Unit, enabled: Boolean = true) {
+    Column(Modifier.graphicsLayer { alpha = if (enabled) 1f else 0.45f }) {
+        Text("Who can see it", style = PageType.small, color = PageInk.grey, modifier = Modifier.padding(bottom = 8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PlaylistPrivacy.entries.forEach { p ->
+                val chosen = p == selected
+                val source = remember { MutableInteractionSource() }
+                val hovered by source.collectIsHoveredAsState()
+                val ink = MaterialTheme.colorScheme.onSurface
+                val page = MaterialTheme.colorScheme.background
+                val fill by animateColorAsState(
+                    when { chosen -> ink; hovered && enabled -> PageInk.buttonHover; else -> PageInk.button },
+                    tween(PAGE_HOVER_MS), label = "privacy fill",
+                )
+                Row(
+                    Modifier.pressScale(source).height(36.dp).clip(CircleShape).background(fill).hoverable(source)
+                        .clickable(enabled = enabled, interactionSource = source, indication = null, role = Role.RadioButton) { onPick(p) }
+                        .semantics { this.selected = chosen }
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(p.icon, null, tint = if (chosen) page else ink, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(p.label, style = PageType.button, color = if (chosen) page else ink, maxLines = 1)
+                }
+            }
+        }
+        Text(selected.meaning, style = PageType.small, color = PageInk.grey, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
+/**
+ * A playlist's name and who can see it, in a [PageDialog]: for a new playlist and for saving one
+ * to YouTube Music. Not [privacyOn] (a playlist kept on this computer), the choice is greyed and
+ * [note] says why. [busy] while it's being made: the buttons wait.
+ */
+@Composable
+internal fun PagePlaylistDialog(
+    title: String,
+    initial: String,
+    confirm: String,
+    privacyOn: Boolean,
+    note: String? = null,
+    busy: Boolean = false,
+    start: PlaylistPrivacy = PlaylistPrivacy.PRIVATE,
+    onDismiss: () -> Unit,
+    onDone: (String, PlaylistPrivacy) -> Unit,
+) {
+    var name by remember { mutableStateOf(initial) }
+    var privacy by remember { mutableStateOf(start) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val ready = name.isNotBlank() && !busy
+    PageDialog(title, onDismiss, buttons = {
+        PageButton("Cancel", enabled = !busy, onClick = onDismiss)
+        PageButton(if (busy) "Saving…" else confirm, primary = true, enabled = ready) { onDone(name, privacy) }
+    }) {
+        Column {
+            PageSearchField(name, { name = it }, "Name", Modifier.fillMaxWidth(), focus = focus, icon = false, onEnter = { if (ready) onDone(name, privacy) })
+            Spacer(Modifier.height(20.dp))
+            PagePrivacyChoice(privacy, { privacy = it }, enabled = privacyOn && !busy)
+            note?.let { Text(it, style = PageType.small, color = PageInk.grey, modifier = Modifier.padding(top = 12.dp)) }
+        }
+    }
+}
+
+/** Changes who can see a playlist on the account, in a [PageDialog]. */
+@Composable
+internal fun PagePrivacyDialog(current: PlaylistPrivacy?, onDismiss: () -> Unit, onPick: (PlaylistPrivacy) -> Unit) {
+    var privacy by remember { mutableStateOf(current ?: PlaylistPrivacy.PRIVATE) }
+    PageDialog("Who can see it", onDismiss, buttons = {
+        PageButton("Cancel", onClick = onDismiss)
+        PageButton("Save", primary = true, enabled = privacy != current) { onPick(privacy) }
+    }) { PagePrivacyChoice(privacy, { privacy = it }) }
 }
 
 /** Asks before something goes for good, in a [PageDialog] with a red button. */
