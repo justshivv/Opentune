@@ -50,6 +50,23 @@ object DesktopWindow {
     /** The window, and what closing it does; set when it's made. */
     internal var window: JFrame? = null
     internal var close: () -> Unit = {}
+    /** Shows the window again when it's been put away in the tray; set when it's made. */
+    internal var show: () -> Unit = {}
+
+    /** Brings the window up and to the front: from the tray, from the Dock or taskbar, over other windows. */
+    fun bringToFront() {
+        show()
+        java.awt.EventQueue.invokeLater {
+            val w = window ?: return@invokeLater
+            if (w.extendedState and Frame.ICONIFIED != 0) w.extendedState = w.extendedState and Frame.ICONIFIED.inv()
+            // Windows only lets a window take the front briefly marked always-on-top; it's put back at once.
+            val top = w.isAlwaysOnTop
+            w.isAlwaysOnTop = true
+            w.toFront()
+            w.requestFocus()
+            w.isAlwaysOnTop = top
+        }
+    }
 
     fun style(window: JFrame) {
         if (!isMac) return

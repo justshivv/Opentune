@@ -23,6 +23,16 @@ fun main(args: Array<String>) {
     if ("--self-check" in args) return selfCheck()
     // Library logs to desktop.log, set before any library asks for its logger.
     Logging.install()
+    // One OpenTune at a time: a second start hands its link to the first and goes.
+    val instance = SingleInstance(File(System.getProperty("user.home"), ".opentune")) { passed ->
+        if (passed.map(DeepLinks::open).none { it }) DesktopWindow.bringToFront()
+    }
+    if (!instance.claim()) {
+        // The first may be a moment from listening, if it's only just started.
+        repeat(10) { if (instance.handOff(args.toList())) kotlin.system.exitProcess(0); Thread.sleep(300) }
+        System.err.println("OpenTune is already running and didn't answer.")
+        kotlin.system.exitProcess(0)
+    }
     CrashLog.install()
     CrashLog.startDiagnostics()
     // Before anything is drawn: a renderer that failed to start last time is passed over.
@@ -31,6 +41,13 @@ fun main(args: Array<String>) {
     // laid out waited two seconds on that on Windows.
     Thread({ runCatching { org.jetbrains.skia.FontMgr.default.let { it.familiesCount; it.matchFamilyStyle(null, org.jetbrains.skia.FontStyle.NORMAL) } } }, "font-warm")
         .apply { isDaemon = true; start() }
+    // opentune:// links: from macOS's Apple Events, this start's own arguments, and set as this app's to open.
+    DeepLinks.listenOnMac()
+    args.forEach { DeepLinks.open(it) }
+    Thread({ DeepLinks.register() }, "links-register").apply { isDaemon = true; start() }
+    // The system's media controls: SMTC, Now Playing or MPRIS, once the window is up.
+    MediaControls.start()
+    Runtime.getRuntime().addShutdownHook(Thread { MediaControls.stop(); instance.release() })
     // The key the sign-ins are sealed with, from the system's keyring, before anything reads one.
     SecretVault.start()
     // The shared settings and music server, as the phone starts them.
@@ -70,6 +87,7 @@ fun main(args: Array<String>) {
         val inTray by TrayPrefs.keepPlaying.collectAsState()
         val trayed = inTray && TrayPrefs.supported
         val close: () -> Unit = { if (trayed) shown = false else exitApplication() }
+        DesktopWindow.show = { shown = true }
         if (TrayPrefs.supported) TrayMenu(onShow = { shown = true }, onQuit = ::exitApplication)
         // An error inside the window (Compose's own layout has a bug in this version that throws
         // "LayoutNode … not found in RectList" now and then) is written to crash.log and the window
@@ -129,6 +147,17 @@ private fun selfCheck() {
         "Native audio" to {
             check(NativeAudio.available) { "otaudio didn't load" }
             "miniaudio on ${NativeAudio.backend}, ${NativeAudio.devices().size} output(s)"
+        },
+        // The system's media controls: otmedia on Windows and macOS, the D-Bus library on Linux.
+        "Media controls" to {
+            if (com.sun.jna.Platform.isLinux()) {
+                // With a session bus, a real connection: the transport is found by ServiceLoader, which a trimmed runtime can lose.
+                if (System.getenv("DBUS_SESSION_BUS_ADDRESS").isNullOrBlank()) "MPRIS ready (no session bus here)"
+                else org.freedesktop.dbus.connections.impl.DBusConnectionBuilder.forSessionBus().withShared(false).build().use { "MPRIS connected to the session bus" }
+            } else {
+                com.sun.jna.Native.load("otmedia", OtMedia::class.java)
+                "otmedia loaded"
+            }
         },
         // AES-GCM and the JNA platform classes on the trimmed runtime, with a key in memory only:
         // this computer's keyring is left alone.

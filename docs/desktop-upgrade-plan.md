@@ -1,6 +1,6 @@
 # Desktop upgrade plan
 
-Status: approved. Phases 1 and 2 are done (see "as built" under each). The decisions in "Conflicts that need a decision" are still open.
+Status: approved. Phases 1 to 3 are done (see "as built" under each). The decisions in "Conflicts that need a decision" are still open.
 
 Estimates are in working days for one engineer who knows the codebase, and include tests. They are rough, and the native work (Phases 2 and 3) carries the most risk.
 
@@ -105,6 +105,15 @@ Each phase is one PR into `fix/crossfade-automix` unless you want them against `
 - Single instance: a lock file plus a loopback socket in `~/.opentune`. A second launch passes its arguments to the first and exits. (0.5 day)
 - `opentune://` deep links: registered by the MSI/EXE installer, the DMG's `Info.plist`, and a `.desktop` file for DEB/RPM/AppImage. Links are parsed against a fixed list of routes (song, album, artist, playlist, Listen Together room). (1.5 days)
 - Tray: keep the AWT tray, add the current song and a quit item. (0.5 day)
+
+#### Phase 3 as built
+
+- Windows: SMTC in plain C (`otmedia_win.c`), built with MinGW. It has the song, artist and cover, play/pause/next/previous/stop, and a seekable timeline. Cross-compiled here, importing only system DLLs; it hasn't run on Windows yet.
+- macOS: Now Playing and remote commands (`otmedia_mac.m`), with cover art and seeking. Built only by CI; it hasn't run on a Mac yet.
+- Linux: MPRIS through dbus-java. Tested here against a real session bus with `gdbus`: properties, PlayPause, Next, and SetPosition, including ignoring a seek meant for another track. The packaged app's self-check connects to the bus. That check found the trimmed runtime missing `jdk.security.auth`, which D-Bus sign-in needs, and the module is now included.
+- Single instance with a token-checked loopback hand-off, and opentune:// links (song, album, artist, playlist, room). They're registered per user on Windows and Linux, and through `Info.plist` on macOS.
+- The tray already had the song playing and Quit, so there was nothing to add.
+- Not done: macOS single instance relies on the same lock rather than LaunchServices' own, which normally keeps one copy of an app running anyway.
 
 ### Phase 4: Content and sources (10 to 13 days)
 

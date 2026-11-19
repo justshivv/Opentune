@@ -146,47 +146,56 @@ val generateBuildConfig = tasks.register("generateBuildConfig") {
 }
 
 /*
- * otaudio, the desktop's sound output (native/otaudio.c on miniaudio), built with this
- * system's C compiler: cc on Linux and macOS, MinGW's gcc on Windows. It goes in the
- * resources under JNA's name for the system (linux-x86-64/libotaudio.so and so on), where
+ * otaudio, the desktop's sound output (native/otaudio.c on miniaudio), and otmedia, the
+ * system's media controls (native/otmedia_win.c, otmedia_mac.m), built with this system's C
+ * compiler: cc on Linux and macOS, MinGW's gcc on Windows. They go in the resources under
+ * JNA's name for the system (linux-x86-64/libotaudio.so and so on), where
  * JNA finds it at run time. Without a compiler the app still builds and plays through Java
  * Sound; on CI a missing compiler fails the build, so no release ships without it.
  */
 val nativeAudio = tasks.register("nativeAudio") {
-    val source = file("native/otaudio.c")
+    val audio = file("native/otaudio.c")
+    val mediaWin = file("native/otmedia_win.c")
+    val mediaMac = file("native/otmedia_mac.m")
     val header = rootProject.file("third_party/miniaudio/miniaudio.h")
     val out = layout.buildDirectory.dir("native-audio")
-    inputs.files(source, header)
+    inputs.files(audio, mediaWin, mediaMac, header)
     outputs.dir(out)
     doLast {
         val os = System.getProperty("os.name").lowercase()
         val arm = System.getProperty("os.arch").let { it == "aarch64" || it == "arm64" }
         val arch = if (arm) "aarch64" else "x86-64"
-        val (prefix, name) = when {
-            os.contains("win") -> "win32-$arch" to "otaudio.dll"
-            os.contains("mac") -> "darwin-$arch" to "libotaudio.dylib"
-            else -> "linux-$arch" to "libotaudio.so"
-        }
+        val win = os.contains("win")
+        val mac = os.contains("mac")
+        val prefix = when { win -> "win32-$arch"; mac -> "darwin-$arch"; else -> "linux-$arch" }
         val dir = out.get().asFile.resolve(prefix).apply { deleteRecursively(); mkdirs() }
-        val target = dir.resolve(name)
-        val compiler = if (os.contains("win")) "gcc" else "cc"
-        val common = listOf("-O2", "-fvisibility=hidden", "-I", header.parentFile.absolutePath, source.absolutePath, "-o", target.absolutePath)
-        val command = when {
-            os.contains("win") -> listOf(compiler, "-shared", "-static-libgcc") + common + listOf("-lole32")
-            os.contains("mac") -> listOf(compiler, "-dynamiclib") + common +
-                listOf("-framework", "CoreFoundation", "-framework", "CoreAudio", "-framework", "AudioToolbox", "-lpthread", "-lm")
-            else -> listOf(compiler, "-shared", "-fPIC") + common + listOf("-ldl", "-lpthread", "-lm")
-        }
+        fun lib(name: String) = dir.resolve(when { win -> "$name.dll"; mac -> "lib$name.dylib"; else -> "lib$name.so" }).absolutePath
+        val compiler = if (win) "gcc" else "cc"
         val found = runCatching { ProcessBuilder(compiler, "--version").redirectErrorStream(true).start().apply { inputStream.readBytes() }.waitFor() == 0 }.getOrDefault(false)
         if (!found) {
             check(System.getenv("CI") == null) { "No C compiler ($compiler) to build the sound output" }
             logger.warn("No C compiler ($compiler): the desktop app plays through Java Sound only")
             return@doLast
         }
-        val process = ProcessBuilder(command).redirectErrorStream(true).start()
-        val log = process.inputStream.bufferedReader().readText()
-        check(process.waitFor() == 0) { "Building otaudio failed:\n$log" }
-        if (log.isNotBlank()) logger.info(log)
+        val shared = when { win -> listOf("-shared", "-static-libgcc"); mac -> listOf("-dynamiclib"); else -> listOf("-shared", "-fPIC") }
+        // The sound output, on miniaudio, everywhere.
+        val builds = mutableListOf(
+            listOf(compiler) + shared + listOf("-O2", "-fvisibility=hidden", "-I", header.parentFile.absolutePath, audio.absolutePath, "-o", lib("otaudio")) + when {
+                win -> listOf("-lole32")
+                mac -> listOf("-framework", "CoreFoundation", "-framework", "CoreAudio", "-framework", "AudioToolbox", "-lpthread", "-lm")
+                else -> listOf("-ldl", "-lpthread", "-lm")
+            },
+        )
+        // The system's media controls: SMTC on Windows, Now Playing on macOS. Linux's MPRIS is D-Bus, from Kotlin.
+        if (win) builds += listOf(compiler) + shared + listOf("-O2", mediaWin.absolutePath, "-o", lib("otmedia"), "-lruntimeobject", "-lole32")
+        if (mac) builds += listOf(compiler) + shared + listOf("-O2", "-fobjc-arc", "-fvisibility=hidden", mediaMac.absolutePath, "-o", lib("otmedia"),
+            "-framework", "Foundation", "-framework", "AppKit", "-framework", "MediaPlayer")
+        for (command in builds) {
+            val process = ProcessBuilder(command).redirectErrorStream(true).start()
+            val log = process.inputStream.bufferedReader().readText()
+            check(process.waitFor() == 0) { "Building ${command.last { it.contains("otaudio") || it.contains("otmedia") }} failed:\n$log" }
+            if (log.isNotBlank()) logger.info(log)
+        }
     }
 }
 
@@ -293,6 +302,9 @@ dependencies {
     implementation("com.google.zxing:core:3.5.4")
     // Windows' own frame and materials under the title bar the app draws: user32 and dwmapi, from Kotlin.
     implementation("net.java.dev.jna:jna:5.17.0")
+    // Linux's media controls: MPRIS on the session bus (Mpris.kt), over the JDK's own Unix sockets.
+    implementation("com.github.hypfvieh:dbus-java-core:5.2.2")
+    implementation("com.github.hypfvieh:dbus-java-transport-native-unixsocket:5.2.2")
     // Windows data protection (DPAPI) for the vault key.
     implementation("net.java.dev.jna:jna-platform:5.17.0")
 
@@ -345,11 +357,26 @@ compose.desktop {
             packageVersion = "1.0.$appVersionCode"
             description = "A music player for YouTube Music"
             vendor = "OpenTune"
-            // What jlink's scan suggests, plus scripting for Rhino, java.sql for the library and EC ciphers for HTTPS.
-            modules("java.instrument", "java.management", "java.net.http", "java.scripting", "java.sql", "jdk.crypto.ec", "jdk.dynalink", "jdk.httpserver", "jdk.jfr", "jdk.unsupported")
+            // What jlink's scan suggests, plus scripting for Rhino, java.sql for the library, EC ciphers for HTTPS,
+            // and jdk.security.auth, which D-Bus's sign-in (MPRIS on Linux) reads the user's id with.
+            modules("java.instrument", "java.management", "java.net.http", "java.scripting", "java.sql", "jdk.crypto.ec", "jdk.dynalink", "jdk.httpserver", "jdk.jfr", "jdk.security.auth", "jdk.unsupported")
             macOS {
                 iconFile.set(project.file("packaging/icons/AppIcon.icns"))
                 bundleID = "com.opentune.desktop"
+                // opentune:// links open in the app; macOS hands them over as Apple Events (DeepLinks).
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>CFBundleURLTypes</key>
+                        <array>
+                            <dict>
+                                <key>CFBundleURLName</key>
+                                <string>com.opentune.desktop</string>
+                                <key>CFBundleURLSchemes</key>
+                                <array><string>opentune</string></array>
+                            </dict>
+                        </array>
+                    """.trimIndent()
+                }
             }
             windows {
                 iconFile.set(project.file("packaging/icons/AppIcon.ico"))

@@ -209,6 +209,23 @@ fun DesktopApp(startPanel: SidePanel? = null, startAccountMenu: Boolean = false,
     var accountOpen by remember { mutableStateOf(startAccountMenu) }
     // What a room has to say ("Only the host can skip"), as a notice.
     LaunchedEffect(Unit) { com.opentune.data.together.Together.notices.collect { Notice.show(it) } }
+    // opentune:// links, from a browser or another start of the app (DeepLinks).
+    LaunchedEffect(Unit) {
+        DeepLinks.incoming.collect { target ->
+            playerOpen = false
+            when (target) {
+                is DeepLinks.Target.Song -> playLinkedSong(target.videoId)
+                is DeepLinks.Target.Artist -> go(stack.page.copy(opened = ShelfItem("", "", null, null, target.browseId)))
+                is DeepLinks.Target.Album -> go(stack.page.copy(opened = linkedCollection(target.browseId)))
+                is DeepLinks.Target.Playlist -> go(stack.page.copy(opened = linkedCollection(target.browseId)))
+                is DeepLinks.Target.Room -> {
+                    val t = com.opentune.data.together.Together
+                    t.join(target.code, t.savedName.ifBlank { com.opentune.data.account.AccountStore.account.value?.name.orEmpty() }.ifBlank { "Listener" })
+                    go(Page(Tab.TOGETHER))
+                }
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         Shortcuts.commands.collect { c ->
             when (c) {
@@ -990,4 +1007,25 @@ internal object Time {
         val s = (ms / 1000).coerceAtLeast(0)
         return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
     }
+}
+
+/** A linked album or playlist as a card: its name and cover asked of YouTube Music, as a card would carry them. */
+private suspend fun linkedCollection(browseId: String): ShelfItem {
+    val header = runCatching {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.opentune.data.innertube.InnertubeParser.parseBrowseHeader(com.opentune.data.innertube.Innertube.browse(browseId))
+        }
+    }.getOrNull()
+    return ShelfItem(header?.title.orEmpty(), header?.subtitle.orEmpty(), header?.thumbnailUrl, null, browseId)
+}
+
+/** A linked song, playing now with YouTube Music's up-next after it. */
+private suspend fun playLinkedSong(videoId: String) {
+    val queue = runCatching {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.opentune.data.innertube.InnertubeParser.parseWatchQueue(com.opentune.data.innertube.Innertube.next(videoId))
+        }
+    }.getOrDefault(emptyList())
+    val song = queue.firstOrNull { it.videoId == videoId } ?: Song(videoId, "Song", "", null)
+    Player.playAll(listOf(song) + queue.filter { it.videoId != videoId }, 0)
 }

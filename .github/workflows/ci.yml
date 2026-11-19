@@ -238,7 +238,10 @@ jobs:
         run: |
           ./gradlew --no-daemon :desktop:createDistributable
           app=desktop/build/compose/binaries/main/app
-          if [ -d "$app/OpenTune.app" ]; then "$app/OpenTune.app/Contents/MacOS/OpenTune" --self-check; else "$app/OpenTune/bin/OpenTune" --self-check; fi
+          if [ -d "$app/OpenTune.app" ]; then "$app/OpenTune.app/Contents/MacOS/OpenTune" --self-check
+          # On Linux inside a session bus, so MPRIS connects for real.
+          elif command -v dbus-run-session > /dev/null; then dbus-run-session -- "$app/OpenTune/bin/OpenTune" --self-check
+          else "$app/OpenTune/bin/OpenTune" --self-check; fi
       # One file that runs on any Linux after chmod +x, wrapped around the app image just checked.
       - name: AppImage
         if: runner.os == 'Linux'

@@ -53,6 +53,13 @@ What this protects against: other users on the computer, backups and copies of t
 - **Discord**: the local IPC socket of the Discord app, with OpenTune's own application id. No token.
 - **Local servers**: the stream relay (`Relay.kt`) listens on the loopback address only.
 
+## One instance and links
+
+- A second start talks to the first over the loopback address. The port and a random 256-bit token are in `~/.opentune/instance.json`, created readable by its owner only. A message without the token is dropped, and the token is compared in constant time. At most eight arguments of 512 characters are taken, and each must parse as an opentune:// link, or it's ignored.
+- opentune:// links open only fixed kinds of page, each id matched against a strict pattern (`DeepLinks.parse`). Nothing in a link is run, fetched as code, or turned into a file path. A song link plays the song, a room link joins the room, and the rest open a page.
+- Registering the scheme writes only per-user places: `HKCU\Software\Classes\opentune` on Windows, `~/.local/share/applications/opentune-links.desktop` on Linux. It's done only when running from an install, so a build run from source changes nothing.
+- MPRIS is on the session bus, which only this user's processes can reach. Of its settable properties, only Volume is taken.
+
 ## JavaScript
 
 YouTube's player script is run to work out stream addresses (`desktop/src/shim/java/org/schabi/newpipe/extractor/utils/JavaScript.java`). GraalJS runs it with `allowAllAccess(false)`, so it gets no Java classes, files, threads or network. Rhino runs it with `initSafeStandardObjects()`. No add-on code runs. Add-ons are JSON manifests over HTTPS.

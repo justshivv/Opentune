@@ -175,7 +175,10 @@ jobs:
         shell: bash
         run: |
           app=desktop/build/compose/binaries/main/app
-          if [ -d "$app/OpenTune.app" ]; then "$app/OpenTune.app/Contents/MacOS/OpenTune" --self-check; else "$app/OpenTune/bin/OpenTune" --self-check; fi
+          if [ -d "$app/OpenTune.app" ]; then "$app/OpenTune.app/Contents/MacOS/OpenTune" --self-check
+          # On Linux inside a session bus, so MPRIS connects for real.
+          elif command -v dbus-run-session > /dev/null; then dbus-run-session -- "$app/OpenTune/bin/OpenTune" --self-check
+          else "$app/OpenTune/bin/OpenTune" --self-check; fi
       - name: Name the files for the release
         shell: bash
         run: |

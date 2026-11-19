@@ -102,6 +102,7 @@ The desktop app bundles these libraries, each under its own licence:
 |---|---|---|
 | [JNA](https://github.com/java-native-access/jna) and JNA Platform | window frame, Windows data protection, macOS Keychain and libsecret calls | Apache 2.0 or LGPL 2.1 |
 | [miniaudio](https://github.com/mackron/miniaudio) 0.11.26, in `third_party/miniaudio` | the sound output (`desktop/native/otaudio.c`) | Public domain (Unlicense) or MIT No Attribution |
+| [dbus-java](https://github.com/hypfvieh/dbus-java) | MPRIS on Linux | MIT |
 | [SLF4J](https://www.slf4j.org/) API and simple logger | library logging into `desktop.log` | MIT |
 | [FFmpeg](https://ffmpeg.org/) through [JavaCPP Presets](https://github.com/bytedeco/javacpp-presets) | decoding | FFmpeg: LGPL 3 or later as built (`--enable-version3`, without the GPL parts). JavaCPP and JavaCV: Apache 2.0 or GPL 2 with the Classpath exception |
 | [jFLAC](https://github.com/nguillaumin/jflac) | FLAC decoding for bit-perfect playback | LGPL 2.1 |
