@@ -1,5 +1,7 @@
 package com.opentune.ui.components
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -483,7 +485,13 @@ fun GlassIconButton(
         // The Poster layout's clear glass, as on its pages' buttons.
         modifier = modifier.size(size).then(if (posterLayout()) Modifier.posterGlass(CircleShape) else Modifier.glass(CircleShape)),
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        // Drawn content of its own (the account's photo) says nothing to a screen reader: the
+        // button is named for it, once, in its place.
+        val named = if (content != null && contentDescription != null) {
+            val said = com.opentune.i18n.Tr.t(contentDescription)
+            Modifier.clearAndSetSemantics { this.contentDescription = said }
+        } else Modifier
+        Box(named, contentAlignment = Alignment.Center) {
             if (content != null) content() else Icon(icon, contentDescription, Modifier.size(size * 0.46f))
         }
     }

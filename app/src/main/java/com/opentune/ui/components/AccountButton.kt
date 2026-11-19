@@ -1,6 +1,9 @@
 package com.opentune.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
@@ -36,8 +39,11 @@ fun AccountButton(
     val onClick: () -> Unit = if (menu != null) ({ menuOpen = true }) else onClick
     if (plain) {
         WithUpdateDot {
+            // Named for a screen reader whether it shows the account's photo or the cog.
+            val said = com.opentune.i18n.Tr.t("Settings")
             androidx.compose.foundation.layout.Box(
-                Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = "Settings", role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
+                Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = "Settings", role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+                    .clearAndSetSemantics { contentDescription = said; role = androidx.compose.ui.semantics.Role.Button },
                 contentAlignment = androidx.compose.ui.Alignment.Center,
             ) {
                 val photo = account?.thumbnailUrl
