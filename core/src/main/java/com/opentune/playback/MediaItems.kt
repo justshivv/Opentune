@@ -75,9 +75,16 @@ fun videoStreamUri(videoId: String): Uri =
 fun isVideoUri(uri: Uri): Boolean =
     videoIdOf(uri) != null && uri.getQueryParameter("video") == "1"
 
+/** The video rendition's picture alone, without its own audio: the factory's video side. */
+fun videoOnlyUri(videoId: String): Uri =
+    streamUri(videoId, upgraded = false).buildUpon().appendQueryParameter("video", "only").build()
+
+fun isVideoOnlyUri(uri: Uri): Boolean =
+    videoIdOf(uri) != null && uri.getQueryParameter("video") == "only"
+
 /** The song cache key: the video id, kept apart for an upgraded or video copy. */
 fun cacheKeyOf(uri: Uri): String? = videoIdOf(uri)?.let { id ->
-    externalStreamKeyOf(uri)?.let { "$id:external:$it" } ?: if (isVideoUri(uri)) "$id:video" else if (isUpgradedUri(uri)) "$id:hq" else id
+    externalStreamKeyOf(uri)?.let { "$id:external:$it" } ?: if (isVideoUri(uri) || isVideoOnlyUri(uri)) "$id:video" else if (isUpgradedUri(uri)) "$id:hq" else id
 }
 
 private const val QUALITY_PARAM = "q"

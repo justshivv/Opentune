@@ -334,16 +334,19 @@ object StreamResolver {
     }
 
     /**
-     * The playable URL of [videoId]'s best muxed video format, or null when no
-     * client offers one that unlocks. Muxed only, for now: a video-only format
-     * carries no audio of its own, and merging one in is a playback change,
-     * not a resolver one. The walk is the same one [resolve] makes, so an age
-     * gate or a burned visitor id costs a video switch no more than a song start.
+     * The playable URL of [videoId]'s best video-only format, or null when no
+     * client offers one that unlocks. Video-only, not the muxed file: the
+     * muxed formats ride the clients whose copies are signature-ciphered,
+     * while the video-only ones are served by the same clients that hand the
+     * app its unciphered audio. The picture plays merged over the song's own
+     * stream (see PlaybackService), so it needs no audio of its own. The walk
+     * is the same one [resolve] makes, so an age gate or a burned visitor id
+     * costs a video switch no more than a song start.
      */
     suspend fun resolveVideo(videoId: String): String? {
         init
         unplayableReason(videoId)?.let { return null }
-        return playerStream(videoId, select = { response -> rankVideoFormats(response).filter { it.muxed } })?.url
+        return playerStream(videoId, select = { response -> rankVideoFormats(response).filter { !it.muxed } })?.url
     }
 
     // ---- Quality upgrade ------------------------------------------------------
@@ -1231,7 +1234,7 @@ object StreamResolver {
     private val videos = ConcurrentHashMap<String, Video>()
 
     /** Whether [videoId]'s response offered any video format worth switching to. */
-    fun hasVideo(videoId: String): Boolean = videos[videoId]?.muxed == true
+    fun hasVideo(videoId: String): Boolean = videos.containsKey(videoId)
 
     /** Tracks a client walk answered for, none of which offered a playable video. */
     private val noVideo = ConcurrentHashMap.newKeySet<String>()
@@ -1243,7 +1246,7 @@ object StreamResolver {
      * kept either way, so a song is only ever asked about once.
      */
     suspend fun videoAvailable(videoId: String): Boolean {
-        if (videos[videoId]?.muxed == true) return true
+        if (videos.containsKey(videoId)) return true
         if (videoId in noVideo) return false
         if (!com.opentune.data.isYouTubeId(videoId)) return false
         unplayableReason(videoId)?.let { return false }
@@ -1252,9 +1255,9 @@ object StreamResolver {
         val stream = playerStream(videoId, select = { response ->
             answered = true
             rememberVideo(response)
-            val muxed = rankVideoFormats(response).filter { it.muxed }
-            if (muxed.isNotEmpty()) offered = true
-            muxed
+            val only = rankVideoFormats(response).filter { !it.muxed }
+            if (only.isNotEmpty()) offered = true
+            only
         })
         if (stream != null) return true
         if (answered && !offered) noVideo += videoId
@@ -1266,7 +1269,7 @@ object StreamResolver {
 
     private fun rememberVideo(response: JsonObject) {
         val id = response["videoDetails"]?.jsonObject?.str("videoId") ?: return
-        val best = rankVideoFormats(response).firstOrNull() ?: return
+        val best = rankVideoFormats(response).firstOrNull { !it.muxed } ?: return
         videos[id] = best
     }
 

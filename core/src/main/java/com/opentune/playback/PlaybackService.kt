@@ -280,8 +280,17 @@ class PlaybackService : MediaLibraryService() {
                 }
                 val uri = withoutStartup(input)
                 val id = videoIdOf(uri) ?: return sources.createMediaSource(mediaItem)
+                if (isVideoUri(uri)) {
+                    // Video mode: the song's own audio, chosen by this same factory so
+                    // its usual source choice applies, with the picture-only stream
+                    // laid over it. One item to the queue and the seek bar; two
+                    // streams underneath, started together.
+                    val audioSide = this.createMediaSource(mediaItem.buildUpon().setUri(trackUri(id)).build())
+                    val videoSide = sources.createMediaSource(mediaItem.buildUpon().setUri(videoOnlyUri(id)).build())
+                    return androidx.media3.exoplayer.source.MergingMediaSource(audioSide, videoSide)
+                }
                 if (!isYouTubeId(id) || Podcasts.isEpisode(id) || externalStreamKeyOf(uri) != null ||
-                    isVideoUri(uri) || uri.getQueryParameter("fallback") == "youtube") return sources.createMediaSource(mediaItem)
+                    uri.getQueryParameter("fallback") == "youtube") return sources.createMediaSource(mediaItem)
                 val token = java.util.UUID.randomUUID().toString()
                 val tagged = uri.buildUpon().appendQueryParameter("startup", token).build()
                 // Lossless for the song playing now, and for the next two readied ahead with Preload
