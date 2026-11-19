@@ -109,9 +109,10 @@ object SmartPlaylists {
         var firstSeen = Long.MAX_VALUE
     }
 
-    // Only the accents Latin, Greek and Cyrillic letters take: the vowel signs of Devanagari or
-    // Gurmukhi are marks too, but part of the word, and stay.
-    private val MARKS = Regex("\\p{InCombiningDiacriticalMarks}+")
+    // Only the accents Latin, Greek and Cyrillic letters take (Combining Diacritical Marks, spelt
+    // out: Android's regex has no block names): the vowel signs of Devanagari or Gurmukhi are
+    // marks too, but part of the word, and stay.
+    private val MARKS = Regex("[\\u0300-\\u036F]+")
 
     /** [text] lowercased with its accents taken off, so "Beyoncé" and "BEYONCE" read alike. */
     internal fun fold(text: String): String =
