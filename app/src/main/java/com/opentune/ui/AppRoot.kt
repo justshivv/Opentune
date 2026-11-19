@@ -502,7 +502,9 @@ fun AppRoot(vm: PlayerViewModel) {
         val stack = nav.currentBackStack.value.filter { it.destination.route != null }
         val at = stack.indexOfLast { it.destination.route == root.route }
         if (at < 0) return emptyList()
-        return stack.drop(at + 1).mapNotNull { e ->
+        // Search (and song recognition) belong to no tab: kept as one of this tab's pages, coming
+        // back to the tab would open Search instead. They and anything opened from them end the list.
+        return stack.drop(at + 1).takeWhile { it.destination.route != SEARCH_ROUTE && it.destination.route?.startsWith("recognize") != true }.mapNotNull { e ->
             val template = e.destination.route ?: return@mapNotNull null
             template.replace(Regex("""\{([^}]+)\}""")) { m -> Uri.encode(e.arguments?.get(m.groupValues[1])?.toString().orEmpty()) }
         }

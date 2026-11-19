@@ -462,9 +462,9 @@ private const val PILL_FRAME_MS = 20f
 
 /**
  * The dock pill's jump, stepped by hand so each frame's time can be capped: its place, a spring
- * toward the open slot (damping 0.74, stiffness 230), and its height, which rises over the
- * first 150 ms and then falls back on a looser spring (0.38, 260), dipping below rest as it
- * lands: the squash.
+ * toward the open slot (damping 0.88, stiffness 260), and its height, which rises over the
+ * first 150 ms and then falls back on a looser spring (0.62, 240), dipping once below rest as
+ * it lands: the squash.
  */
 private class PillMotion(start: Float) {
     var x by mutableFloatStateOf(start)
@@ -506,10 +506,11 @@ private class PillMotion(start: Float) {
 
     private companion object {
         const val RISE_MS = 150f
-        const val X_STIFF = 230f
-        val X_DAMP = 2f * 0.74f * kotlin.math.sqrt(230f)
-        const val H_STIFF = 260f
-        val H_DAMP = 2f * 0.38f * kotlin.math.sqrt(260f)
+        // Glides in without wobbling about the new place, and lands with one soft squash.
+        const val X_STIFF = 260f
+        val X_DAMP = 2f * 0.88f * kotlin.math.sqrt(260f)
+        const val H_STIFF = 240f
+        val H_DAMP = 2f * 0.62f * kotlin.math.sqrt(240f)
     }
 }
 
@@ -519,9 +520,16 @@ private fun PosterDockItem(icon: ImageVector, label: String, open: Boolean, modi
     val ink = com.opentune.ui.components.PosterInk
     val fg by animateColorAsState(if (open) ink.on else ink.off, tween(260), label = "posterDock")
     val shape = RoundedCornerShape(percent = 50)
+    // No ripple: the pill moving over is the answer to a tap. Only keyboard focus draws a ring.
+    val interaction = remember { MutableInteractionSource() }
     Column(
         modifier.fillMaxHeight().clip(shape)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = com.opentune.ui.components.FocusRing(shape),
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
             .semantics { role = Role.Tab; this.selected = open },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
