@@ -321,8 +321,10 @@ private fun PosterChrome(c: ChromeContent, fold: () -> Float, onExpand: () -> Un
     val gone = { maxOf(c.away(), fold()) }
     Box(modifier.fillMaxWidth().padding(horizontal = 12.dp)
         .height(if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT)) {
-        c.mini?.invoke(false, Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CHROME_MINI_HEIGHT)
-            .graphicsLayer { translationY = (CHROME_TAB_HEIGHT + CARD_GAP).toPx() * gone() })
+        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalPosterFold provides fold) {
+            c.mini?.invoke(false, Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CHROME_MINI_HEIGHT)
+                .graphicsLayer { translationY = (CHROME_TAB_HEIGHT + CARD_GAP).toPx() * gone() })
+        }
         BoxWithConstraints(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(CHROME_TAB_HEIGHT)
                 .graphicsLayer {

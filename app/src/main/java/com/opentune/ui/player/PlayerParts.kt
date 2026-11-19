@@ -1458,11 +1458,21 @@ private fun MiniRow(
         // On smoked glass, drawn light: a larger cover, the title over the artist, then play
         // and next as plain glyphs, as the Poster layout's reference has them.
         val ink = com.opentune.ui.components.PosterInk
+        // Folded by a scroll, the cover turns from a rounded square into a circle, and back.
+        val fold = com.opentune.ui.components.LocalPosterFold.current
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides ink.on) {
             Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(50.dp).then(landing), RoundedCornerShape(14.dp))
+                        Artwork(
+                            s.thumbnailUrl.artworkAt(ROW_ART_PX),
+                            Modifier.size(50.dp).then(landing).graphicsLayer {
+                                val f = fold().coerceIn(0f, 1f)
+                                shape = RoundedCornerShape(14.dp + (25.dp - 14.dp) * f)
+                                clip = true
+                            },
+                            RoundedCornerShape(14.dp),
+                        )
                         Column(Modifier.padding(start = 14.dp)) {
                             Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = ink.on)
                             Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = ink.off)

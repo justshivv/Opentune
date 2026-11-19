@@ -125,3 +125,9 @@ internal object PosterInk {
     val on = Color.White
     val off = Color.White.copy(alpha = 0.62f)
 }
+
+/**
+ * How far the Poster chrome is folded by a scroll, 0 open to 1 folded, read by the mini player
+ * under it: folded, its cover turns round.
+ */
+internal val LocalPosterFold = androidx.compose.runtime.staticCompositionLocalOf<() -> Float> { { 0f } }
