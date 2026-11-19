@@ -84,9 +84,8 @@ import com.opentune.data.settings.AppSettings
 internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
     val id = item.browseId!!
     val ui by AppSettings.ui.collectAsState()
-    val page by produceState<ArtistPage?>(null, id) {
-        value = runCatching { InnertubeParser.parseArtistPage(Innertube.browse(id)) }.getOrNull()
-    }
+    // Kept with the page, so Back from an album opened here finds it as it was, scrolled where it was.
+    val page: ArtistPage? = rememberKept(id) { runCatching { InnertubeParser.parseArtistPage(Innertube.browse(id)) }.getOrNull() }
     val name = page?.name ?: item.title
     val hero by produceState<String?>(null, name, page) {
         // Apple's photo only for the artist whose page this is, not a namesake (see artFor).

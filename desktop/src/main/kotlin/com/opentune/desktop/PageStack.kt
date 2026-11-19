@@ -60,7 +60,7 @@ internal class PageStack<P>(start: P, private val limit: Int = 30) {
  * shows it at once, so its list is there to scroll back to where it was. Null until it's read.
  */
 @Composable
-internal fun <T : Any> rememberKept(vararg keys: Any?, load: suspend () -> T): T? {
+internal fun <T : Any> rememberKept(vararg keys: Any?, load: suspend () -> T?): T? {
     val kept = rememberSaveable(*keys) { mutableStateOf<T?>(null) }
     LaunchedEffect(*keys) { if (kept.value == null) kept.value = load() }
     return kept.value
