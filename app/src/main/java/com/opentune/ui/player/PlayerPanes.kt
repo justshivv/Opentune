@@ -207,12 +207,9 @@ fun QueuePane(
                                 onDragEnd = {
                                     val from = dragStartPos
                                     val to = order.indexOf(index)
-                                    // Rows as they were when the drag began: the queue can move on under the
-                                    // finger (the song ends, a row goes), and read from it as it is now, the row
-                                    // went to the wrong place, or past the end of the list and the app closed.
-                                    val target = dragStartOrder.getOrNull(to)
                                     if (from >= 0 && to >= 0 && from != to) {
-                                        if (target != null && index in currentUpNext && target in currentUpNext) currentOnMove(index, target)
+                                        val move = queueDragMove(dragStartOrder, from, to, currentUpNext)
+                                        if (move != null) currentOnMove(move.first, move.second)
                                         else { order.clear(); order.addAll(currentUpNext) }
                                     }
                                     dragging = null
@@ -245,6 +242,20 @@ fun QueuePane(
             if (pos == order.lastIndex) Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+/**
+ * The queue move (from, to, as queue indices) for an Up Next row dragged from place [from] to
+ * place [to] of [started], the rows as they were when the drag began; null when the queue has
+ * moved on under the finger so far that either row has left [upNext]. Read from the rows as
+ * they are at the drop, a song ending mid-drag moved the wrong row, or read past the end of
+ * the list and closed the app.
+ */
+internal fun queueDragMove(started: List<Int>, from: Int, to: Int, upNext: List<Int>): Pair<Int, Int>? {
+    val moved = started.getOrNull(from) ?: return null
+    val onto = started.getOrNull(to) ?: return null
+    if (moved == onto || moved !in upNext || onto !in upNext) return null
+    return moved to onto
 }
 
 @Composable
