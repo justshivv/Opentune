@@ -45,7 +45,6 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Bedtime
-import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MoreHoriz
@@ -223,8 +222,10 @@ internal fun NowPlaying(
                 val wide = !docked && maxWidth >= 900.dp && maxWidth >= maxHeight * 0.9f
                 if (wide) PlayerWide(song, playing, panel, show, onOpenTogether, lyricsOverride, maxWidth)
                 else PlayerNarrow(song, playing, panel, show, onOpenTogether, lyricsOverride, docked)
-                HoverIcon(
-                    if (docked) Icons.AutoMirrored.Rounded.KeyboardArrowRight else Icons.Rounded.ExpandMore, if (docked) "Hide player" else "Close player",
+                // The full player closes by its grab bar (see PlayerOverlay); docked beside the
+                // page, it has no bar, so it keeps a button to hide it.
+                if (docked) HoverIcon(
+                    Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Hide player",
                     size = 40.dp, iconSize = 26.dp,
                     modifier = Modifier.align(Alignment.TopStart).padding(start = 16.dp, top = DesktopWindow.topInset + 10.dp),
                     onClick = onClose,
@@ -775,19 +776,22 @@ private fun PlayerPillDivider() {
     Box(Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.16f)))
 }
 
-/** A button in the pill: white on a small soft disc when [active], grey when not. */
+/**
+ * A button in the pill. When [active] its whole part of the pill lights up, a soft white from
+ * divider to divider (the pill's own rounding curves the end ones); grey when not.
+ */
 @Composable
 private fun PlayerPillButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     val wash by animateColorAsState(Color.White.copy(alpha = if (hovered) 0.08f else 0f), tween(150), label = "pill hover")
-    val disc by animateFloatAsState(if (active) 1f else 0f, tween(200, easing = Motion.Settle), label = "pill on")
+    val lit by animateFloatAsState(if (active) 1f else 0f, tween(200, easing = Motion.Settle), label = "pill on")
     Box(
         Modifier.size(64.dp, 56.dp).background(wash).hoverable(hover)
             .clickable(interactionSource = hover, indication = FocusRing(RoundedCornerShape(28.dp)), role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(38.dp).graphicsLayer { alpha = disc; scaleX = 0.7f + 0.3f * disc; scaleY = 0.7f + 0.3f * disc }.clip(CircleShape).background(Color.White.copy(alpha = 0.2f)))
+        Box(Modifier.matchParentSize().graphicsLayer { alpha = lit }.background(Color.White.copy(alpha = 0.22f)))
         Icon(icon, label, tint = Color.White.copy(alpha = if (active) 1f else if (hovered) 0.85f else 0.58f), modifier = Modifier.size(22.dp))
     }
 }

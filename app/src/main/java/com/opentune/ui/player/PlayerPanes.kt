@@ -415,7 +415,9 @@ fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () 
     val scale = pressScale(press, selected)
     Box(
         Modifier.fillMaxHeight().width(width).segmentFill(bg)
-            .clickable(press, androidx.compose.material3.ripple(), enabled = enabled, onClickLabel = label, onClick = onClick),
+            // No ripple: its square wash isn't shaped by the pill, and one left behind when the
+            // set stops taking taps mid-press stayed as a block over the pill's edge.
+            .clickable(press, com.opentune.ui.components.FocusRing(androidx.compose.ui.graphics.RectangleShape), enabled = enabled, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         // The segment's fill stays put in the pill; the icon is what gives under the finger.
@@ -542,7 +544,7 @@ private class PillOutline(private val left: Float, private val width: Float) : a
  */
 private fun Modifier.sweepMask(old: Boolean, set: Int, widths: FloatArray, progress: () -> Float): Modifier = this
     .graphicsLayer {
-        val p = progress()
+        val p = settled(progress())
         val whole = if (old) p <= 0f else p >= 1f
         val none = if (old) p >= 1f else p <= 0f
         alpha = if (none) 0f else 1f
@@ -550,7 +552,7 @@ private fun Modifier.sweepMask(old: Boolean, set: Int, widths: FloatArray, progr
         else androidx.compose.ui.graphics.CompositingStrategy.Offscreen
     }
     .drawWithContent {
-        val p = progress()
+        val p = settled(progress())
         if (if (old) p >= 1f else p <= 0f) return@drawWithContent
         drawContent()
         if (if (old) p <= 0f else p >= 1f) return@drawWithContent
@@ -566,6 +568,17 @@ private fun Modifier.sweepMask(old: Boolean, set: Int, widths: FloatArray, progr
             blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
         )
     }
+
+/**
+ * The sweep's progress with its last sliver at either end counted as done, so a change that
+ * stops a hair short of its end never leaves a faint copy of the other set, its lit
+ * button included, showing through.
+ */
+private fun settled(p: Float): Float = when {
+    p <= 0.004f -> 0f
+    p >= 0.996f -> 1f
+    else -> p
+}
 
 /** How far a morphing pill's outline reaches past the set of buttons inside it, each side, in px. */
 internal val LocalPillOverhang = androidx.compose.runtime.staticCompositionLocalOf<() -> Float> { { 0f } }
@@ -718,6 +731,7 @@ private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motio
     // Each change plays the segment's motion once: 0 at rest, through to 1 and back.
     val kick = remember { androidx.compose.animation.core.Animatable(0f) }
     var taps by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val segPress = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     LaunchedEffect(taps) {
         if (taps == 0 || reduce) return@LaunchedEffect
         kick.snapTo(0f)
@@ -725,7 +739,8 @@ private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motio
         kick.snapTo(0f)
     }
     Box(
-        Modifier.fillMaxHeight().width(LocalPillSegmentWidth.current).segmentFill(bg).clickable(enabled = enabled) { taps++; onClick() },
+        Modifier.fillMaxHeight().width(LocalPillSegmentWidth.current).segmentFill(bg)
+            .clickable(segPress, com.opentune.ui.components.FocusRing(androidx.compose.ui.graphics.RectangleShape), enabled = enabled) { taps++; onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

@@ -93,7 +93,7 @@ internal fun PlayerOverlay(open: Boolean, cover: String?, onClose: () -> Unit, c
             // pointer exactly; a press anywhere else goes on to the player as usual.
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                val top = if (still) 0f else gone.value.coerceAtLeast(0f) * size.height
+                val top = (if (still) 0f else gone.value.coerceAtLeast(0f) * size.height) + DesktopWindow.topInset.toPx()
                 val half = PLAYER_HANDLE_ZONE_W.toPx() / 2
                 val zone = Rect(size.width / 2f - half, top, size.width / 2f + half, top + PLAYER_HANDLE_ZONE_H.toPx())
                 if (!zone.contains(down.position)) return@awaitEachGesture
@@ -115,7 +115,9 @@ internal fun PlayerOverlay(open: Boolean, cover: String?, onClose: () -> Unit, c
                 }
                 dragging = false
                 val flung = tracker.calculateVelocity().y > 1_200f
-                if (moved > 4f && (gone.value > 0.22f || flung)) onClose()
+                // A click on the bar, without a drag, closes the player too.
+                if (kotlin.math.abs(moved) <= 4f) onClose()
+                else if (gone.value > 0.22f || flung) onClose()
                 else scope.launch { gone.animateTo(0f, tween(260, easing = Motion.Emphasized)) }
             }
         },
@@ -145,9 +147,9 @@ private fun PlayerGrabHandle(dragging: Boolean, modifier: Modifier) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     Box(
-        modifier.padding(top = 4.dp).size(PLAYER_HANDLE_ZONE_W, PLAYER_HANDLE_ZONE_H - 4.dp).hoverable(hover)
+        modifier.padding(top = DesktopWindow.topInset + 4.dp).size(PLAYER_HANDLE_ZONE_W, PLAYER_HANDLE_ZONE_H - 4.dp).hoverable(hover)
             .pointerHoverIcon(PointerIcon.Hand)
-            .semantics { contentDescription = "Drag down to close the player" },
+            .semantics { contentDescription = "Close the player: click, or drag down" },
         contentAlignment = Alignment.Center,
     ) {
         Box(
