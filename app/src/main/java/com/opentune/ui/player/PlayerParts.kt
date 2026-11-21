@@ -1488,15 +1488,6 @@ fun MiniPlayer(
     }
 }
 
-/** [content] laid out in [text]'s own direction: an Arabic line runs right-to-left in its slot, its start (a leading number included) at the right and its overflow cut at the left, instead of being forced through the screen's left-to-right reading. */
-@Composable
-private fun InTextDirection(text: String, content: @Composable () -> Unit) {
-    androidx.compose.runtime.CompositionLocalProvider(
-        androidx.compose.ui.platform.LocalLayoutDirection provides if (com.opentune.ui.components.isRtlText(text)) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.platform.LocalLayoutDirection.current,
-        content = content,
-    )
-}
-
 /** The mini player's row: cover, title and artist, play in its progress ring, next. */
 @Composable
 private fun MiniRow(
@@ -1523,8 +1514,8 @@ private fun MiniRow(
                             CircleShape,
                         )
                         Column(Modifier.padding(start = 14.dp)) {
-                            InTextDirection(s.title) { Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = ink.on) }
-                            InTextDirection(s.artist) { Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = ink.off) }
+                            Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = ink.on)
+                            Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = ink.off)
                         }
                     }
                 }
@@ -1544,8 +1535,8 @@ private fun MiniRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(44.dp).then(landing), RoundedCornerShape(12.dp))
                 Column(Modifier.padding(start = 12.dp)) {
-                    InTextDirection(s.title) { Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold) }
-                    InTextDirection(s.artist) { com.opentune.ui.components.SubtitleLine(s.artist, explicit = s.isExplicit == true, style = MaterialTheme.typography.bodySmall) }
+                    Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    com.opentune.ui.components.SubtitleLine(s.artist, explicit = s.isExplicit == true, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
