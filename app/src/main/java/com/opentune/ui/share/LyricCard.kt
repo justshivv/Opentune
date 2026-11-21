@@ -20,6 +20,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -377,59 +380,75 @@ fun LyricCardSheet(
             )
         },
     ) {
-        if (canVideo) {
-            com.opentune.ui.components.PillSegmented(
-                ShareKind.entries, kind, { it.label }, { haptics.tick(); kind = it },
-                Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-            )
-        }
-        if (isVideo) {
-            com.opentune.ui.components.PillSegmented(
-                Backdrop.entries, if (moving == null && movingDone) Backdrop.AMBIENT else backdrop, { it.label },
-                { if (it == Backdrop.AMBIENT || moving != null) { haptics.tick(); backdrop = it } },
-                Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-            )
-            if (movingDone && moving == null) {
-                Text(
-                    "This album has no animated cover, so its colours flow behind the words.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+        // Everything above the lines to pick. It scrolls when it's taller than the room it has:
+        // in video mode the pills, the preview, the button and the switches don't fit every
+        // screen, and squeezed into the card they slid under Save and Share.
+        val controls: @Composable () -> Unit = {
+            if (canVideo) {
+                com.opentune.ui.components.PillSegmented(
+                    ShareKind.entries, kind, { it.label }, { haptics.tick(); kind = it },
+                    Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                )
+            }
+            if (isVideo) {
+                com.opentune.ui.components.PillSegmented(
+                    Backdrop.entries, if (moving == null && movingDone) Backdrop.AMBIENT else backdrop, { it.label },
+                    { if (it == Backdrop.AMBIENT || moving != null) { haptics.tick(); backdrop = it } },
+                    Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                )
+                if (movingDone && moving == null) {
+                    Text(
+                        "This album has no animated cover, so its colours flow behind the words.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                    )
+                }
+            }
+            // The card or video as it will look.
+            val ratio by animateFloatAsState(if (isVideo) LyricVideo.WIDTH / LyricVideo.HEIGHT.toFloat() else LyricCard.WIDTH / LyricCard.height(story).toFloat(), label = "cardRatio")
+            Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
+                val frameModifier = Modifier.width(if (pickable) 150.dp else 200.dp).aspectRatio(ratio).clip(RoundedCornerShape(18.dp))
+                val shown = if (isVideo) frame else preview?.asImageBitmap()
+                if (shown != null) {
+                    Image(shown, if (isVideo) "Lyric video" else "Lyric card", frameModifier, contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                } else {
+                    Box(frameModifier.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+                        Icon(ImageVector.vectorResource(AppIcons.FormatQuote), null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (isVideo) {
+                SheetButton(
+                    if (videoCard) "Make it a story" else "Make it a card",
+                    icon = if (videoCard) ImageVector.vectorResource(AppIcons.Smartphone) else ImageVector.vectorResource(AppIcons.Article),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+                    onClick = { haptics.tick(); videoCard = !videoCard },
+                )
+                com.opentune.ui.components.ToggleRow("Show the OpenTune logo", showLogo, { haptics.tick(); showLogo = it })
+                com.opentune.ui.components.ToggleRow(
+                    "Include the song", withSong, { haptics.tick(); withSong = it },
+                    summary = "The part of the song the lines are sung in, under the video",
+                )
+            } else {
+                SheetButton(
+                    if (story) "Make it a card" else "Make it a story",
+                    icon = if (story) ImageVector.vectorResource(AppIcons.Article) else ImageVector.vectorResource(AppIcons.Smartphone),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+                    onClick = { haptics.tick(); story = !story },
                 )
             }
         }
-        // The card or video as it will look.
-        val ratio by animateFloatAsState(if (isVideo) LyricVideo.WIDTH / LyricVideo.HEIGHT.toFloat() else LyricCard.WIDTH / LyricCard.height(story).toFloat(), label = "cardRatio")
-        Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
-            val frameModifier = Modifier.width(if (pickable) 150.dp else 200.dp).aspectRatio(ratio).clip(RoundedCornerShape(18.dp))
-            val shown = if (isVideo) frame else preview?.asImageBitmap()
-            if (shown != null) {
-                Image(shown, if (isVideo) "Lyric video" else "Lyric card", frameModifier, contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-            } else {
-                Box(frameModifier.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-                    Icon(ImageVector.vectorResource(AppIcons.FormatQuote), null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+        val controlsScroll = androidx.compose.foundation.rememberScrollState()
+        if (!pickable) {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(controlsScroll)) {
+                controls()
+                Spacer(Modifier.height(4.dp))
             }
-        }
-        if (isVideo) {
-            SheetButton(
-                if (videoCard) "Make it a story" else "Make it a card",
-                icon = if (videoCard) ImageVector.vectorResource(AppIcons.Smartphone) else ImageVector.vectorResource(AppIcons.Article),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
-                onClick = { haptics.tick(); videoCard = !videoCard },
-            )
-            com.opentune.ui.components.ToggleRow("Show the OpenTune logo", showLogo, { haptics.tick(); showLogo = it })
-            com.opentune.ui.components.ToggleRow(
-                "Include the song", withSong, { haptics.tick(); withSong = it },
-                summary = "The part of the song the lines are sung in, under the video",
-            )
         } else {
-            SheetButton(
-                if (story) "Make it a card" else "Make it a story",
-                icon = if (story) ImageVector.vectorResource(AppIcons.Article) else ImageVector.vectorResource(AppIcons.Smartphone),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
-                onClick = { haptics.tick(); story = !story },
-            )
+            // Over the list of lines, at most half the screen, so there's room to pick.
+            val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.5f).dp
+            Column(Modifier.heightIn(max = half).verticalScroll(controlsScroll)) { controls() }
         }
         if (pickable) {
             LazyColumn(Modifier.weight(1f, fill = false).padding(top = 4.dp), state = list) {
@@ -470,8 +489,6 @@ fun LyricCardSheet(
                     }
                 }
             }
-        } else {
-            Spacer(Modifier.height(4.dp))
         }
     }
 }

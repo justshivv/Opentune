@@ -57,6 +57,8 @@ internal class LyricVideo(
         /** The longest video made: a story's own limit is a minute; half that keeps it to the part. */
         const val MAX_MS = 30_000L
         private const val LEAD_MS = 700L
+        /** How strong the lines not being sung are. */
+        private const val DIM = 0.42f
         private const val TAIL_MS = 1_200L
         /** How long a line takes to glide into place, and to brighten or dim. */
         private const val GLIDE_MS = 620f
@@ -111,6 +113,13 @@ internal class LyricVideo(
     private val square = cover?.let(ShareCard::centerSquare)
     private val palette = palette(cover)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    // Shaders take their strength from the paint's own alpha too, so each one drawn has a
+    // paint of its own at full strength: sharing [paint], whose colour was left at whatever
+    // the last fill set (the rim's faint white, the fade's nearly clear black), had the edge
+    // fade wipe the lines all but away and the flowing lights not show.
+    private val shade = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val lights = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SCREEN) }
+    private val edgeFade = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private val image = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
     // Where the lines go: the whole frame for a story, the card's top part for a card.
@@ -124,7 +133,8 @@ internal class LyricVideo(
     private val gap = textSize * 0.55f
 
     private val dimPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; this.textSize = this@LyricVideo.textSize; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
-    private val litPaint = TextPaint(dimPaint)
+    // A soft shadow under the sung words, so they hold on a bright cover.
+    private val litPaint = TextPaint(dimPaint).apply { setShadowLayer(this@LyricVideo.textSize * 0.16f, 0f, 0f, Color.argb(90, 0, 0, 0)) }
     private val dim = lines.map { build(it.text, dimPaint) }
     private val lit = lines.map { build(it.text, litPaint) }
     /** Each line's top, laid out one under another from 0. */
@@ -149,9 +159,8 @@ internal class LyricVideo(
         background(t)
         c.drawBitmap(bg, null, RectF(0f, 0f, w, h), bgPaint)
         // Darker towards the foot, where the title sits, so white reads on any cover.
-        paint.shader = LinearGradient(0f, 0f, 0f, h, intArrayOf(Color.argb(70, 0, 0, 0), Color.argb(95, 0, 0, 0), Color.argb(170, 0, 0, 0)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
-        c.drawRect(0f, 0f, w, h, paint)
-        paint.shader = null
+        shade.shader = LinearGradient(0f, 0f, 0f, h, intArrayOf(Color.argb(70, 0, 0, 0), Color.argb(95, 0, 0, 0), Color.argb(170, 0, 0, 0)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w, h, shade)
 
         if (!story) {
             // The frosted card: smoked glass over the wash, so white words read on any colour,
@@ -208,17 +217,14 @@ internal class LyricVideo(
             bgCanvas.drawBitmap(b, null, RectF((bw - side) / 2f, (bh - side) / 2f, (bw + side) / 2f, (bh + side) / 2f), bgPaint)
             bgCanvas.restore()
         } ?: bgCanvas.drawColor(palette[0])
-        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
         palette.forEachIndexed { i, colour ->
             val sp = 0.21f + i * 0.07f
             val x = bw * (0.5f + 0.42f * sin(s * sp + i * 1.7f))
             val y = bh * (0.5f + 0.40f * cos(s * sp * 0.8f + i * 2.3f))
             val r = bh * (0.42f + 0.08f * sin(s * 0.5f + i))
-            paint.shader = RadialGradient(x, y, r, Color.argb(150, Color.red(colour), Color.green(colour), Color.blue(colour)), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-            bgCanvas.drawCircle(x, y, r, paint)
+            lights.shader = RadialGradient(x, y, r, Color.argb(150, Color.red(colour), Color.green(colour), Color.blue(colour)), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+            bgCanvas.drawCircle(x, y, r, lights)
         }
-        paint.shader = null
-        paint.xfermode = null
     }
 
     /** Four colours from the cover, the most varied first; a deep violet set without one. */
@@ -274,9 +280,9 @@ internal class LyricVideo(
                 else -> 1f - ease(sinceEnd / FADE_MS)
             }
             val distanceAway = if (active < 0) i + 1 else abs(i - active)
-            val alpha = 0.34f + 0.66f * on
+            val alpha = DIM + (1f - DIM) * on
             val scale = 0.955f + 0.045f * on
-            val blur = ((1f - on) * min(distanceAway, 3) * w * 0.0016f)
+            val blur = ((1f - on) * min(distanceAway, 3) * w * 0.0011f)
             c.save()
             c.translate(area.left, y)
             c.scale(scale, scale, 0f, dim[i].height / 2f)
@@ -284,7 +290,7 @@ internal class LyricVideo(
             if (words != null && on > 0f) {
                 // Word by word: the line dim, and lit up to where the singing has got, with a feathered edge.
                 dimPaint.maskFilter = null
-                dimPaint.alpha = (255 * (0.34f + 0.16f * on)).toInt()
+                dimPaint.alpha = (255 * (DIM + 0.16f * on)).toInt()
                 dim[i].draw(c)
                 wipe(c, i, song, words, on)
             } else {
@@ -296,15 +302,12 @@ internal class LyricVideo(
             c.restore()
         }
         val edge = textSize * (if (story) 1.4f else 0.8f)
-        paint.shader = LinearGradient(
+        edgeFade.shader = LinearGradient(
             0f, box.top, 0f, box.bottom,
             intArrayOf(Color.TRANSPARENT, Color.BLACK, Color.BLACK, Color.TRANSPARENT),
             floatArrayOf(0f, edge / box.height(), 1f - edge / box.height(), 1f), Shader.TileMode.CLAMP,
         )
-        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-        c.drawRect(box, paint)
-        paint.xfermode = null
-        paint.shader = null
+        c.drawRect(box, edgeFade)
         c.restore()
     }
 

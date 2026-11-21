@@ -97,6 +97,28 @@ class LyricVideoTest {
         frame(LyricVideo(span, null, null, "No cover", "Someone", LyricVideo.Layout.CARD, showLogo = false), 5_000, "card-no-cover")
     }
 
+    /**
+     * Drawn frame after frame as the preview and the encoder do, the sung line is still white
+     * once the fade in is over, in both layouts. One paint used to carry the fade's nearly
+     * clear black into the next frames' edge fade, and the lines all but vanished.
+     */
+    @Test fun theLinesStayBrightFrameAfterFrame() {
+        val span = LyricVideo.span(lines)
+        for (layout in LyricVideo.Layout.entries) {
+            val v = LyricVideo(span, cover(), null, "At Peace", "Karan Aujla", layout, showLogo = true)
+            val b = Bitmap.createBitmap(v.width / 3, v.height / 3, Bitmap.Config.ARGB_8888)
+            val c = Canvas(b)
+            c.scale(1f / 3, 1f / 3)
+            var t = 0L
+            while (t <= 2_000) { v.draw(c, t); t += 33 }
+            File(out, "steady-${layout.name.lowercase()}.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            // Only where the lines are: the title and logo are white whatever happens to the lines.
+            val band = Bitmap.createBitmap(b, 0, (b.height * 0.27f).toInt(), b.width, (b.height * 0.33f).toInt())
+            val brightest = pixels(band).maxOf { minOf(Color.red(it), Color.green(it), Color.blue(it)) }
+            assertTrue("${layout.name}: the sung line isn't white ($brightest)", brightest > 225)
+        }
+    }
+
     private fun pixels(b: Bitmap) = IntArray(b.width * b.height).also { b.getPixels(it, 0, b.width, 0, 0, b.width, b.height) }
 
     private fun brightness(b: Bitmap) = pixels(b).sumOf { (Color.red(it) + Color.green(it) + Color.blue(it)).toLong() }

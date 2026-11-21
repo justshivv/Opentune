@@ -13,6 +13,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
@@ -64,5 +65,27 @@ class LyricCardSheetTest {
         canvas.translate(0f, (back.height - sheet.height).toFloat())
         sheet.draw(canvas)
         File("build/screenshots/share/lyrics-sheet.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    /**
+     * As a video, the pills, the preview, the button and both switches are more than a phone's
+     * card holds: they scroll, and the last switch comes clear of Save and Share, not under them.
+     */
+    @Test fun videoControlsScrollClearOfTheButtons() {
+        AppSettings.init(ApplicationProvider.getApplicationContext())
+        val timed = (0 until 4).map { i ->
+            com.opentune.data.lyrics.LyricLine(10_000L + i * 3_000, 13_000L + i * 3_000, "Kurta ae kaala beeba line $i", emptyList(), false)
+        }
+        compose.setContent {
+            MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65))) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF101014)))
+                LyricCardSheet(Song("x", "At Peace", "Karan Aujla", null), timed.map { it.text }, startAt = 0, onDismiss = {}, pickable = false, timed = timed)
+            }
+        }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        val toggle = compose.onNodeWithText("Include the song").performScrollTo().fetchSemanticsNode().boundsInRoot
+        val save = compose.onNodeWithText("Save").fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue("the switch ($toggle) runs under Save ($save)", toggle.bottom <= save.top + 1f)
     }
 }
