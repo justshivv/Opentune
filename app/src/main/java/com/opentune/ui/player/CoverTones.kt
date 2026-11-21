@@ -3,14 +3,17 @@ package com.opentune.ui.player
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import com.materialkolor.hct.Hct
+import kotlin.math.max
 import kotlin.math.min
 
 /**
@@ -66,3 +69,44 @@ private const val DEEP_TONE = 32.0
 private const val SECOND_TONE = 26.0
 private const val BASE_TONE = 7.0
 private const val LIGHT_TONE = 58.0
+
+/**
+ * The liked heart's colour, taken from the cover: its first colour with real
+ * colour in it (the palette puts colourful ones first), kept at its hue but
+ * set light enough to stand out on the player's dark buttons ([onDark]), or
+ * dark enough on light ones, and pushed up to a clear colourfulness so a
+ * muted cover still gives a heart that reads as coloured. Null for a cover
+ * that is all greys, or not read yet, where the heart keeps its usual colour.
+ */
+internal fun coverLikeColor(palette: List<Color>, onDark: Boolean = true): Color? {
+    val pick = palette.map { Hct.fromInt(it.toArgb()) }.firstOrNull { it.chroma >= LIKE_MIN_SOURCE_CHROMA } ?: return null
+    val tone = if (onDark) LIKE_TONE_ON_DARK else LIKE_TONE_ON_LIGHT
+    return Color(Hct.from(pick.hue, max(pick.chroma, LIKE_MIN_CHROMA), tone).toInt())
+}
+
+/**
+ * [coverLikeColor] for the cover at [artworkUrl], or [fallback], easing from one
+ * song's to the next as the player's other cover colours do. While the next
+ * cover is still being read the last song's colour stays, rather than
+ * flashing back to [fallback] in between.
+ */
+@Composable
+internal fun rememberCoverLikeColor(artworkUrl: String?, fallback: Color): Color {
+    val palette = com.opentune.ui.theme.rememberArtworkPalette(artworkUrl)
+    val onDark = LocalContentColor.current.luminance() > 0.5f
+    // Plain memory, not state: it only bridges the gap and never needs to recompose anything.
+    val last = remember { LastLikeColor() }
+    val target = if (palette.isEmpty()) last.color ?: fallback
+    else (coverLikeColor(palette, onDark) ?: fallback).also { last.color = it }
+    return animateColorAsState(target, tween(900), label = "coverLike").value
+}
+
+private class LastLikeColor { var color: Color? = null }
+
+/** A cover colour below this chroma counts as grey. */
+private const val LIKE_MIN_SOURCE_CHROMA = 10.0
+/** The heart's least colourfulness, so it never reads as grey. */
+private const val LIKE_MIN_CHROMA = 52.0
+/** Its lightness on dark buttons and on light ones. */
+private const val LIKE_TONE_ON_DARK = 70.0
+private const val LIKE_TONE_ON_LIGHT = 40.0

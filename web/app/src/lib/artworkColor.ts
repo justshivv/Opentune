@@ -6,6 +6,33 @@ export interface ArtworkColor {
   background: string;
   /** Whether text on it should be light (a dark colour) or dark. */
   dark: boolean;
+  /**
+   * The cover's hue as a clear, light accent for the liked star on the
+   * player's dark backdrop. Absent for a grey cover.
+   */
+  accent?: string;
+}
+
+/**
+ * The liked star's colour from the cover's average [r, g, b] (0–255): its hue,
+ * pushed up to a clear saturation and set light, so it reads on the player's
+ * backdrop, which always fades to near-black, however dark or pale the cover.
+ * Null for a cover that is all greys, where the hue means nothing.
+ */
+export function likeAccent(r: number, g: number, b: number): string | null {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const chroma = max - min;
+  if (chroma < 18) return null;
+  let hue: number;
+  if (max === r) hue = ((g - b) / chroma) % 6;
+  else if (max === g) hue = (b - r) / chroma + 2;
+  else hue = (r - g) / chroma + 4;
+  hue = Math.round((hue * 60 + 360) % 360);
+  const lightness = (max + min) / 510;
+  const saturation = chroma / 255 / (1 - Math.abs(2 * lightness - 1) || 1);
+  const s = Math.round(Math.max(saturation, 0.65) * 100);
+  return `hsl(${hue} ${Math.min(s, 100)}% 68%)`;
 }
 
 const cache = new Map<string, ArtworkColor>();
@@ -43,7 +70,8 @@ async function measure(url: string): Promise<ArtworkColor> {
   const dark = luminance < 0.6;
   const k = dark ? Math.min(1, 0.55 / Math.max(luminance, 0.05)) * 0.6 : 1;
   const scale = (v: number) => Math.round(dark ? Math.min(v * k, 90) : v);
-  return { background: `rgb(${scale(r)}, ${scale(g)}, ${scale(b)})`, dark };
+  const accent = likeAccent(r, g, b) ?? undefined;
+  return { background: `rgb(${scale(r)}, ${scale(g)}, ${scale(b)})`, dark, accent };
 }
 
 export function useArtworkColor(url: string | null | undefined): ArtworkColor | null {
