@@ -58,6 +58,7 @@ import com.opentune.ui.components.rememberHaptics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.asCoroutineDispatcher
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
@@ -174,14 +175,34 @@ object LyricCard {
         Color.rgb((Color.red(colour) * by).toInt().coerceIn(0, 255), (Color.green(colour) * by).toInt().coerceIn(0, 255), (Color.blue(colour) * by).toInt().coerceIn(0, 255))
 }
 
+/** A picture of the lines, or a video of them sung over the song. */
+private enum class ShareKind(val label: String) { VIDEO("Video"), IMAGE("Image") }
+
+/** What's behind the lines in a video: the album's own moving cover, or its colours flowing. */
+private enum class Backdrop(val label: String) { ANIMATED("Animated cover"), AMBIENT("Ambient colours") }
+
 /**
- * Shares lines of a song as a lyric card. With [pickable], tap up to
- * [LyricCard.MAX_LINES] of [lines] first (starting from [startAt]); without,
- * [lines] are already the chosen ones. Then see the card, switch it to a
- * story, save it, or share it. Only the picture goes out, no text with it.
+ * Shares lines of a song. With [pickable], tap up to [LyricCard.MAX_LINES] of [lines] first
+ * (starting from [startAt]); without, [lines] are already the chosen ones.
+ *
+ * As an image: the lines on a card or a story, saved or shared as a picture. As a video,
+ * where the lines are synced ([timed], one for each of [lines]): the part of the song they
+ * cover, its words lighting as they're sung, over the album's animated cover ([canvasUrl],
+ * Spotify's, or [motion], Apple's) or the cover's colours flowing, with the song itself under
+ * it. [offsetMs] is the song's lyrics offset, so the audio lines up with the words.
  */
 @Composable
-fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () -> Unit, pickable: Boolean = true) {
+fun LyricCardSheet(
+    song: Song,
+    lines: List<String>,
+    startAt: Int,
+    onDismiss: () -> Unit,
+    pickable: Boolean = true,
+    timed: List<com.opentune.data.lyrics.LyricLine>? = null,
+    offsetMs: Long = 0,
+    canvasUrl: String? = null,
+    motion: com.opentune.data.covers.AppleMotionArt.Motion? = null,
+) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
@@ -191,7 +212,14 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
             else if (startAt in lines.indices) add(startAt)
         }
     }
+    val canVideo = timed != null && timed.size == lines.size
+    var kind by remember { mutableStateOf(if (canVideo) ShareKind.VIDEO else ShareKind.IMAGE) }
     var story by remember { mutableStateOf(false) }
+    // The video's own choices.
+    var videoCard by remember { mutableStateOf(false) }
+    var showLogo by remember { mutableStateOf(true) }
+    var withSong by remember { mutableStateOf(true) }
+    var backdrop by remember { mutableStateOf(Backdrop.ANIMATED) }
     // This song's cover, and whether looking for it is over; the card waits
     // for it, so it never goes out with another song's picture.
     var cover by remember(song.videoId) { mutableStateOf<Bitmap?>(null) }
@@ -203,19 +231,103 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
         cover = kotlinx.coroutines.withTimeoutOrNull(8_000) { runCatching { ShareCard.loadImage(context, song.thumbnailUrl, 720) }.getOrNull() }
         coverDone = true
     }
+    // The album's animated cover for the video: the Canvas the player found, else Apple's.
+    var moving by remember(song.videoId) { mutableStateOf<MotionFrames?>(null) }
+    var movingDone by remember(song.videoId) { mutableStateOf(false) }
+    LaunchedEffect(song.videoId, kind) {
+        if (kind != ShareKind.VIDEO || movingDone) return@LaunchedEffect
+        moving = canvasUrl?.let { MotionFrames.loadVideo(it, context.cacheDir) }
+            ?: (motion ?: runCatching { com.opentune.data.covers.AppleMotionArt.forSong(song, ShareCard.durationOf(song.durationText)) }.getOrNull())
+                ?.let { MotionFrames.load(it, context.cacheDir) }
+        movingDone = true
+    }
     val chosen = picked.sorted().map { lines[it] }
-    LaunchedEffect(chosen, story, cover, coverDone) {
+    // The video's lines: everything from the first picked to the last, so the song's words
+    // between them aren't skipped while it plays.
+    val videoLines = remember(picked.toList(), timed) {
+        val t = timed ?: return@remember emptyList()
+        val sorted = picked.sorted()
+        if (sorted.isEmpty()) emptyList() else LyricVideo.span(t.subList(sorted.first(), sorted.last() + 1))
+    }
+    LaunchedEffect(chosen, story, cover, coverDone, kind) {
+        if (kind != ShareKind.IMAGE) return@LaunchedEffect
         preview = if (chosen.isEmpty() || !coverDone) null else withContext(Dispatchers.Default) { LyricCard.draw(cover, chosen, song.title, song.artist, story) }
+    }
+    val useMotion = backdrop == Backdrop.ANIMATED && moving != null
+    val video = remember(videoLines, cover, coverDone, useMotion, moving, videoCard, showLogo) {
+        if (videoLines.isEmpty() || !coverDone) null
+        else LyricVideo(videoLines, cover, moving.takeIf { useMotion }, song.title, song.artist, if (videoCard) LyricVideo.Layout.CARD else LyricVideo.Layout.STORY, showLogo)
+    }
+    // The video playing in the sheet, drawn small from the same frames it will be made of.
+    var frame by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    LaunchedEffect(video, kind) {
+        frame = null
+        val v = video ?: return@LaunchedEffect
+        if (kind != ShareKind.VIDEO) return@LaunchedEffect
+        withContext(Dispatchers.Default) {
+            val scale = 1 / 3f
+            val bitmaps = List(2) { Bitmap.createBitmap((v.width * scale).toInt(), (v.height * scale).toInt(), Bitmap.Config.ARGB_8888) }
+            val began = System.nanoTime()
+            var n = 0
+            while (true) {
+                val t = ((System.nanoTime() - began) / 1_000_000) % v.lengthMs
+                val b = bitmaps[n++ % 2]
+                val c = android.graphics.Canvas(b)
+                c.scale(scale, scale)
+                v.draw(c, t)
+                frame = b.asImageBitmap()
+                kotlinx.coroutines.delay(33)
+            }
+        }
+    }
+    // Making the video: how far along, 0 to 1, while it runs.
+    var making by remember { mutableStateOf<Float?>(null) }
+    var made by remember { mutableStateOf<java.io.File?>(null) }
+    LaunchedEffect(video, withSong) { made = null }
+    fun makeVideo(then: (java.io.File) -> Unit) {
+        made?.let { return then(it) }
+        if (videoLines.isEmpty() || making != null) return
+        val lines = videoLines
+        making = 0f
+        scope.launch {
+            val result = runCatching {
+                // Its own frames at full size, on one thread, as OpenGL needs.
+                val full = LyricVideo(lines, cover, moving.takeIf { useMotion }, song.title, song.artist, if (videoCard) LyricVideo.Layout.CARD else LyricVideo.Layout.STORY, showLogo)
+                val audio = if (withSong) {
+                    VideoFiles.audioSource(song.videoId)?.let { source ->
+                        withContext(Dispatchers.IO) { LyricVideoEncoder.audio(source, full.startMs - offsetMs, full.startMs - offsetMs + full.lengthMs) }
+                    }
+                } else null
+                val file = VideoFiles.fresh(context, "OpenTune-lyrics-${song.videoId}.mp4")
+                val thread = java.util.concurrent.Executors.newSingleThreadExecutor()
+                try {
+                    withContext(thread.asCoroutineDispatcher()) {
+                        LyricVideoEncoder.encode(full, audio, file) { p -> making = p }
+                    }
+                } finally {
+                    thread.shutdown()
+                }
+                if (withSong && audio == null) com.opentune.data.Pills.error("Made without the song: it couldn't be read", context)
+                file
+            }
+            making = null
+            result.onSuccess { made = it; then(it) }
+                .onFailure { if (it !is kotlinx.coroutines.CancellationException) com.opentune.data.Pills.error("Couldn't make the video", context) }
+        }
     }
     val list = rememberLazyListState()
     // Open on the line being sung, a little way down so the lines before it show too.
     LaunchedEffect(Unit) { if (pickable && startAt > 0) list.scrollToItem((startAt - 2).coerceAtLeast(0)) }
     val fileName = "OpenTune-lyrics-${song.videoId}${if (story) "-story" else ""}.png"
+    val isVideo = kind == ShareKind.VIDEO
+    val ready = if (isVideo) video != null && making == null else preview != null
     FloatingCard(
         onDismiss = onDismiss,
         title = "Share lyrics",
         icon = ImageVector.vectorResource(AppIcons.FormatQuote),
         subtitle = when {
+            making != null -> com.opentune.i18n.Tr.f("Making the video… {0}%", ((making ?: 0f) * 100).toInt())
+            isVideo && !pickable -> "The lines you picked, sung over the song."
             !pickable -> "The lines you picked, laid out on a card with the cover."
             picked.isEmpty() -> "Tap the lines to put on the card"
             else -> com.opentune.i18n.Tr.f("{0} of {1} lines picked", picked.size, LyricCard.MAX_LINES)
@@ -225,11 +337,21 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
             SheetButton(
                 "Save",
                 icon = ImageVector.vectorResource(AppIcons.Download),
-                enabled = preview != null,
+                enabled = ready,
+                loading = isVideo && making != null,
                 modifier = Modifier.weight(1f),
                 onClick = {
-                    val card = preview ?: return@SheetButton
                     haptics.press()
+                    if (isVideo) {
+                        makeVideo { file ->
+                            scope.launch {
+                                val saved = runCatching { VideoFiles.save(context, file) }.isSuccess
+                                if (saved) com.opentune.data.Pills.done("Saved to Movies/OpenTune", context) else com.opentune.data.Pills.error("Couldn't save the video", context)
+                            }
+                        }
+                        return@SheetButton
+                    }
+                    val card = preview ?: return@SheetButton
                     scope.launch {
                         val saved = runCatching { ShareCard.saveImage(context, card, fileName) }.isSuccess
                         if (saved) com.opentune.data.Pills.done("Saved to Pictures/OpenTune", context) else com.opentune.data.Pills.error("Couldn't save the card", context)
@@ -240,36 +362,75 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
                 "Share",
                 icon = ImageVector.vectorResource(AppIcons.IosShare),
                 tone = SheetTone.Primary,
-                enabled = preview != null,
+                enabled = ready,
                 modifier = Modifier.weight(1f),
                 onClick = {
-                    val card = preview ?: return@SheetButton
                     haptics.press()
+                    if (isVideo) {
+                        makeVideo { file -> VideoFiles.share(context, file, song.title) }
+                        return@SheetButton
+                    }
+                    val card = preview ?: return@SheetButton
                     // The picture alone: apps that take text as well would paste the lines under it.
                     scope.launch { ShareCard.sendImage(context, card, fileName, text = null, label = song.title) }
                 },
             )
         },
     ) {
-        // The card as it will look.
-        val ratio by animateFloatAsState(LyricCard.WIDTH / LyricCard.height(story).toFloat(), label = "cardRatio")
+        if (canVideo) {
+            com.opentune.ui.components.PillSegmented(
+                ShareKind.entries, kind, { it.label }, { haptics.tick(); kind = it },
+                Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            )
+        }
+        if (isVideo) {
+            com.opentune.ui.components.PillSegmented(
+                Backdrop.entries, if (moving == null && movingDone) Backdrop.AMBIENT else backdrop, { it.label },
+                { if (it == Backdrop.AMBIENT || moving != null) { haptics.tick(); backdrop = it } },
+                Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            )
+            if (movingDone && moving == null) {
+                Text(
+                    "This album has no animated cover, so its colours flow behind the words.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                )
+            }
+        }
+        // The card or video as it will look.
+        val ratio by animateFloatAsState(if (isVideo) LyricVideo.WIDTH / LyricVideo.HEIGHT.toFloat() else LyricCard.WIDTH / LyricCard.height(story).toFloat(), label = "cardRatio")
         Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
-            val p = preview
-            val frame = Modifier.width(if (pickable) 150.dp else 200.dp).aspectRatio(ratio).clip(RoundedCornerShape(18.dp))
-            if (p != null) {
-                Image(p.asImageBitmap(), "Lyric card", frame, contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+            val frameModifier = Modifier.width(if (pickable) 150.dp else 200.dp).aspectRatio(ratio).clip(RoundedCornerShape(18.dp))
+            val shown = if (isVideo) frame else preview?.asImageBitmap()
+            if (shown != null) {
+                Image(shown, if (isVideo) "Lyric video" else "Lyric card", frameModifier, contentScale = androidx.compose.ui.layout.ContentScale.Crop)
             } else {
-                Box(frame.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+                Box(frameModifier.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
                     Icon(ImageVector.vectorResource(AppIcons.FormatQuote), null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
-        SheetButton(
-            if (story) "Make it a card" else "Make it a story",
-            icon = if (story) ImageVector.vectorResource(AppIcons.Article) else ImageVector.vectorResource(AppIcons.Smartphone),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
-            onClick = { haptics.tick(); story = !story },
-        )
+        if (isVideo) {
+            SheetButton(
+                if (videoCard) "Make it a story" else "Make it a card",
+                icon = if (videoCard) ImageVector.vectorResource(AppIcons.Smartphone) else ImageVector.vectorResource(AppIcons.Article),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+                onClick = { haptics.tick(); videoCard = !videoCard },
+            )
+            com.opentune.ui.components.ToggleRow("Show the OpenTune logo", showLogo, { haptics.tick(); showLogo = it })
+            com.opentune.ui.components.ToggleRow(
+                "Include the song", withSong, { haptics.tick(); withSong = it },
+                summary = "The part of the song the lines are sung in, under the video",
+            )
+        } else {
+            SheetButton(
+                if (story) "Make it a card" else "Make it a story",
+                icon = if (story) ImageVector.vectorResource(AppIcons.Article) else ImageVector.vectorResource(AppIcons.Smartphone),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+                onClick = { haptics.tick(); story = !story },
+            )
+        }
         if (pickable) {
             LazyColumn(Modifier.weight(1f, fill = false).padding(top = 4.dp), state = list) {
                 itemsIndexed(lines) { i, line ->

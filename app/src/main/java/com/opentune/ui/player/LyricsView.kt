@@ -135,6 +135,10 @@ fun LyricsView(
     seeks: () -> Long = { 0L },
     /** Follow the player's existing focus timer and touch-to-reveal controls. */
     controlsVisible: Boolean = true,
+    /** For a lyric video: the Canvas or animated cover the player found, and the song's lyrics offset. */
+    shareCanvas: String? = null,
+    shareMotion: com.opentune.data.covers.AppleMotionArt.Motion? = null,
+    shareOffsetMs: Long = 0,
 ) {
     // The song and its lines as they were when sharing began, so a song
     // change while the sheet is open can't mix one song's words with another's.
@@ -146,6 +150,8 @@ fun LyricsView(
     val selection = remember(syncedLines) { androidx.compose.runtime.mutableStateListOf<Int>() }
     // The picked lines handed to the card sheet, frozen when Share was pressed.
     var sharingPicked by remember { mutableStateOf<Pair<com.opentune.data.model.Song, List<String>>?>(null) }
+    // The same lines with their timing, for a lyric video; null for plain lyrics.
+    var sharingTimed by remember { mutableStateOf<List<com.opentune.data.lyrics.LyricLine>?>(null) }
     // The translate-and-romanize sheet, opened from the page's translate button.
     var textSheet by remember { mutableStateOf(false) }
     // Settings › Keep the screen on for lyrics: held only while this view is on screen, and
@@ -169,7 +175,9 @@ fun LyricsView(
                         selection = selection.takeIf { shareSong != null },
                         onShareSelection = shareSong?.let { song ->
                             {
-                                val picked = selection.sorted().mapNotNull { lyrics.lines.getOrNull(it)?.text?.trim()?.takeIf(String::isNotEmpty) }
+                                val pickedLines = selection.sorted().mapNotNull { lyrics.lines.getOrNull(it)?.takeIf { l -> l.text.isNotBlank() } }
+                                val picked = pickedLines.map { it.text.trim() }
+                                sharingTimed = pickedLines
                                 if (picked.isNotEmpty()) sharingPicked = song to picked
                                 selection.clear()
                             }
@@ -217,6 +225,7 @@ fun LyricsView(
                                 selection.add(found.lines.indexOfLast { it.startMs <= now }.coerceAtLeast(0))
                             } else {
                                 shareStartAt = if (found is Lyrics.Synced) timed.indexOfLast { it.second <= now } else -1
+                                sharingTimed = (found as? Lyrics.Synced)?.lines?.filter { it.text.isNotBlank() }?.takeIf { synced }
                                 sharing = shareSong to lines
                             }
                         }
@@ -225,9 +234,17 @@ fun LyricsView(
             }
         }
         // The action row may hide while the sheet is open; keep the sheet independent.
-        sharing?.let { (song, shared) -> com.opentune.ui.share.LyricCardSheet(song, shared, startAt = shareStartAt, onDismiss = { sharing = null }) }
+        sharing?.let { (song, shared) ->
+            com.opentune.ui.share.LyricCardSheet(
+                song, shared, startAt = shareStartAt, onDismiss = { sharing = null },
+                timed = sharingTimed, offsetMs = shareOffsetMs, canvasUrl = shareCanvas, motion = shareMotion,
+            )
+        }
         sharingPicked?.let { (song, picked) ->
-            com.opentune.ui.share.LyricCardSheet(song, picked, startAt = 0, onDismiss = { sharingPicked = null }, pickable = false)
+            com.opentune.ui.share.LyricCardSheet(
+                song, picked, startAt = 0, onDismiss = { sharingPicked = null }, pickable = false,
+                timed = sharingTimed, offsetMs = shareOffsetMs, canvasUrl = shareCanvas, motion = shareMotion,
+            )
         }
         if (textSheet && found != null) {
             val sheetLines = when (found) {
