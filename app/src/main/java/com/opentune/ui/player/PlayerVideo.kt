@@ -111,8 +111,8 @@ private fun fitVideo(view: TextureView, video: VideoSize) {
 @Composable
 internal fun SongVideoToggle(videoMode: Boolean, onSelect: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
-        Segment(Tr.f("Song"), selected = !videoMode) { onSelect(false) }
-        Segment(Tr.f("Video"), selected = videoMode) { onSelect(true) }
+        Segment(Tr.f("Song"), selected = !videoMode) { if (videoMode) onSelect(false) }
+        Segment(Tr.f("Video"), selected = videoMode) { if (!videoMode) onSelect(true) }
     }
 }
 

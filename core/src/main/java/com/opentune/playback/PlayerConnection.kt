@@ -441,6 +441,7 @@ class PlayerConnection(private val context: Context) {
 
     /** Switches the playing song between its audio stream and its music video, in place. */
     fun setVideoMode(on: Boolean) {
+        if (_videoMode.value == on) return
         val controller = controller ?: return
         val item = controller.currentMediaItem ?: return
         // The service makes the swap on its own player: its rendition swaps

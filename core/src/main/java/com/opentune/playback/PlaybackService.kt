@@ -661,6 +661,11 @@ class PlaybackService : MediaLibraryService() {
                 val player = mediaSession?.player as? ExoPlayer ?: return@collect
                 val item = player.currentMediaItem ?: return@collect
                 if (item.mediaId != id) return@collect
+                // A switch to the mode already showing is not a switch: it
+                // must not even touch the remembered rendition, let alone
+                // build the item again.
+                val alreadyVideo = item.localConfiguration?.uri?.let { isVideoUri(it) || isVideoOnlyUri(it) } == true
+                if (on == alreadyVideo) return@collect
                 val uri = if (on) {
                     videoAudioStash = id to (item.localConfiguration?.uri ?: trackUri(id))
                     videoModeSongId = id
