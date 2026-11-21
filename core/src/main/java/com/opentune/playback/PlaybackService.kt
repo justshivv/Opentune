@@ -658,6 +658,9 @@ class PlaybackService : MediaLibraryService() {
                 if (player.currentMediaItem?.mediaId != id) return@collect
                 val better = ExternalStreams.cached(id)?.takeIf { it.lossless && ExternalStreams.allowed(true) } ?: return@collect
                 val playing = player.currentMediaItem?.localConfiguration?.uri ?: return@collect
+                // A better stream answering late never takes a song out of
+                // video mode: the user picked the picture over the upgrade.
+                if (isVideoUri(playing) || isVideoOnlyUri(playing)) return@collect
                 val existing = externalStreamKeyOf(selectedUri(playing))?.let { ExternalStreams.get(id, it) }
                 if (existing?.key == better.key) return@collect
                 if (existing?.lossless == true && com.opentune.data.addons.AddonResolver.qualityScore(better.bits, better.sampleRate) <=
@@ -1858,6 +1861,10 @@ class PlaybackService : MediaLibraryService() {
             if (!isYouTubeId(id) || Podcasts.isEpisode(id)) continue
             val raw = item.localConfiguration?.uri ?: continue
             if (raw.scheme == "file") continue
+            // Video mode is a rendition the user picked: the guard leaves it
+            // alone, as the upgrade search does, or it would swap the picture
+            // out from under them once a better stream is known.
+            if (isVideoUri(raw) || isVideoOnlyUri(raw)) continue
             if (startupToken(raw) != null && startupToken(raw)?.let { startupSelections[it]?.selected } == null) continue
             if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS + GUARD_EVERY_MS) continue
             if (tries >= GUARD_TRIES) continue
