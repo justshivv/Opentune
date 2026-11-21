@@ -263,7 +263,12 @@ object InnerTubeXResolver {
         bindSession()
         val stream = extractor.extract(
             videoId = videoId,
-            hints = ContentHints().withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
+            // wantVideo is the whole point of this ask: without it the
+            // extractor runs audio-only and the stream it returns has no
+            // videoUrl, so this function could only ever answer null (the
+            // 2026-11-21 device log shows 27 extractions, all wantVideo=false).
+            hints = ContentHints(wantVideo = true)
+                .withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
             excludedClients = excludedFor(videoId) + skipClients,
             audioQuality = AudioQuality.AUTO,
             clientPlaybackNonce = generateClientPlaybackNonce(),
