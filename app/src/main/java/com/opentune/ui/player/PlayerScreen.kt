@@ -661,7 +661,7 @@ fun PlayerLayout(
     val listsGone by remember { androidx.compose.runtime.derivedStateOf { paneProgress() <= 0.001f } }
     val listsFull by remember { androidx.compose.runtime.derivedStateOf { paneProgress() >= 0.999f } }
 
-    PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme, neutral = apple) {
+    PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl, keepLast = true), settings = theme, neutral = apple) {
         // "Playing from", whose room it is, or the remix pill.
         val statusLine: @Composable () -> Unit = {
             val room by Together.room.collectAsState()

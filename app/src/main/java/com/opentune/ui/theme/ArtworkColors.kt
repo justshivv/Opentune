@@ -32,11 +32,17 @@ private const val NO_COLOR = 0
  * Results are cached per URL, so the same cover is only read once.
  */
 @Composable
-fun rememberArtworkSeed(url: String?): Color? {
+fun rememberArtworkSeed(url: String?, keepLast: Boolean = false): Color? {
     val context = LocalContext.current
-    var seed by remember(url) { mutableStateOf(url?.let(seedCache::get)?.takeIf { it != NO_COLOR }?.let(::Color)) }
+    fun cached() = url?.let(seedCache::get)?.takeIf { it != NO_COLOR }?.let(::Color)
+    // With [keepLast], the colour so far stays until the new cover's is read: the player's
+    // colours then ease from one song's straight to the next's, rather than by way of the
+    // app's own accent for the moment the new cover takes to read.
+    val held = remember { mutableStateOf(cached()) }
+    var seed by if (keepLast) held else remember(url) { mutableStateOf(cached()) }
     LaunchedEffect(url) {
-        if (url == null || seedCache.containsKey(url)) return@LaunchedEffect
+        if (url == null) { seed = null; return@LaunchedEffect }
+        if (seedCache.containsKey(url)) { seed = cached(); return@LaunchedEffect }
         val argb = extractSeed(context, url)
         seedCache[url] = argb ?: NO_COLOR
         seed = argb?.let(::Color)
@@ -80,12 +86,17 @@ private val paletteCache = ConcurrentHashMap<String, IntArray>()
  * when the cover can't be loaded; cached per URL like [rememberArtworkSeed].
  */
 @Composable
-fun rememberArtworkPalette(url: String?): List<Color> {
+fun rememberArtworkPalette(url: String?, keepLast: Boolean = false): List<Color> {
     val context = LocalContext.current
-    var palette by remember(url) { mutableStateOf(url?.let(paletteCache::get)?.map { Color(it) }.orEmpty()) }
+    fun cached() = url?.let(paletteCache::get)?.map { Color(it) }.orEmpty()
+    // With [keepLast], the colours so far stay until the new cover's are read (see rememberArtworkSeed).
+    val held = remember { mutableStateOf(cached()) }
+    var palette by if (keepLast) held else remember(url) { mutableStateOf(cached()) }
     LaunchedEffect(url) {
-        if (url == null || paletteCache.containsKey(url)) return@LaunchedEffect
-        val argb = extractPalette(context, url) ?: return@LaunchedEffect
+        if (url == null) { palette = emptyList(); return@LaunchedEffect }
+        if (paletteCache.containsKey(url)) { palette = cached(); return@LaunchedEffect }
+        val argb = extractPalette(context, url)
+        if (argb == null) { if (keepLast) palette = emptyList(); return@LaunchedEffect }
         paletteCache[url] = argb
         palette = argb.map { Color(it) }
     }

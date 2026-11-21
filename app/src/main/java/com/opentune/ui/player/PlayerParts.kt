@@ -186,7 +186,7 @@ fun PlayerBackdrop(
 ) {
     val scheme = MaterialTheme.colorScheme
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
-    val seed = rememberArtworkSeed(artworkUrl)
+    val seed = rememberArtworkSeed(artworkUrl, keepLast = true)
     // With the setting on, the full-screen cover's own colour is the backdrop:
     // the cover fades into itself and the player reads as one surface.
     val matched = if (ui.coverColorBackground && fullCover) seed else null
@@ -569,7 +569,7 @@ private val FULL_COVER_FADE = 210.dp
 @Composable
 private fun MeshGradient(artworkUrl: String?, animate: Boolean, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
-    val palette = com.opentune.ui.theme.rememberArtworkPalette(artworkUrl)
+    val palette = com.opentune.ui.theme.rememberArtworkPalette(artworkUrl, keepLast = true)
     // The cover's colours, or the song's scheme until they've been read. Each
     // is kept between dark and mid so none of them glares behind white text.
     val wanted = remember(palette, scheme.primary, scheme.tertiary) {
@@ -1324,7 +1324,7 @@ fun MiniPlayer(
     val accent = MaterialTheme.colorScheme.primary
     val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
     // The cover's own colour, faded into the glass, so each song tints the card.
-    val seed = rememberArtworkSeed(song.thumbnailUrl)
+    val seed = rememberArtworkSeed(song.thumbnailUrl, keepLast = true)
     val colourFromCover = com.opentune.data.settings.AppSettings.ui.collectAsState().value.miniPlayerTint
     val tint by animateColorAsState(((if (colourFromCover) seed else null) ?: MaterialTheme.colorScheme.surfaceContainerHigh).copy(alpha = 0.38f), tween(600), label = "miniTint")
 

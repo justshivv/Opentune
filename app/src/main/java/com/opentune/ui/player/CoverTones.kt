@@ -47,7 +47,7 @@ internal fun coverTones(palette: List<Color>, scheme: ColorScheme): CoverTones {
 /** [coverTones] for the cover at [artworkUrl], easing from one song's to the next. */
 @Composable
 internal fun rememberCoverTones(artworkUrl: String?): CoverTones {
-    val palette = com.opentune.ui.theme.rememberArtworkPalette(artworkUrl)
+    val palette = com.opentune.ui.theme.rememberArtworkPalette(artworkUrl, keepLast = true)
     val scheme = MaterialTheme.colorScheme
     val target = remember(palette, scheme) { coverTones(palette, scheme) }
     val spec = tween<Color>(900)
