@@ -339,28 +339,33 @@ object StreamResolver {
      * muxed formats ride the clients whose copies are signature-ciphered,
      * while the video-only ones are served by the same clients that hand the
      * app its unciphered audio. The picture plays merged over the song's own
-     * stream (see PlaybackService), so it needs no audio of its own. The walk
-     * is the same one [resolve] makes, so an age gate or a burned visitor id
-     * costs a video switch no more than a song start.
+     * stream (see PlaybackService), so it needs no audio of its own. The
+     * InnerTubeX engine is asked before the walk: its streams carry PoTokens
+     * and play under the bot flags that stand the plain clients down, while
+     * a walk-minted video URL can pass its own probe and still be refused
+     * when the player opens it. The walk is the same one [resolve] makes,
+     * so an age gate or a burned visitor id costs a video switch no more
+     * than a song start.
      */
     suspend fun resolveVideo(videoId: String): String? {
         init
         unplayableReason(videoId)?.let { return null }
+        videoUrls[videoId]?.let { return it }
         // Off the caller's thread, for the same reason as [videoAvailable]:
         // the walk's probes are raw network calls, and a main-thread caller
         // would have every one of them killed and conclude nothing is usable.
         return withContext(Dispatchers.IO) {
-            playerStream(videoId, select = { response -> rankVideoFormats(response).filter { !it.muxed } })?.url
-                ?: innerTubeXVideo(videoId)
-        }
+            innerTubeXVideo(videoId)
+                ?: playerStream(videoId, select = { response -> rankVideoFormats(response).filter { !it.muxed } })?.url
+        }?.also { videoUrls[videoId] = it }
     }
 
     /**
      * The video side of the InnerTubeX engine. The clients that keep audio
      * playing under a bot flag carry PoTokens, and their extraction includes
-     * the music video; the plain client walk has neither advantage, so when
-     * it comes back empty — refused, bot-checked, ciphered — this is asked
-     * before giving up. Probed and excluded exactly like its audio streams.
+     * the music video; the plain client walk has neither advantage, so this
+     * is asked first and the walk only when it finds nothing. Probed and
+     * excluded exactly like its audio streams.
      */
     private suspend fun innerTubeXVideo(videoId: String): String? {
         val skip = mutableSetOf<String>()
@@ -377,6 +382,7 @@ object StreamResolver {
             } ?: return null
             if (probe(found.url, expectVideo = true) == Probe.OK) {
                 TrackLog.d(TAG, "InnerTubeX served video for $videoId via ${found.clientName} at ${found.kbps} kbps")
+                videoUrls[videoId] = found.url
                 return found.url
             }
             InnerTubeXResolver.exclude(videoId, found.profileId)
@@ -1269,20 +1275,35 @@ object StreamResolver {
     /** The best video format seen for each track, kept for the process's lifetime. */
     private val videos = ConcurrentHashMap<String, Video>()
 
-    /** Whether [videoId]'s response offered any video format worth switching to. */
-    fun hasVideo(videoId: String): Boolean = videos.containsKey(videoId)
+    /**
+     * Whether a probed video URL is already held for [videoId]. A parsed
+     * response offering a video format is not enough to light the switch:
+     * no URL was ever resolved for it, and resolving one at load time is
+     * exactly what failed under load. Only a URL in hand counts.
+     */
+    fun hasVideo(videoId: String): Boolean = videoUrls.containsKey(videoId)
 
     /** Tracks a client walk answered for, none of which offered a playable video. */
     private val noVideo = ConcurrentHashMap.newKeySet<String>()
 
     /**
-     * Whether [videoId] has a music video worth switching to, asking the walk
-     * itself when no response of the track's was ever parsed (a song served
-     * from the cache or a download never had its formats read). The answer is
-     * kept either way, so a song is only ever asked about once.
+     * Video stream URLs already resolved, by song. A load opens its stream
+     * several times over, and re-walking for every open can fail where the
+     * walk that lit the toggle succeeded moments earlier — the player then
+     * has no video at all and skips the song. Dropped when googlevideo
+     * refuses one (see [onPlaybackRefused]).
+     */
+    private val videoUrls = ConcurrentHashMap<String, String>()
+
+    /**
+     * Whether [videoId] has a music video worth switching to — meaning a
+     * probed URL for it is held, not merely a format offered by some parsed
+     * response. When none is held, [checkVideo] resolves one (the PoToken
+     * engine first, then the walk). The answer is kept either way, so a
+     * song is only ever asked about once.
      */
     suspend fun videoAvailable(videoId: String): Boolean {
-        if (videos.containsKey(videoId)) return true
+        if (videoUrls.containsKey(videoId)) return true
         if (videoId in noVideo) return false
         if (!com.opentune.data.isYouTubeId(videoId)) return false
         // The walk is network work; a caller on the main thread (the player
@@ -1293,6 +1314,9 @@ object StreamResolver {
 
     private suspend fun checkVideo(videoId: String): Boolean {
         unplayableReason(videoId)?.let { return false }
+        // Asked first, for the same reason as in [resolveVideo]: this
+        // engine's streams are the ones that play in a flagged session.
+        if (innerTubeXVideo(videoId) != null) return true
         var answered = false
         var offered = false
         val stream = playerStream(videoId, select = { response ->
@@ -1302,10 +1326,10 @@ object StreamResolver {
             if (only.isNotEmpty()) offered = true
             only
         })
-        if (stream != null) return true
-        // The walk can be bot-flagged into silence while the PoToken engine
-        // still knows the track's video; ask it before concluding none.
-        if (innerTubeXVideo(videoId) != null) return true
+        if (stream != null) {
+            videoUrls[videoId] = stream.url
+            return true
+        }
         if (answered && !offered) noVideo += videoId
         return false
     }
@@ -1887,6 +1911,9 @@ object StreamResolver {
         // answering 404 stands down the client that mints most of YouTube's,
         // and the next YouTube track pays for a failure on a different server.
         if (url.toHttpUrlOrNull()?.host?.endsWith("googlevideo.com") != true) return
+        // A refused video URL is dropped too, so the next play re-resolves it
+        // instead of failing on the same dead address.
+        videoUrls.entries.removeAll { it.value == url }
         // A URL InnerTubeX minted is its refusal, not one of [CLIENTS]': it
         // excludes that client variant, and the next track starts on our walk.
         InnerTubeXResolver.onRefused(url)?.let { videoId ->
