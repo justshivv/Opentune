@@ -183,6 +183,10 @@ fun PlayerBackdrop(
     artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
     /** Apple's animated cover for the playing song, looped over the full-screen still. */
     video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
+    /** The song's music video is showing in the full cover's place. */
+    musicVideo: Boolean = false,
+    /** The playback player's video picture, drawn in the full cover's place while [musicVideo]. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
@@ -244,6 +248,27 @@ fun PlayerBackdrop(
         }
         if (canvas != null) {
             CanvasBackdrop(canvas, canvasPlaying, titleTop, canvasBehindText, Modifier.matchParentSize())
+        } else if (fullCover && musicVideo) {
+            // The music video in the full cover's place: the same span from the top,
+            // faded into the backdrop below it with a scrim laid over it (never a mask
+            // drawn through the picture itself), and the same top shade.
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible) 1f else 0f }) {
+                val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
+                val solid = (1f - FULL_COVER_FADE / height).coerceIn(0.4f, 0.8f)
+                Box(Modifier.fillMaxWidth().height(height)) {
+                    videoSurface()
+                    Box(
+                        Modifier.matchParentSize().background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                solid to Color.Transparent,
+                                1f to (matched ?: tones.base),
+                            ),
+                        ),
+                    )
+                    Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = com.opentune.ui.components.FULL_COVER_TOP_SHADE), 0.2f to Color.Transparent)))
+                }
+            }
         } else if (fullCover) {
             CoverSwap(CoverShown(artworkUrl, index, songId), change) { url, motion ->
                 // The cover runs from the top down to just behind the title and
@@ -1817,6 +1842,10 @@ fun VinylPane(
     onSwipePrevious: () -> Unit,
     animate: Boolean,
     modifier: Modifier = Modifier,
+    /** The song's music video is showing in the record's place. */
+    musicVideo: Boolean = false,
+    /** The playback player's video picture, drawn while [musicVideo]. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     var angle by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(isPlaying, animate) {
@@ -1831,7 +1860,18 @@ fun VinylPane(
     }
     val groove = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
     ArtworkSwipeArea(onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious, modifier = modifier.fillMaxWidth()) {
-        Box(
+        if (musicVideo) {
+            // The record rests and the video takes its place, unturned: a turning
+            // picture would fight the frame's own fitting.
+            Box(
+                Modifier
+                    .fillMaxWidth(0.92f)
+                    .aspectRatio(16f / 9f)
+                    .align(Alignment.Center)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+                    .background(Color.Black),
+            ) { videoSurface() }
+        } else Box(
             Modifier
                 .fillMaxWidth(0.92f)
                 .aspectRatio(1f)

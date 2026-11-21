@@ -855,7 +855,9 @@ fun PlayerLayout(
                     change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                     index = state.currentIndex,
                     songId = current.videoId,
-                    canvas = state.canvasVideo,
+                    canvas = state.canvasVideo.takeIf { !state.videoMode },
+                    musicVideo = state.videoMode,
+                    videoSurface = videoSurface,
                     video = state.coverVideo,
                     titleTop = with(LocalDensity.current) { bigTitle?.top?.takeIf { it > 0f }?.toDp() },
                     // Lyrics and the queue are read over the whole page, so the Canvas frosts top to bottom.
@@ -1062,17 +1064,18 @@ fun PlayerLayout(
                                                     },
                                                 )
                                             style == PlayerStyle.VINYL ->
-                                                VinylPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                                VinylPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation, musicVideo = state.videoMode, videoSurface = videoSurface)
                                             style == PlayerStyle.CASSETTE ->
                                                 CassettePane(
                                                     current, state.isPlaying,
                                                     progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
                                                     onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation,
+                                                    musicVideo = state.videoMode, videoSurface = videoSurface,
                                                 )
                                             style == PlayerStyle.HALO ->
-                                                HaloPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                                HaloPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation, musicVideo = state.videoMode, videoSurface = videoSurface)
                                             style == PlayerStyle.POLAROID ->
-                                                PolaroidPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                                PolaroidPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation, musicVideo = state.videoMode, videoSurface = videoSurface)
                                             else ->
                                                 ArtworkPane(
                                                     current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous,
@@ -1085,7 +1088,7 @@ fun PlayerLayout(
                                                     video = state.coverVideo,
                                                     musicVideo = state.videoMode,
                                                     videoSurface = videoSurface,
-                                                    canvasShowing = state.canvasVideo != null,
+                                                    canvasShowing = state.canvasVideo != null && !state.videoMode,
                                                     corner = state.ui.coverCornerDp.dp,
                                                 )
                                         }
@@ -1431,8 +1434,8 @@ fun PlayerLayout(
                         // lands on, so the still cover never shows for a moment on the way.
                         // With a Spotify Canvas behind, the big cover is the video: the still cover
                         // flies in only as it shrinks, so it never covers the Canvas on the way.
-                        bigAlpha = if (state.canvasVideo != null) 0f else 1f,
-                        overlay = state.coverVideo?.takeIf { flying && state.canvasVideo == null && !fullStyle }?.let { video ->
+                        bigAlpha = if (state.canvasVideo != null || state.videoMode) 0f else 1f,
+                        overlay = state.coverVideo?.takeIf { flying && state.canvasVideo == null && !state.videoMode && !fullStyle }?.let { video ->
                             {
                                 val quality = state.ui.motionQuality
                                 LoopingVideo(video.url, state.isPlaying, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl, maxPx = quality.maxPx, maxBitrate = quality.maxBitrate)
