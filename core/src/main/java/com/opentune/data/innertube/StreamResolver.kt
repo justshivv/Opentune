@@ -357,7 +357,7 @@ object StreamResolver {
         return withContext(Dispatchers.IO) {
             innerTubeXVideo(videoId)
                 ?: playerStream(videoId, select = { response -> rankVideoFormats(response).filter { !it.muxed } })?.url
-        }?.also { videoUrls[videoId] = it }
+        }?.also { videoUrls[videoId] = it; VideoAvailability.remember(videoId, true) }
     }
 
     /**
@@ -1281,7 +1281,10 @@ object StreamResolver {
      * no URL was ever resolved for it, and resolving one at load time is
      * exactly what failed under load. Only a URL in hand counts.
      */
-    fun hasVideo(videoId: String): Boolean = videoUrls.containsKey(videoId)
+    fun hasVideo(videoId: String): Boolean = videoUrls.containsKey(videoId) || VideoAvailability.known(videoId) == true
+
+    /** Whether the video question has a settled answer for [videoId], either way. */
+    fun videoKnown(videoId: String): Boolean = videoUrls.containsKey(videoId) || videoId in noVideo || VideoAvailability.known(videoId) != null
 
     /** Tracks a client walk answered for, none of which offered a playable video. */
     private val noVideo = ConcurrentHashMap.newKeySet<String>()
@@ -1305,11 +1308,17 @@ object StreamResolver {
     suspend fun videoAvailable(videoId: String): Boolean {
         if (videoUrls.containsKey(videoId)) return true
         if (videoId in noVideo) return false
+        // Settled once, settled for good: the kept answer needs no network.
+        VideoAvailability.known(videoId)?.let { return it }
         if (!com.opentune.data.isYouTubeId(videoId)) return false
         // The walk is network work; a caller on the main thread (the player
         // connection is one) would have its probes killed by the platform's
         // main-thread network ban and conclude every video is unusable.
-        return withContext(Dispatchers.IO) { checkVideo(videoId) }
+        val found = withContext(Dispatchers.IO) { checkVideo(videoId) }
+        // Only a settled answer is kept: a walk that never answered (asked
+        // too early, say) leaves nothing behind, here or on disk.
+        if (found || videoId in noVideo) VideoAvailability.remember(videoId, found)
+        return found
     }
 
     private suspend fun checkVideo(videoId: String): Boolean {
