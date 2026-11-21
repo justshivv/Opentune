@@ -387,16 +387,25 @@ fun PlayerLayout(
     var controlsAway by remember { mutableStateOf(false) }
     var seenTouch by remember { mutableLongStateOf(touchedAt) }
     val artworkMotion = com.opentune.ui.components.rememberArtworkMotion(state.isPlaying && state.ui.movingCover && !state.ui.reduceAnimation)
-    val focusable = state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
+    val lyricsFocusable = state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
             ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
+    // A Canvas playing on the cover takes the screen the same way: the controls slide down
+    // and leave the title over the video. A tap or a short swipe up brings them back.
+    val canvasFocusable = state.ui.canvasFocus && pane == Pane.COVER && state.canvasVideo != null && state.isSounding &&
+            !docked && !state.ui.reduceAnimation && state.ui.playerStyle != PlayerStyle.LYRICS_FIRST
+    val focusable = lyricsFocusable || canvasFocusable
     val sheetOpen = showMenu || showRemix || showSpeed || showSleep || showCast || showOffset || showLyricsSource || showDetails || showCredits || showSignal
-    LaunchedEffect(touchedAt, focusable, sheetOpen) {
+    // The view the countdown was started on: moving from the Canvas to the lyrics brings the
+    // controls back, and they go again from there after their own few seconds.
+    val focusPane = remember { arrayOf(pane) }
+    LaunchedEffect(touchedAt, focusable, sheetOpen, pane) {
         // A sheet opening or closing leaves the controls as they are, the tap that opened
         // it included: bringing them back resized the lyrics under the sheet as it slid
         // up, and the sheet stuttered. The countdown starts again once it's gone.
         if (sheetOpen) { seenTouch = touchedAt; return@LaunchedEffect }
-        if (!focusable || touchedAt != seenTouch) controlsAway = false
+        if (!focusable || touchedAt != seenTouch || pane != focusPane[0]) controlsAway = false
         seenTouch = touchedAt
+        focusPane[0] = pane
         if (!focusable) return@LaunchedEffect
         delay(LYRICS_FOCUS_MS)
         controlsAway = true
@@ -600,6 +609,8 @@ fun PlayerLayout(
     // A swipe up opens the lyrics or queue only from the cover and its title, not from the
     // seek bar, buttons and volume under them.
     var upAllowed by remember { mutableStateOf(true) }
+    var revealing by remember { mutableStateOf(false) }
+    var revealRun by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val upPx = with(LocalDensity.current) { 64.dp.toPx() }
     var coverSettle by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     // The full cover follows a swipe up toward the header it goes back into,
@@ -715,6 +726,11 @@ fun PlayerLayout(
                             upPull += back
                             d -= back
                         }
+                        // Controls away over a Canvas: a short swipe up only brings them back.
+                        if (revealing && d < 0f && dragOffset == 0f) {
+                            revealRun += d
+                            if (revealRun <= -swipePx) { touchedAt = System.currentTimeMillis(); revealing = false }
+                        }
                         // Upward, with the card at rest: a swipe up on the cover, counted on its own.
                         if (d < 0f && dragOffset == 0f) { if (upAllowed) upPull += d; d = 0f }
                         dragOffset = (dragOffset + d).coerceAtLeast(0f)
@@ -739,6 +755,11 @@ fun PlayerLayout(
                         val title = bigTitle
                         val top = playerCoords?.takeIf { it.isAttached }?.positionInRoot()?.y
                         upAllowed = pane != Pane.COVER || title == null || top == null || at.y <= title.bottom - top
+                        // With the controls away over a Canvas the swipe brings them back, and the
+                        // rest of it doesn't go on to the lyrics or queue.
+                        revealing = controlsAway && pane == Pane.COVER
+                        revealRun = 0f
+                        if (revealing) upAllowed = false
                         settling?.cancel()
                         coverSettle?.cancel()
                         liftSettle?.cancel()
@@ -1090,6 +1111,13 @@ fun PlayerLayout(
                                         .onGloballyPositioned { if (!hidden && !flight.active && coverLift == 0f && dragOffset == 0f) bigTitle = it.boundsInRoot() }
                                         .graphicsLayer { alpha = if (flight.active && bigTitle != null) 0f else 1f },
                                 )
+                                // With the controls away over a Canvas, the title sits a little up from the bottom edge.
+                                val footRoom by androidx.compose.animation.core.animateDpAsState(
+                                    if (controlsHidden) CANVAS_TITLE_FOOT else 0.dp,
+                                    if (controlsHidden) tween(520, easing = FastOutSlowInEasing) else spring(dampingRatio = 0.9f, stiffness = 380f),
+                                    label = "canvasFoot",
+                                )
+                                Spacer(Modifier.height(footRoom))
                             } else {
                                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Artwork(
@@ -1889,6 +1917,7 @@ private val PILL_DRIFT = 3.dp
 
 /** How long the lyrics view goes untouched before the controls slide away. */
 private const val LYRICS_FOCUS_MS = 5_000L
+private val CANVAS_TITLE_FOOT = 28.dp
 
 /** Mini player wired to the view model; the bottom bar places and sizes it. */
 @Composable

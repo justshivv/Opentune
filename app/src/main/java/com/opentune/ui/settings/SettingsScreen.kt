@@ -1466,6 +1466,9 @@ private fun settingsSections(
                         PillSegmented(com.opentune.data.settings.CanvasLook.entries, ui.canvasLook, { it.label }, { v -> AppSettings.updateUi { it.copy(canvasLook = v) } })
                     })
                     RowDivider()
+                    ToggleRow("Canvas takes the screen", ui.canvasFocus, { v -> AppSettings.updateUi { it.copy(canvasFocus = v) } }, summary = "While a Canvas plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.", icon = ImageVector.vectorResource(AppIcons.Animation),
+                        enabled = ui.spotifyCanvas && !reduced, disabledReason = if (reduced) "Off while Reduce animation is on" else "Only with Spotify Canvas on")
+                    RowDivider()
                     ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = "Likes are saved to Spotify. Listening here does not add plays to Spotify history", icon = ImageVector.vectorResource(AppIcons.Favorite))
                     RowDivider()
                     ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = ImageVector.vectorResource(AppIcons.Album))
