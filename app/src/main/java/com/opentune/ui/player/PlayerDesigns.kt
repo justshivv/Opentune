@@ -100,7 +100,6 @@ fun CassettePane(
                     .aspectRatio(1.58f)
                     .align(Alignment.Center)
                     .graphicsLayer { shadowElevation = 24.dp.toPx(); shape = RoundedCornerShape(26.dp); clip = true }
-                    .background(Color.Black),
             ) { videoSurface() }
         } else BoxWithConstraints(
             Modifier
@@ -235,7 +234,6 @@ fun HaloPane(
                         .fillMaxWidth(0.8f)
                         .aspectRatio(16f / 9f)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color.Black),
                 ) { videoSurface() }
             } else Artwork(
                 song.thumbnailUrl.artworkAt(PLAYER_ART_PX),
@@ -292,7 +290,6 @@ fun PolaroidPane(
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(Color.Black),
                 ) { videoSurface() }
             } else Artwork(song.thumbnailUrl.artworkAt(PLAYER_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), RoundedCornerShape(2.dp))
             Column(Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {

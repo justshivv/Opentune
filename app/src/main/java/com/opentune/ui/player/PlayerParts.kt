@@ -249,23 +249,30 @@ fun PlayerBackdrop(
         if (canvas != null) {
             CanvasBackdrop(canvas, canvasPlaying, titleTop, canvasBehindText, Modifier.matchParentSize())
         } else if (fullCover && musicVideo) {
-            // The music video in the full cover's place: the same span from the top,
-            // faded into the backdrop below it with a scrim laid over it (never a mask
-            // drawn through the picture itself), and the same top shade.
+            // The music video in the full cover's place: the same span from the top
+            // and the same top shade. Its bottom dissolves the way the cover's
+            // does — the picture's own alpha fades out, anchored to where a 16:9
+            // picture's bottom falls in this span. A colour scrim here instead
+            // painted the backdrop's near-black base over the empty stretch
+            // under the picture, which read as a black band.
             androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible) 1f else 0f }) {
                 val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
-                val solid = (1f - FULL_COVER_FADE / height).coerceIn(0.4f, 0.8f)
+                val pictureBottom = height / 2 + (maxWidth / (16f / 9f)) / 2
+                val fadeStart = ((pictureBottom - FULL_COVER_FADE * 0.6f) / height).coerceIn(0f, 1f)
+                val fadeEnd = ((pictureBottom + FULL_COVER_FADE * 0.4f) / height).coerceIn(0f, 1f)
                 Box(Modifier.fillMaxWidth().height(height)) {
-                    videoSurface()
                     Box(
-                        Modifier.matchParentSize().background(
-                            Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                solid to Color.Transparent,
-                                1f to (matched ?: tones.base),
-                            ),
-                        ),
-                    )
+                        Modifier
+                            .matchParentSize()
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    Brush.verticalGradient(fadeStart to Color.Black, fadeEnd to Color.Transparent),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            },
+                    ) { videoSurface() }
                     Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = com.opentune.ui.components.FULL_COVER_TOP_SHADE), 0.2f to Color.Transparent)))
                 }
             }
@@ -1869,7 +1876,6 @@ fun VinylPane(
                     .aspectRatio(16f / 9f)
                     .align(Alignment.Center)
                     .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
-                    .background(Color.Black),
             ) { videoSurface() }
         } else Box(
             Modifier
