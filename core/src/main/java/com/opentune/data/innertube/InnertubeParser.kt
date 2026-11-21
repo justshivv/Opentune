@@ -203,6 +203,27 @@ object InnertubeParser {
     }
 
     /**
+     * YouTube Music's "Mixed for you" page: the account's Supermix, My Mix 1 and on, Discover,
+     * New Release, Replay and Archive mixes, and a Supermix and numbered mixes for a few moods.
+     * They come as carousels or grids depending on the day, so each section's cards are
+     * collected wherever they sit, under the section's own heading.
+     */
+    fun parseMixedForYou(response: JsonObject): List<HomeShelf> {
+        val sections = response.o("contents")
+            .o("singleColumnBrowseResultsRenderer").a("tabs")?.firstOrNull()
+            .o("tabRenderer").o("content").o("sectionListRenderer").a("contents")
+            .orEmpty()
+        return sections.mapNotNull { section ->
+            val title = section.o("musicCarouselShelfRenderer").o("header").o("musicCarouselShelfBasicHeaderRenderer").o("title").runs()
+                .ifBlank { section.o("gridRenderer").o("header").o("gridHeaderRenderer").o("title").runs() }
+                .ifBlank { section.o("musicShelfRenderer").o("title").runs() }
+            val items = collectRenderers(section, "musicTwoRowItemRenderer").mapNotNull(::parseTwoRowItem)
+                .filter { it.browseId != null }
+            if (items.isEmpty()) null else HomeShelf(title, items)
+        }
+    }
+
+    /**
      * The Moods & genres browse page is a set of navigation-button grids, not
      * a normal carousel. Keep the browse params on every button: they select
      * the playlist shelves that belong to that exact mood or genre.

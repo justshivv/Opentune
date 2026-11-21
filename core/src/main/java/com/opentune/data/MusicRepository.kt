@@ -82,6 +82,25 @@ object MusicRepository {
 
     private val _homeMore = MutableStateFlow<List<HomeShelf>>(emptyList())
 
+    /** The last "Mixed for you" read, and when, so the Radio tab opens on it at once. */
+    @Volatile private var mixesCache: Fetched? = null
+
+    /**
+     * YouTube Music's mixes made for the signed-in account (see [RadioMixes] for how the
+     * Radio page lays them out). Kept for half an hour; [fresh] reads them again. Signed
+     * out, YouTube refuses the page, and this throws.
+     */
+    suspend fun mixedForYou(fresh: Boolean = false): List<HomeShelf> = io {
+        mixesCache?.takeIf { !fresh && System.currentTimeMillis() - it.at < MIXES_TTL_MS }?.let { return@io it.shelves }
+        val shelves = InnertubeParser.parseMixedForYou(Innertube.browse("FEmusic_mixed_for_you"))
+        DebugLog.d("Radio", "mixed for you: " + shelves.joinToString { "${it.title} (${it.items.size})" })
+        mixesCache = Fetched(shelves, System.currentTimeMillis())
+        shelves
+    }
+
+    /** What [mixedForYou] last read, if anything, without going to the network. */
+    fun cachedMixes(): List<HomeShelf>? = mixesCache?.shelves
+
     /**
      * Home's shelves past the first page. YouTube Music sends Home a few
      * shelves at a time; [home] returns the first batch at once and the rest
@@ -468,6 +487,7 @@ object MusicRepository {
     }
 
     private const val MAX_HOME_PAGES = 8
+    private const val MIXES_TTL_MS = 30 * 60_000L
     private const val EXTRAS_FRESH_MS = 30 * 60 * 1000L
     /** How many recent songs Home's picks take turns to start from. */
     private const val RECENT_SEEDS = 6

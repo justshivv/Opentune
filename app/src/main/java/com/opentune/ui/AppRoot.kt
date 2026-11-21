@@ -116,6 +116,8 @@ object TabEvents {
 private enum class Tab(val route: String, val label: String, val iconRes: Int, val selectedIconRes: Int) {
     HOME("home", "Home", AppIcons.HomeOutline, AppIcons.Home),
     EXPLORE("explore", "Explore", AppIcons.ExploreOutline, AppIcons.Explore),
+    /** YouTube Music's mixes for the account, in the Poster layout only (see RadioMixesScreen). */
+    RADIO(com.opentune.ui.radio.RADIO_ROUTE, "Radio", AppIcons.Radio, AppIcons.Radio),
     PODCASTS("podcasts", "Podcasts", AppIcons.Podcasts, AppIcons.Podcasts),
     LIBRARY("library", "Library", AppIcons.LibraryMusicOutline, AppIcons.LibraryMusic),
 }
@@ -148,7 +150,11 @@ fun AppRoot(vm: PlayerViewModel) {
     val chromeUi by com.opentune.data.settings.AppSettings.ui.collectAsState()
     // Explore without a tab of its own lives on the Search page instead.
     val separateExplore = chromeUi.separateExplore
-    val dockTabs = remember(separateExplore) { if (separateExplore) Tab.entries.toList() else Tab.entries - Tab.EXPLORE }
+    // The Poster layout has a Radio tab of the account's mixes.
+    val radioTab = chromeUi.pageLayout == com.opentune.data.settings.PageLayout.POSTER
+    val dockTabs = remember(separateExplore, radioTab) {
+        Tab.entries.filter { (it != Tab.EXPLORE || separateExplore) && (it != Tab.RADIO || radioTab) }
+    }
     val chromeTabs = dockTabs.map { ChromeTab(it.label, ImageVector.vectorResource(it.iconRes), ImageVector.vectorResource(it.selectedIconRes)) }
     // A page opened from inside the player (the artist, from a tap on their
     // name) folds the player away; back from that page opens the player
@@ -249,6 +255,13 @@ fun AppRoot(vm: PlayerViewModel) {
         if (!separateExplore && tab == Tab.EXPLORE) {
             tab = Tab.HOME
             if (route == Tab.EXPLORE.route) nav.popBackStack(Tab.HOME.route, inclusive = false)
+        }
+    }
+    // Out of the Poster layout while on its Radio tab: back to Home.
+    LaunchedEffect(radioTab) {
+        if (!radioTab && tab == Tab.RADIO) {
+            tab = Tab.HOME
+            if (route == Tab.RADIO.route) nav.popBackStack(Tab.HOME.route, inclusive = false)
         }
     }
     LaunchedEffect(route) {
@@ -651,6 +664,16 @@ fun AppRoot(vm: PlayerViewModel) {
                         }
                         page(Tab.EXPLORE.route) {
                             ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, onOpenSettings = { pages.open("settings") })
+                        }
+                        page(Tab.RADIO.route) {
+                            com.opentune.ui.radio.RadioMixesScreen(
+                                content,
+                                onItemClick = openItem,
+                                onOpenLiked = { pages.open("liked") },
+                                onOpenStations = { pages.open("radio") },
+                                onSignIn = { pages.open("login") },
+                                onOpenSettings = { pages.open("settings") },
+                            )
                         }
                         page(Tab.PODCASTS.route) {
                             com.opentune.ui.podcasts.PodcastsScreen(content, actions, onOpenShow = { id -> pages.open("podcast/${Uri.encode(id)}") }, onOpenSettings = { pages.open("settings") },
