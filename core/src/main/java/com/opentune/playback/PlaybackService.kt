@@ -214,6 +214,18 @@ class PlaybackService : MediaLibraryService() {
     private fun selectedUri(uri: Uri): Uri = startupToken(uri)?.let { startupSelections[it]?.selected } ?: uri
 
     /**
+     * The one address a song's audio plays from, whichever mode shows it:
+     * the rendition it was on when video mode took over, else the best
+     * external rendition on record for it, else its plain track address.
+     */
+    private fun audioUriFor(id: String): Uri {
+        val stashed = videoAudioStash?.takeIf { it.first == id }?.second
+        if (stashed != null && externalStreamKeyOf(selectedUri(stashed)) != null) return stashed
+        ExternalStreams.cached(id)?.let { return externalStreamUri(id, it.key) }
+        return stashed ?: trackUri(id)
+    }
+
+    /**
      * [item] pointed at exactly the stream the main player chose for it, so a
      * second player plays the same file (and reads it from the cache) rather
      * than choosing again; null while the choice is still being made.
@@ -281,11 +293,13 @@ class PlaybackService : MediaLibraryService() {
                 val uri = withoutStartup(input)
                 val id = videoIdOf(uri) ?: return sources.createMediaSource(mediaItem)
                 if (isVideoUri(uri)) {
-                    // Video mode: the song's own audio, chosen by this same factory so
-                    // its usual source choice applies, with the picture-only stream
-                    // laid over it. One item to the queue and the seek bar; two
+                    // Video mode: the song's own audio on the rendition it is on
+                    // (see audioUriFor — an upgraded song keeps its upgrade under
+                    // the picture), chosen by this same factory so its usual
+                    // source choice applies, with the picture-only stream laid
+                    // over it. One item to the queue and the seek bar; two
                     // streams underneath, started together.
-                    val audioSide = this.createMediaSource(mediaItem.buildUpon().setUri(trackUri(id)).build())
+                    val audioSide = this.createMediaSource(mediaItem.buildUpon().setUri(audioUriFor(id)).build())
                     val videoSide = sources.createMediaSource(mediaItem.buildUpon().setUri(videoOnlyUri(id)).build())
                     // The picture side leads: a merged source publishes its
                     // first source's item as the playing one, and the player
@@ -622,7 +636,12 @@ class PlaybackService : MediaLibraryService() {
                 val player = mediaSession?.player as? ExoPlayer ?: return@collect
                 val item = player.currentMediaItem ?: return@collect
                 if (item.mediaId != id) return@collect
-                val uri = if (on) videoStreamUri(id) else trackUri(id)
+                val uri = if (on) {
+                    videoAudioStash = id to (item.localConfiguration?.uri ?: trackUri(id))
+                    videoStreamUri(id)
+                } else {
+                    audioUriFor(id).also { if (videoAudioStash?.first == id) videoAudioStash = null }
+                }
                 if (item.localConfiguration?.uri == uri) return@collect
                 // A rendition swap like the quality switch's own: the position
                 // and play state are carried across by hand, because replacing
@@ -1670,6 +1689,13 @@ class PlaybackService : MediaLibraryService() {
     // ---- Quality upgrade -----------------------------------------------------------
 
     private var upgradeJob: Job? = null
+    /**
+     * The address a song's audio was playing from when video mode took it
+     * over, kept so the video's audio side and the way back both use that
+     * very rendition: an upgraded song is never thrown back to its plain
+     * track to be upgraded all over again.
+     */
+    @Volatile private var videoAudioStash: Pair<String, Uri>? = null
     /** The FLAC search the player's buffering waits on (see [LossyHoldBack]); read on the playback thread. */
     @Volatile private var lossyHeldBack: Job? = null
 
