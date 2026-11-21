@@ -816,6 +816,10 @@ fun MarqueeText(
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
         val textWidth = remember(text, style) { measurer.measure(text, style, maxLines = 1, softWrap = false).size.width }
+        // The text's own direction, not the layout's: an Arabic title in an
+        // otherwise left-to-right screen still begins at the right, and its
+        // marquee has to rest and run from there (see below).
+        val rtl = remember(text) { isRtlText(text.text) }
         val overflows = constraints.hasBoundedWidth && textWidth > constraints.maxWidth
         if (!overflows) {
             Text(text, style = style, color = color, maxLines = 1)
@@ -843,8 +847,8 @@ fun MarqueeText(
             }
             val leftCut by remember(text, containerWidth) { derivedStateOf { phase > 0.5f && phase < textWidth } }
             val rightCut by remember(text, containerWidth) { derivedStateOf { phase + containerWidth < textWidth || phase > totalWidth - containerWidth } }
-            val leftFade by androidx.compose.animation.core.animateFloatAsState(if (leftCut) 1f else 0f, androidx.compose.animation.core.tween(150), label = "marqueeLeftFade")
-            val rightFade by androidx.compose.animation.core.animateFloatAsState(if (rightCut) 1f else 0f, androidx.compose.animation.core.tween(150), label = "marqueeRightFade")
+            val leftFade by androidx.compose.animation.core.animateFloatAsState(if (if (rtl) rightCut else leftCut) 1f else 0f, androidx.compose.animation.core.tween(150), label = "marqueeLeftFade")
+            val rightFade by androidx.compose.animation.core.animateFloatAsState(if (if (rtl) leftCut else rightCut) 1f else 0f, androidx.compose.animation.core.tween(150), label = "marqueeRightFade")
             androidx.compose.foundation.layout.Box(
                 Modifier
                     .fillMaxWidth()
@@ -865,13 +869,13 @@ fun MarqueeText(
                     text, style = style, color = color, maxLines = 1, softWrap = false,
                     modifier = Modifier
                         .wrapContentWidth(androidx.compose.ui.Alignment.Start, unbounded = true)
-                        .offset { androidx.compose.ui.unit.IntOffset(-phase.toInt(), 0) }
+                        .offset { androidx.compose.ui.unit.IntOffset(if (rtl) (containerWidth - textWidth + phase).toInt() else -phase.toInt(), 0) }
                 )
                 Text(
                     text, style = style, color = color, maxLines = 1, softWrap = false,
                     modifier = Modifier
                         .wrapContentWidth(androidx.compose.ui.Alignment.Start, unbounded = true)
-                        .offset { androidx.compose.ui.unit.IntOffset((totalWidth - phase).toInt(), 0) }
+                        .offset { androidx.compose.ui.unit.IntOffset(if (rtl) (containerWidth - textWidth + phase - totalWidth).toInt() else (totalWidth - phase).toInt(), 0) }
                 )
             }
         }
@@ -880,6 +884,17 @@ fun MarqueeText(
 
 /** How far in from each edge scrolling text fades. */
 private val MARQUEE_FADE = 14.dp
+
+/** Whether [text] runs right-to-left: its first strong letter decides, as the bidi algorithm would. */
+private fun isRtlText(text: String): Boolean {
+    for (ch in text) {
+        when (Character.getDirectionality(ch)) {
+            Character.DIRECTIONALITY_LEFT_TO_RIGHT -> return false
+            Character.DIRECTIONALITY_RIGHT_TO_LEFT, Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC -> return true
+        }
+    }
+    return false
+}
 
 /**
  * combinedClickable for an item whose long press opens a menu. A tap ripples as usual;
