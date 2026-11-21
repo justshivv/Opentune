@@ -12,7 +12,7 @@ export type ConfigData = {
 export type AppConfig = { revision: number; expiresAt: number; data: ConfigData };
 export const defaults = (): AppConfig => ({ revision: 0, expiresAt: Infinity, data: {
   sections: sectionIds.map(id => ({ id, enabled: true, title: '' })), banners: [], playlists: [], sources: null,
-  links: { github: 'https://github.com/justshivv/Opentune', discord: 'https://discord.gg/6udrCVh5n', web: 'https://justshivv.github.io/Opentune/player/', tv: 'https://justshivv.github.io/Opentune/' },
+  links: { github: 'https://github.com/justshivv/Opentune', discord: 'https://discord.gg/aqGA9ekG2H', web: 'https://justshivv.github.io/Opentune/player/', tv: 'https://justshivv.github.io/Opentune/' },
   network: { timeoutMs: 8000, retries: 2 }, communityPrompts: true,
 } });
 function check(value: unknown): asserts value { if (!value) throw new Error('Invalid configuration'); }
