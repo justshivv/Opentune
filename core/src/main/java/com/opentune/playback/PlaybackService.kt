@@ -226,6 +226,31 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /**
+     * Puts the current song back onto its video item when something rebuilt
+     * it plain while the user had it in video mode. The video item's audio
+     * side is built from audioUriFor, so the heal restores the upgrade as
+     * well as the picture; position and play state are carried across like
+     * the switch's own swap, and the swap is marked so the transition it
+     * causes is not mistaken for a new listen or a new start.
+     */
+    private fun healVideoMode() {
+        val id = videoModeSongId ?: return
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val item = player.currentMediaItem ?: return
+        if (item.mediaId != id) return
+        val uri = item.localConfiguration?.uri ?: return
+        if (isVideoUri(uri) || isVideoOnlyUri(uri)) return
+        if (crossfade?.blending == true) return
+        healingVideoTo = id
+        val index = player.currentMediaItemIndex
+        val position = player.currentPosition
+        val playing = player.isPlaying
+        player.replaceMediaItem(index, item.buildUpon().setUri(videoStreamUri(id)).build())
+        if (position > 0) player.seekTo(index, position)
+        if (playing) player.play()
+    }
+
+    /**
      * [item] pointed at exactly the stream the main player chose for it, so a
      * second player plays the same file (and reads it from the cache) rather
      * than choosing again; null while the choice is still being made.
@@ -638,8 +663,10 @@ class PlaybackService : MediaLibraryService() {
                 if (item.mediaId != id) return@collect
                 val uri = if (on) {
                     videoAudioStash = id to (item.localConfiguration?.uri ?: trackUri(id))
+                    videoModeSongId = id
                     videoStreamUri(id)
                 } else {
+                    if (videoModeSongId == id) videoModeSongId = null
                     audioUriFor(id).also { if (videoAudioStash?.first == id) videoAudioStash = null }
                 }
                 if (item.localConfiguration?.uri == uri) return@collect
@@ -1283,11 +1310,12 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             nowPlayingId = mediaItem?.mediaId
+            if (mediaItem?.mediaId != videoModeSongId) videoModeSongId = null
             refreshArtistCredit(mediaItem)
             // The same song put onto its better stream: the swap that did it is
             // still running, waiting to bring the volume back up. A new upgrade
             // check here used to cancel it and leave every song after silent.
-            val swap = mediaItem != null && mediaItem.mediaId == swappingTo
+            val swap = mediaItem != null && (mediaItem.mediaId == swappingTo || mediaItem.mediaId == healingVideoTo)
             // A quality switch says what's playing once the new stream really is (see swapToUpgrade).
             if (!swap) updateExternalStats()
             applyLoudness()
@@ -1312,14 +1340,16 @@ class PlaybackService : MediaLibraryService() {
                 mediaSession?.player?.takeIf { it.currentPosition < RESUME_SLACK_MS }?.seekTo(at)
             }
             // The same song on a better stream is not a new listen.
-            if (mediaItem != null && mediaItem.mediaId == swappingTo) {
-                swappingTo = null
+            if (mediaItem != null && (mediaItem.mediaId == swappingTo || mediaItem.mediaId == healingVideoTo)) {
+                if (mediaItem.mediaId == swappingTo) swappingTo = null
+                if (mediaItem.mediaId == healingVideoTo) healingVideoTo = null
                 return
             }
             finishListen()
             startListen(mediaItem?.toSong(), mediaSession?.player?.isPlaying == true)
             // Only time starts meant to sound now, not a skip made while paused.
             startRequestedAt = if (mediaSession?.player?.playWhenReady == true) SystemClock.elapsedRealtime() else 0L
+            healVideoMode()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -1341,6 +1371,7 @@ class PlaybackService : MediaLibraryService() {
             watchStall(playbackState)
             if (playbackState == Player.STATE_READY) {
                 updateExternalStats()
+                healVideoMode()
                 // The figure arrives with the stream; on a first play it's
                 // only known once the track has resolved.
                 applyLoudness()
@@ -1696,6 +1727,19 @@ class PlaybackService : MediaLibraryService() {
      * track to be upgraded all over again.
      */
     @Volatile private var videoAudioStash: Pair<String, Uri>? = null
+
+    /**
+     * The song the user left in video mode, remembered while it stays the
+     * current song. The mode is a fact about the song's playback, not about
+     * one item instance: anything that rebuilds the item plain while it
+     * plays — a repeat at its end, an error recovery, a queue rebuild —
+     * is healed straight back (see healVideoMode). Forgotten the moment a
+     * different song becomes current.
+     */
+    @Volatile private var videoModeSongId: String? = null
+
+    /** The song a heal swap is carrying back to its video item, if one is in flight. */
+    @Volatile private var healingVideoTo: String? = null
     /** The FLAC search the player's buffering waits on (see [LossyHoldBack]); read on the playback thread. */
     @Volatile private var lossyHeldBack: Job? = null
 
