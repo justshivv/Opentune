@@ -1096,7 +1096,7 @@ fun PlayerLayout(
                                     if (state.ui.doubleTapSeek && !ownTaps) SeekTaps(seekBy, 1f, Modifier.matchParentSize()) { design() } else design()
                                 }
                                 if (state.videoAvailable) {
-                                    SongVideoToggle(state.videoMode, actions.setVideoMode, Modifier.align(Alignment.CenterHorizontally).padding(top = 14.dp))
+                                    SongVideoToggle(state.videoMode, actions.setVideoMode, Modifier.align(Alignment.CenterHorizontally).padding(top = 14.dp), isEpisode = isEpisode)
                                 }
                                 Spacer(Modifier.height(16.dp))
                                 TitleRow(

@@ -107,11 +107,11 @@ private fun fitVideo(view: TextureView, video: VideoSize) {
     view.setTransform(matrix)
 }
 
-/** The player's Song | Video switch, shown only for songs that have a video. */
+/** The player's Song | Video switch, shown only for songs that have a video. An episode or a chapter is no song: its side of the switch reads Audio. */
 @Composable
-internal fun SongVideoToggle(videoMode: Boolean, onSelect: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+internal fun SongVideoToggle(videoMode: Boolean, onSelect: (Boolean) -> Unit, modifier: Modifier = Modifier, isEpisode: Boolean = false) {
     Row(modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
-        Segment(Tr.f("Song"), selected = !videoMode) { if (videoMode) onSelect(false) }
+        Segment(Tr.f(if (isEpisode) "Audio" else "Song"), selected = !videoMode) { if (videoMode) onSelect(false) }
         Segment(Tr.f("Video"), selected = videoMode) { if (!videoMode) onSelect(true) }
     }
 }
