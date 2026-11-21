@@ -886,7 +886,7 @@ fun MarqueeText(
 private val MARQUEE_FADE = 14.dp
 
 /** Whether [text] runs right-to-left: its first strong letter decides, as the bidi algorithm would. */
-private fun isRtlText(text: String): Boolean {
+internal fun isRtlText(text: String): Boolean {
     for (ch in text) {
         when (Character.getDirectionality(ch)) {
             Character.DIRECTIONALITY_LEFT_TO_RIGHT -> return false
