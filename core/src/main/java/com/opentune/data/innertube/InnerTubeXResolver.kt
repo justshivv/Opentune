@@ -250,6 +250,46 @@ object InnerTubeXResolver {
         return extracted
     }
 
+    /**
+     * The video side of an extraction: the track's music-video stream, minted
+     * by the same PoToken-backed clients as the audio. Null when the chosen
+     * client offers the track no plain-HTTPS video.
+     */
+    suspend fun extractVideo(
+        videoId: String,
+        skipClients: Set<String> = emptySet(),
+    ): Extracted? {
+        if (prefs == null) return null
+        bindSession()
+        val stream = extractor.extract(
+            videoId = videoId,
+            // wantVideo is the whole point of this ask: without it the
+            // extractor runs audio-only and the stream it returns has no
+            // videoUrl, so this function could only ever answer null (the
+            // 2026-11-21 device log shows 27 extractions, all wantVideo=false).
+            hints = ContentHints(wantVideo = true)
+                .withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
+            excludedClients = excludedFor(videoId) + skipClients,
+            audioQuality = AudioQuality.AUTO,
+            clientPlaybackNonce = generateClientPlaybackNonce(),
+        ) ?: return null
+        val url = stream.videoUrl?.takeIf { it.isNotBlank() } ?: return null
+        val mime = stream.videoMimeType.orEmpty()
+        val extracted = Extracted(
+            videoId = videoId,
+            url = url,
+            kbps = (stream.videoBitrate ?: 0) / 1000,
+            mimeType = if (stream.videoCodecs.isNullOrBlank()) mime else "$mime; codecs=\"${stream.videoCodecs}\"",
+            loudnessDb = null,
+            clientName = stream.clientName,
+            profileId = stream.profileId,
+            headers = stream.headers,
+        )
+        if (minted.size >= MAX_REMEMBERED) minted.clear()
+        minted[extracted.url] = extracted
+        return extracted
+    }
+
     /** Headers the media fetch for [url] must carry, when InnerTubeX minted it. */
     fun headersFor(url: String): Map<String, String>? = minted[url]?.headers
 

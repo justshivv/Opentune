@@ -306,7 +306,7 @@ fun SettingsScreen(
                                     if (i > 0) RowDivider()
                                     // Audio sources sits on the main page, just above the sound settings.
                                     if (c.key == "audio") {
-                                        NavRow("Audio sources", { sourcesOpen = true }, summary = audioSourcesSummary(), icon = ImageVector.vectorResource(AppIcons.Extension))
+                                        NavRow("Audio sources", { sourcesOpen = true }, summary = audioSourcesSummary(), icon = ImageVector.vectorResource(AppIcons.Extension), titleMaxLines = 2, summaryMaxLines = 2)
                                         RowDivider()
                                     }
                                     val summary = if (c.key == "account") {
@@ -324,6 +324,8 @@ fun SettingsScreen(
                                         dot = c.key == "updates" && updatePending,
                                         badge = if (c.key == "updates") BuildConfig.VERSION_NAME else null,
                                         leading = avatar?.let { url -> { Artwork(url, Modifier.size(28.dp), CircleShape) } },
+                                        titleMaxLines = 2,
+                                        summaryMaxLines = 2,
                                     )
                                 }
                             }
@@ -380,6 +382,62 @@ private fun DeveloperCard(name: String, avatarUrl: String, profileUrl: String) {
             }
         }
         Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
+/**
+ * The About page's Contributors sheet: the repo's contributors, read from
+ * GitHub as the sheet opens (see [com.opentune.data.Contributors]), one row
+ * per person, a tap opening their GitHub profile.
+ */
+@Composable
+private fun ContributorsSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var people by remember { mutableStateOf<List<com.opentune.data.Contributors.Person>?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val loaded = com.opentune.data.Contributors.people()
+        if (loaded == null) failed = true else people = loaded
+    }
+    com.opentune.ui.components.FloatingCard(onDismiss = onDismiss, title = "Contributors", icon = ImageVector.vectorResource(AppIcons.People)) {
+        val list = people
+        when {
+            failed -> Text(
+                com.opentune.i18n.Tr.f("Couldn't load the contributors. Check your connection and try again."),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 14.dp),
+            )
+            list == null -> Box(Modifier.fillMaxWidth().padding(vertical = 22.dp), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
+            }
+            list.isEmpty() -> Text(
+                com.opentune.i18n.Tr.f("No contributors yet."),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 14.dp),
+            )
+            else -> list.forEach { person ->
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Artwork(person.avatarUrl, Modifier.size(44.dp), CircleShape)
+                    Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp).weight(1f))
+                    // Only the GitHub badge is the button, as on the developers' cards above.
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
+                            .clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, person.profileUrl.toUri())) } },
+                    ) {
+                        Icon(githubLogo, "GitHub", Modifier.size(19.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -457,6 +515,7 @@ private fun settingsSections(
     var showWhatsNew by remember { mutableStateOf(false) }
     var checkingUpdates by remember { mutableStateOf(false) }
     var supportDialog by remember { mutableStateOf(false) }
+    var contributorsOpen by remember { mutableStateOf(false) }
     val pendingUpdate by UpdateCheck.pending.collectAsState()
     var updateBytes by remember { mutableStateOf(0L) }
     var playerStyleDialog by remember { mutableStateOf(false) }
@@ -578,6 +637,7 @@ private fun settingsSections(
         BuildConfig.VERSION_NAME, onDismiss = { showWhatsNew = false },
     )
     if (supportDialog) com.opentune.ui.components.SupportDialog(onDismiss = { supportDialog = false })
+    if (contributorsOpen) ContributorsSheet { contributorsOpen = false }
     if (followedDialog) FollowedArtistsDialog(onDismiss = { followedDialog = false })
     if (hiddenDialog) HiddenDialog(onDismiss = { hiddenDialog = false })
     if (appIconDialog) AppIconDialog { appIconDialog = false }
@@ -941,10 +1001,10 @@ private fun settingsSections(
                     })
                 },
                 Entry("Lossless streaming", "flac lossless addons") {
-                    ToggleRow("Lossless at other quality levels", pb.losslessStreaming, { v -> AppSettings.updatePlayback { it.copy(losslessStreaming = v) } }, summary = "Also check your audio add-ons after playback starts at other quality levels. Lossless checks them automatically in your chosen order.", icon = ImageVector.vectorResource(AppIcons.HighQuality))
+                    ToggleRow("Lossless at other quality levels", pb.losslessStreaming, { v -> AppSettings.updatePlayback { it.copy(losslessStreaming = v) } }, summary = "Checks your add-ons at other quality levels too", icon = ImageVector.vectorResource(AppIcons.HighQuality))
                 },
                 Entry("Unmetered networks only", "flac saavn mobile wifi data") {
-                    ToggleRow("Unmetered networks only", pb.losslessWifiOnly, { v -> AppSettings.updatePlayback { it.copy(losslessWifiOnly = v) } }, summary = "When on, mobile data uses YouTube even with Lossless selected. Turn off to try FLAC and JioSaavn on mobile data", icon = ImageVector.vectorResource(AppIcons.Wifi))
+                    ToggleRow("Unmetered networks only", pb.losslessWifiOnly, { v -> AppSettings.updatePlayback { it.copy(losslessWifiOnly = v) } }, summary = "Uses YouTube on mobile data, even with Lossless on", icon = ImageVector.vectorResource(AppIcons.Wifi))
                 },
                 // On the main Settings page; here only so searching finds it.
                 Entry("Audio sources", "audio add-ons addons source URL manifest order priority lossless flac high res") {
@@ -973,7 +1033,7 @@ private fun settingsSections(
                     if (bitPerfectSheet) BitPerfectSheet(mode, onDismiss = { bitPerfectSheet = false })
                 },
                 Entry("System audio effects", "dolby atmos soundalive equalizer device effects") {
-                    ToggleRow("System audio effects", pb.systemEffects, { v -> AppSettings.updatePlayback { it.copy(systemEffects = v) } }, summary = "Let the phone's own effects (Dolby, SoundAlive, system equalizer) process playback", icon = ImageVector.vectorResource(AppIcons.SurroundSound))
+                    ToggleRow("System audio effects", pb.systemEffects, { v -> AppSettings.updatePlayback { it.copy(systemEffects = v) } }, summary = "Lets your phone's sound effects process playback", icon = ImageVector.vectorResource(AppIcons.SurroundSound))
                 },
                 Entry("Background playback", "battery optimization doze killed stops samsung") {
                     val ignoring = remember { context.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(context.packageName) == true }
@@ -993,7 +1053,7 @@ private fun settingsSections(
             "Playback",
             listOfNotNull(
                 Entry("Loudness normalization", "volume level") {
-                    ToggleRow("Loudness normalization", pb.loudnessNormalization, { v -> AppSettings.updatePlayback { it.copy(loudnessNormalization = v) } }, summary = "Uses YouTube's loudness measurement to set one steady volume per song", icon = ImageVector.vectorResource(AppIcons.VolumeUp))
+                    ToggleRow("Loudness normalization", pb.loudnessNormalization, { v -> AppSettings.updatePlayback { it.copy(loudnessNormalization = v) } }, summary = "Keeps every song at one steady volume", icon = ImageVector.vectorResource(AppIcons.VolumeUp))
                 },
                 if (pb.loudnessNormalization) Entry("Volume level", "loud louder quiet normal volume level loudness target boost") {
                     SettingRow("Volume level", summary = pb.volumeLevel.summary, icon = ImageVector.vectorResource(AppIcons.VolumeUp), below = {
@@ -1011,19 +1071,22 @@ private fun settingsSections(
                     )
                 } else null,
                 Entry("Preload upcoming songs", "latency fast skip instant buffer lossless flac data") {
-                    ToggleRow("Preload upcoming songs", pb.preloadUpcoming, { v -> AppSettings.updatePlayback { it.copy(preloadUpcoming = v) } }, summary = "The next two songs are readied in their best quality, lossless included, so they start at once. Off saves data.", icon = ImageVector.vectorResource(AppIcons.Speed))
+                    ToggleRow("Preload upcoming songs", pb.preloadUpcoming, { v -> AppSettings.updatePlayback { it.copy(preloadUpcoming = v) } }, summary = "Readies the next two songs so they start instantly", icon = ImageVector.vectorResource(AppIcons.Speed))
                 },
                 if (pb.preloadUpcoming) Entry("Boost preloading on Wi-Fi", "preload wifi unmetered buffer performance speed") {
                     ToggleRow(
                         "Boost preloading on Wi-Fi",
                         pb.preloadBoostOnWifi,
                         { v -> AppSettings.updatePlayback { it.copy(preloadBoostOnWifi = v) } },
-                        summary = "Pre-buffers 20 seconds ahead and resolves 3 songs early when connected to Wi-Fi",
+                        summary = "Buffers ahead and readies 3 songs early on Wi-Fi",
                         icon = ImageVector.vectorResource(AppIcons.Wifi),
                     )
                 } else null,
                 Entry("Upgrade quality while playing", "better stream premium 256 opus swap") {
-                    ToggleRow("Upgrade quality while playing", pb.qualityUpgrade, { v -> AppSettings.updatePlayback { it.copy(qualityUpgrade = v) } }, summary = "If a clearly better stream turns up a few seconds in, switch to it without stopping", icon = ImageVector.vectorResource(AppIcons.HighQuality), beta = true)
+                    ToggleRow("Upgrade quality while playing", pb.qualityUpgrade, { v -> AppSettings.updatePlayback { it.copy(qualityUpgrade = v) } }, summary = "Switches to a better stream mid-song when one appears", icon = ImageVector.vectorResource(AppIcons.HighQuality), beta = true)
+                },
+                Entry("Video mode", "video music video watch song video switch player") {
+                    ToggleRow("Video mode", pb.videoModeEnabled, { v -> AppSettings.updatePlayback { it.copy(videoModeEnabled = v) } }, summary = "Adds a Song / Video switch to the player", icon = ImageVector.vectorResource(AppIcons.PlayCircle), beta = true)
                 },
                 Entry("Automix", "auto mix dj blend beat transition seamless") {
                     ToggleRow(
@@ -1063,7 +1126,7 @@ private fun settingsSections(
                     ToggleRow("Skip silence", pb.skipSilence, { v -> AppSettings.updatePlayback { it.copy(skipSilence = v) } }, summary = "Trim gaps longer than a second", icon = ImageVector.vectorResource(AppIcons.SpaceBar))
                 },
                 Entry("Clarity", "studio master clarity presence air bass clear enhance") {
-                    ToggleRow("Clarity", pb.clarity, { v -> AppSettings.updatePlayback { it.copy(clarity = v) } }, summary = "Firmer bass, less mud, more presence and air, at the same loudness. Off plays the stream untouched.", icon = ImageVector.vectorResource(AppIcons.AutoAwesome), beta = true)
+                    ToggleRow("Clarity", pb.clarity, { v -> AppSettings.updatePlayback { it.copy(clarity = v) } }, summary = "Firmer bass and clearer sound at the same loudness", icon = ImageVector.vectorResource(AppIcons.AutoAwesome), beta = true)
                 },
                 Entry("Spatial audio", "stereo widen immersive") {
                     ToggleRow("Spatial audio", pb.spatialAudio, { v -> AppSettings.updatePlayback { it.copy(spatialAudio = v) } }, summary = "Widens stereo tracks for a more open sound", icon = ImageVector.vectorResource(AppIcons.SurroundSound), beta = true)
@@ -1078,26 +1141,26 @@ private fun settingsSections(
                     NavRow(
                         "Recommendations",
                         { recommenderDialog = true },
-                        summary = "Whose picks autoplay adds and Home's \"Because you played\" shows. Songs still play from YouTube Music.",
+                        summary = "Whose picks autoplay and Home recommendations use",
                         icon = ImageVector.vectorResource(AppIcons.AutoAwesome),
                         value = pb.recommender.label,
                     )
                 },
                 Entry("Sync listening history", "youtube account privacy sync spotify history") {
                     NavRow("Sync listening history", { historyTargetDialog = true },
-                        summary = "YouTube Music needs a signed-in account. Spotify does not accept plays from other services; likes can sync separately. Connected scrobblers keep their own settings.",
+                        summary = "YouTube Music needs sign-in. Spotify doesn't accept outside plays",
                         icon = ImageVector.vectorResource(AppIcons.History), value = pb.listeningHistoryTarget.label)
                 },
                 Entry("Pause account sync", "private pause youtube spotify history recommendations") {
                     ToggleRow("Pause account sync", pb.pauseListeningHistory,
                         { v -> AppSettings.updatePlayback { it.copy(pauseListeningHistory = v) } },
-                        summary = "Pause sending new listens to YouTube Music. Your local history, listening stats and personal recommendations keep updating. Paused listens are never sent later; likes and connected scrobblers keep their own settings.",
+                        summary = "Pauses sharing your listens with YouTube Music",
                         icon = ImageVector.vectorResource(AppIcons.History))
                 },
                 Entry("Listens from YouTube Music", "import sync history youtube music other apps outside recents") {
                     ToggleRow("Listens from YouTube Music", pb.importAccountHistory,
                         { v -> AppSettings.updatePlayback { it.copy(importAccountHistory = v) }; if (v) com.opentune.data.history.AccountHistory.syncSoon(force = true) },
-                        summary = "What you play in YouTube Music or other apps on your account shows in your history, Recents and Replay here",
+                        summary = "Shows plays from your account's other apps in your history",
                         icon = ImageVector.vectorResource(AppIcons.History))
                 },
                 Entry("Don't repeat songs in current session", "autoplay duplicates") {
@@ -1105,11 +1168,11 @@ private fun settingsSections(
                 },
                 Entry("Songs, not music videos", "audio only music video version omv atv song video switch") {
                     ToggleRow("Songs, not music videos", pb.songsOnly, { v -> AppSettings.updatePlayback { it.copy(songsOnly = v) } },
-                        summary = "Radio and mixes play the song where YouTube Music also has its video, so the same song never comes twice in two versions",
+                        summary = "Plays one version of each song in radio and mixes",
                         icon = ImageVector.vectorResource(AppIcons.MusicNote))
                 },
                 Entry("Smart shuffle", "shuffle similar songs mix recommendations playlist album sparkle") {
-                    ToggleRow("Smart shuffle", pb.smartShuffle, { v -> AppSettings.updatePlayback { it.copy(smartShuffle = v) } }, summary = "Mixes a similar song in after every four. Tap the player's shuffle button twice, or long-press Shuffle on a playlist or album", icon = ImageVector.vectorResource(AppIcons.AutoAwesome))
+                    ToggleRow("Smart shuffle", pb.smartShuffle, { v -> AppSettings.updatePlayback { it.copy(smartShuffle = v) } }, summary = "Mixes in a similar song after every four", icon = ImageVector.vectorResource(AppIcons.AutoAwesome))
                 },
                 Entry("Hidden songs and artists", "not interested don't play hide block artist unhide suggestions") {
                     val count = hidden.songs.size + hidden.artists.size
@@ -1125,13 +1188,13 @@ private fun settingsSections(
                     )
                 },
                 Entry("Resume when headphones connect", "bluetooth headset wired auto play resume connect car") {
-                    ToggleRow("Resume when headphones connect", pb.resumeOnConnect, { v -> AppSettings.updatePlayback { it.copy(resumeOnConnect = v) } }, summary = "Carries on playing when headphones are plugged in or a Bluetooth device connects, while OpenTune is open or in the notification", icon = com.opentune.ui.player.PlayerIcons.Headphones)
+                    ToggleRow("Resume when headphones connect", pb.resumeOnConnect, { v -> AppSettings.updatePlayback { it.copy(resumeOnConnect = v) } }, summary = "Resumes playing when headphones or Bluetooth connect", icon = com.opentune.ui.player.PlayerIcons.Headphones)
                 },
                 Entry("Pause at zero volume", "mute volume down silent") {
-                    ToggleRow("Pause at zero volume", pb.pauseAtZeroVolume, { v -> AppSettings.updatePlayback { it.copy(pauseAtZeroVolume = v) } }, summary = "Pauses when the volume is turned all the way down and plays again when it comes back up", icon = ImageVector.vectorResource(AppIcons.VolumeOff))
+                    ToggleRow("Pause at zero volume", pb.pauseAtZeroVolume, { v -> AppSettings.updatePlayback { it.copy(pauseAtZeroVolume = v) } }, summary = "Pauses at zero volume and resumes when it rises", icon = ImageVector.vectorResource(AppIcons.VolumeOff))
                 },
                 Entry("SponsorBlock", "sponsorblock skip sponsor intro outro non-music talking music video segments") {
-                    ToggleRow("Skip non-music parts", pb.sponsorBlock, { v -> AppSettings.updatePlayback { it.copy(sponsorBlock = v) } }, summary = "Jumps over talking, skits and sponsor reads in music videos, from SponsorBlock", icon = ImageVector.vectorResource(AppIcons.FastForward))
+                    ToggleRow("Skip non-music parts", pb.sponsorBlock, { v -> AppSettings.updatePlayback { it.copy(sponsorBlock = v) } }, summary = "Skips talking and sponsors in music videos", icon = ImageVector.vectorResource(AppIcons.FastForward))
                 },
                 if (pb.sponsorBlock) Entry("SponsorBlock categories", "sponsorblock skip categories") {
                     NavRow("What to skip", { sponsorBlockDialog = true }, summary = pb.sponsorBlockCategories.mapNotNull { SponsorBlock.CATEGORIES[it]?.label }.joinToString().ifEmpty { "Nothing" }, icon = ImageVector.vectorResource(AppIcons.FastForward))
@@ -1270,7 +1333,7 @@ private fun settingsSections(
                         disabledReason = "Glides while Reduce animation is on")
                 },
                 Entry("Dock slides away", "dock slides away hide navigation bar bottom pages liked playlist artist settings mini player") {
-                    ToggleRow("Dock slides away", ui.dockSlidesAway, { v -> AppSettings.updateUi { it.copy(dockSlidesAway = v) } }, summary = "On Liked, playlists, artist pages, Settings and History, the dock and Search slide away and the mini player has the bottom to itself", icon = ImageVector.vectorResource(AppIcons.Dock),
+                    ToggleRow("Dock slides away", ui.dockSlidesAway, { v -> AppSettings.updateUi { it.copy(dockSlidesAway = v) } }, summary = "Gives the mini player the whole bottom bar", icon = ImageVector.vectorResource(AppIcons.Dock),
                         enabled = !railShown, disabledReason = "Not with the side rail this wide window uses")
                 },
                 Entry("Opening animation", "splash start launch intro logo reveal dive") {
@@ -1278,7 +1341,7 @@ private fun settingsSections(
                         "Opening animation",
                         ui.openingAnimation,
                         { v -> AppSettings.updateUi { it.copy(openingAnimation = v) } },
-                        summary = "When OpenTune starts, the screen dives into the logo and the app comes through it",
+                        summary = "Plays the logo dive when the app starts",
                         icon = ImageVector.vectorResource(AppIcons.AutoAwesome),
                         enabled = !reduced,
                         disabledReason = "Off while Reduce animation is on",
@@ -1290,7 +1353,7 @@ private fun settingsSections(
                         enabled = !reduced, disabledReason = "A short fade while Reduce animation is on")
                 },
                 Entry("Double-tap to skip 10 seconds", "double tap cover seek forward back rewind ten seconds gesture") {
-                    ToggleRow("Double-tap to skip 10 seconds", ui.doubleTapSeek, { v -> AppSettings.updateUi { it.copy(doubleTapSeek = v) } }, summary = "Double-tap the left of the cover to go back 10 seconds, the right to go on", icon = ImageVector.vectorResource(AppIcons.TouchApp))
+                    ToggleRow("Double-tap to skip 10 seconds", ui.doubleTapSeek, { v -> AppSettings.updateUi { it.copy(doubleTapSeek = v) } }, summary = "Double-tap the cover's sides to skip 10 seconds", icon = ImageVector.vectorResource(AppIcons.TouchApp))
                 },
                 Entry("Glow under the cover", "glow shadow light cover colour bass pulse") {
                     // The glow is drawn only under the Classic and Minimal players' square cover
@@ -1306,7 +1369,7 @@ private fun settingsSections(
                     }
                     // Greyed with what it's set to showing, which comes back with the cover that draws it.
                     ToggleRow("Glow under the cover", ui.coverGlow, { v -> AppSettings.updateUi { it.copy(coverGlow = v) } },
-                        summary = "A soft light in the cover's colours under it, swelling a little with the bass",
+                        summary = "A soft glow under the cover that moves with the bass",
                         icon = ImageVector.vectorResource(AppIcons.AutoAwesome), enabled = glowWhyNot == null, disabledReason = glowWhyNot)
                 },
                 Entry("Song change", "cover change next song skip animation flip carousel deck fade") {
@@ -1323,11 +1386,11 @@ private fun settingsSections(
                     })
                 },
                 Entry("Moving cover art", "motion artwork canvas animated cover drift zoom") {
-                    ToggleRow("Moving cover art", ui.movingCover, { v -> AppSettings.updateUi { it.copy(movingCover = v) } }, summary = "The cover drifts and zooms slowly in the player while a song plays", icon = ImageVector.vectorResource(AppIcons.Animation),
+                    ToggleRow("Moving cover art", ui.movingCover, { v -> AppSettings.updateUi { it.copy(movingCover = v) } }, summary = "Slowly drifts and zooms the cover in the player", icon = ImageVector.vectorResource(AppIcons.Animation),
                         enabled = !reduced, disabledReason = "Off while Reduce animation is on")
                 },
                 Entry("Moving covers on Home", "motion artwork animated cover drift zoom home cards mixes") {
-                    ToggleRow("Moving covers on Home", ui.homeMovingCovers, { v -> AppSettings.updateUi { it.copy(homeMovingCovers = v) } }, summary = "Song and album covers on Home drift and zoom slowly, one or two at a time, while you're not scrolling. Off in battery saver", icon = ImageVector.vectorResource(AppIcons.Animation),
+                    ToggleRow("Moving covers on Home", ui.homeMovingCovers, { v -> AppSettings.updateUi { it.copy(homeMovingCovers = v) } }, summary = "Slowly drifts and zooms covers on Home", icon = ImageVector.vectorResource(AppIcons.Animation),
                         enabled = !reduced, disabledReason = "Off while Reduce animation is on")
                 },
                 Entry("Page layout", "layout poster classic album playlist artist page design look header") {
@@ -1338,15 +1401,15 @@ private fun settingsSections(
                 },
                 Entry("Full-screen playlist covers", "playlist album cover art edge full screen header") {
                     // Poster pages always open with their cover edge to edge (fullListCover), so the switch is the Classic layout's.
-                    ToggleRow("Full-screen playlist covers", ui.fullScreenListCover, { v -> AppSettings.updateUi { it.copy(fullScreenListCover = v) } }, summary = "Playlists and albums open with their cover across the top of the page, edge to edge", icon = ImageVector.vectorResource(AppIcons.Fullscreen),
+                    ToggleRow("Full-screen playlist covers", ui.fullScreenListCover, { v -> AppSettings.updateUi { it.copy(fullScreenListCover = v) } }, summary = "Opens playlists and albums with a full-width cover", icon = ImageVector.vectorResource(AppIcons.Fullscreen),
                         enabled = !poster, disabledReason = "Only with the Classic page layout. Poster pages always open edge to edge")
                 },
                 Entry("Liked Music cover", "liked music cover heart newest latest song artwork") {
-                    ToggleRow("Liked Music cover", ui.likedCoverFromLatest, { v -> AppSettings.updateUi { it.copy(likedCoverFromLatest = v) } }, summary = "The newest song you liked becomes the cover, instead of the heart cover", icon = ImageVector.vectorResource(AppIcons.Favorite))
+                    ToggleRow("Liked Music cover", ui.likedCoverFromLatest, { v -> AppSettings.updateUi { it.copy(likedCoverFromLatest = v) } }, summary = "Uses your newest liked song as the Liked cover", icon = ImageVector.vectorResource(AppIcons.Favorite))
                 },
                 Entry("Full-screen cover art", "artwork edge") {
                     // The Poster layout always gives the player its cover edge to edge, whatever this says (PlayerScreen).
-                    ToggleRow("Full-screen cover art", ui.fullScreenCover, { v -> AppSettings.updateUi { it.copy(fullScreenCover = v) } }, summary = "Runs the cover to the edges of the player instead of a square sleeve", icon = ImageVector.vectorResource(AppIcons.Fullscreen),
+                    ToggleRow("Full-screen cover art", ui.fullScreenCover, { v -> AppSettings.updateUi { it.copy(fullScreenCover = v) } }, summary = "Stretches the cover to the player's edges", icon = ImageVector.vectorResource(AppIcons.Fullscreen),
                         enabled = !poster, disabledReason = "Only with the Classic page layout. The Poster player's cover is always full-screen")
                 },
                 Entry("Cover corners", "artwork corner radius round square sharp shape thumbnail") {
@@ -1387,7 +1450,7 @@ private fun settingsSections(
                         !ui.fullScreenCover && !poster -> "Only with Full-screen cover art on"
                         else -> null
                     }
-                    ToggleRow("Match background to cover", ui.coverColorBackground, { v -> AppSettings.updateUi { it.copy(coverColorBackground = v) } }, summary = "Paints the player's background in the cover's own colour, so the full-screen cover blends into it", icon = ImageVector.vectorResource(AppIcons.Palette),
+                    ToggleRow("Match background to cover", ui.coverColorBackground, { v -> AppSettings.updateUi { it.copy(coverColorBackground = v) } }, summary = "Tints the player's background with the cover's colour", icon = ImageVector.vectorResource(AppIcons.Palette),
                         enabled = matchWhyNot == null, disabledReason = matchWhyNot)
                 },
                 Entry("Wavy seek bar", "wave progress slider") {
@@ -1398,7 +1461,7 @@ private fun settingsSections(
                         disabledReason = if (appleStyle) "Not with the Apple Music inspired player, whose bar stays plain" else "Off while Reduce animation is on")
                 },
                 Entry("Lyric preview while seeking", "scrub seek bar lyric line preview bubble drag") {
-                    ToggleRow("Lyric preview while seeking", ui.lyricScrubPreview, { v -> AppSettings.updateUi { it.copy(lyricScrubPreview = v) } }, summary = "Dragging the seek bar shows the line sung at that point above your finger", icon = ImageVector.vectorResource(AppIcons.Lyrics))
+                    ToggleRow("Lyric preview while seeking", ui.lyricScrubPreview, { v -> AppSettings.updateUi { it.copy(lyricScrubPreview = v) } }, summary = "Shows the lyric at that point while you drag the seek bar", icon = ImageVector.vectorResource(AppIcons.Lyrics))
                 },
                 Entry("Seek bar thickness", "progress bar seek slider thin thick height") {
                     SettingRow("Seek bar thickness", icon = ImageVector.vectorResource(AppIcons.LineWeight), below = {
@@ -1411,7 +1474,7 @@ private fun settingsSections(
                     })
                 },
                 Entry("Seek bar colour", "progress bar color accent gradient") {
-                    SettingRow("Seek bar colour", summary = "Accent and Gradient follow the cover when the player takes its colours", icon = ImageVector.vectorResource(AppIcons.Palette), below = {
+                    SettingRow("Seek bar colour", summary = "Accent and Gradient follow the cover's colours", icon = ImageVector.vectorResource(AppIcons.Palette), below = {
                         PillSegmented(com.opentune.data.settings.SeekbarColor.entries, ui.seekbarColor, { it.label }, { v -> AppSettings.updateUi { it.copy(seekbarColor = v) } })
                     })
                 },
@@ -1421,25 +1484,31 @@ private fun settingsSections(
                     })
                 },
                 Entry("Audio details page", "signal path pipeline format details bit perfect output routing codec resolution") {
-                    SettingRow("Audio details page", summary = "What the quality label opens: cards of format, output and source, or the live pipeline", icon = ImageVector.vectorResource(AppIcons.GraphicEq), below = {
+                    SettingRow("Audio details page", summary = "Choose what tapping the quality label opens", icon = ImageVector.vectorResource(AppIcons.GraphicEq), below = {
                         PillSegmented(com.opentune.data.settings.SignalPathStyle.entries, ui.signalPathStyle, { it.label }, { v -> AppSettings.updateUi { it.copy(signalPathStyle = v) } })
                     })
                 },
+                Entry("Song part marks", "seek bar chorus verse dots marks parts") {
+                    ToggleRow("Song part marks", ui.seekbarMarks, { v -> AppSettings.updateUi { it.copy(seekbarMarks = v) } }, summary = "Marks verses and choruses with dots on the seek bar", icon = ImageVector.vectorResource(AppIcons.MoreHoriz))
+                },
                 Entry("Skip to chorus", "chorus jump skip button song parts") {
-                    ToggleRow("Skip to chorus button", ui.skipToChorus, { v -> AppSettings.updateUi { it.copy(skipToChorus = v) } }, summary = "A button under the title that jumps to the next chorus, when the lyrics mark one", icon = ImageVector.vectorResource(AppIcons.FastForward))
+                    ToggleRow("Skip to chorus button", ui.skipToChorus, { v -> AppSettings.updateUi { it.copy(skipToChorus = v) } }, summary = "Adds a button that jumps to the next chorus", icon = ImageVector.vectorResource(AppIcons.FastForward))
                 },
                 Entry("Audio quality label", "audio source quality pill badge codec bitrate jiosaavn youtube") {
-                    ToggleRow("Show the quality label", ui.sourcePill, { v -> AppSettings.updateUi { it.copy(sourcePill = v) } }, summary = "Shows quality and upgrade progress below the seek bar; tap for the full signal path", icon = ImageVector.vectorResource(AppIcons.HighQuality))
+                    ToggleRow("Show the quality label", ui.sourcePill, { v -> AppSettings.updateUi { it.copy(sourcePill = v) } }, summary = "Shows quality below the seek bar; tap for the signal path", icon = ImageVector.vectorResource(AppIcons.HighQuality))
+                },
+                Entry("Like button colour", "like heart star favourite favorite cover colour color player") {
+                    ToggleRow("Like button colour", ui.likeCoverColor, { v -> AppSettings.updateUi { it.copy(likeCoverColor = v) } }, summary = "The filled heart and star take the playing cover's colour", icon = ImageVector.vectorResource(AppIcons.Favorite))
                 },
                 Entry("Album covers", "artwork cover musicbrainz cover art archive video thumbnail") {
-                    ToggleRow("Sharper album covers", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "The player shows the album's cover from Apple Music, Deezer or the Cover Art Archive, sharper than YouTube's and in place of a video frame", icon = ImageVector.vectorResource(AppIcons.Album))
+                    ToggleRow("Sharper album covers", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "Shows sharper album covers from Apple Music, Deezer and more", icon = ImageVector.vectorResource(AppIcons.Album))
                 },
                 Entry("Artist signatures", "artist signature handwritten autograph name artist page header") {
                     com.opentune.ui.browse.ArtistSignatureSettings()
                 },
                 Entry("Animated covers", "apple music motion artwork video moving album cover animated") {
                     // With motion reduced no clip is fetched or played (PlayerViewModel), so these do nothing then.
-                    ToggleRow("Animated covers", ui.animatedCovers, { v -> AppSettings.updateUi { it.copy(animatedCovers = v) } }, summary = "When Apple Music has a moving cover for the album, it loops silently in the player's cover", icon = ImageVector.vectorResource(AppIcons.Animation),
+                    ToggleRow("Animated covers", ui.animatedCovers, { v -> AppSettings.updateUi { it.copy(animatedCovers = v) } }, summary = "Loops Apple Music's moving covers in the player", icon = ImageVector.vectorResource(AppIcons.Animation),
                         enabled = !reduced, disabledReason = "Off while Reduce animation is on")
                     if (ui.animatedCovers) {
                         RowDivider()
@@ -1454,21 +1523,21 @@ private fun settingsSections(
                 },
                 // Shown once Spotify is connected; before that the Spotify row above says what it adds.
                 if (spotifyConnected) Entry("Spotify", "spotify canvas video loop background likes mixes home") {
-                    ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = "When a song has a Canvas on Spotify, it loops silently behind the player", icon = ImageVector.vectorResource(AppIcons.Animation),
+                    ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = "Loops the song's Spotify Canvas behind the player", icon = ImageVector.vectorResource(AppIcons.Animation),
                         enabled = !reduced, disabledReason = "Off while Reduce animation is on")
                     RowDivider()
                     // How a Canvas is shaded, so only while one can play.
                     SettingRow("Behind the title and controls", summary = ui.canvasLook.summary, icon = ImageVector.vectorResource(AppIcons.BlurOn),
                         enabled = ui.spotifyCanvas && !reduced, disabledReason = if (reduced) "Off while Reduce animation is on" else "Only with Spotify Canvas on", below = {
-                        PillSegmented(com.opentune.data.settings.CanvasLook.entries, ui.canvasLook, { it.label }, { v -> AppSettings.updateUi { it.copy(canvasLook = v) } })
-                    })
+                            PillSegmented(com.opentune.data.settings.CanvasLook.entries, ui.canvasLook, { it.label }, { v -> AppSettings.updateUi { it.copy(canvasLook = v) } })
+                        })
                     RowDivider()
                     ToggleRow("Canvas takes the screen", ui.canvasFocus, { v -> AppSettings.updateUi { it.copy(canvasFocus = v) } }, summary = "While a Canvas plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.", icon = ImageVector.vectorResource(AppIcons.Animation),
                         enabled = ui.spotifyCanvas && !reduced, disabledReason = if (reduced) "Off while Reduce animation is on" else "Only with Spotify Canvas on")
                     RowDivider()
-                    ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = "Likes are saved to Spotify. Listening here does not add plays to Spotify history", icon = ImageVector.vectorResource(AppIcons.Favorite))
+                    ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = "Saves your likes to Spotify, without adding plays", icon = ImageVector.vectorResource(AppIcons.Favorite))
                     RowDivider()
-                    ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = ImageVector.vectorResource(AppIcons.Album))
+                    ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = "Your Spotify mixes and playlists, played from YouTube Music", icon = ImageVector.vectorResource(AppIcons.Album))
                 } else null,
                 Entry("Animated covers on Wi-Fi only", "mobile data metered save data wifi animated covers canvas video") {
                     ToggleRow("Animated covers on Wi-Fi only", ui.animatedCoversWifiOnly, { v -> AppSettings.updateUi { it.copy(animatedCoversWifiOnly = v) } }, summary = "Animated covers and Canvas don't load on mobile data", icon = ImageVector.vectorResource(AppIcons.Wifi),
@@ -1479,7 +1548,7 @@ private fun settingsSections(
                     ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes decorative motion and simplifies player and lyric transitions", icon = ImageVector.vectorResource(AppIcons.Animation))
                 },
                 Entry("Lite three-dot menu", "song menu page animation performance low end") {
-                    ToggleRow("Lite three-dot menu", ui.liteThreeDotMenu, { v -> AppSettings.updateUi { it.copy(liteThreeDotMenu = v) } }, summary = "The song menu opens as a plain page with no animation, lighter on low-end phones", icon = ImageVector.vectorResource(AppIcons.Speed))
+                    ToggleRow("Lite three-dot menu", ui.liteThreeDotMenu, { v -> AppSettings.updateUi { it.copy(liteThreeDotMenu = v) } }, summary = "Opens the song menu as a plain page, lighter on slow phones", icon = ImageVector.vectorResource(AppIcons.Speed))
                 },
                 Entry("Glass style", "glass liquid glass refraction apple lens web frosted blur theme material poster classic") {
                     // Both styles are Liquid Glass, in both page layouts (glass, posterGlass): without a
@@ -1494,6 +1563,9 @@ private fun settingsSections(
                 Entry("Frosted top edge", "status bar blur fade top scroll glass") {
                     ToggleRow("Frosted top edge", ui.frostedTopEdge, { v -> AppSettings.updateUi { it.copy(frostedTopEdge = v) } }, summary = "Pages blur and fade as they scroll under the status bar", icon = ImageVector.vectorResource(AppIcons.Gradient))
                 },
+                Entry("Solid system bars", "status bar navigation bar transparent edge to edge solid background") {
+                    ToggleRow("Solid system bars", ui.solidSystemBars, { v -> AppSettings.updateUi { it.copy(solidSystemBars = v) } }, summary = "Gives the system bars the page's solid background", icon = ImageVector.vectorResource(AppIcons.Smartphone))
+                },
                 Entry("Performance profile", "battery saver drain power performance profile balanced smooth heat") {
                     NavRow("Performance profile", { profileDialog = true }, summary = ui.performanceProfile.summary, icon = ImageVector.vectorResource(AppIcons.Speed), value = ui.performanceProfile.label)
                 },
@@ -1502,7 +1574,7 @@ private fun settingsSections(
                 },
                 Entry("Streaks on Home", "streak badges milestones hours artists new week home") {
                     ToggleRow("Streaks on Home", ui.homeStreaks, { v -> AppSettings.updateUi { it.copy(homeStreaks = v) } },
-                        summary = "Days in a row you've listened, new artists this week and hours with an artist, under the greeting", icon = ImageVector.vectorResource(AppIcons.LocalFireDepartment))
+                        summary = "Your streak, new artists and listening hours on Home", icon = ImageVector.vectorResource(AppIcons.LocalFireDepartment))
                 },
                 Entry("Speed dial", "home most played quick grid shortcuts favourites top") {
                     ToggleRow("Speed dial", ui.speedDial, { v -> AppSettings.updateUi { it.copy(speedDial = v) } }, summary = "Your most-played songs, albums and artists at the top of Home", icon = ImageVector.vectorResource(AppIcons.GridView))
@@ -1521,7 +1593,7 @@ private fun settingsSections(
                         "Wide-screen layout",
                         ui.wideLayout,
                         { v -> AppSettings.updateUi { it.copy(wideLayout = v) } },
-                        summary = "On tablets, unfolded phones and in landscape, the tabs move to a rail on the side and pages keep a readable width",
+                        summary = "Moves tabs to a side rail on wide screens",
                         icon = ImageVector.vectorResource(AppIcons.TabletAndroid),
                     )
                 },
@@ -1536,7 +1608,7 @@ private fun settingsSections(
                         "Lite mode",
                         ui.liteMode,
                         { v -> AppSettings.updateUi { com.opentune.data.settings.liteModeApplied(it, v) } },
-                        summary = "The same app without glass, blur, glows, moving and animated covers, and fewer shelves on Home. On by itself on TVs and older phones",
+                        summary = "Turns off glass, blur and animations for slower phones",
                         icon = ImageVector.vectorResource(AppIcons.Speed),
                     )
                 },
@@ -1545,7 +1617,7 @@ private fun settingsSections(
                         "Lighter Liquid Glass",
                         com.opentune.ui.components.GlassPerformance.lite,
                         { v -> com.opentune.ui.components.GlassPerformance.choose(v) },
-                        summary = "Leaves out the colour fringe and inner shade, which slower phones can't draw every frame. Turns on by itself when frames run late",
+                        summary = "Drops heavy glass effects to keep scrolling smooth",
                         icon = ImageVector.vectorResource(AppIcons.Speed),
                     )
                 },
@@ -1610,13 +1682,13 @@ private fun settingsSections(
                         disabledReason = if (!ui.syncedLyrics) "Only with Synced lyrics on" else "The Karaoke animation always glows")
                 },
                 Entry("Keep the screen on for lyrics", "keep screen awake on wake lock sleep dim lyrics") {
-                    ToggleRow("Keep the screen on for lyrics", ui.keepScreenOnLyrics, { v -> AppSettings.updateUi { it.copy(keepScreenOnLyrics = v) } }, summary = "While lyrics are showing, the screen doesn't dim or lock. It goes back to normal when you leave them.", icon = ImageVector.vectorResource(AppIcons.LightMode))
+                    ToggleRow("Keep the screen on for lyrics", ui.keepScreenOnLyrics, { v -> AppSettings.updateUi { it.copy(keepScreenOnLyrics = v) } }, summary = "Keeps the screen awake while lyrics are showing", icon = ImageVector.vectorResource(AppIcons.LightMode))
                 },
                 Entry("Hide the navigation bar on the lyrics page", "navigation bar hide gesture bottom bar immersive lyrics") {
-                    ToggleRow("Hide the navigation bar on the lyrics page", ui.hideNavigationBarOnLyrics, { v -> AppSettings.updateUi { it.copy(hideNavigationBarOnLyrics = v) } }, summary = "The device's navigation bar is hidden on the lyrics page and its space left empty, so nothing crowds the bottom edge. Swipe up from the edge to bring it back for a moment.", icon = ImageVector.vectorResource(AppIcons.BorderBottom))
+                    ToggleRow("Hide the navigation bar on the lyrics page", ui.hideNavigationBarOnLyrics, { v -> AppSettings.updateUi { it.copy(hideNavigationBarOnLyrics = v) } }, summary = "Hides the navigation bar on the lyrics page", icon = ImageVector.vectorResource(AppIcons.BorderBottom))
                 },
                 Entry("Hide the status bar on the lyrics page", "status bar hide top immersive lyrics") {
-                    ToggleRow("Hide the status bar on the lyrics page", ui.hideStatusBarOnLyrics, { v -> AppSettings.updateUi { it.copy(hideStatusBarOnLyrics = v) } }, summary = "The phone's status bar is hidden on the lyrics page and its space left empty, so nothing crowds the top edge. Swipe down from the top edge to bring it back for a moment.", icon = ImageVector.vectorResource(AppIcons.BorderTop))
+                    ToggleRow("Hide the status bar on the lyrics page", ui.hideStatusBarOnLyrics, { v -> AppSettings.updateUi { it.copy(hideStatusBarOnLyrics = v) } }, summary = "Hides the status bar on the lyrics page", icon = ImageVector.vectorResource(AppIcons.BorderTop))
                 },
                 Entry("Blur unfocused lyrics", "spotlight") {
                     // Karaoke and Minimal blur no line (and reduced motion plays Minimal), so there's nothing to turn off.
@@ -1630,7 +1702,7 @@ private fun settingsSections(
                         })
                 },
                 Entry("Lyrics take the screen", "hide controls idle focus fullscreen lyrics auto") {
-                    ToggleRow("Lyrics take the screen", ui.lyricsFocus, { v -> AppSettings.updateUi { it.copy(lyricsFocus = v) } }, summary = "On the lyrics view, the controls slide away after a few seconds untouched. Touch or swipe to bring them back.", icon = ImageVector.vectorResource(AppIcons.Lyrics))
+                    ToggleRow("Lyrics take the screen", ui.lyricsFocus, { v -> AppSettings.updateUi { it.copy(lyricsFocus = v) } }, summary = "Hides the lyrics controls after a few seconds", icon = ImageVector.vectorResource(AppIcons.Lyrics))
                 },
                 Entry("Lyrics sources", "lrclib youtube order provider") {
                     NavRow(
@@ -1653,7 +1725,7 @@ private fun settingsSections(
                             AppSettings.updateLibrary { it.copy(releaseAlerts = v) }
                             NewReleases.schedule(context)
                         },
-                        summary = "A notification when an artist you follow puts out an album or single. Checked twice a day.",
+                        summary = "Notifies you about new releases from artists you follow",
                         icon = ImageVector.vectorResource(AppIcons.NotificationsActive),
                     )
                 },
@@ -1670,7 +1742,7 @@ private fun settingsSections(
                         "Hide explicit content",
                         lib.hideExplicit,
                         { v -> AppSettings.updateLibrary { it.copy(hideExplicit = v) } },
-                        summary = "Leaves out songs and albums marked explicit on Home, in search, on album and artist pages and in autoplay",
+                        summary = "Hides explicit songs and albums everywhere",
                         icon = ImageVector.vectorResource(AppIcons.FilterAlt),
                     )
                 },
@@ -1690,13 +1762,13 @@ private fun settingsSections(
                 Entry("Smart downloads", "automatic offline favorite wifi battery") {
                     ToggleRow("Smart downloads", lib.smartDownloads,
                         { enabled -> AppSettings.updateLibrary { it.copy(smartDownloads = enabled) } },
-                        summary = "Save your liked and most-listened music on unmetered Wi-Fi with sufficient battery. Manual downloads are kept separately.",
+                        summary = "Auto-downloads liked and top songs on Wi-Fi",
                         icon = ImageVector.vectorResource(AppIcons.DownloadDone))
                 },
                 Entry("Keep today's mixes offline", "smart download mixes daylist discover genre offline automatic") {
                     ToggleRow("Keep today's mixes offline", lib.smartDownloadMixes,
                         { v -> AppSettings.updateLibrary { it.copy(smartDownloadMixes = v) } },
-                        summary = "Smart downloads also save the first songs of each mix on Home: your daylist, daily, genre and Discover mixes",
+                        summary = "Also saves the first songs of your Home mixes",
                         icon = ImageVector.vectorResource(AppIcons.AutoAwesome), enabled = lib.smartDownloads, disabledReason = "Only with Smart downloads on")
                 },
                 Entry("Smart download limit", "automatic offline songs storage threshold") {
@@ -1734,7 +1806,7 @@ private fun settingsSections(
                     val pbd by AppSettings.playback.collectAsState()
                     ToggleRow("Prefer the download when it's as good", pbd.streamDownloadsOnlyIfBetter,
                         { v -> AppSettings.updatePlayback { it.copy(streamDownloadsOnlyIfBetter = v) } },
-                        summary = "Plays the saved file instead of streaming when no stream would sound better, such as a lossless download. Saves data.",
+                        summary = "Plays the download when streaming wouldn't sound better",
                         icon = ImageVector.vectorResource(AppIcons.HighQuality), enabled = pbd.downloadedPlayback != com.opentune.data.download.DownloadedPlayback.FILE,
                         disabledReason = "Downloaded songs always play from the file while Stream downloaded songs is Never")
                 },
@@ -1771,7 +1843,7 @@ private fun settingsSections(
                     NavRow("Local music folder", { folderDialog = true }, summary = lib.localFolder ?: "All audio folders", icon = ImageVector.vectorResource(AppIcons.Folder))
                 },
                 Entry("Filter non-music audio", "recordings voice notes") {
-                    ToggleRow("Filter non-music audio", lib.filterNonMusic, { v -> AppSettings.updateLibrary { it.copy(filterNonMusic = v) } }, summary = "Hides clips under 30 seconds, WAV files, voice notes, recordings and system sounds", icon = ImageVector.vectorResource(AppIcons.FilterAlt))
+                    ToggleRow("Filter non-music audio", lib.filterNonMusic, { v -> AppSettings.updateLibrary { it.copy(filterNonMusic = v) } }, summary = "Hides short clips, voice notes and system sounds", icon = ImageVector.vectorResource(AppIcons.FilterAlt))
                 },
             ),
         ),
@@ -1782,7 +1854,7 @@ private fun settingsSections(
                     var draft by remember(lib.songCacheMb) { mutableFloatStateOf(lib.songCacheMb.toFloat()) }
                     SettingRow(
                         "Song cache limit",
-                        summary = "Keeps played audio on disk for instant seeking and replays. Takes effect after a restart.",
+                        summary = "Caches played audio for instant replays",
                         icon = ImageVector.vectorResource(AppIcons.Storage),
                         trailing = { Text(formatMb(draft.toInt()), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal) },
                         below = {
@@ -1935,25 +2007,25 @@ private fun settingsSections(
             "Miscellaneous",
             listOf(
                 Entry("Playlists in Library", "playlists library tiles list grid view rows layout show all view all") {
-                    SettingRow("Playlists in Library", summary = "Tiles in a sideways row, or a list down the page by where they're from, each with View all", icon = ImageVector.vectorResource(AppIcons.QueueMusic), below = {
+                    SettingRow("Playlists in Library", summary = "Tiles in a row, or a list grouped by source", icon = ImageVector.vectorResource(AppIcons.QueueMusic), below = {
                         PillSegmented(listOf(false, true), ui.playlistList, { if (it) "List" else "Tiles" }, { v -> AppSettings.updateUi { it.copy(playlistList = v) } })
                     })
                 },
                 Entry("Swipe songs to queue them", "gesture swipe queue play next add to queue") {
-                    ToggleRow("Swipe songs to queue them", pb.swipeToQueue, { v -> AppSettings.updatePlayback { it.copy(swipeToQueue = v) } }, summary = "Swipe a song right to play it next, or left to add it to the end of the queue", icon = ImageVector.vectorResource(AppIcons.PlaylistPlay))
+                    ToggleRow("Swipe songs to queue them", pb.swipeToQueue, { v -> AppSettings.updatePlayback { it.copy(swipeToQueue = v) } }, summary = "Swipe right to play next, left to queue last", icon = ImageVector.vectorResource(AppIcons.PlaylistPlay))
                 },
                 Entry("Hide volume bar", "player slider") {
                     ToggleRow("Hide volume bar", ui.hideVolumeBar, { v -> AppSettings.updateUi { it.copy(hideVolumeBar = v) } }, summary = "Removes the volume slider from the player", icon = ImageVector.vectorResource(AppIcons.VolumeOff))
                 },
                 Entry("Hide device volume bar", "system volume panel keys") {
-                    ToggleRow("Hide device volume bar", ui.hideDeviceVolumeBar, { v -> AppSettings.updateUi { it.copy(hideDeviceVolumeBar = v) } }, summary = "Volume keys change the volume with no Android panel over the player; needs the volume slider shown", icon = ImageVector.vectorResource(AppIcons.VolumeUp), enabled = !ui.hideVolumeBar, disabledReason = "Only while the player's volume bar is shown")
+                    ToggleRow("Hide device volume bar", ui.hideDeviceVolumeBar, { v -> AppSettings.updateUi { it.copy(hideDeviceVolumeBar = v) } }, summary = "Volume keys work without Android's panel", icon = ImageVector.vectorResource(AppIcons.VolumeUp), enabled = !ui.hideVolumeBar, disabledReason = "Only while the player's volume bar is shown")
                 },
                 Entry("Lyrics preview", "player lyrics line apple music classic theme") {
                     ToggleRow("Lyrics preview", ui.lyricsPreview, { v -> AppSettings.updateUi { it.copy(lyricsPreview = v) } },
                         summary = "Show the current lyric on the player in every theme", icon = ImageVector.vectorResource(AppIcons.Lyrics))
                 },
                 Entry("Comments button", "comments youtube button pill remove hide") {
-                    ToggleRow("Comments button", ui.commentsButton, { v -> AppSettings.updateUi { it.copy(commentsButton = v) } }, summary = "A button in the player's pill for the song's comments from YouTube. Off, they're still in the player's menu", icon = ImageVector.vectorResource(AppIcons.ChatBubbleOutline))
+                    ToggleRow("Comments button", ui.commentsButton, { v -> AppSettings.updateUi { it.copy(commentsButton = v) } }, summary = "Adds a comments button to the player's pill", icon = ImageVector.vectorResource(AppIcons.ChatBubbleOutline))
                 },
                 Entry("Hide song status", "playing from") {
                     ToggleRow("Hide song status", ui.hideSongStatus, { v -> AppSettings.updateUi { it.copy(hideSongStatus = v) } }, summary = "Hides the \"Playing from\" line in the player", icon = ImageVector.vectorResource(AppIcons.VisibilityOff))
@@ -1992,18 +2064,21 @@ private fun settingsSections(
                     }, summary = pendingUpdate?.let { com.opentune.i18n.Tr.f("OpenTune {0} is ready to install. You have {1}.", it.version, BuildConfig.VERSION_NAME) } ?: com.opentune.i18n.Tr.f("Current version: {0}", BuildConfig.VERSION_NAME), icon = ImageVector.vectorResource(AppIcons.Update), dot = pendingUpdate != null, busy = checkingUpdates)
                 },
                 Entry("Check for updates automatically", "update new version release auto") {
-                    ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Looks for a new release on GitHub every few hours, in the background too, and offers to install it", icon = ImageVector.vectorResource(AppIcons.Autorenew))
+                    ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Checks GitHub for new versions and offers updates", icon = ImageVector.vectorResource(AppIcons.Autorenew))
                 },
                 Entry("Count this phone in usage numbers", "anonymous usage statistics analytics counter privacy telemetry") {
                     ToggleRow(
                         "Count this phone in usage numbers",
                         ui.countUsage,
                         { v -> AppSettings.updateUi { it.copy(countUsage = v) }; com.opentune.data.Usage.consentChanged(v) },
-                        summary = "Shares a random installation ID, app version, active dates and daily play totals. No hardware ID, account or song names. Reinstalls get a new ID; updates keep it.",
+                        summary = "Anonymous stats only — no account or song data",
                         icon = ImageVector.vectorResource(AppIcons.Info),
                     )
                 },
                 Entry("OpenTune community", "github discord community addons developer") { CommunityBanner() },
+                Entry("Contributors", "contributors github community helpers developers") {
+                    NavRow("Contributors", { contributorsOpen = true }, summary = "The people who pitch in with fixes and improvements", icon = ImageVector.vectorResource(AppIcons.People))
+                },
                 Entry("Support OpenTune", "donate upi pay money tip support developer") {
                     NavRow("Support OpenTune", { supportDialog = true }, summary = "A small thank-you helps keep OpenTune going", icon = ImageVector.vectorResource(AppIcons.Favorite))
                 },

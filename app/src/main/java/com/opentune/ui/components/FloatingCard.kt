@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -72,6 +73,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import kotlin.math.roundToInt
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Measured
+import androidx.compose.ui.layout.ParentDataModifier
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.VerticalAlignmentLine
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.TransformOrigin
@@ -88,6 +94,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -109,8 +116,9 @@ class FloatingCardScope internal constructor(private val closeWith: (after: (() 
 val LocalFloatingCard = compositionLocalOf<FloatingCardScope?> { null }
 
 /**
- * The app's one sheet, and every popup in the app is built on it: full width,
- * flush to the bottom of the screen, rounded only at the top, rising over
+ * The app's one sheet, and every popup in the app is built on it: the screen's
+ * width up to [SHEET_MAX_WIDTH] and centred past it, flush to the bottom of
+ * the screen, rising over
  * the page. Its fill is the reader's choice (see [SheetStyle]): a frosted
  * blur of the screen behind it, or the app's own theme, solid, wearing
  * whatever theme the page under it wears. It has a grab handle, an optional
@@ -125,6 +133,8 @@ fun FloatingCard(
     onDismiss: () -> Unit,
     title: String? = null,
     icon: ImageVector? = null,
+    /** A drawable shown in the header tile instead of [icon]: a service's own logo, in its own colours. */
+    logo: Int? = null,
     subtitle: String? = null,
     dismissible: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp),
@@ -228,9 +238,20 @@ fun FloatingCard(
             ) {
                 val maxCard = maxHeight
                 val density = LocalDensity.current
+                // Pulled up to the whole page, the card runs under the status and navigation bars, edge
+                // to edge: the room kept for them outside it goes as it grows, and comes back inside
+                // it instead, so nothing of it sits under the clock. Kept outside, it left a hard band
+                // of the page above and below a card that was meant to be the page.
+                val barsTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                val barsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 // The card's own height with everything shown, measured as it lays out;
                 // an expandable card never grows past it, so a short menu has no empty foot.
                 var naturalPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+                // What the body reports about itself as it lays out (see SheetBody): its
+                // height in the measure just taken, and, while the height block below is
+                // probing, its content's true height. Plain, not state: written and read
+                // inside the one layout pass, like [touching].
+                val bodyMeasure = remember { SheetBodyMeasure() }
                 val fullPx = minOf(with(density) { (maxCard * fullFraction).toPx() }, if (fitContent) naturalPx else Float.MAX_VALUE)
                 // Start at full height when asked, so the whole menu shows at once; otherwise half.
                 val halfPx = if (startExpanded) fullPx else minOf(with(density) { (maxCard * openFraction).toPx() }, fullPx)
@@ -239,13 +260,23 @@ fun FloatingCard(
                 // height: one capped by its content keeps its card shape at its top.
                 val fullscreen = expandable && fullFraction >= 1f && fullPx >= with(density) { maxCard.toPx() } - 1f
                 // How far the card's square-off has got: 1 at rest, 0 pulled up to the whole
-                // page. Read only from layout and draw code (the insets below, the layer and
-                // the rim), never while composing: a pull writes [extra] on every move, and a
-                // read here would rebuild the whole card — handle, title, content and all —
-                // on every one of them, which is what made dragging a sheet crawl.
+                // page. It runs only over the last of the pull — the status bar's own
+                // height of it, once the card's top edge reaches the bar — so the top
+                // keeps the sheet's own shape for the whole climb and reaches under the
+                // bar only at the very end; spread over the whole pull, the top stretched
+                // from the first move, long before it arrived. Read only from layout and
+                // draw code (the insets below, the layer and the rim), never while
+                // composing: a pull writes [extra] on every move, and a read here would
+                // rebuild the whole card — handle, title, content and all — on every one
+                // of them, which is what made dragging a sheet crawl.
                 val edgeNow = {
                     if (!fullscreen) 1f
-                    else 1f - if (range > 0f) (extra / range).coerceIn(0f, 1f) else 1f
+                    else if (range <= 0f) 0f
+                    else {
+                        val stretch = minOf(with(density) { barsTop.toPx() }, range)
+                        if (stretch <= 0f) 1f - (extra / range).coerceIn(0f, 1f)
+                        else 1f - ((extra - (range - stretch)) / stretch).coerceIn(0f, 1f)
+                    }
                 }
                 // The same square-off, coarsened for the layout insets: the insets set the
                 // card's width, and a width that creeps a pixel at a time makes the whole
@@ -343,12 +374,6 @@ fun FloatingCard(
                         }
                     }
                 }
-                // Pulled up to the whole page, the card runs under the status and navigation bars, edge
-                // to edge: the room kept for them outside it goes as it grows, and comes back inside
-                // it instead, so nothing of it sits under the clock. Kept outside, it left a hard band
-                // of the page above and below a card that was meant to be the page.
-                val barsTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                val barsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 Column(
                     Modifier
                         .insetBy {
@@ -363,36 +388,39 @@ fun FloatingCard(
                             InsetsPx(0, (barsTop * bars).roundToPx() + (12.dp * e).roundToPx(), 0, 0)
                         }
                         .imePadding()
+                        .widthIn(max = SHEET_MAX_WIDTH)
                         .fillMaxWidth()
                         .then(
                             if (expandable) {
                                 Modifier.layout { measurable, constraints ->
-                                    // The content's own height, learned two ways, each covering
-                                    // the other's blind spot. The intrinsic size is the honest
-                                    // sum of the content, but on some contents the query itself
-                                    // throws (it tries to build a Constraints with an
-                                    // unrepresentable height) — and a sheet whose body is laid
-                                    // out to fill would defeat it the other way. So when the
-                                    // query fails, the content is laid out for real inside the
-                                    // space actually on offer and its height read off that: a
-                                    // short content reports its own height, one that fills the
-                                    // whole space reports the space, which is a full sheet
-                                    // anyway. Both run at rest and whenever a pull reaches the
-                                    // cap they set, never on every pull, so dragging a sheet
-                                    // costs exactly what it cost before. A content that can't
-                                    // be measured whole (a lazy list) fails both, is caught,
-                                    // and just takes the height asked for, as before.
+                                    // The content's own height, heard from the body itself: the
+                                    // card is laid out once at the height on offer, and inside
+                                    // that measure the body reports its content's intrinsic
+                                    // height (see SheetBody) — the honest reading a measure of
+                                    // the whole card could never give, since a body measured
+                                    // as a whole answers with the space it was given whenever
+                                    // anything inside it is laid out to fill. The card's
+                                    // natural height is the measured height with the body's
+                                    // share swapped for its true one. It runs at rest and
+                                    // whenever a pull reaches the cap it sets, never on every
+                                    // pull, so dragging a sheet costs exactly what it cost
+                                    // before. A body that can't be laid out whole (a lazy
+                                    // list) reports nothing, and the card just takes the
+                                    // height asked for, as before.
                                     val want = (halfPx + extra).roundToInt()
                                     val atRest = extra <= 0f || extra >= range
                                     // Not while a finger is on it: measuring the whole content's height
                                     // on every frame of a pull held at the top was a stutter.
                                     val pressing = fitContent && !touching[0] && want.toFloat() >= naturalPx
                                     val natural = if (fitContent && (atRest || pressing)) {
-                                        runCatching { measurable.maxIntrinsicHeight(constraints.maxWidth) }.getOrNull()
-                                            ?: runCatching {
-                                                val probe = measurable.measure(constraints.copy(minHeight = 0))
-                                                probe.height.takeIf { it > 0 && it < constraints.maxHeight }
-                                            }.getOrNull()
+                                        bodyMeasure.probing = true
+                                        val found = runCatching {
+                                            val laid = measurable.measure(constraints.copy(minHeight = 0))
+                                            bodyMeasure.natural?.let { laid.height - bodyMeasure.measured + it }
+                                                ?: laid.height.takeIf { it > 0 && it < constraints.maxHeight }
+                                        }.getOrNull()
+                                        bodyMeasure.probing = false
+                                        found
                                     } else null
                                     if (natural != null && natural.toFloat() != naturalPx) naturalPx = natural.toFloat()
                                     if (atRest || pressing || !fitContent) measured = true
@@ -469,9 +497,14 @@ fun FloatingCard(
                         .pointerInput(Unit) { detectTapGestures { } }
                         .insetBy {
                             val insideF = if (fullscreen) 1f - edgeLayout() else 0f
-                            // The bottom room is the navigation bar's at every height:
-                            // the sheet's fill runs under it, its content never does.
-                            InsetsPx(10.dp.roundToPx(), 10.dp.roundToPx() + (barsTop * insideF).roundToPx(), 10.dp.roundToPx(), 14.dp.roundToPx() + barsBottom.roundToPx())
+                            // The top room at full height is the status bar's exactly:
+                            // the card's own 10dp gives way to it as the sheet becomes
+                            // the page, instead of stacking on top of it, so the handle
+                            // sits right under the bar. The bottom room is the
+                            // navigation bar's exactly, no more: the sheet's fill runs
+                            // under the bar, and its content stops at the bar's own
+                            // top edge, with no dead band of fill above it.
+                            InsetsPx(10.dp.roundToPx(), ((10.dp * (1f - insideF)) + (barsTop * insideF)).roundToPx(), 10.dp.roundToPx(), barsBottom.roundToPx())
                         },
                 ) {
                     // The handle and title pull the card down; content below keeps its own gestures.
@@ -507,7 +540,13 @@ fun FloatingCard(
                         }
                         if (title != null) {
                             Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                if (icon != null) {
+                                if (logo != null) {
+                                    Box(
+                                        Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                        contentAlignment = Alignment.Center,
+                                    ) { androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(logo), null, Modifier.size(28.dp)) }
+                                    Spacer(Modifier.width(14.dp))
+                                } else if (icon != null) {
                                     Box(
                                         Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
                                         contentAlignment = Alignment.Center,
@@ -536,16 +575,18 @@ fun FloatingCard(
                     }
                     // The body rises in just behind the card, on the card's own clock, so the
                     // two never pull against each other. A content-capped card's body is not
-                    // force-filled: its height never passes the content's own anyway, and
-                    // leaving the fill off is what lets the cap probe in the height block
-                    // above lay the body out unbounded and hear its true height — a filled
-                    // body answers "as tall as you'll give me" and the cap never engages.
-                    Column(
+                    // force-filled: its height never passes the content's own anyway. The
+                    // body is the card's own layout (SheetBody), which is how the height
+                    // block above hears the content's true height even when the content is
+                    // a scroller laid out to fill — measured as a whole, such a body only
+                    // ever answers "as tall as you'll give me", and the cap never engages.
+                    SheetBody(
                         Modifier.weight(1f, fill = expandable && !fitContent).fillMaxWidth().nestedScroll(grow).padding(contentPadding).graphicsLayer {
                             val rise = ((shown - 0.2f) / 0.8f).coerceIn(0f, 1f)
                             alpha = rise
                             translationY = (1f - rise) * 16.dp.toPx()
                         },
+                        measure = bodyMeasure,
                         content = content,
                     )
                     if (actions != null) {
@@ -556,6 +597,131 @@ fun FloatingCard(
                             content = actions,
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/** What a sheet's body reports about itself while it lays out; see [SheetBody]. */
+private class SheetBodyMeasure {
+    /** Set by the card while it measures the content's natural height: the body probes. */
+    var probing = false
+
+    /** The body's height in the measure just taken. */
+    var measured = 0
+
+    /** The body's content at its true height, from the last probe; null when it can't be laid out whole. */
+    var natural: Int? = null
+}
+
+/** The merged parent data of a [SheetBody] child: its weight and alignment, written a field at a time. */
+private class SheetChildData(var weight: Float = 0f, var fill: Boolean = true, var align: Alignment.Horizontal? = null)
+
+/** Writes one field of a child's [SheetChildData]: its [ColumnScope.weight], or its alignment. */
+private class SheetChildPatch(
+    private val weight: Float? = null,
+    private val fill: Boolean = true,
+    private val align: Alignment.Horizontal? = null,
+) : ParentDataModifier {
+    override fun Density.modifyParentData(parentData: Any?): SheetChildData {
+        val data = parentData as? SheetChildData ?: SheetChildData()
+        if (weight != null) {
+            data.weight = weight
+            data.fill = fill
+        }
+        if (align != null) data.align = align
+        return data
+    }
+}
+
+/**
+ * The [ColumnScope] a sheet's content is composed in, inside [SheetBody]. Weight and
+ * alignment become parent data the body reads. Alignment by a baseline is left off at
+ * the body's root: it orders children inside a column, and a column inside the body
+ * keeps its own.
+ */
+private object SheetBodyScope : ColumnScope {
+    override fun Modifier.weight(weight: Float, fill: Boolean): Modifier =
+        then(SheetChildPatch(weight = weight, fill = fill))
+
+    override fun Modifier.align(alignment: Alignment.Horizontal): Modifier =
+        then(SheetChildPatch(align = alignment))
+
+    override fun Modifier.alignBy(alignmentLine: VerticalAlignmentLine): Modifier = this
+
+    override fun Modifier.alignBy(alignmentLineBlock: (Measured) -> Int): Modifier = this
+}
+
+/**
+ * A sheet's body: the one layout every [FloatingCard] content sits in. It stacks its
+ * children top to bottom like the column it replaces, sharing the height left over
+ * between the weighted ones, and it is what lets the card learn its content's height.
+ * A body measured as a whole can't tell the card how tall its content is — a scroller
+ * inside answers with whatever space it was given — so while the card is probing (at
+ * rest, see the height block in [FloatingCard]) the body asks each child its
+ * intrinsic height instead and reports the sum as the natural height: a question a
+ * scroller answers with its whole content, and one that never disturbs the measure
+ * already running. A child that can't answer (a lazy list) reports nothing, and the
+ * card takes the height it was asked for, as it always has.
+ */
+@Composable
+private fun SheetBody(modifier: Modifier = Modifier, measure: SheetBodyMeasure, content: @Composable ColumnScope.() -> Unit) {
+    Layout(content = { with(SheetBodyScope) { content() } }, modifier = modifier) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val offered = constraints.maxHeight
+        if (measure.probing) {
+            // An intrinsic query, never a measure: asking costs the layout nothing
+            // and leaves every node as it was, while a scroller answers it with the
+            // height of its whole content — the reading the card could never get by
+            // measuring the body, which only ever reports the space it was given.
+            var sum = 0
+            var whole = true
+            for (measurable in measurables) {
+                val height = runCatching { measurable.maxIntrinsicHeight(width) }.getOrNull()
+                if (height == null) {
+                    whole = false
+                    break
+                }
+                sum += height
+            }
+            measure.natural = if (whole) sum else null
+        }
+        val datas = measurables.map { it.parentData as? SheetChildData }
+        val totalWeight = datas.fold(0f) { acc, data -> acc + (data?.weight ?: 0f) }
+        val placeables = arrayOfNulls<Placeable>(measurables.size)
+        var unweighted = 0
+        measurables.forEachIndexed { index, measurable ->
+            if ((datas[index]?.weight ?: 0f) <= 0f) {
+                val laid = measurable.measure(Constraints(maxWidth = width, maxHeight = offered))
+                placeables[index] = laid
+                unweighted += laid.height
+            }
+        }
+        val remaining = (offered - unweighted).coerceAtLeast(0)
+        measurables.forEachIndexed { index, measurable ->
+            val weight = datas[index]?.weight ?: 0f
+            if (weight > 0f) {
+                val share = if (totalWeight > 0f) (remaining * weight / totalWeight).roundToInt() else 0
+                placeables[index] = measurable.measure(
+                    Constraints(maxWidth = width, minHeight = if (datas[index]?.fill == true) share else 0, maxHeight = share),
+                )
+            }
+        }
+        val total = placeables.fold(0) { acc, placeable -> acc + (placeable?.height ?: 0) }
+        val height = total.coerceIn(constraints.minHeight, offered)
+        measure.measured = height
+        layout(width, height) {
+            var y = 0
+            placeables.forEachIndexed { index, placeable ->
+                if (placeable != null) {
+                    val x = when (datas[index]?.align) {
+                        Alignment.CenterHorizontally -> (width - placeable.width) / 2
+                        Alignment.End -> width - placeable.width
+                        else -> 0
+                    }
+                    placeable.place(x, y)
+                    y += placeable.height
                 }
             }
         }
@@ -743,6 +909,9 @@ private fun Modifier.insetBy(insets: Density.() -> InsetsPx): Modifier = layout 
         placeable.place(ins.left, ins.top)
     }
 }
+
+/** The widest a sheet gets, however wide the screen is: Material's large-screen cap. */
+private val SHEET_MAX_WIDTH = 640.dp
 
 private const val EXIT_MS = 200L
 /** The Solid sheet style's fills: neutral, with nothing of the page's colour in them. */

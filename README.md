@@ -11,7 +11,7 @@
   &nbsp;·&nbsp;
   <a href="docs/features.md">Features</a>
   &nbsp;·&nbsp;
-  <a href="https://discord.gg/6udrCVh5n">Discord</a>
+  <a href="https://discord.gg/aqGA9ekG2H">Discord</a>
 </p>
 
 <p align="center">
@@ -133,7 +133,7 @@ accounts or listening history. You can turn it off under Settings › About.
 ## Community
 
 Questions, ideas and bug reports are welcome on
-[Discord](https://discord.gg/6udrCVh5n) and in the
+[Discord](https://discord.gg/aqGA9ekG2H) and in the
 [issues](https://github.com/justshivv/Opentune/issues).
 
 ## Disclaimer

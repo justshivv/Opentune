@@ -9,11 +9,15 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -100,53 +104,60 @@ fun AccountMenu(nav: AccountMenuNav, onDismiss: () -> Unit) {
                 enter = if (calm) fadeIn(tween(120)) else fadeIn(tween(160)) + scaleIn(tween(240), initialScale = 0.86f, transformOrigin = TransformOrigin(1f, 0f)),
                 exit = if (calm) fadeOut(tween(100)) else fadeOut(tween(140)) + scaleOut(tween(160), targetScale = 0.92f, transformOrigin = TransformOrigin(1f, 0f)),
             ) {
-                Column(
-                    Modifier
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp)
-                        .widthIn(max = 420.dp)
-                        .fillMaxWidth()
-                        .shadow(24.dp, RoundedCornerShape(30.dp))
-                        .clip(RoundedCornerShape(30.dp))
-                        .background(card)
-                        // Taps on the card stay on the card.
-                        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
-                        .padding(vertical = 16.dp),
-                ) {
-                    val active = accounts.firstOrNull { it.active }
-                    Text(
-                        if (signedIn) "Switch account" else "Account",
-                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
-                    if (active != null && active.email.isNotBlank()) {
+                BoxWithConstraints {
+                    // The card never outgrows the screen: on a short screen (landscape, a small
+                    // phone) it stops short of the bottom edge and its content scrolls instead.
+                    val cardMaxHeight = maxHeight - 64.dp
+                    Column(
+                        Modifier
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                            .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                            .widthIn(max = 420.dp)
+                            .fillMaxWidth()
+                            .heightIn(max = cardMaxHeight)
+                            .shadow(24.dp, RoundedCornerShape(30.dp))
+                            .clip(RoundedCornerShape(30.dp))
+                            .background(card)
+                            // Taps on the card stay on the card.
+                            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+                            .verticalScroll(rememberScrollState())
+                            .padding(vertical = 16.dp),
+                    ) {
+                        val active = accounts.firstOrNull { it.active }
                         Text(
-                            active.email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 4.dp),
+                            if (signedIn) "Switch account" else "Account",
+                            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 24.dp),
                         )
-                    }
-                    if (signedIn) accounts.forEach { acc ->
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .clickable { if (!acc.active) AccountStore.switchTo(acc.id); close() }
-                                .padding(horizontal = 24.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Artwork(acc.thumbnailUrl, Modifier.size(48.dp), CircleShape)
-                            Column(Modifier.padding(start = 16.dp).weight(1f)) {
-                                Text(acc.name.ifBlank { "Signed in" }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (acc.email.isNotBlank()) Text(
-                                    acc.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            if (acc.active) Icon(ImageVector.vectorResource(AppIcons.Check), "In use", Modifier.size(26.dp))
+                        if (active != null && active.email.isNotBlank()) {
+                            Text(
+                                active.email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 4.dp),
+                            )
                         }
+                        if (signedIn) accounts.forEach { acc ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable { if (!acc.active) AccountStore.switchTo(acc.id); close() }
+                                    .padding(horizontal = 24.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Artwork(acc.thumbnailUrl, Modifier.size(48.dp), CircleShape)
+                                Column(Modifier.padding(start = 16.dp).weight(1f)) {
+                                    Text(acc.name.ifBlank { "Signed in" }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    if (acc.email.isNotBlank()) Text(
+                                        acc.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                if (acc.active) Icon(ImageVector.vectorResource(AppIcons.Check), "In use", Modifier.size(26.dp))
+                            }
+                        }
+                        MenuLine(ImageVector.vectorResource(AppIcons.Add), if (signedIn) "Add account" else "Sign in") { close(); nav.addAccount() }
+                        if (signedIn) MenuLine(ImageVector.vectorResource(AppIcons.ManageAccounts), "Manage accounts") { close(); nav.manageAccounts() }
+                        MenuLine(ImageVector.vectorResource(AppIcons.Settings), "Settings") { close(); nav.settings() }
                     }
-                    MenuLine(ImageVector.vectorResource(AppIcons.Add), if (signedIn) "Add account" else "Sign in") { close(); nav.addAccount() }
-                    if (signedIn) MenuLine(ImageVector.vectorResource(AppIcons.ManageAccounts), "Manage accounts") { close(); nav.manageAccounts() }
-                    MenuLine(ImageVector.vectorResource(AppIcons.Settings), "Settings") { close(); nav.settings() }
                 }
             }
         }

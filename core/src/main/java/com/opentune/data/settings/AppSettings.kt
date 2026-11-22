@@ -100,22 +100,51 @@ enum class PerformanceProfile(val label: String, val summary: String) {
 }
 
 /** [ui] and [pb] as [profile] sets them; everything it doesn't touch is kept. */
+/** The switches Battery saver turns off, kept so leaving it gives them back as they were. */
+@Serializable
+data class SaverSwitches(
+    val animatedCovers: Boolean,
+    val spotifyCanvas: Boolean,
+    val movingCover: Boolean,
+    val homeMovingCovers: Boolean,
+    val blurLyrics: Boolean,
+)
+
+/** [ui] with Battery saver's switches given back, if it turned them off. */
+private fun InterfaceSettings.withSaverRestored(): InterfaceSettings {
+    val s = saverSnapshot
+    if (s != null) return copy(
+        saverSnapshot = null,
+        animatedCovers = s.animatedCovers, spotifyCanvas = s.spotifyCanvas,
+        movingCover = s.movingCover, homeMovingCovers = s.homeMovingCovers, blurLyrics = s.blurLyrics,
+    )
+    // Battery saver was turned on before snapshots existed: the defaults are all there is to go back to.
+    if (performanceProfile == PerformanceProfile.BATTERY_SAVER) {
+        val d = InterfaceSettings()
+        return copy(
+            animatedCovers = d.animatedCovers, spotifyCanvas = d.spotifyCanvas,
+            movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics,
+        )
+    }
+    return this
+}
+
 fun performanceApplied(ui: InterfaceSettings, pb: PlaybackSettings, profile: PerformanceProfile): Pair<InterfaceSettings, PlaybackSettings> {
-    val d = InterfaceSettings()
     return when (profile) {
         PerformanceProfile.BATTERY_SAVER -> ui.copy(
             performanceProfile = profile, highRefreshRate = false, stillBackdrops = true,
+            saverSnapshot = ui.saverSnapshot ?: SaverSwitches(
+                animatedCovers = ui.animatedCovers, spotifyCanvas = ui.spotifyCanvas,
+                movingCover = ui.movingCover, homeMovingCovers = ui.homeMovingCovers, blurLyrics = ui.blurLyrics,
+            ),
             animatedCovers = false, spotifyCanvas = false, movingCover = false, homeMovingCovers = false, blurLyrics = false,
         ) to pb.copy(automixPerformance = AutomixPerformance.EFFICIENT)
-        PerformanceProfile.BALANCED -> ui.copy(
+        PerformanceProfile.BALANCED -> ui.withSaverRestored().copy(
             performanceProfile = profile, highRefreshRate = false, stillBackdrops = false,
-            animatedCovers = d.animatedCovers, animatedCoversWifiOnly = true, spotifyCanvas = d.spotifyCanvas,
-            movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics,
+            animatedCoversWifiOnly = true,
         ) to pb.copy(automixPerformance = AutomixPerformance.BALANCED)
-        PerformanceProfile.PERFORMANCE -> ui.copy(
+        PerformanceProfile.PERFORMANCE -> ui.withSaverRestored().copy(
             performanceProfile = profile, highRefreshRate = true, stillBackdrops = false,
-            animatedCovers = d.animatedCovers, spotifyCanvas = d.spotifyCanvas,
-            movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics,
         ) to pb.copy(automixPerformance = AutomixPerformance.PERFORMANCE)
     }
 }
@@ -418,6 +447,13 @@ data class PlaybackSettings(
     val streamDownloadsOnlyIfBetter: Boolean = true,
     /** Swap to a clearly better stream mid-song when one turns up. */
     val qualityUpgrade: Boolean = true,
+    /**
+     * Songs that have a music video get a Song / Video switch in the player,
+     * swapping the playing song onto its video and back where it stands.
+     * On by default; off takes the switch away, and no song is checked for
+     * a video at all.
+     */
+    val videoModeEnabled: Boolean = true,
     /** Community FLAC lookup runs after playback starts. Downloads remain YouTube audio. */
     val losslessStreaming: Boolean = false,
     /** No longer read: its default let FLAC stream on mobile data. See [losslessWifiOnly]. */
@@ -487,6 +523,8 @@ data class InterfaceSettings(
     val liteMode: Boolean = false,
     /** Lite mode has been offered on this device (turned on if it suited), after which it's the listener's. */
     val liteChecked: Boolean = false,
+    /** The switches Lite mode turned off, as they were just before it; given back when it's turned off. */
+    val liteSnapshot: LiteSwitches? = null,
     val reduceAnimation: Boolean = false,
     /** The song menu opens as a plain page, there at once with no animation, instead of a card rising from the bottom. */
     val liteThreeDotMenu: Boolean = false,
@@ -547,10 +585,14 @@ data class InterfaceSettings(
     val seekbarTime: SeekbarTime = SeekbarTime.LEFT,
     /** The audio details page: cards of format, routing and source, or the live pipeline. */
     val signalPathStyle: SignalPathStyle = SignalPathStyle.DETAILS,
+    /** Small dots on the seek bar where the song's parts (verse, chorus) begin. */
+    val seekbarMarks: Boolean = true,
     /** A "Skip to chorus" button beside the source pill, when the lyrics mark the chorus. */
     val skipToChorus: Boolean = false,
     /** The pill under the title naming where the audio comes from and its quality. */
     val sourcePill: Boolean = true,
+    /** The filled like heart (and the Apple-style star) takes the playing cover's colour. */
+    val likeCoverColor: Boolean = false,
     /** A soft light in the cover's colour under the player's cover. */
     val coverGlow: Boolean = true,
     /** Double-tapping the cover's left or right side goes back or on ten seconds. */
@@ -608,6 +650,8 @@ data class InterfaceSettings(
     val choiceMenus: ChoiceMenuStyle = ChoiceMenuStyle.SCREEN,
     /** Pages blur and fade out as they scroll under the status bar. */
     val frostedTopEdge: Boolean = true,
+    /** The status bar and the navigation bar sit on the page's background colour instead of the page showing through them. */
+    val solidSystemBars: Boolean = false,
     /** How the dock's highlight travels between tabs. */
     val dockLens: DockLens = DockLens.STRETCH,
     /**
@@ -631,6 +675,8 @@ data class InterfaceSettings(
     val highRefreshRate: Boolean = true,
     /** The profile last chosen (Settings › Performance profile); the switches it set may have been changed since. */
     val performanceProfile: PerformanceProfile = PerformanceProfile.PERFORMANCE,
+    /** The switches Battery saver turned off, as they were just before it; given back when another profile is chosen. */
+    val saverSnapshot: SaverSwitches? = null,
     /** Player backgrounds and their glow hold still instead of drifting (Battery saver). */
     val stillBackdrops: Boolean = false,
     /** The rate high performance mode asks for, in Hz; 0 (saved by older versions) counts as 60. */
@@ -1030,6 +1076,30 @@ object AppSettings {
         return !com.opentune.data.UnmeteredNetwork.available(cm)
     }
 
+    /** The lowest video bitrate worth sustaining, in kbps: below it a picture is not worth its stalls. */
+    private const val VIDEO_CEILING_MIN_KBPS = 400
+
+    /** The highest video bitrate a connection is ever asked to sustain, in kbps. */
+    private const val VIDEO_CEILING_MAX_KBPS = 12_000
+
+    /** The video bitrate assumed when a metered connection publishes no estimate, in kbps. */
+    private const val VIDEO_CEILING_FALLBACK_KBPS = 2_500
+
+    /**
+     * The video bitrate the current connection can be asked to sustain, in
+     * kbps: the link's own downstream estimate, discounted by a third, so a
+     * music video starts at a size the network can actually feed. When the
+     * system publishes no estimate, an unmetered link is trusted without a
+     * ceiling and a metered one gets the conservative fallback.
+     */
+    fun videoCeilingKbps(): Int {
+        val cm = connectivity ?: return VIDEO_CEILING_FALLBACK_KBPS
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return VIDEO_CEILING_FALLBACK_KBPS
+        val downstream = if (android.os.Build.VERSION.SDK_INT >= 29) caps.linkDownstreamBandwidthKbps else 0
+        if (downstream > 0) return (downstream * 7 / 10).coerceIn(VIDEO_CEILING_MIN_KBPS, VIDEO_CEILING_MAX_KBPS)
+        return if (com.opentune.data.UnmeteredNetwork.available(cm)) Int.MAX_VALUE else VIDEO_CEILING_FALLBACK_KBPS
+    }
+
     fun init(context: Context) {
         // A change still waiting to be written goes to the store it was made against first.
         flush()
@@ -1196,15 +1266,50 @@ fun migrateGlassStyle(saved: JsonElement): JsonElement {
 }
 
 /** [ui] as Lite mode sets it ([on]) or as it's set without it. */
+/** The switches Lite mode turns off, kept so turning it off gives them back as they were. */
+@Serializable
+data class LiteSwitches(
+    val reduceBlur: Boolean,
+    val frostedTopEdge: Boolean,
+    val coverGlow: Boolean,
+    val movingCover: Boolean,
+    val homeMovingCovers: Boolean,
+    val blurLyrics: Boolean,
+    val wavySeekbar: Boolean,
+    val openingAnimation: Boolean,
+    val animatedCovers: Boolean,
+    val spotifyCanvas: Boolean,
+)
+
 fun liteModeApplied(ui: InterfaceSettings, on: Boolean): InterfaceSettings {
-    val d = InterfaceSettings()
     return if (on) ui.copy(
-        liteMode = true, reduceBlur = true, frostedTopEdge = false, coverGlow = false,
+        liteMode = true,
+        liteSnapshot = ui.liteSnapshot ?: LiteSwitches(
+            reduceBlur = ui.reduceBlur, frostedTopEdge = ui.frostedTopEdge, coverGlow = ui.coverGlow,
+            movingCover = ui.movingCover, homeMovingCovers = ui.homeMovingCovers, blurLyrics = ui.blurLyrics,
+            wavySeekbar = ui.wavySeekbar, openingAnimation = ui.openingAnimation,
+            animatedCovers = ui.animatedCovers, spotifyCanvas = ui.spotifyCanvas,
+        ),
+        reduceBlur = true, frostedTopEdge = false, coverGlow = false,
         movingCover = false, homeMovingCovers = false, blurLyrics = false, wavySeekbar = false, openingAnimation = false,
         animatedCovers = false, spotifyCanvas = false,
-    ) else ui.copy(
-        liteMode = false, reduceBlur = d.reduceBlur, frostedTopEdge = d.frostedTopEdge, coverGlow = d.coverGlow,
-        movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics, openingAnimation = d.openingAnimation,
-        animatedCovers = d.animatedCovers, spotifyCanvas = d.spotifyCanvas,
-    )
+    ) else {
+        val s = ui.liteSnapshot
+        if (s != null) ui.copy(
+            liteMode = false, liteSnapshot = null,
+            reduceBlur = s.reduceBlur, frostedTopEdge = s.frostedTopEdge, coverGlow = s.coverGlow,
+            movingCover = s.movingCover, homeMovingCovers = s.homeMovingCovers, blurLyrics = s.blurLyrics,
+            wavySeekbar = s.wavySeekbar, openingAnimation = s.openingAnimation,
+            animatedCovers = s.animatedCovers, spotifyCanvas = s.spotifyCanvas,
+        ) else if (ui.liteMode) {
+            // Lite was turned on before snapshots existed: the defaults are all there is to go back to.
+            val d = InterfaceSettings()
+            ui.copy(
+                liteMode = false, reduceBlur = d.reduceBlur, frostedTopEdge = d.frostedTopEdge, coverGlow = d.coverGlow,
+                movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics,
+                wavySeekbar = d.wavySeekbar, openingAnimation = d.openingAnimation,
+                animatedCovers = d.animatedCovers, spotifyCanvas = d.spotifyCanvas,
+            )
+        } else ui.copy(liteMode = false)
+    }
 }

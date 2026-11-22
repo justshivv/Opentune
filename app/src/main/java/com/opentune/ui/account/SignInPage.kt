@@ -34,6 +34,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.opentune.ui.components.FloatingCard
+import com.opentune.ui.components.GlassIconButton
+import com.opentune.ui.components.glass
 import com.opentune.ui.theme.Icon
 import com.opentune.ui.theme.Text
 import androidx.compose.ui.res.vectorResource
@@ -101,20 +103,13 @@ internal fun SignInPage(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
             ) {
-                Surface(
-                    onClick = onBack,
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    color = scheme.surfaceContainerHigh,
-                    contentColor = scheme.onSurface,
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(ImageVector.vectorResource(AppIcons.ArrowBack), "Close sign-in", Modifier.size(22.dp))
-                    }
-                }
+                GlassIconButton(
+                    ImageVector.vectorResource(AppIcons.ArrowBack), "Close sign-in", onBack,
+                    size = 48.dp,
+                )
                 Row(
                     Modifier.weight(1f).height(48.dp)
-                        .background(scheme.surfaceContainerHigh, androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+                        .glass(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
                         .then(if (loading) Modifier.borderLoader(brand) else Modifier)
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -131,17 +126,10 @@ internal fun SignInPage(
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                Surface(
-                    onClick = { showHelp = true },
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    color = scheme.surfaceContainerHigh,
-                    contentColor = scheme.onSurface,
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(ImageVector.vectorResource(AppIcons.Info), "Sign-in help", Modifier.size(22.dp))
-                    }
-                }
+                GlassIconButton(
+                    ImageVector.vectorResource(AppIcons.Info), "Sign-in help", { showHelp = true },
+                    size = 48.dp,
+                )
             }
             // Clipped to its box: a WebView's first frames can paint past its bounds, and
             // nothing it draws may ever reach the header above it.
@@ -156,7 +144,7 @@ internal fun SignInPage(
             }
         }
     }
-    if (showHelp) FloatingCard(onDismiss = { showHelp = false }, title = service, icon = icon) {
+    if (showHelp) FloatingCard(onDismiss = { showHelp = false }, title = service, icon = icon, logo = logo) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(gives, style = MaterialTheme.typography.bodyLarge)
             Text(privacy ?: com.opentune.i18n.Tr.f(

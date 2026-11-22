@@ -22,6 +22,10 @@ object SongParts {
         return inferred(lyrics.lines)
     }
 
+    /** Where the parts begin, for the seek bar: the source's own, else the choruses. */
+    fun marks(lyrics: Lyrics.Synced): List<Long> =
+        if (lyrics.parts.size >= 2) lyrics.parts.map { it.startMs }.filter { it > 0 }.distinct().sorted() else choruses(lyrics)
+
     /** The chorus in [starts] after [positionMs], unless one is playing now or it's about to start anyway. */
     fun nextChorus(starts: List<Long>, positionMs: Long): Long? {
         if (starts.any { it <= positionMs && positionMs < it + CHORUS_MS }) return null

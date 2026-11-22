@@ -94,4 +94,13 @@ object PlaybackRequests {
     fun switchToPicked(videoId: String) {
         _picked.tryEmit(videoId)
     }
+
+    private val _videoMode = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, Boolean>>(extraBufferCapacity = 1)
+    /** Show or hide the playing song's music video, as (song, on) pairs. */
+    val videoMode: kotlinx.coroutines.flow.SharedFlow<Pair<String, Boolean>> = _videoMode
+
+    /** Ask the service to put [videoId] onto its music video, or back onto the song. */
+    fun setVideoMode(videoId: String, on: Boolean) {
+        _videoMode.tryEmit(videoId to on)
+    }
 }

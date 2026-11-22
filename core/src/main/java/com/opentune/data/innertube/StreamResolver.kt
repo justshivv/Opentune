@@ -182,7 +182,7 @@ object StreamResolver {
                 builder.header(
                     "User-Agent",
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+                            "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
                 )
             }
 
@@ -204,7 +204,7 @@ object StreamResolver {
                 TrackLog.w(
                     TAG,
                     "extractor fetch FAILED after ${SystemClock.elapsedRealtime() - requestStart}ms " +
-                        "${request.httpMethod()} ${request.url()}: ${e.javaClass.simpleName}: ${e.message}",
+                            "${request.httpMethod()} ${request.url()}: ${e.javaClass.simpleName}: ${e.message}",
                 )
                 throw e
             }
@@ -331,6 +331,106 @@ object StreamResolver {
         remember(videoId, stream.url)
         served[videoId] = stream
         return stream.url
+    }
+
+    /**
+     * The playable URL of [videoId]'s best video-only format, or null when no
+     * client offers one that unlocks. Video-only, not the muxed file: the
+     * muxed formats ride the clients whose copies are signature-ciphered,
+     * while the video-only ones are served by the same clients that hand the
+     * app its unciphered audio. The picture plays merged over the song's own
+     * stream (see PlaybackService), so it needs no audio of its own. The
+     * InnerTubeX engine is asked before the walk: its streams carry PoTokens
+     * and play under the bot flags that stand the plain clients down, while
+     * a walk-minted video URL can pass its own probe and still be refused
+     * when the player opens it. The walk is the same one [resolve] makes,
+     * so an age gate or a burned visitor id costs a video switch no more
+     * than a song start.
+     */
+    suspend fun resolveVideo(videoId: String): String? {
+        init
+        unplayableReason(videoId)?.let { return null }
+        // The picture is picked for the connection asking: a stream this
+        // network cannot feed only stalls, so the best format here is the
+        // heaviest the connection can sustain, not the tallest one going.
+        val ceiling = minOf(AppSettings.videoCeilingKbps(), videoStepCaps[videoId] ?: Int.MAX_VALUE)
+        videoUrls[videoId]?.let { url ->
+            val kbps = videoKbps[videoId]
+            if (kbps == null || kbps <= ceiling) return url
+            // The held picture is heavier than this connection: forget it
+            // and resolve again under the ceiling.
+            videoUrls.remove(videoId)
+            videoKbps.remove(videoId)
+        }
+        // Off the caller's thread, for the same reason as [videoAvailable]:
+        // the walk's probes are raw network calls, and a main-thread caller
+        // would have every one of them killed and conclude nothing is usable.
+        val picked = withContext(Dispatchers.IO) {
+            val x = innerTubeXVideo(videoId, ceiling)
+            if (x != null) x.url to x.kbps
+            else playerStream(videoId, select = { response -> rankVideoForPlayback(response, ceiling) })?.let { it.url to it.kbps }
+        } ?: return null
+        videoUrls[videoId] = picked.first
+        videoKbps[videoId] = picked.second
+        VideoAvailability.remember(videoId, true)
+        return picked.first
+    }
+
+    /**
+     * Steps [videoId]'s picture down after a stall: the held stream is
+     * forgotten and the next resolve is capped near the rung under the one
+     * that stalled, for the rest of the session. False when there is no
+     * held stream to judge by, or the picture is already at the lightest
+     * rung worth showing — a connection that can't hold that won't be
+     * fixed by another swap.
+     */
+    fun stepDownVideo(videoId: String): Boolean {
+        val servedKbps = videoKbps[videoId] ?: return false
+        if (servedKbps <= VIDEO_STEP_FLOOR_KBPS) return false
+        videoStepCaps[videoId] = (servedKbps * 55 / 100).coerceAtLeast(VIDEO_STEP_FLOOR_KBPS)
+        videoUrls.remove(videoId)
+        videoKbps.remove(videoId)
+        return true
+    }
+
+    /**
+     * The video side of the InnerTubeX engine. The clients that keep audio
+     * playing under a bot flag carry PoTokens, and their extraction includes
+     * the music video; the plain client walk has neither advantage, so this
+     * is asked first and the walk only when it finds nothing. Probed and
+     * excluded exactly like its audio streams.
+     */
+    private suspend fun innerTubeXVideo(videoId: String, maxKbps: Int = Int.MAX_VALUE): InnerTubeXResolver.Extracted? {
+        val skip = mutableSetOf<String>()
+        repeat(INNERTUBEX_ATTEMPTS) {
+            val found = try {
+                withTimeoutOrNull(INNERTUBEX_TIMEOUT_MS) { InnerTubeXResolver.extractVideo(videoId, skip) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Errors as well as exceptions: third-party code, and a
+                // linkage error here must not take the track down with it.
+                TrackLog.w(TAG, "InnerTubeX video failed for $videoId: ${e.javaClass.simpleName}: ${e.message}")
+                return null
+            } ?: return null
+            if (probe(found.url, expectVideo = true) == Probe.OK) {
+                if (found.kbps > maxKbps) {
+                    // Playable, but heavier than the asking connection can
+                    // feed: not a refusal, so the client keeps its standing —
+                    // the caller falls back to the walk, whose ladder is
+                    // ranked under the same ceiling.
+                    TrackLog.d(TAG, "InnerTubeX video for $videoId at ${found.kbps} kbps is over the ${maxKbps} kbps ceiling; the walk picks instead")
+                    return null
+                }
+                TrackLog.d(TAG, "InnerTubeX served video for $videoId via ${found.clientName} at ${found.kbps} kbps")
+                videoUrls[videoId] = found.url
+                videoKbps[videoId] = found.kbps
+                return found
+            }
+            InnerTubeXResolver.exclude(videoId, found.profileId)
+            skip += found.profileId
+        }
+        return null
     }
 
     // ---- Quality upgrade ------------------------------------------------------
@@ -641,7 +741,7 @@ object StreamResolver {
             TrackLog.w(
                 TAG,
                 "resolve hit a linkage failure for $videoId after " +
-                    "${SystemClock.elapsedRealtime() - resolveStart}ms: ${e.javaClass.name}: ${e.message}",
+                        "${SystemClock.elapsedRealtime() - resolveStart}ms: ${e.javaClass.name}: ${e.message}",
                 e,
             )
             throw IOException("Stream resolution cannot run on this device: $e", e)
@@ -657,7 +757,7 @@ object StreamResolver {
             TrackLog.w(
                 TAG,
                 "resolve failed for $videoId after ${SystemClock.elapsedRealtime() - resolveStart}ms: " +
-                    "${e.javaClass.name}: ${e.message}",
+                        "${e.javaClass.name}: ${e.message}",
                 e,
             )
             // Recorded before it is rethrown, so the retries stacked above this
@@ -710,7 +810,7 @@ object StreamResolver {
      */
     private suspend fun authenticatedWebRemixStream(
         videoId: String,
-        select: (JsonObject) -> List<Audio>,
+        select: (JsonObject) -> List<Format>,
     ): Stream? {
         if (Innertube.cookie == null) return null
         // Every format this client returns is ciphered, so with the solver
@@ -727,7 +827,7 @@ object StreamResolver {
             }
             val candidates = select(response)
             if (candidates.isEmpty()) return null
-            var format: Audio? = null
+            var format: Format? = null
             var url: String? = null
             timed("$videoId WEB_REMIX streamUrl") {
                 for (candidate in candidates) {
@@ -937,7 +1037,7 @@ object StreamResolver {
      */
     private suspend fun playerStream(
         videoId: String,
-        select: (JsonObject) -> List<Audio>,
+        select: (JsonObject) -> List<Format>,
         responses: MutableMap<PlayerClient, JsonObject> = mutableMapOf(),
     ): Stream? {
         // Before anything asks. Without one, the good clients refuse outright
@@ -1033,7 +1133,7 @@ object StreamResolver {
                 // bitrate alone is blind to which is which — so a broken
                 // signature solver threw away whole clients that were offering a
                 // perfectly serviceable unciphered rung one step down.
-                var format: Audio? = null
+                var format: Format? = null
                 var url: String? = null
                 timed("$videoId ${client.clientName} streamUrl") {
                     for (candidate in candidates) {
@@ -1052,13 +1152,13 @@ object StreamResolver {
                     TrackLog.d(
                         TAG,
                         "${client.clientName} offered ${candidates.size} format(s) for $videoId but none " +
-                            "could be unlocked (${candidates.joinToString { "${it.mimeType} @ ${it.kbps}kbps" }})",
+                                "could be unlocked (${candidates.joinToString { "${it.mimeType} @ ${it.kbps}kbps" }})",
                     )
                     refused(videoId, client)
                     continue
                 }
 
-                val verdict = timed("$videoId ${client.clientName} probe") { probe(playable) }
+                val verdict = timed("$videoId ${client.clientName} probe") { probe(playable, expectVideo = picked is Video) }
                 TrackLog.d(TAG, "TIMING $videoId ${client.clientName} total: ${SystemClock.elapsedRealtime() - clientStart}ms")
                 when (verdict) {
                     Probe.OK -> {
@@ -1085,7 +1185,7 @@ object StreamResolver {
                 TrackLog.w(
                     TAG,
                     "${client.clientName} minted an unusable URL for $videoId: " +
-                        "$verdict for ${picked.mimeType} @ ${picked.kbps}kbps",
+                            "$verdict for ${picked.mimeType} @ ${picked.kbps}kbps",
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -1143,13 +1243,21 @@ object StreamResolver {
 
     // ---- Format selection ---------------------------------------------------
 
+    /** What the client walk needs of a format, audio or video, to unlock it. */
+    private interface Format {
+        val url: String?
+        val signatureCipher: String?
+        val kbps: Int
+        val mimeType: String
+    }
+
     /** One audio entry of a player response, before its URL has been unlocked. */
     private class Audio(
-        val url: String?,
-        val signatureCipher: String?,
-        val kbps: Int,
-        val mimeType: String,
-    ) {
+        override val url: String?,
+        override val signatureCipher: String?,
+        override val kbps: Int,
+        override val mimeType: String,
+    ) : Format {
         /**
          * YouTube's Opus is always carried in WebM and its AAC always in MP4 —
          * there is no Opus-in-MP4 on this endpoint — so the container the mime
@@ -1163,6 +1271,21 @@ object StreamResolver {
         val qualityScore: Double get() = if (isOpus) kbps * OPUS_EFFICIENCY else kbps.toDouble()
     }
 
+    /**
+     * One video entry of a player response, before its URL has been unlocked.
+     * [muxed] entries (YouTube's progressive formats) carry their own audio;
+     * the rest are video-only and need an audio track merged in to play.
+     */
+    internal class Video(
+        override val url: String?,
+        override val signatureCipher: String?,
+        override val kbps: Int,
+        override val mimeType: String,
+        val width: Int,
+        val height: Int,
+        val muxed: Boolean,
+    ) : Format
+
     private const val OPUS_EFFICIENCY = 1.5
 
     /** An upgrade has to gain this much, in AAC-equivalent kbps, to be worth a swap. */
@@ -1170,6 +1293,7 @@ object StreamResolver {
 
     private fun audioFormats(response: JsonObject): List<Audio> {
         rememberLoudness(response)
+        rememberVideo(response)
         // The description carries the song's credits; kept so View credits needs no request of its own.
         com.opentune.data.metadata.SongCreditsRepository.remember(response)
         return audioFormatList(response)
@@ -1188,6 +1312,96 @@ object StreamResolver {
     private fun keepLoudness(videoId: String, db: Double) {
         loudness[videoId] = db
         LoudnessStore.put(videoId, db)
+    }
+
+    /** The best video format seen for each track, kept for the process's lifetime. */
+    private val videos = ConcurrentHashMap<String, Video>()
+
+    /**
+     * Whether a probed video URL is already held for [videoId]. A parsed
+     * response offering a video format is not enough to light the switch:
+     * no URL was ever resolved for it, and resolving one at load time is
+     * exactly what failed under load. Only a URL in hand counts.
+     */
+    fun hasVideo(videoId: String): Boolean = videoUrls.containsKey(videoId) || VideoAvailability.known(videoId) == true
+
+    /** Whether the video question has a settled answer for [videoId], either way. */
+    fun videoKnown(videoId: String): Boolean = videoUrls.containsKey(videoId) || videoId in noVideo || VideoAvailability.known(videoId) != null
+
+    /** Tracks a client walk answered for, none of which offered a playable video. */
+    private val noVideo = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Video stream URLs already resolved, by song. A load opens its stream
+     * several times over, and re-walking for every open can fail where the
+     * walk that lit the toggle succeeded moments earlier — the player then
+     * has no video at all and skips the song. Dropped when googlevideo
+     * refuses one (see [onPlaybackRefused]).
+     */
+    private val videoUrls = ConcurrentHashMap<String, String>()
+
+    /** The bitrate of each held video URL, so [resolveVideo] can tell a held picture is too heavy for the connection now asking and resolve it again under that connection's ceiling. */
+    private val videoKbps = ConcurrentHashMap<String, Int>()
+
+    /** Per-song picture ceilings set by a stall step-down (see [stepDownVideo]): a song that kept stopping keeps its lighter picture for the session, whatever the connection's own ceiling says. */
+    private val videoStepCaps = ConcurrentHashMap<String, Int>()
+
+    /** The lightest picture rung worth showing, in kbps: at or under it a stall step-down has nowhere left to go. */
+    private const val VIDEO_STEP_FLOOR_KBPS = 450
+
+    /**
+     * Whether [videoId] has a music video worth switching to — meaning a
+     * probed URL for it is held, not merely a format offered by some parsed
+     * response. When none is held, [checkVideo] resolves one (the PoToken
+     * engine first, then the walk). The answer is kept either way, so a
+     * song is only ever asked about once.
+     */
+    suspend fun videoAvailable(videoId: String): Boolean {
+        if (videoUrls.containsKey(videoId)) return true
+        if (videoId in noVideo) return false
+        // Settled once, settled for good: the kept answer needs no network.
+        VideoAvailability.known(videoId)?.let { return it }
+        if (!com.opentune.data.isYouTubeId(videoId)) return false
+        // The walk is network work; a caller on the main thread (the player
+        // connection is one) would have its probes killed by the platform's
+        // main-thread network ban and conclude every video is unusable.
+        val found = withContext(Dispatchers.IO) { checkVideo(videoId) }
+        // Only a settled answer is kept: a walk that never answered (asked
+        // too early, say) leaves nothing behind, here or on disk.
+        if (found || videoId in noVideo) VideoAvailability.remember(videoId, found)
+        return found
+    }
+
+    private suspend fun checkVideo(videoId: String): Boolean {
+        unplayableReason(videoId)?.let { return false }
+        // Asked first, for the same reason as in [resolveVideo]: this
+        // engine's streams are the ones that play in a flagged session.
+        if (innerTubeXVideo(videoId) != null) return true
+        var answered = false
+        var offered = false
+        val stream = playerStream(videoId, select = { response ->
+            answered = true
+            rememberVideo(response)
+            val only = rankVideoFormats(response).filter { !it.muxed }
+            if (only.isNotEmpty()) offered = true
+            only
+        })
+        if (stream != null) {
+            videoUrls[videoId] = stream.url
+            videoKbps[videoId] = stream.kbps
+            return true
+        }
+        if (answered && !offered) noVideo += videoId
+        return false
+    }
+
+    /** The best video format seen for [videoId], or null when its response offered none. */
+    internal fun videoFor(videoId: String): Video? = videos[videoId]
+
+    private fun rememberVideo(response: JsonObject) {
+        val id = response["videoDetails"]?.jsonObject?.str("videoId") ?: return
+        val best = rankVideoFormats(response).firstOrNull { !it.muxed } ?: return
+        videos[id] = best
     }
 
     private fun rememberLoudness(response: JsonObject) {
@@ -1221,6 +1435,61 @@ object StreamResolver {
             .orEmpty()
 
     /**
+     * Every video entry of [response]: the progressive (muxed) formats from
+     * `formats` and the video-only ones from `adaptiveFormats`, in one list.
+     * Entries with neither a URL nor a cipher are useless and dropped, the
+     * same rule [audioFormatList] applies to audio.
+     */
+    internal fun videoFormatList(response: JsonObject): List<Video> {
+        val data = response["streamingData"]?.jsonObject ?: return emptyList()
+        fun entry(it: JsonObject, muxed: Boolean) = Video(
+            url = it.str("url"),
+            signatureCipher = it.str("signatureCipher") ?: it.str("cipher"),
+            kbps = ((it.str("bitrate")?.toLongOrNull() ?: 0L) / 1000).toInt(),
+            mimeType = it.str("mimeType").orEmpty(),
+            width = it.str("width")?.toIntOrNull() ?: 0,
+            height = it.str("height")?.toIntOrNull() ?: 0,
+            muxed = muxed,
+        )
+        val muxed = data["formats"]?.jsonArray?.map { it.jsonObject }
+            ?.filter { it.str("mimeType")?.startsWith("video/") == true }
+            ?.map { entry(it, muxed = true) }
+            .orEmpty()
+        val adaptive = data["adaptiveFormats"]?.jsonArray?.map { it.jsonObject }
+            ?.filter { it.str("mimeType")?.startsWith("video/") == true }
+            ?.map { entry(it, muxed = false) }
+            .orEmpty()
+        return (muxed + adaptive).filter { it.url != null || it.signatureCipher != null }
+    }
+
+    /**
+     * [response]'s video formats in the order they are worth attempting:
+     * muxed first (they play through the existing single-stream pipeline),
+     * tallest first within each kind, unciphered ahead of ciphered on a tie —
+     * the same preference [rankByQuality] gives audio.
+     */
+    internal fun rankVideoFormats(response: JsonObject): List<Video> =
+        videoFormatList(response).sortedWith(
+            compareByDescending<Video> { it.muxed }
+                .thenByDescending { it.height }
+                .thenByDescending { it.url != null },
+        )
+
+    /**
+     * [response]'s video-only formats in the order they are worth attempting
+     * on a connection that sustains at most [maxKbps]: the heaviest it allows
+     * first, the rest under it descending, then anything over it cheapest
+     * first — a rung over budget still beats no picture, and the cheapest
+     * such rung is the least wrong. [rankByQuality]'s ladder, for pictures.
+     */
+    private fun rankVideoForPlayback(response: JsonObject, maxKbps: Int): List<Video> {
+        val (within, over) = videoFormatList(response).filter { !it.muxed }.partition { it.kbps <= maxKbps }
+        val order = compareByDescending<Video> { it.url != null }
+        return within.sortedWith(compareByDescending<Video> { it.kbps }.then(order)) +
+                over.sortedWith(compareBy<Video> { it.kbps }.then(order))
+    }
+
+    /**
      * What playback wants, best first: the formats the connection's ceiling
      * allows, in the order they are worth trying.
      *
@@ -1250,7 +1519,7 @@ object StreamResolver {
         // often reads a little under AAC 140's while sounding clearly better.
         // AAC 256 (Premium's 141) still outranks Opus 160.
         val ranked = withinBudget.sortedWith(compareByDescending<Audio> { it.qualityScore }.then(order)) +
-            overBudget.sortedWith(compareBy<Audio> { it.kbps }.then(order))
+                overBudget.sortedWith(compareBy<Audio> { it.kbps }.then(order))
         return if (signatureSolverBroken) ranked.sortedWith(order) else ranked
     }
 
@@ -1299,7 +1568,7 @@ object StreamResolver {
     // ---- Unlocking ----------------------------------------------------------
 
     /** The playable URL behind a format, or null if it can't be unlocked. */
-    private suspend fun streamUrl(videoId: String, format: Audio): String? {
+    private suspend fun streamUrl(videoId: String, format: Format): String? {
         val direct = format.url
         if (direct != null) return deobfuscate(videoId, direct)
 
@@ -1312,7 +1581,7 @@ object StreamResolver {
             .mapNotNull { part ->
                 val i = part.indexOf('=').takeIf { it > 0 } ?: return@mapNotNull null
                 URLDecoder.decode(part.substring(0, i), "UTF-8") to
-                    URLDecoder.decode(part.substring(i + 1), "UTF-8")
+                        URLDecoder.decode(part.substring(i + 1), "UTF-8")
             }
             .toMap()
 
@@ -1354,9 +1623,9 @@ object StreamResolver {
             .joinToString(" ")
             .lowercase(Locale.ROOT)
         return "deobfuscation function" in text ||
-            "player js" in text ||
-            "player javascript" in text ||
-            "javascript base url" in text
+                "player js" in text ||
+                "player javascript" in text ||
+                "javascript base url" in text
     }
 
     /**
@@ -1390,8 +1659,8 @@ object StreamResolver {
         TrackLog.w(
             TAG,
             "this NewPipe release cannot read YouTube's current player JavaScript " +
-                "(${cause.message}); ciphered formats are unavailable for the rest of this session — " +
-                "signed-in device clients are the only route to an age-restricted track",
+                    "(${cause.message}); ciphered formats are unavailable for the rest of this session — " +
+                    "signed-in device clients are the only route to an age-restricted track",
         )
     }
 
@@ -1529,7 +1798,7 @@ object StreamResolver {
      * [PlayerClient.forStreamUrl] — so this tests the request that matters
      * rather than a more favourable version of it.
      */
-    private fun probe(url: String): Probe {
+    private fun probe(url: String, expectVideo: Boolean = false): Probe {
         val builder = okhttp3.Request.Builder().url(url)
             .header("Range", "bytes=0-${PROBE_RANGE_BYTES - 1}")
         mediaHeadersFor(url).forEach { (name, value) ->
@@ -1542,7 +1811,7 @@ object StreamResolver {
                     response.code !in 200..299 && response.code != 416 -> Probe.UNREACHABLE
                     // A refusal dressed as a success: an error page, or the
                     // consent/captcha interstitial, rather than audio.
-                    response.header("Content-Type")?.startsWith("audio/") != true -> Probe.REFUSED
+                    response.header("Content-Type")?.let { it.startsWith("audio/") || (expectVideo && it.startsWith("video/")) } != true -> Probe.REFUSED
                     // Headers can arrive long before a body that never does —
                     // exactly the shaping this whole path exists to sidestep.
                     // Insisting on the bytes is the point: a trickle that
@@ -1717,6 +1986,10 @@ object StreamResolver {
         // answering 404 stands down the client that mints most of YouTube's,
         // and the next YouTube track pays for a failure on a different server.
         if (url.toHttpUrlOrNull()?.host?.endsWith("googlevideo.com") != true) return
+        // A refused video URL is dropped too, so the next play re-resolves it
+        // instead of failing on the same dead address.
+        videoUrls.filterValues { it == url }.keys.forEach { videoKbps.remove(it) }
+        videoUrls.entries.removeAll { it.value == url }
         // A URL InnerTubeX minted is its refusal, not one of [CLIENTS]': it
         // excludes that client variant, and the next track starts on our walk.
         InnerTubeXResolver.onRefused(url)?.let { videoId ->
@@ -1920,14 +2193,14 @@ object StreamResolver {
                 // Progressive only — DASH/HLS entries carry a manifest, not a URL.
                 .filter {
                     !it.content.isNullOrBlank() &&
-                        it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP
+                            it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP
                 }
             val stream = select(candidates.map { it.averageBitrate to it })
                 ?: error("Track unavailable: no audio streams")
             TrackLog.d(
                 TAG,
                 "NewPipe picked ${stream.format?.name} @ ${stream.averageBitrate}kbps " +
-                    "(extraction held the gate ${SystemClock.elapsedRealtime() - waited}ms)",
+                        "(extraction held the gate ${SystemClock.elapsedRealtime() - waited}ms)",
             )
             // stream.content is already playable, not raw: YoutubeStreamExtractor
             // resolves the signature cipher and the `n` parameter itself while

@@ -90,6 +90,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val loadingMessage = player.loadingMessage
     val shuffleEnabled = combine(player.shuffleEnabled, remote) { here, far -> far?.state?.shuffle ?: here }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+    /** The playing song is showing its music video (this device only, never a remote one). */
+    val videoMode = combine(player.videoMode, remote) { here, far -> far == null && here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+    /** The playing song has a music video to switch to (this device only). */
+    val videoAvailable = combine(player.videoAvailable, remote) { here, far -> far == null && here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
     val shuffleMode = combine(player.shuffleMode, remote) { here, far ->
         far?.state?.let { if (it.shuffle) com.opentune.playback.ShuffleMode.ON else com.opentune.playback.ShuffleMode.OFF } ?: here
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, com.opentune.playback.ShuffleMode.OFF)
@@ -299,6 +305,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // While another of the person's devices plays, these act on it (see Connect);
     // in someone else's room they go to the host instead (see Together.intercept).
     fun togglePlayPause() { if (!Connect.togglePlayPause() && !Together.intercept(Together.Control.PlayPause)) player.togglePlayPause() }
+
+    /** Switches the playing song between its audio stream and its music video. */
+    fun setVideoMode(on: Boolean) { player.setVideoMode(on) }
     fun dismiss() = player.dismiss()
     fun skipNext() { if (!Connect.skipNext() && !Together.intercept(Together.Control.Next)) player.skipNext() }
     fun skipPrevious() { if (!Connect.skipPrevious() && !Together.intercept(Together.Control.Previous)) player.skipPrevious() }

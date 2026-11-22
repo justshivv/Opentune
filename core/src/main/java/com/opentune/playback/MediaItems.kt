@@ -10,7 +10,9 @@ import com.opentune.data.download.Downloads
 import com.opentune.data.innertube.UpgradedTracks
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.model.QueueTier
+import com.opentune.data.model.NOTIFICATION_ART_PX
 import com.opentune.data.model.Song
+import com.opentune.data.model.artworkAt
 import com.opentune.data.subsonic.Subsonic
 import com.opentune.data.radio.Radio
 import androidx.media3.common.MimeTypes
@@ -68,9 +70,35 @@ fun externalStreamUri(videoId: String, rendition: String): Uri =
 fun externalStreamKeyOf(uri: Uri): String? =
     if (videoIdOf(uri) != null) uri.getQueryParameter("external")?.takeIf { it.isNotBlank() } else null
 
-/** The song cache key: the video id, kept apart for an upgraded copy. */
+/** The same song as its music video: an alternate rendition, like an external stream. [step] counts the picture's stall step-downs (see PlaybackService's video stall watch). */
+fun videoStreamUri(videoId: String, step: Int = 0): Uri =
+    streamUri(videoId, upgraded = false).buildUpon().appendQueryParameter("video", "1")
+        .apply { if (step > 0) appendQueryParameter("vstep", step.toString()) }
+        .build()
+
+fun isVideoUri(uri: Uri): Boolean =
+    videoIdOf(uri) != null && uri.getQueryParameter("video") == "1"
+
+/** The video rendition's picture alone, without its own audio: the factory's video side. */
+fun videoOnlyUri(videoId: String, step: Int = 0): Uri =
+    streamUri(videoId, upgraded = false).buildUpon().appendQueryParameter("video", "only")
+        .apply { if (step > 0) appendQueryParameter("vstep", step.toString()) }
+        .build()
+
+/** How many times a video item's picture has stepped down after a stall. */
+fun videoStepOf(uri: Uri): Int =
+    if (videoIdOf(uri) != null) uri.getQueryParameter("vstep")?.toIntOrNull() ?: 0 else 0
+
+fun isVideoOnlyUri(uri: Uri): Boolean =
+    videoIdOf(uri) != null && uri.getQueryParameter("video") == "only"
+
+/** The song cache key: the video id, kept apart for an upgraded or video copy. */
 fun cacheKeyOf(uri: Uri): String? = videoIdOf(uri)?.let { id ->
-    externalStreamKeyOf(uri)?.let { "$id:external:$it" } ?: if (isUpgradedUri(uri)) "$id:hq" else id
+    externalStreamKeyOf(uri)?.let { "$id:external:$it" }
+        ?: if (isVideoUri(uri) || isVideoOnlyUri(uri)) {
+            val step = videoStepOf(uri)
+            if (step > 0) "$id:video:s$step" else "$id:video"
+        } else if (isUpgradedUri(uri)) "$id:hq" else id
 }
 
 private const val QUALITY_PARAM = "q"
@@ -85,8 +113,10 @@ fun Song.toMediaItem(): MediaItem =
             MediaMetadata.Builder()
                 .setTitle(title)
                 .setArtist(artist)
-                // A downloaded cover keeps the notification and lock screen right offline.
-                .setArtworkUri(Downloads.artFor(videoId)?.let(Uri::fromFile) ?: Subsonic.resolveCover(thumbnailUrl)?.let(Uri::parse))
+                // A downloaded cover keeps the notification and lock screen right offline. A song from
+                // a list carries the list's small thumbnail (60 to 120 px): asked for at the size the
+                // media card draws, not stretched over it in blocks.
+                .setArtworkUri(Downloads.artFor(videoId)?.let(Uri::fromFile) ?: Subsonic.resolveCover(thumbnailUrl).artworkAt(NOTIFICATION_ART_PX)?.let(Uri::parse))
                 .setAlbumTitle(albumName)
                 .setExtras(
                     Bundle().apply {

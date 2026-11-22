@@ -24,13 +24,48 @@ object LocalMusic {
         videoId.removePrefix(PREFIX).toLong(),
     )
 
-    data class Track(val song: Song, val folder: String, val mimeType: String?, val durationMs: Long, val isMusic: Boolean)
+    data class Track(val song: Song, val folder: String, val mimeType: String?, val durationMs: Long, val isMusic: Boolean, val dateAdded: Long)
 
     suspend fun tracks(context: Context, settings: LibrarySettings): List<Song> = withContext(Dispatchers.IO) {
+        filtered(context, settings).map { it.song }
+    }
+
+    // The last count read, kept in memory so a surface showing the number can
+    // paint it at once instead of after a fresh scan; the scan still runs
+    // behind it and replaces it when it lands. Keyed by the folder and the
+    // filter, the two settings that change what counts.
+    @Volatile private var countCache: Pair<String, Int>? = null
+
+    private fun countKey(settings: LibrarySettings) = settings.localFolder + "|" + settings.filterNonMusic
+
+    fun cachedCount(settings: LibrarySettings): Int? = countCache?.takeIf { it.first == countKey(settings) }?.second
+
+    suspend fun count(context: Context, settings: LibrarySettings): Int {
+        val n = tracks(context, settings).size
+        countCache = countKey(settings) to n
+        return n
+    }
+
+    /** [tracks] with the moment each file appeared on the device, for newest-first sorting. */
+    suspend fun tracksDated(context: Context, settings: LibrarySettings): List<Pair<Song, Long>> = withContext(Dispatchers.IO) {
+        filtered(context, settings).map { it.song to it.dateAdded }
+    }
+
+    private fun filtered(context: Context, settings: LibrarySettings): List<Track> =
         query(context)
             .filter { settings.localFolder == null || it.folder == settings.localFolder }
             .filter { !settings.filterNonMusic || looksLikeMusic(it) }
-            .map { it.song }
+
+    /**
+     * The first of [songs] whose album really has artwork. The album-art uri is
+     * built for every album, art or not, so each candidate has to be opened to
+     * tell; only the first few are tried.
+     */
+    suspend fun firstWithArtwork(context: Context, songs: List<Song>): Song? = withContext(Dispatchers.IO) {
+        songs.asSequence().take(40).firstOrNull { song ->
+            val uri = song.thumbnailUrl?.toUri() ?: return@firstOrNull false
+            runCatching { context.contentResolver.openInputStream(uri)?.use { true } ?: false }.getOrDefault(false)
+        }
     }
 
     suspend fun folders(context: Context): List<Pair<String, Int>> = withContext(Dispatchers.IO) {
@@ -44,9 +79,9 @@ object LocalMusic {
     fun looksLikeMusic(t: Track): Boolean {
         val folder = t.folder.lowercase()
         return t.isMusic &&
-            t.durationMs >= 30_000 &&
-            t.mimeType?.contains("wav") != true &&
-            listOf("recording", "voice", "whatsapp audio", "notifications", "ringtones", "alarms", "call").none { it in folder }
+                t.durationMs >= 30_000 &&
+                t.mimeType?.contains("wav") != true &&
+                listOf("recording", "voice", "whatsapp audio", "notifications", "ringtones", "alarms", "call").none { it in folder }
     }
 
     // Lint's Recycle check doesn't see Kotlin's use {}, which closes the cursor.
@@ -63,6 +98,7 @@ object LocalMusic {
             MediaStore.Audio.Media.MIME_TYPE,
             MediaStore.Audio.Media.IS_MUSIC,
             folderColumn,
+            MediaStore.Audio.Media.DATE_ADDED,
         )
         val out = mutableListOf<Track>()
         val cursor = context.contentResolver.query(
@@ -92,6 +128,7 @@ object LocalMusic {
                     mimeType = c.getString(6),
                     durationMs = duration,
                     isMusic = c.getInt(7) != 0,
+                    dateAdded = c.getLong(9),
                 )
             }
         }

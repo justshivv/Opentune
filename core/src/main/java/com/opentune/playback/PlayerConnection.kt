@@ -2,14 +2,17 @@ package com.opentune.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.view.TextureView
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.opentune.data.innertube.StreamResolver
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.model.QueueTier
 import com.opentune.data.model.Song
@@ -62,6 +65,35 @@ class PlayerConnection(private val context: Context) {
 
     private val _hasNext = MutableStateFlow(false)
     val hasNext = _hasNext.asStateFlow()
+
+    private val _videoMode = MutableStateFlow(false)
+    /** True while the playing song is on its music video instead of its audio stream. */
+    val videoMode = _videoMode.asStateFlow()
+
+    private val _videoAvailable = MutableStateFlow(false)
+    /** Whether the playing song has a music video it can switch to. */
+    val videoAvailable = _videoAvailable.asStateFlow()
+
+    /** The song a video-availability walk is currently running for, if any. */
+    private var videoCheckId: String? = null
+
+    init {
+        // The switch is a setting (on by default): turning it off takes the
+        // switch away at once, and a song playing its video comes back to
+        // its audio stream.
+        scope.launch {
+            AppSettings.playback.collect { playback ->
+                if (!playback.videoModeEnabled) {
+                    _videoAvailable.value = false
+                    if (_videoMode.value) setVideoMode(false)
+                }
+            }
+        }
+    }
+
+    private val _videoSize = MutableStateFlow(VideoSize.UNKNOWN)
+    /** The playing stream's picture size, so the video surface can fit itself. */
+    val videoSize = _videoSize.asStateFlow()
 
     private val _shuffleEnabled = MutableStateFlow(false)
     val shuffleEnabled = _shuffleEnabled.asStateFlow()
@@ -156,6 +188,10 @@ class PlayerConnection(private val context: Context) {
     val jumps = _jumps.asSharedFlow()
 
     private val listener = object : Player.Listener {
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            _videoSize.value = videoSize
+        }
+
         override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
             _audioFormat.value = null
         }
@@ -272,6 +308,36 @@ class PlayerConnection(private val context: Context) {
             ?: 0L
         _durationMs.value = duration
         _durationOf.value = id to duration
+        // Video mode follows the item's own address, so a swap the service makes
+        // (an upgrade, a recovery) settles the toggle on what is actually playing.
+        // A merged video source publishes its first side's item, whose address
+        // is the picture-only one, so both video addresses count.
+        _videoMode.value = (mixing?.item ?: player.currentMediaItem)?.localConfiguration?.uri
+            ?.let { isVideoUri(it) || isVideoOnlyUri(it) } == true
+        _videoAvailable.value = AppSettings.playback.value.videoModeEnabled && id?.let { StreamResolver.hasVideo(it) } == true
+        // A song served without its response ever being parsed (from the cache,
+        // a download) has no answer yet: ask, and light the toggle if it has one.
+        if (id != null && !_videoAvailable.value && videoCheckId != id && AppSettings.playback.value.videoModeEnabled) {
+            videoCheckId = id
+            scope.launch {
+                // A song restored paused after a relaunch can be asked about
+                // before the probe's engine has warmed up: that ask comes
+                // back unanswered, which is not a no. Keep asking, a few
+                // seconds apart, while the song stays current and the answer
+                // stays unknown, so the switch still arrives on its own.
+                var tries = 0
+                while (_currentSong.value?.videoId == id && !StreamResolver.videoKnown(id) && tries < 6) {
+                    if (StreamResolver.videoAvailable(id)) {
+                        if (_currentSong.value?.videoId == id && AppSettings.playback.value.videoModeEnabled) _videoAvailable.value = true
+                        break
+                    }
+                    tries++
+                    if (!StreamResolver.videoKnown(id)) kotlinx.coroutines.delay(5_000)
+                }
+                if (videoCheckId == id) videoCheckId = null
+            }
+        }
+        _videoSize.value = player.videoSize
         // Buffering on the way, with playback meant to go on (a quality switch
         // loading its stream, a stall), still counts as playing: the button
         // flipped to play and back for that moment at every upgrade.
@@ -398,6 +464,27 @@ class PlayerConnection(private val context: Context) {
                 kotlinx.coroutines.delay(QUEUE_CHUNK_MS)
             }
         }
+    }
+
+    /** Switches the playing song between its audio stream and its music video, in place. */
+    fun setVideoMode(on: Boolean) {
+        if (_videoMode.value == on) return
+        // The setting is the feature's master switch: while it is off, no
+        // song is swapped onto its video.
+        if (on && !AppSettings.playback.value.videoModeEnabled) return
+        val controller = controller ?: return
+        val item = controller.currentMediaItem ?: return
+        // The service makes the swap on its own player: its rendition swaps
+        // (the quality switch's) are the ones that hold, where a controller's
+        // replace of the playing item settles back onto the queued item.
+        PlaybackRequests.setVideoMode(item.mediaId, on)
+        _videoMode.value = on
+    }
+
+    /** Gives the player a view to draw the playing song's video picture into, or takes it back. */
+    fun setVideoTextureView(view: TextureView?) {
+        val controller = controller ?: return
+        if (view == null) controller.clearVideoTextureView(null) else controller.setVideoTextureView(view)
     }
 
     fun toggleShuffle() {

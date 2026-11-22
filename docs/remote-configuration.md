@@ -35,7 +35,7 @@ Native home sections are `speed-dial`, `quick-picks`, `mixes`, `spotify-mixes`, 
 Example banner:
 
 ```json
-[{"id":"community","enabled":true,"title":"Made for music. Built together.","body":"Share your ideas with the community.","action":"Join Discord","url":"https://discord.gg/6udrCVh5n","platforms":["android","tv","web"]}]
+[{"id":"community","enabled":true,"title":"Made for music. Built together.","body":"Share your ideas with the community.","action":"Join Discord","url":"https://discord.gg/aqGA9ekG2H","platforms":["android","tv","web"]}]
 ```
 
 Example admin catalog:

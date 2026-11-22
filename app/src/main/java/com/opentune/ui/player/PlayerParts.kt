@@ -183,6 +183,10 @@ fun PlayerBackdrop(
     artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
     /** Apple's animated cover for the playing song, looped over the full-screen still. */
     video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
+    /** The song's music video is showing in the full cover's place. */
+    musicVideo: Boolean = false,
+    /** The playback player's video picture, drawn in the full cover's place while [musicVideo]. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
@@ -244,6 +248,34 @@ fun PlayerBackdrop(
         }
         if (canvas != null) {
             CanvasBackdrop(canvas, canvasPlaying, titleTop, canvasBehindText, Modifier.matchParentSize())
+        } else if (fullCover && musicVideo) {
+            // The music video in the full cover's place: the same span from the top
+            // and the same top shade. Its bottom dissolves the way the cover's
+            // does — the picture's own alpha fades out, anchored to where a 16:9
+            // picture's bottom falls in this span. A colour scrim here instead
+            // painted the backdrop's near-black base over the empty stretch
+            // under the picture, which read as a black band.
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible) 1f else 0f }) {
+                val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
+                val pictureBottom = height / 2 + (maxWidth / (16f / 9f)) / 2
+                val fadeStart = ((pictureBottom - FULL_COVER_FADE * 0.6f) / height).coerceIn(0f, 1f)
+                val fadeEnd = ((pictureBottom + FULL_COVER_FADE * 0.4f) / height).coerceIn(0f, 1f)
+                Box(Modifier.fillMaxWidth().height(height)) {
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    Brush.verticalGradient(fadeStart to Color.Black, fadeEnd to Color.Transparent),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            },
+                    ) { videoSurface() }
+                    Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = com.opentune.ui.components.FULL_COVER_TOP_SHADE), 0.2f to Color.Transparent)))
+                }
+            }
         } else if (fullCover) {
             CoverSwap(CoverShown(artworkUrl, index, songId), change) { url, motion ->
                 // The cover runs from the top down to just behind the title and
@@ -801,6 +833,10 @@ fun ArtworkPane(
     canvasShowing: Boolean = false,
     /** How round the cover's corners are. */
     corner: androidx.compose.ui.unit.Dp = 28.dp,
+    /** The song's music video is showing in the cover's place. */
+    musicVideo: Boolean = false,
+    /** The playback player's video picture, drawn over the cover while [musicVideo]. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val coverShown by animateFloatAsState(if (canvasShowing) 0f else 1f, tween(450), label = "coverOverCanvas")
     val scale by animateFloatAsState(
@@ -867,8 +903,12 @@ fun ArtworkPane(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(corner),
                     imageModifier = Modifier.livingArt(isPlaying, moving, artworkMotion),
                 ) {
+                    // The music video takes the cover's place while video mode is on.
+                    if (musicVideo && url == song.thumbnailUrl) {
+                        videoSurface()
+                    }
                     // Only on the playing song's cover, not on one leaving as the song changes.
-                    if (video != null && !canvasShowing && url == song.thumbnailUrl) {
+                    else if (video != null && !canvasShowing && url == song.thumbnailUrl) {
                         val quality = com.opentune.data.settings.AppSettings.ui.collectAsState().value.motionQuality
                         // Keyed on the quality, so a new choice in Settings takes effect at once.
                         androidx.compose.runtime.key(quality) {
@@ -1003,6 +1043,8 @@ fun SeekBar(
     playing: Boolean = false,
     /** The lyric line sung at a moment, shown above the finger while the bar is dragged. */
     lyricAt: ((Long) -> String?)? = null,
+    /** Where the song's parts (verse, chorus) begin, in ms, marked as small gaps in the track. */
+    marks: List<Long> = emptyList(),
     quality: (@Composable () -> Unit)? = null,
 ) {
     var dragFraction by remember(durationMs) { mutableStateOf<Float?>(null) }
@@ -1047,8 +1089,10 @@ fun SeekBar(
     }
     val gradientEnd = MaterialTheme.colorScheme.tertiary
     val gradient = look.seekbarColor == com.opentune.data.settings.SeekbarColor.GRADIENT
+    val shownMarks = if (look.seekbarMarks) marks else emptyList()
     val inactive = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
     val bufferedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+    val markDot = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
 
     val seekHaptics = com.opentune.ui.components.rememberHaptics()
     fun fraction(): Float = dragFraction ?: heldFraction
@@ -1177,6 +1221,16 @@ fun SeekBar(
                     drawRoundRect(Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), Offset(0f, y), Size(size.width * f, h), r)
                 } else {
                     drawRoundRect(active, Offset(0f, y), Size(size.width * f, h), r)
+                }
+                // A small dot where each part of the song still to come begins. Ones already
+                // played aren't drawn: cut into the played line (the wave above all) they read as breaks.
+                if (durationMs > 0) {
+                    val played = size.width * f
+                    val clear = maxOf(thumbRadius.toPx(), h) + 2.dp.toPx()
+                    shownMarks.forEach { ms ->
+                        val x = size.width * (ms.toFloat() / durationMs)
+                        if (x > played + clear && x < size.width - h) drawCircle(markDot, h * 0.32f, Offset(x, size.height / 2))
+                    }
                 }
                 if (thumbRadius > 0.dp) {
                     val at = Offset(size.width * f, size.height / 2)
@@ -1795,6 +1849,10 @@ fun VinylPane(
     onSwipePrevious: () -> Unit,
     animate: Boolean,
     modifier: Modifier = Modifier,
+    /** The song's music video is showing in the record's place. */
+    musicVideo: Boolean = false,
+    /** The playback player's video picture, drawn while [musicVideo]. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     var angle by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(isPlaying, animate) {
@@ -1809,7 +1867,17 @@ fun VinylPane(
     }
     val groove = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
     ArtworkSwipeArea(onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious, modifier = modifier.fillMaxWidth()) {
-        Box(
+        if (musicVideo) {
+            // The record rests and the video takes its place, unturned: a turning
+            // picture would fight the frame's own fitting.
+            Box(
+                Modifier
+                    .fillMaxWidth(0.92f)
+                    .aspectRatio(16f / 9f)
+                    .align(Alignment.Center)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            ) { videoSurface() }
+        } else Box(
             Modifier
                 .fillMaxWidth(0.92f)
                 .aspectRatio(1f)

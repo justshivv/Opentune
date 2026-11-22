@@ -300,6 +300,9 @@ fun GlassPage(modifier: Modifier = Modifier, overlay: @Composable BoxScope.() ->
             // would sit over the whole NavHost and blur the top bar itself,
             // so AppRoot skips its strip on these pages.
             TopEdgeFrost(Modifier.align(Alignment.TopCenter))
+            // The status bar's solid backdrop too, when Settings ask for it:
+            // the navigation bar's is drawn at the root, behind the chrome.
+            com.opentune.ui.theme.SystemBarBackdrops(top = true, bottom = false)
             overlay()
         }
     }
@@ -522,7 +525,7 @@ fun PageHeader(title: String, onBack: (() -> Unit)? = null, actions: (@Composabl
             title,
             // The Poster layout's titles are heavy and set a little tight, as on its pages.
             style = if (posterLayout()) MaterialTheme.typography.displaySmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Black, letterSpacing = (-0.5).sp)
-                else MaterialTheme.typography.displaySmall,
+            else MaterialTheme.typography.displaySmall,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
         )
     }

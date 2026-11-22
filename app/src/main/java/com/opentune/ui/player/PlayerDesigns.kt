@@ -83,11 +83,25 @@ fun CassettePane(
     onSwipePrevious: () -> Unit,
     animate: Boolean,
     modifier: Modifier = Modifier,
+    /** The song's music video is showing in the cassette's place. */
+    musicVideo: Boolean = false,
+    /** The playback player's video picture, drawn while [musicVideo]. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val clock = rememberRunningClock(isPlaying && animate)
     val accent = MaterialTheme.colorScheme.primary
     ArtworkSwipeArea(onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious, modifier = modifier.fillMaxWidth()) {
-        BoxWithConstraints(
+        if (musicVideo) {
+            // The cassette's own shape is near enough the video's: the tape
+            // becomes the screen, in the same shell outline.
+            Box(
+                Modifier
+                    .fillMaxWidth(0.96f)
+                    .aspectRatio(1.58f)
+                    .align(Alignment.Center)
+                    .graphicsLayer { shadowElevation = 24.dp.toPx(); shape = RoundedCornerShape(26.dp); clip = true }
+            ) { videoSurface() }
+        } else BoxWithConstraints(
             Modifier
                 .fillMaxWidth(0.96f)
                 .aspectRatio(1.58f)
@@ -187,6 +201,10 @@ fun HaloPane(
     onSwipePrevious: () -> Unit,
     animate: Boolean,
     modifier: Modifier = Modifier,
+    /** The song's music video is showing inside the ring. */
+    musicVideo: Boolean = false,
+    /** The playback player's video picture, drawn while [musicVideo]. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val clock = rememberRunningClock(isPlaying && animate)
     val ring = MaterialTheme.colorScheme.primary
@@ -208,7 +226,16 @@ fun HaloPane(
                 }
             }
             val breathe = if (isPlaying) 1f + 0.012f * sin(clock() * 3.2f) else 1f
-            Artwork(
+            if (musicVideo) {
+                // The ring keeps dancing round a still screen: the picture is
+                // never scaled, so its own fitting stays exact.
+                Box(
+                    Modifier
+                        .fillMaxWidth(0.8f)
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(20.dp))
+                ) { videoSurface() }
+            } else Artwork(
                 song.thumbnailUrl.artworkAt(PLAYER_ART_PX),
                 Modifier.fillMaxSize(0.68f).graphicsLayer { scaleX = breathe; scaleY = breathe; shadowElevation = 20.dp.toPx(); shape = CircleShape; clip = true },
                 CircleShape,
@@ -236,6 +263,10 @@ fun PolaroidPane(
     onSwipePrevious: () -> Unit,
     animate: Boolean,
     modifier: Modifier = Modifier,
+    /** The song's music video is showing as the photo. */
+    musicVideo: Boolean = false,
+    /** The playback player's video picture, drawn while [musicVideo]. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val clock = rememberRunningClock(isPlaying && animate)
     ArtworkSwipeArea(onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious, modifier = modifier.fillMaxWidth()) {
@@ -253,7 +284,14 @@ fun PolaroidPane(
                 .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Artwork(song.thumbnailUrl.artworkAt(PLAYER_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), RoundedCornerShape(2.dp))
+            if (musicVideo) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(2.dp))
+                ) { videoSurface() }
+            } else Artwork(song.thumbnailUrl.artworkAt(PLAYER_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), RoundedCornerShape(2.dp))
             Column(Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
                 Text(song.title, color = INK, fontSize = 22.sp, fontStyle = FontStyle.Italic, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(song.artist, color = INK.copy(alpha = 0.55f), fontSize = 15.sp, fontStyle = FontStyle.Italic, maxLines = 1, overflow = TextOverflow.Ellipsis)

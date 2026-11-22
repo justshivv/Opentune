@@ -889,6 +889,11 @@ fun AppRoot(vm: PlayerViewModel) {
             // under their top bar instead — here it would blur the bar itself.
             if (chromeRoute && route != "liked" && route != "playlist/{id}" && route != "collection/{id}") com.opentune.ui.components.TopEdgeFrost(Modifier.align(Alignment.TopCenter))
 
+            // Solid system bars (Settings): the navigation bar's backdrop on
+            // every page, the status bar's too except on GlassPage pages,
+            // which draw their own inside the page (see GlassPage).
+            if (chromeRoute) com.opentune.ui.theme.SystemBarBackdrops(top = route != "liked" && route != "playlist/{id}" && route != "collection/{id}", bottom = true)
+
             // Floating chrome: the mini player above the nav pill and search button.
             // It sits outside the recorded layer, so its Liquid Glass can sample it.
             if (chromeVisible) CompositionLocalProvider(LocalBackdrop provides backdrop.takeIf { sampled }) {

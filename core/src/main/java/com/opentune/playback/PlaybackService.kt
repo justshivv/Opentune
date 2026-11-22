@@ -214,6 +214,43 @@ class PlaybackService : MediaLibraryService() {
     private fun selectedUri(uri: Uri): Uri = startupToken(uri)?.let { startupSelections[it]?.selected } ?: uri
 
     /**
+     * The one address a song's audio plays from, whichever mode shows it:
+     * the rendition it was on when video mode took over, else the best
+     * external rendition on record for it, else its plain track address.
+     */
+    private fun audioUriFor(id: String): Uri {
+        val stashed = videoAudioStash?.takeIf { it.first == id }?.second
+        if (stashed != null && externalStreamKeyOf(selectedUri(stashed)) != null) return stashed
+        ExternalStreams.cached(id)?.let { return externalStreamUri(id, it.key) }
+        return stashed ?: trackUri(id)
+    }
+
+    /**
+     * Puts the current song back onto its video item when something rebuilt
+     * it plain while the user had it in video mode. The video item's audio
+     * side is built from audioUriFor, so the heal restores the upgrade as
+     * well as the picture; position and play state are carried across like
+     * the switch's own swap, and the swap is marked so the transition it
+     * causes is not mistaken for a new listen or a new start.
+     */
+    private fun healVideoMode() {
+        val id = videoModeSongId ?: return
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val item = player.currentMediaItem ?: return
+        if (item.mediaId != id) return
+        val uri = item.localConfiguration?.uri ?: return
+        if (isVideoUri(uri) || isVideoOnlyUri(uri)) return
+        if (crossfade?.blending == true) return
+        healingVideoTo = id
+        val index = player.currentMediaItemIndex
+        val position = player.currentPosition
+        val playing = player.isPlaying
+        player.replaceMediaItem(index, item.buildUpon().setUri(videoStreamUri(id)).build())
+        if (position > 0) player.seekTo(index, position)
+        if (playing) player.play()
+    }
+
+    /**
      * [item] pointed at exactly the stream the main player chose for it, so a
      * second player plays the same file (and reads it from the cache) rather
      * than choosing again; null while the choice is still being made.
@@ -280,6 +317,22 @@ class PlaybackService : MediaLibraryService() {
                 }
                 val uri = withoutStartup(input)
                 val id = videoIdOf(uri) ?: return sources.createMediaSource(mediaItem)
+                if (isVideoUri(uri)) {
+                    // Video mode: the song's own audio on the rendition it is on
+                    // (see audioUriFor — an upgraded song keeps its upgrade under
+                    // the picture), chosen by this same factory so its usual
+                    // source choice applies, with the picture-only stream laid
+                    // over it. One item to the queue and the seek bar; two
+                    // streams underneath, started together.
+                    val audioSide = this.createMediaSource(mediaItem.buildUpon().setUri(audioUriFor(id)).build())
+                    val videoSide = sources.createMediaSource(mediaItem.buildUpon().setUri(videoOnlyUri(id, videoStepOf(uri))).build())
+                    // The picture side leads: a merged source publishes its
+                    // first source's item as the playing one, and the player
+                    // reads video mode off that item's address — led by the
+                    // audio side, the item would read as a plain song and the
+                    // switch would settle straight back off.
+                    return androidx.media3.exoplayer.source.MergingMediaSource(videoSide, audioSide)
+                }
                 if (!isYouTubeId(id) || Podcasts.isEpisode(id) || externalStreamKeyOf(uri) != null ||
                     uri.getQueryParameter("fallback") == "youtube") return sources.createMediaSource(mediaItem)
                 val token = java.util.UUID.randomUUID().toString()
@@ -603,6 +656,36 @@ class PlaybackService : MediaLibraryService() {
             }
         }
         scope.launch { PlaybackRequests.upgrade.collect { scheduleUpgrade(force = true) } }
+        scope.launch {
+            PlaybackRequests.videoMode.collect { (id, on) ->
+                val player = mediaSession?.player as? ExoPlayer ?: return@collect
+                val item = player.currentMediaItem ?: return@collect
+                if (item.mediaId != id) return@collect
+                // A switch to the mode already showing is not a switch: it
+                // must not even touch the remembered rendition, let alone
+                // build the item again.
+                val alreadyVideo = item.localConfiguration?.uri?.let { isVideoUri(it) || isVideoOnlyUri(it) } == true
+                if (on == alreadyVideo) return@collect
+                val uri = if (on) {
+                    videoAudioStash = id to (item.localConfiguration?.uri ?: trackUri(id))
+                    videoModeSongId = id
+                    videoStreamUri(id)
+                } else {
+                    if (videoModeSongId == id) videoModeSongId = null
+                    audioUriFor(id).also { if (videoAudioStash?.first == id) videoAudioStash = null }
+                }
+                if (item.localConfiguration?.uri == uri) return@collect
+                // A rendition swap like the quality switch's own: the position
+                // and play state are carried across by hand, because replacing
+                // the playing item drops the playhead to its start.
+                val index = player.currentMediaItemIndex
+                val position = player.currentPosition
+                val playing = player.isPlaying
+                player.replaceMediaItem(index, item.buildUpon().setUri(uri).build())
+                if (position > 0) player.seekTo(index, position)
+                if (playing) player.play()
+            }
+        }
         scope.launch { guardQuality() }
         // A stream picked in Search's Add-ons tab that came in after its song had started.
         scope.launch {
@@ -626,6 +709,9 @@ class PlaybackService : MediaLibraryService() {
                 if (player.currentMediaItem?.mediaId != id) return@collect
                 val better = ExternalStreams.cached(id)?.takeIf { it.lossless && ExternalStreams.allowed(true) } ?: return@collect
                 val playing = player.currentMediaItem?.localConfiguration?.uri ?: return@collect
+                // A better stream answering late never takes a song out of
+                // video mode: the user picked the picture over the upgrade.
+                if (isVideoUri(playing) || isVideoOnlyUri(playing)) return@collect
                 val existing = externalStreamKeyOf(selectedUri(playing))?.let { ExternalStreams.get(id, it) }
                 if (existing?.key == better.key) return@collect
                 if (existing?.lossless == true && com.opentune.data.addons.AddonResolver.qualityScore(better.bits, better.sampleRate) <=
@@ -1229,11 +1315,12 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             nowPlayingId = mediaItem?.mediaId
+            if (mediaItem?.mediaId != videoModeSongId) videoModeSongId = null
             refreshArtistCredit(mediaItem)
             // The same song put onto its better stream: the swap that did it is
             // still running, waiting to bring the volume back up. A new upgrade
             // check here used to cancel it and leave every song after silent.
-            val swap = mediaItem != null && mediaItem.mediaId == swappingTo
+            val swap = mediaItem != null && (mediaItem.mediaId == swappingTo || mediaItem.mediaId == healingVideoTo)
             // A quality switch says what's playing once the new stream really is (see swapToUpgrade).
             if (!swap) updateExternalStats()
             applyLoudness()
@@ -1258,14 +1345,16 @@ class PlaybackService : MediaLibraryService() {
                 mediaSession?.player?.takeIf { it.currentPosition < RESUME_SLACK_MS }?.seekTo(at)
             }
             // The same song on a better stream is not a new listen.
-            if (mediaItem != null && mediaItem.mediaId == swappingTo) {
-                swappingTo = null
+            if (mediaItem != null && (mediaItem.mediaId == swappingTo || mediaItem.mediaId == healingVideoTo)) {
+                if (mediaItem.mediaId == swappingTo) swappingTo = null
+                if (mediaItem.mediaId == healingVideoTo) healingVideoTo = null
                 return
             }
             finishListen()
             startListen(mediaItem?.toSong(), mediaSession?.player?.isPlaying == true)
             // Only time starts meant to sound now, not a skip made while paused.
             startRequestedAt = if (mediaSession?.player?.playWhenReady == true) SystemClock.elapsedRealtime() else 0L
+            healVideoMode()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -1285,8 +1374,10 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             watchStall(playbackState)
+            watchVideoStall(playbackState)
             if (playbackState == Player.STATE_READY) {
                 updateExternalStats()
+                healVideoMode()
                 // The figure arrives with the stream; on a first play it's
                 // only known once the track has resolved.
                 applyLoudness()
@@ -1635,6 +1726,26 @@ class PlaybackService : MediaLibraryService() {
     // ---- Quality upgrade -----------------------------------------------------------
 
     private var upgradeJob: Job? = null
+    /**
+     * The address a song's audio was playing from when video mode took it
+     * over, kept so the video's audio side and the way back both use that
+     * very rendition: an upgraded song is never thrown back to its plain
+     * track to be upgraded all over again.
+     */
+    @Volatile private var videoAudioStash: Pair<String, Uri>? = null
+
+    /**
+     * The song the user left in video mode, remembered while it stays the
+     * current song. The mode is a fact about the song's playback, not about
+     * one item instance: anything that rebuilds the item plain while it
+     * plays — a repeat at its end, an error recovery, a queue rebuild —
+     * is healed straight back (see healVideoMode). Forgotten the moment a
+     * different song becomes current.
+     */
+    @Volatile private var videoModeSongId: String? = null
+
+    /** The song a heal swap is carrying back to its video item, if one is in flight. */
+    @Volatile private var healingVideoTo: String? = null
     /** The FLAC search the player's buffering waits on (see [LossyHoldBack]); read on the playback thread. */
     @Volatile private var lossyHeldBack: Job? = null
 
@@ -1662,6 +1773,10 @@ class PlaybackService : MediaLibraryService() {
         val item = player.currentMediaItem ?: return
         val uri = item.localConfiguration?.uri ?: return
         val id = videoIdOf(uri) ?: return
+        // Video mode is a rendition the user picked: upgrading it away would
+        // swap the picture out from under them mid-song. Its audio side
+        // already went through the factory's own source choice.
+        if (isVideoUri(uri) || isVideoOnlyUri(uri)) return
         fun alreadyExternal(): Boolean {
             val key = externalStreamKeyOf(selectedUri(uri)) ?: return false
             // Only a stream known to be lossless: one no longer on record used to count too,
@@ -1822,6 +1937,10 @@ class PlaybackService : MediaLibraryService() {
             if (!isYouTubeId(id) || Podcasts.isEpisode(id)) continue
             val raw = item.localConfiguration?.uri ?: continue
             if (raw.scheme == "file") continue
+            // Video mode is a rendition the user picked: the guard leaves it
+            // alone, as the upgrade search does, or it would swap the picture
+            // out from under them once a better stream is known.
+            if (isVideoUri(raw) || isVideoOnlyUri(raw)) continue
             if (startupToken(raw) != null && startupToken(raw)?.let { startupSelections[it]?.selected } == null) continue
             if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS + GUARD_EVERY_MS) continue
             if (tries >= GUARD_TRIES) continue
@@ -3004,6 +3123,45 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    private var videoStallJob: Job? = null
+
+    /**
+     * A music video that stops to buffer mid-song and doesn't come back
+     * within [VIDEO_STALL_MS] steps its picture down a rung, from where it
+     * stopped: the resolver forgets the stalled stream and picks a lighter
+     * one (see [StreamResolver.stepDownVideo]), and the item is rebuilt on
+     * it, the way a stalled better stream falls back. At most
+     * [MAX_VIDEO_STEPS] a song — a connection that can't hold the lightest
+     * useful picture won't be fixed by another swap.
+     */
+    private fun watchVideoStall(state: Int) {
+        videoStallJob?.cancel()
+        if (state != Player.STATE_BUFFERING) return
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val item = player.currentMediaItem ?: return
+        val uri = item.localConfiguration?.uri ?: return
+        if (!isVideoUri(uri)) return
+        if (videoStepOf(uri) >= MAX_VIDEO_STEPS) return
+        // Only mid-song: the start and a seek buffer by design.
+        if (player.currentPosition < STALL_MIN_POSITION_MS) return
+        val at = player.currentPosition
+        videoStallJob = scope.launch {
+            delay(VIDEO_STALL_MS)
+            if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@launch
+            if (player.currentMediaItem?.localConfiguration?.uri != uri || kotlin.math.abs(player.currentPosition - at) > 1_000) return@launch
+            if (!StreamResolver.stepDownVideo(item.mediaId)) return@launch
+            Log.w(TAG, "Music video for ${item.mediaId} stalled for ${VIDEO_STALL_MS}ms at ${at}ms; stepping its picture down")
+            val index = player.currentMediaItemIndex
+            swappingTo = item.mediaId
+            player.replaceMediaItem(index, item.buildUpon().setUri(videoStreamUri(item.mediaId, videoStepOf(uri) + 1)).build())
+            updateExternalStats()
+            applyLoudness()
+            player.seekTo(index, at)
+            player.prepare()
+            PlaybackRequests.report("The video kept stopping, so its quality stepped down to match the connection")
+        }
+    }
+
     /** The stream the song last switched from, to go back to if the new one fails. */
     private var beforeSwap: Pair<String, android.net.Uri>? = null
 
@@ -3290,6 +3448,10 @@ class PlaybackService : MediaLibraryService() {
         /** Stuck buffering this long mid-song, a better stream gives way to the regular one. */
         const val STALL_FALLBACK_MS = 6_000L
         const val STALL_MIN_POSITION_MS = 3_000L
+        /** Stuck buffering this long mid-song, a music video's picture steps down a rung. */
+        const val VIDEO_STALL_MS = 6_000L
+        /** How many times one song's picture may step down after stalls. */
+        const val MAX_VIDEO_STEPS = 2
         const val FAR_BUFFER_MS = 15 * 60 * 1000
         const val FAR_BUFFER_BYTES = 48 * 1024 * 1024
         /** How far ahead a stream that a FLAC may replace is fetched; past the 30 s the player wants at least. */

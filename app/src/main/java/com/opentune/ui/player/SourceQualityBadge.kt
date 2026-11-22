@@ -156,32 +156,70 @@ private fun QualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () 
     TextButton(onClick = onClick, modifier = modifier.widthIn(max = 280.dp).fillMaxWidth().heightIn(min = 40.dp).semantics { contentDescription = com.opentune.i18n.Tr.f("{0}. Open signal path", label) },
         colors = ButtonDefaults.textButtonColors(contentColor = colors.onSurfaceVariant),
         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) {
-        // Lossless gets the waveform; a lossy stream the plain HQ mark (a headphone read as the output, not the quality).
-        // Dolby audio wears Dolby's double D.
-        Icon(ImageVector.vectorResource(if (dolby) AppIcons.Dolby else if (lossless) AppIcons.GraphicEq else AppIcons.HighQuality),
-            null, Modifier.size(if (dolby) 18.dp else 16.dp))
-        Spacer(Modifier.width(5.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }.drawWithCache {
-                onDrawWithContent {
-                    drawContent()
-                    phase?.value?.let { progress ->
-                        val x = progress * size.width
-                        val half = 9.dp.toPx()
-                        // A narrow upright line of light, swept over the grey text only.
-                        drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(
-                            0f to colors.onSurface.copy(alpha = 0f),
-                            0.5f to colors.onSurface.copy(alpha = 0.85f),
-                            1f to colors.onSurface.copy(alpha = 0f),
-                            startX = x - half,
-                            endX = x + half),
-                            blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+        if (upgrading == mediaId) {
+            // While the better stream is fetched, "Upgrading" stands here on
+            // its own instead of trailing the quality label.
+            UpgradingLabel()
+        } else {
+            // Lossless gets the waveform; a lossy stream the plain HQ mark (a headphone read as the output, not the quality).
+            // Dolby audio wears Dolby's double D.
+            Icon(ImageVector.vectorResource(if (dolby) AppIcons.Dolby else if (lossless) AppIcons.GraphicEq else AppIcons.HighQuality),
+                null, Modifier.size(if (dolby) 18.dp else 16.dp))
+            Spacer(Modifier.width(5.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }.drawWithCache {
+                    onDrawWithContent {
+                        drawContent()
+                        phase?.value?.let { progress ->
+                            val x = progress * size.width
+                            val half = 9.dp.toPx()
+                            // A narrow upright line of light, swept over the grey text only.
+                            drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                0f to colors.onSurface.copy(alpha = 0f),
+                                0.5f to colors.onSurface.copy(alpha = 0.85f),
+                                1f to colors.onSurface.copy(alpha = 0f),
+                                startX = x - half,
+                                endX = x + half),
+                                blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+                        }
                     }
-                }
-            },
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
+}
+
+/**
+ * "Upgrading" on its own while the better stream is fetched, lit by the same
+ * light sweep the lossless label wears, at a brisker pace (1100 ms against
+ * its 2800), so the wait itself is what the badge shows.
+ */
+@Composable
+private fun UpgradingLabel() {
+    val colors = MaterialTheme.colorScheme
+    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+    val phase = if (still) null else rememberInfiniteTransition(label = "upgrading light")
+        .animateFloat(-0.15f, 1.15f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "upgrading sweep")
+    Text("Upgrading", style = MaterialTheme.typography.labelMedium,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = Modifier.graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }.drawWithCache {
+            onDrawWithContent {
+                drawContent()
+                phase?.value?.let { progress ->
+                    val x = progress * size.width
+                    val half = 9.dp.toPx()
+                    drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        0f to colors.onSurface.copy(alpha = 0f),
+                        0.5f to colors.onSurface.copy(alpha = 0.85f),
+                        1f to colors.onSurface.copy(alpha = 0f),
+                        startX = x - half,
+                        endX = x + half),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+                }
+            }
+        },
+        maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 internal fun qualityStatusLabel(source: NerdStats.Source?, format: AudioFormatInfo?, upgrading: Boolean): String {

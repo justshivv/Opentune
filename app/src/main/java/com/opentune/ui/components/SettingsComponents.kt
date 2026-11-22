@@ -126,6 +126,9 @@ fun SettingRow(
     beta: Boolean = false,
     /** Shown in the summary's place while [enabled] is false, saying what turns the setting on. */
     disabledReason: String? = null,
+    /** Caps on the title's and summary's lines, the rest ending in an ellipsis; uncapped by default. */
+    titleMaxLines: Int = Int.MAX_VALUE,
+    summaryMaxLines: Int = Int.MAX_VALUE,
 ) {
     val alpha = if (enabled) 1f else DISABLED_ROW_ALPHA
     val shownSummary = if (!enabled && disabledReason != null) disabledReason else summary
@@ -145,7 +148,7 @@ fun SettingRow(
             }
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(com.opentune.ui.theme.tr(title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha), modifier = Modifier.weight(1f, fill = false))
+                    Text(com.opentune.ui.theme.tr(title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha), modifier = Modifier.weight(1f, fill = false), maxLines = titleMaxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     if (beta) BetaTag(Modifier.padding(start = 8.dp).alpha(alpha))
                 }
                 if (!shownSummary.isNullOrBlank()) {
@@ -154,6 +157,8 @@ fun SettingRow(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
                         modifier = Modifier.padding(top = 2.dp),
+                        maxLines = summaryMaxLines,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -205,9 +210,12 @@ fun NavRow(
     busy: Boolean = false,
     /** See [SettingRow]: what turns the setting on, shown while it's off. */
     disabledReason: String? = null,
+    /** See [SettingRow]: caps on the title's and summary's lines. */
+    titleMaxLines: Int = Int.MAX_VALUE,
+    summaryMaxLines: Int = Int.MAX_VALUE,
 ) {
     val alpha = if (enabled) 1f else DISABLED_ROW_ALPHA
-    SettingRow(title, summary = summary, icon = icon, enabled = enabled, disabledReason = disabledReason, onClick = if (busy) null else onClick, leading = leading, trailing = {
+    SettingRow(title, summary = summary, icon = icon, enabled = enabled, disabledReason = disabledReason, titleMaxLines = titleMaxLines, summaryMaxLines = summaryMaxLines, onClick = if (busy) null else onClick, leading = leading, trailing = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (dot) UpdateDot(Modifier.padding(end = 6.dp))
             if (badge != null) {
@@ -305,7 +313,7 @@ fun <T> PillSegmented(options: List<T>, selected: T, label: (T) -> String, onSel
         val inner = if (poster) RoundedCornerShape(percent = 50) else RoundedCornerShape(12.dp)
         Box(Modifier.fillMaxWidth().height(height)
             .then(if (poster) Modifier.posterGlass(RoundedCornerShape(percent = 50))
-                else Modifier.clip(RoundedCornerShape(16.dp)).background(c.surfaceContainerHighest.copy(alpha = 0.7f)))
+            else Modifier.clip(RoundedCornerShape(16.dp)).background(c.surfaceContainerHighest.copy(alpha = 0.7f)))
             .padding(5.dp)) {
             val index = options.indexOf(selected).coerceAtLeast(0)
             val x by animateDpAsState(segment * index, if (reduced) snap() else spring(dampingRatio = 1f, stiffness = 500f), label = "pill")

@@ -70,6 +70,8 @@ internal fun resolveTrack(dataSpec: DataSpec): DataSpec {
             val losslessKey = externalStreamKeyOf(dataSpec.uri)
             when {
                 losslessKey != null -> ExternalStreams.resolve(videoId, losslessKey)
+                isVideoOnlyUri(dataSpec.uri) -> StreamResolver.resolveVideo(videoId)
+                    ?: throw IllegalStateException("No video stream for $videoId")
                 isUpgradedUri(dataSpec.uri) -> StreamResolver.resolveUpgrade(videoId)
                 else -> StreamResolver.resolve(videoId)
             }

@@ -475,7 +475,12 @@ internal class ConnectSession(
             is State -> onState(msg, known, now)
             is Leave -> {
                 // A goodbye from before something newer it said (a restart's hello overtaking it) is stale.
-                if (msg.seq < latest) return
+                // That hello found this device still known, so nothing went back: the restarted one
+                // hasn't heard of it, and a paused one won't say its state again unasked.
+                if (msg.seq < latest) {
+                    if (known != null) { sayPresence(); sayState(force = true) }
+                    return
+                }
                 leftAt[msg.from] = msg.seq
                 devices.remove(msg.from)
                 offsets.remove(msg.from)
