@@ -1,7 +1,6 @@
 package com.opentune.ui.share
 
 import android.graphics.Bitmap
-import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -61,7 +60,9 @@ internal class LyricVideo(
         private const val DIM = 0.42f
         private const val TAIL_MS = 1_200L
         /** How long a line takes to glide into place, and to brighten or dim. */
-        private const val GLIDE_MS = 620f
+        /** A new page comes in this long before its first line, and takes this long to. */
+        private const val PAGE_LEAD_MS = 450L
+        private const val PAGE_FADE_MS = 420f
         private const val FADE_MS = 420f
 
         /**
@@ -115,11 +116,10 @@ internal class LyricVideo(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     // Shaders take their strength from the paint's own alpha too, so each one drawn has a
     // paint of its own at full strength: sharing [paint], whose colour was left at whatever
-    // the last fill set (the rim's faint white, the fade's nearly clear black), had the edge
-    // fade wipe the lines all but away and the flowing lights not show.
+    // the last fill set (the rim's faint white, the fade's nearly clear black), had the
+    // flowing lights not show.
     private val shade = Paint(Paint.ANTI_ALIAS_FLAG)
     private val lights = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SCREEN) }
-    private val edgeFade = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private val image = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
     // Where the lines go: the whole frame for a story, the card's top part for a card.
@@ -128,23 +128,59 @@ internal class LyricVideo(
     private val footH = if (story) w * 0.14f else card.height() * 0.17f
     private val area = if (story) RectF(margin, h * 0.16f, w - margin, h - margin - footH - h * 0.04f)
         else RectF(card.left + card.width() * 0.08f, card.top + card.height() * 0.07f, card.right - card.width() * 0.08f, card.bottom - footH - card.height() * 0.04f)
-    private val anchor = area.top + area.height() * (if (story) 0.30f else 0.30f)
-    private val textSize = if (story) w * 0.074f else w * 0.056f
-    private val gap = textSize * 0.55f
-
-    private val dimPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; this.textSize = this@LyricVideo.textSize; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
-    // A soft shadow under the sung words, so they hold on a bright cover.
-    private val litPaint = TextPaint(dimPaint).apply { setShadowLayer(this@LyricVideo.textSize * 0.16f, 0f, 0f, Color.argb(90, 0, 0, 0)) }
-    private val dim = lines.map { build(it.text, dimPaint) }
-    private val lit = lines.map { build(it.text, litPaint) }
-    /** Each line's top, laid out one under another from 0. */
-    private val tops = run {
-        var y = 0f
-        dim.map { l -> y.also { y += l.height + gap } }
+    // The lines stay where they are laid out: the whole part at once, the text a little
+    // smaller if that's what it takes to fit, and split into pages that follow one another
+    // in place when even that isn't enough.
+    private val laid = fit()
+    private val textSize = laid.size
+    private val gap = textSize * 0.5f
+    private val dimPaint = laid.dimPaint
+    private val litPaint = laid.litPaint
+    private val dim = laid.dim
+    private val lit = laid.lit
+    /** Each page's lines, and each line's top on the frame. */
+    private val pages: List<IntRange>
+    private val lineTop = FloatArray(lines.size)
+    init {
+        val out = mutableListOf<IntRange>()
+        var from = 0
+        while (from < lines.size) {
+            var to = from
+            var height = dim[from].height.toFloat()
+            while (to + 1 < lines.size && height + gap + dim[to + 1].height <= area.height()) {
+                to++
+                height += gap + dim[to].height
+            }
+            // Each page sits a little above the middle of the space for lines.
+            var y = area.top + (area.height() - height) * 0.42f
+            for (i in from..to) { lineTop[i] = y; y += dim[i].height + gap }
+            out += from..to
+            from = to + 1
+        }
+        pages = out
     }
-    private val blurs = HashMap<Int, BlurMaskFilter>()
-    /** Each word-timed line's words as character spans of its text. */
+    /** How far a sung word rises, and how far its glow reaches. */
+    private val lift = textSize * 0.13f
+    private val glow = textSize * 0.42f
+    /** Each word-timed line's words as character spans of its text, the space after each included. */
     private val wordSpans = lines.map { spans(it) }
+
+    private class Laid(val size: Float, val dimPaint: TextPaint, val litPaint: TextPaint, val dim: List<StaticLayout>, val lit: List<StaticLayout>)
+
+    private fun fit(): Laid {
+        var size = if (story) w * 0.074f else w * 0.056f
+        val smallest = if (story) w * 0.056f else w * 0.044f
+        while (true) {
+            val d = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = size; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+            val l = TextPaint(d)
+            val dimLayouts = lines.map { build(it.text, d) }
+            val total = dimLayouts.sumOf { it.height.toDouble() } + size * 0.5f * (lines.size - 1)
+            if (total <= area.height() || size <= smallest) {
+                return Laid(size, d, l, dimLayouts, lines.map { build(it.text, l) })
+            }
+            size = max(smallest, size * 0.93f)
+        }
+    }
 
     private fun build(text: String, p: TextPaint) =
         StaticLayout.Builder.obtain(text, 0, text.length, p, area.width().toInt())
@@ -259,134 +295,123 @@ internal class LyricVideo(
 
     // ---- The lines ---------------------------------------------------------------------
 
+    /** When page [p] comes in: a moment before its first line is sung. */
+    private fun pageAt(p: Int): Long = if (p == 0) Long.MIN_VALUE else lines[pages[p].first].startMs - PAGE_LEAD_MS
+
     private fun lyrics(c: Canvas, song: Long) {
-        val active = lines.indexOfLast { it.startMs <= song }
-        // Drawn in a layer of their own, so the lines fade out softly at its top and bottom
-        // edges rather than being cut there.
-        val box = if (story) RectF(0f, area.top - textSize, w, area.bottom) else RectF(card.left, area.top - textSize * 0.3f, card.right, area.bottom)
-        c.saveLayer(box, null)
-        c.clipRect(box)
-        for (i in lines.indices) {
-            val line = lines[i]
-            // Moved up by each line's height as each new line begins (see [scroll]).
-            val y = anchor + tops[i] - scroll(song, i)
-            if (y > area.bottom + textSize || y + dim[i].height < area.top - textSize * 2) continue
-            val sinceStart = (song - line.startMs).toFloat()
-            val sinceEnd = lines.getOrNull(i + 1)?.let { (song - it.startMs).toFloat() } ?: (song - line.endMs - 600).toFloat()
-            // 1 while it's the line being sung, easing in at its start and out once the next begins.
-            val on = when {
-                sinceStart < 0 -> 0f
-                sinceEnd < 0 -> ease(sinceStart / FADE_MS)
-                else -> 1f - ease(sinceEnd / FADE_MS)
-            }
-            val distanceAway = if (active < 0) i + 1 else abs(i - active)
-            val alpha = DIM + (1f - DIM) * on
-            val scale = 0.955f + 0.045f * on
-            val blur = ((1f - on) * min(distanceAway, 3) * w * 0.0011f)
-            c.save()
-            c.translate(area.left, y)
-            c.scale(scale, scale, 0f, dim[i].height / 2f)
-            val words = wordSpans[i]
-            if (words != null && on > 0f) {
-                // Word by word: the line dim, and lit up to where the singing has got, with a feathered edge.
-                dimPaint.maskFilter = null
-                dimPaint.alpha = (255 * (DIM + 0.16f * on)).toInt()
-                dim[i].draw(c)
-                wipe(c, i, song, words, on)
-            } else {
-                dimPaint.maskFilter = blurOf(blur)
-                dimPaint.alpha = (255 * alpha).toInt()
-                dim[i].draw(c)
-            }
-            dimPaint.maskFilter = null
-            c.restore()
+        val page = pages.indices.last { pageAt(it) <= song }
+        // A new page fades in where the last one was, nothing moving.
+        val k = if (page == 0) 1f else ((song - pageAt(page)) / PAGE_FADE_MS).coerceIn(0f, 1f)
+        if (k < 1f) for (i in pages[page - 1]) line(c, i, song, 1f - k)
+        for (i in pages[page]) line(c, i, song, k)
+    }
+
+    /** Line [i], at its place, [shown] as much as its page is. */
+    private fun line(c: Canvas, i: Int, song: Long, shown: Float) {
+        if (shown <= 0f) return
+        val l = lines[i]
+        val next = lines.getOrNull(i + 1)?.startMs ?: (l.endMs + 600)
+        // 1 while it's the line being sung, easing in at its start and out once the next begins.
+        val on = when {
+            song < l.startMs -> 0f
+            song < next -> ease((song - l.startMs) / FADE_MS)
+            else -> 1f - ease((song - next) / FADE_MS)
         }
-        val edge = textSize * (if (story) 1.4f else 0.8f)
-        edgeFade.shader = LinearGradient(
-            0f, box.top, 0f, box.bottom,
-            intArrayOf(Color.TRANSPARENT, Color.BLACK, Color.BLACK, Color.TRANSPARENT),
-            floatArrayOf(0f, edge / box.height(), 1f - edge / box.height(), 1f), Shader.TileMode.CLAMP,
-        )
-        c.drawRect(box, edgeFade)
+        // Sung already: a touch brighter than the lines still to come.
+        val rest = if (song >= next) DIM + 0.08f else DIM
+        c.save()
+        c.translate(area.left, lineTop[i])
+        val words = wordSpans[i]
+        if (on <= 0f) {
+            dimPaint.alpha = (255 * rest * shown).toInt()
+            dim[i].draw(c)
+        } else if (words == null) {
+            // No word timing: the whole line rises a little and glows.
+            c.translate(0f, -lift * on)
+            dimPaint.alpha = (255 * rest * (1f - on) * shown).toInt()
+            dim[i].draw(c)
+            lit(on * shown, on)
+            lit[i].draw(c)
+        } else {
+            for ((range, timing) in words) word(c, i, range, timing, song, on, rest, shown)
+        }
+        litPaint.shader = null
+        litPaint.clearShadowLayer()
         c.restore()
     }
 
-    /** How far the lines have moved for line [i], at [song]: each line's start lifts them by its height. */
-    private fun scroll(song: Long, i: Int): Float {
-        var s = 0f
-        for (k in 1 until lines.size) {
-            // Lines below the new one follow a little after it, a ripple down the page.
-            val delay = (max(0, i - k) * 45).coerceAtMost(180)
-            val p = ease((song - lines[k].startMs - delay) / GLIDE_MS)
-            s += (tops[k] - tops[k - 1]) * p
+    /** One word of the line being sung: it rises as it's sung, lit with a feathered edge and glowing. */
+    private fun word(c: Canvas, i: Int, range: IntRange, timing: LyricLine, song: Long, on: Float, rest: Float, shown: Float) {
+        val layout = dim[i]
+        val sung = when {
+            song <= timing.startMs -> 0f
+            song >= timing.endMs -> 1f
+            else -> (song - timing.startMs).toFloat() / (timing.endMs - timing.startMs)
         }
-        return s
+        val row = layout.getLineForOffset(range.first)
+        val rowStart = layout.getLineStart(row)
+        val rowEnd = layout.getLineEnd(row)
+        val a = layout.getPrimaryHorizontal(range.first)
+        val b = if (range.last + 1 >= rowEnd) layout.getLineRight(row) else layout.getPrimaryHorizontal(range.last + 1)
+        val left = min(a, b)
+        val right = max(a, b)
+        // The word's own box, so each word moves alone; its glow may spill past the ends of the
+        // row and the top and bottom of the line, but not over a neighbour's letters.
+        val clip = RectF(
+            if (range.first <= rowStart) left - glow else left,
+            layout.getLineTop(row) - if (row == 0) glow else 0f,
+            if (range.last + 1 >= rowEnd) right + glow else right,
+            layout.getLineBottom(row) + if (row == layout.lineCount - 1) glow else 0f,
+        )
+        c.save()
+        c.translate(0f, -lift * ease(min(1f, sung * 1.6f)) * on)
+        c.clipRect(clip)
+        dimPaint.alpha = (255 * rest * shown).toInt()
+        layout.draw(c)
+        if (sung > 0f) {
+            if (sung < 1f) {
+                // Lit up to where the singing has got, the edge feathered.
+                val rtl = a > b
+                val x = if (rtl) right - (right - left) * sung else left + (right - left) * sung
+                val feather = textSize * 0.6f
+                litPaint.shader = if (rtl) LinearGradient(x + feather, 0f, x - feather * 0.25f, 0f, Color.WHITE, Color.TRANSPARENT, Shader.TileMode.CLAMP)
+                    else LinearGradient(x - feather, 0f, x + feather * 0.25f, 0f, Color.WHITE, Color.TRANSPARENT, Shader.TileMode.CLAMP)
+            } else litPaint.shader = null
+            lit(on * shown, on)
+            lit[i].draw(c)
+        }
+        c.restore()
     }
 
-    private fun blurOf(radius: Float): BlurMaskFilter? {
-        if (radius < 0.6f) return null
-        val key = (radius * 2).toInt()
-        return blurs.getOrPut(key) { BlurMaskFilter(key / 2f, BlurMaskFilter.Blur.NORMAL) }
-    }
-
-    /** The lit part of a word-timed line, each visual line lit to where the singing is. */
-    private fun wipe(c: Canvas, i: Int, song: Long, words: List<Pair<IntRange, LyricLine>>, on: Float) {
-        val layout = lit[i]
-        val at = charAt(song, words, lines[i])
-        val feather = w * 0.06f
-        litPaint.alpha = (255 * on).toInt()
-        for (j in 0 until layout.lineCount) {
-            val start = layout.getLineStart(j)
-            val end = layout.getLineEnd(j)
-            val top = layout.getLineTop(j).toFloat()
-            val bottom = layout.getLineBottom(j).toFloat()
-            if (at <= start) break
-            c.save()
-            c.clipRect(0f, top, area.width(), bottom)
-            if (at >= end) {
-                litPaint.shader = null
-            } else {
-                val whole = at.toInt().coerceIn(start, end)
-                val x0 = layout.getPrimaryHorizontal(whole)
-                val x1 = if (whole + 1 <= end) layout.getPrimaryHorizontal((whole + 1).coerceAtMost(end)) else x0
-                val x = x0 + (x1 - x0) * (at - whole)
-                litPaint.shader = LinearGradient(x - feather, 0f, x + feather * 0.25f, 0f, Color.WHITE, Color.TRANSPARENT, Shader.TileMode.CLAMP)
-            }
-            layout.draw(c)
-            c.restore()
-        }
-        litPaint.shader = null
-    }
-
-    /** Where the singing is in line [line] at [song], as a character position, fractional within a character. */
-    private fun charAt(song: Long, words: List<Pair<IntRange, LyricLine>>, line: LyricLine): Float {
-        for ((range, timing) in words) {
-            if (song < timing.startMs) return range.first.toFloat()
-            if (song < timing.endMs) {
-                val p = (song - timing.startMs).toFloat() / (timing.endMs - timing.startMs).coerceAtLeast(1)
-                return range.first + p * (range.last + 1 - range.first)
-            }
-        }
-        return line.text.length.toFloat()
+    /** The lit paint at [alpha], with a soft white glow as strong as [on]. */
+    private fun lit(alpha: Float, on: Float) {
+        litPaint.alpha = (255 * alpha).toInt()
+        litPaint.setShadowLayer(glow * 0.55f, 0f, 0f, Color.argb((150 * on * alpha).toInt(), 255, 255, 255))
     }
 
     /**
-     * A line's words as character ranges of its text. Lines without word timing carry it
-     * spread by character count, as the player sweeps them; null when there's none at all.
+     * A line's words as character ranges of its text, each running on to the next word so
+     * spaces and punctuation go with it. Lines without word timing carry it spread by
+     * character count, as the player sweeps them; null when there's none at all.
      */
     private fun spans(line: LyricLine): List<Pair<IntRange, LyricLine>>? {
         if (line.words.isEmpty()) return null
         var from = 0
-        val out = mutableListOf<Pair<IntRange, LyricLine>>()
+        val found = mutableListOf<Pair<Int, LyricLine>>()
         for (word in line.words) {
             val text = word.text.trim()
             if (text.isEmpty()) continue
             val at = line.text.indexOf(text, from)
             if (at < 0) return null
-            out += (at until at + text.length) to LyricLine(word.startMs, max(word.endMs, word.startMs + 1), text, emptyList(), false)
+            found += at to LyricLine(word.startMs, max(word.endMs, word.startMs + 1), text, emptyList(), false)
             from = at + text.length
         }
-        return out.takeIf { it.isNotEmpty() }
+        if (found.isEmpty()) return null
+        return found.mapIndexed { k, (at, timing) ->
+            val start = if (k == 0) 0 else at
+            val end = found.getOrNull(k + 1)?.first ?: line.text.length
+            (start until end) to timing
+        }
     }
 
     // ---- The foot ----------------------------------------------------------------------
