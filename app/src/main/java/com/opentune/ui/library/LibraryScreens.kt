@@ -184,15 +184,20 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
                         val returning = com.opentune.ui.browse.rememberSearchReturn(search, listState) { i, o -> i > 0 || o > heroHeightPx - barHeightPx }
                         val topSolid = searching || barSolid || returning
                         TopNavBar("On this device", topSolid, onBack) {
-                            Row(Modifier.height(48.dp).then(if (topSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { if (searching) search.close() else search.open = true }) {
-                                    Icon(if (searching) ImageVector.vectorResource(AppIcons.Close) else ImageVector.vectorResource(AppIcons.Search), "Search this list")
+                            // The bar's actions are only built once there are songs to
+                            // search, sort or act on: with none (no permission yet, still
+                            // reading, or an empty library) they would do nothing.
+                            if (songs != null && all.isNotEmpty()) {
+                                Row(Modifier.height(48.dp).then(if (topSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(onClick = { if (searching) search.close() else search.open = true }) {
+                                        Icon(if (searching) ImageVector.vectorResource(AppIcons.Close) else ImageVector.vectorResource(AppIcons.Search), "Search this list")
+                                    }
+                                    Box {
+                                        IconButton(onClick = { sortOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.Sort), "Sort") }
+                                        com.opentune.ui.browse.ListSortMenu(sortOpen, order, onPick = { order = it; sortOpen = false }, onDismiss = { sortOpen = false })
+                                    }
+                                    IconButton(onClick = { moreOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.MoreHoriz), "More") }
                                 }
-                                Box {
-                                    IconButton(onClick = { sortOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.Sort), "Sort") }
-                                    com.opentune.ui.browse.ListSortMenu(sortOpen, order, onPick = { order = it; sortOpen = false }, onDismiss = { sortOpen = false })
-                                }
-                                IconButton(onClick = { moreOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.MoreHoriz), "More") }
                             }
                         }
                     }
