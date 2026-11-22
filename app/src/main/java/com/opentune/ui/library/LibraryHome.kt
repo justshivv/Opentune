@@ -186,8 +186,8 @@ internal object LibraryPins {
     /** Whether a pin still names something in the library: a playlist here, a saved list, or one of the account's. */
     private fun inLibrary(key: String): Boolean =
         LibraryStore.playlist(key) != null ||
-            LibraryStore.savedLists.value.any { it.browseId == key } ||
-            com.opentune.data.library.LibraryCache.playlists.value.any { it.browseId == key }
+                LibraryStore.savedLists.value.any { it.browseId == key } ||
+                com.opentune.data.library.LibraryCache.playlists.value.any { it.browseId == key }
 }
 
 private const val YT_PLAYLISTS = "library:ytPlaylists"
@@ -313,6 +313,23 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         }
     }
     val doneCount = finished.size
+    // How many songs the phone itself holds, for the On this phone tile: read
+    // while the permission is there (without it the count can't be known, and
+    // the tile keeps its plain label). Follows the Local music settings, so
+    // the count matches the page the tile opens.
+    val librarySettings by AppSettings.library.collectAsState()
+    val localPermission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) android.Manifest.permission.READ_MEDIA_AUDIO else android.Manifest.permission.READ_EXTERNAL_STORAGE
+    val localGranted = androidx.core.content.ContextCompat.checkSelfPermission(context, localPermission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    // Seeded from the last scan's count, so a return visit paints the number
+    // at once; the scan below still runs and only moves it if it changed.
+    var localCount by remember { mutableStateOf(if (localGranted) com.opentune.data.local.LocalMusic.cachedCount(librarySettings) else null) }
+    LaunchedEffect(librarySettings.localFolder, librarySettings.filterNonMusic) {
+        localCount = if (localGranted) {
+            runCatching { com.opentune.data.local.LocalMusic.count(context, librarySettings) }.getOrNull() ?: localCount
+        } else {
+            null
+        }
+    }
     // One scroll state per face, so each face keeps its place while the faces swipe.
     val libraryListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val playlistsListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -408,7 +425,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     Shortcut(ImageVector.vectorResource(AppIcons.Download), "Downloads", if (doneCount == 0) "Offline songs" else com.opentune.i18n.Tr.f("{0} songs", doneCount), nav.downloads, Modifier.weight(1f))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Shortcut(ImageVector.vectorResource(AppIcons.LibraryMusic), "On this phone", "Local files", nav.local, Modifier.weight(1f))
+                    Shortcut(ImageVector.vectorResource(AppIcons.LibraryMusic), "On this phone", localCount?.takeIf { it > 0 }?.let { com.opentune.i18n.Tr.f("{0} songs", it) } ?: "Local files", nav.local, Modifier.weight(1f))
                     Shortcut(ImageVector.vectorResource(AppIcons.History), "Replay", "Your top songs", nav.replay, Modifier.weight(1f))
                 }
                 val server by Subsonic.server.collectAsState()
