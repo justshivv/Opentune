@@ -1497,6 +1497,9 @@ private fun settingsSections(
                 Entry("Frosted top edge", "status bar blur fade top scroll glass") {
                     ToggleRow("Frosted top edge", ui.frostedTopEdge, { v -> AppSettings.updateUi { it.copy(frostedTopEdge = v) } }, summary = "Pages blur and fade as they scroll under the status bar", icon = ImageVector.vectorResource(AppIcons.Gradient))
                 },
+                Entry("Solid system bars", "status bar navigation bar transparent edge to edge solid background") {
+                    ToggleRow("Solid system bars", ui.solidSystemBars, { v -> AppSettings.updateUi { it.copy(solidSystemBars = v) } }, summary = "The status bar and navigation bar take the page's background instead of showing the page through them", icon = ImageVector.vectorResource(AppIcons.Smartphone))
+                },
                 Entry("Performance profile", "battery saver drain power performance profile balanced smooth heat") {
                     NavRow("Performance profile", { profileDialog = true }, summary = ui.performanceProfile.summary, icon = ImageVector.vectorResource(AppIcons.Speed), value = ui.performanceProfile.label)
                 },

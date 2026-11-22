@@ -67,7 +67,7 @@ internal val SETTINGS_CATEGORIES = listOf(
             "Loading ahead" to listOf("Preload upcoming songs", "Boost preloading on Wi-Fi"),
             "Autoplay and suggestions" to listOf("Autoplay", "Recommendations", "Smart shuffle", "Songs, not music videos", "Don't repeat songs in current session"),
             "Headphones and background" to listOf("Resume when headphones connect", "Pause at zero volume", "Background playback", "Stop music on close from recents"),
-            "Music videos" to listOf("Video mode", "SponsorBlock", "SponsorBlock categories"),
+            "Music videos" to listOf("SponsorBlock", "SponsorBlock categories"),
         ),
     ),
     SettingsCategory(
@@ -88,7 +88,7 @@ internal val SETTINGS_CATEGORIES = listOf(
                 "Page layout", "Page buttons", "Full-screen playlist covers", "Playlist page background", "Liked Music cover",
                 "Artist pages take the photo's colour", "Artist page shade", "Artist signatures", "Choice menus",
             ),
-            "Glass" to listOf("Glass style", "Lighter Liquid Glass", "Frosted top edge", "Reduce dynamic blur", "Sheet style"),
+            "Glass" to listOf("Glass style", "Lighter Liquid Glass", "Frosted top edge", "Solid system bars", "Reduce dynamic blur", "Sheet style"),
             "Language and icon" to listOf("App language", "App icon"),
         ),
     ),

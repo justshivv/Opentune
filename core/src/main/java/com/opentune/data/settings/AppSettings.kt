@@ -615,6 +615,8 @@ data class InterfaceSettings(
     val choiceMenus: ChoiceMenuStyle = ChoiceMenuStyle.SCREEN,
     /** Pages blur and fade out as they scroll under the status bar. */
     val frostedTopEdge: Boolean = true,
+    /** The status bar and the navigation bar sit on the page's background colour instead of the page showing through them. */
+    val solidSystemBars: Boolean = false,
     /** How the dock's highlight travels between tabs. */
     val dockLens: DockLens = DockLens.STRETCH,
     /**
