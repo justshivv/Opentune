@@ -1,10 +1,86 @@
-// The home page's live parts: the header glass, the latest release and its downloads,
+// The home page's live parts: the hero's player, the header, the latest release and its downloads,
 // the star count and the iPhone build. Everything here enhances a page that already
 // reads fine without it; reveals are CSS-only (site.css).
 (() => {
   const $ = (id) => document.getElementById(id);
 
-  /* Header: glass once the page has moved. */
+  /* The hero's player: a few songs in turn, the hero taking each cover's colours as the
+     app does. It runs by itself while it's on screen (not with reduced motion), and the
+     three buttons work. The first song is in the page already, so it reads without this. */
+  (() => {
+    const np = $("np"), hero = $("hero");
+    if (!np || !hero) return;
+    const SONGS = [
+      { id: "weeknd", t: "Blinding Lights", a: "The Weeknd", alt: "The cover of After Hours by The Weeknd", c: ["#b3122a", "#d08a2e", "#5a1a2a"], at: 64 },
+      { id: "aujla", t: "Softly", a: "Karan Aujla", alt: "The cover of Making Memories by Karan Aujla", c: ["#7d5bd1", "#c8876a", "#2f2466"], at: 47 },
+      { id: "rockstar", t: "Kun Faya Kun", a: "A.R. Rahman", alt: "The cover of the Rockstar soundtrack", c: ["#e2532f", "#f0a03a", "#8a1c22"], at: 92 },
+      { id: "sza", t: "Kill Bill", a: "SZA", alt: "The cover of SOS by SZA", c: ["#1f6fb5", "#3fb0c8", "#0b3f86"], at: 31 },
+      { id: "dualipa", t: "Future Nostalgia", a: "Dua Lipa", alt: "The cover of Future Nostalgia by Dua Lipa", c: ["#d99a3a", "#c2453a", "#1f6a5c"], at: 75 },
+    ];
+    const LENGTH = 200, EVERY = 4800;
+    const art = $("np-art"), title = $("np-title"), artist = $("np-artist"), fill = $("np-fill"), now = $("np-now"), left = $("np-left"), play = $("np-play");
+    const covers = [art.querySelector("img")];
+    const clock = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let at = 0, pos = SONGS[0].at, playing = !still, seen = true, timer = 0, swap = 0;
+    const cover = (i) => {
+      if (!covers[i]) {
+        const img = new Image(560, 560);
+        img.alt = SONGS[i].alt;
+        img.decoding = "async";
+        img.src = "img/covers/" + SONGS[i].id + ".webp";
+        art.appendChild(img);
+        covers[i] = img;
+      }
+      return covers[i];
+    };
+    const paint = () => {
+      fill.style.width = (pos / LENGTH) * 100 + "%";
+      now.textContent = clock(pos);
+      left.textContent = "-" + clock(LENGTH - pos);
+    };
+    function show(i) {
+      at = (i + SONGS.length) % SONGS.length;
+      const song = SONGS[at], img = cover(at);
+      const light = () => {
+        covers.forEach((c) => c && c.classList.toggle("on", c === img));
+        song.c.forEach((c, n) => hero.style.setProperty("--c" + (n + 1), c));
+      };
+      // The colours follow the cover, so they wait for it.
+      if (img.complete) light(); else img.addEventListener("load", light, { once: true });
+      np.classList.add("swap");
+      clearTimeout(swap);
+      swap = setTimeout(() => { title.textContent = song.t; artist.textContent = song.a; np.classList.remove("swap"); }, 160);
+      pos = song.at;
+      paint();
+      cover(at + 1 < SONGS.length ? at + 1 : 0);
+    }
+    const schedule = () => {
+      clearInterval(timer);
+      if (!playing || !seen) return;
+      let ticks = 0;
+      timer = setInterval(() => {
+        pos = Math.min(LENGTH, pos + 1);
+        paint();
+        if (++ticks * 1000 >= EVERY) { show(at + 1); ticks = 0; }
+      }, 1000);
+    };
+    $("np-next").addEventListener("click", () => { show(at + 1); schedule(); });
+    $("np-prev").addEventListener("click", () => { show(at - 1); schedule(); });
+    play.addEventListener("click", () => {
+      playing = !playing;
+      np.classList.toggle("paused", !playing);
+      play.setAttribute("aria-label", playing ? "Pause the preview" : "Play the preview");
+      schedule();
+    });
+    if (still) { np.classList.add("paused"); play.setAttribute("aria-label", "Play the preview"); }
+    if ("IntersectionObserver" in window) new IntersectionObserver(([e]) => { seen = e.isIntersecting; schedule(); }).observe(np);
+    document.addEventListener("visibilitychange", () => { seen = !document.hidden; schedule(); });
+    paint();
+    schedule();
+  })();
+
+  /* Header: a little more solid once the page has moved. */
   const nav = $("nav");
   const onScroll = () => nav.classList.toggle("scrolled", scrollY > 8);
   addEventListener("scroll", onScroll, { passive: true });

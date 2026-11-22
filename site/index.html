@@ -32,11 +32,9 @@
 <link rel="manifest" href="/Opentune/site.webmanifest">
 <meta name="apple-mobile-web-app-title" content="OpenTune">
 <link rel="sitemap" type="application/xml" href="sitemap.xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400..800&display=swap">
+<link rel="preload" as="font" href="assets/outfit.woff2" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/site.css">
-<link rel="preload" as="image" href="img/app/fullcover.webp" type="image/webp">
+<link rel="preload" as="image" href="img/covers/weeknd.webp" type="image/webp">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -66,11 +64,13 @@
   <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></symbol>
   <symbol id="i-gh" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.1-1.46-1.1-1.46-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.86v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 104 80"><path d="M50 8.5v63a5 5 0 0 1-7.900 4.100L4.600 44.100a5 5 0 0 1 0-8.200L42.100 4.400A5 5 0 0 1 50 8.500zM100 8.500v63a5 5 0 0 1-7.900 4.100L54.600 44.100a5 5 0 0 1 0-8.200L92.100 4.400a5 5 0 0 1 7.900 4.100z"/></symbol>
+  <symbol id="i-next" viewBox="0 0 104 80"><path d="M54 8.500v63a5 5 0 0 0 7.900 4.100l37.500-31.500a5 5 0 0 0 0-8.200L61.900 4.400A5 5 0 0 0 54 8.500zM4 8.500v63a5 5 0 0 0 7.900 4.100l37.500-31.500a5 5 0 0 0 0-8.200L11.900 4.400A5 5 0 0 0 4 8.500z"/></symbol>
 </svg>
 
 <header class="nav" id="nav">
   <div class="wrap nav-in">
-    <a class="brand" href="./" aria-label="OpenTune home"><img src="img/opentune-logo.svg" alt="" width="30" height="30">OpenTune</a>
+    <a class="brand" href="./" aria-label="OpenTune home"><img src="img/opentune-logo.svg" alt="" width="32" height="32">OpenTune</a>
     <nav aria-label="Main">
       <ul class="nav-links">
         <li class="opt"><a href="#features">Features</a></li>
@@ -84,21 +84,47 @@
 </header>
 
 <main id="main">
-  <section class="hero">
-    <div class="wrap hero-copy">
-      <a class="release-chip" href="#whats-new"><b id="ver-badge">New</b><span id="ver-note">Free and open source, updated often</span></a>
-      <h1>Every song.<br><span class="glow-text">No ads.</span></h1>
-      <p class="lede">OpenTune plays the whole YouTube Music catalogue with synced lyrics, offline downloads, live radio and podcasts. No account, no subscription.</p>
-      <div class="btn-row">
-        <a class="btn btn-primary" href="https://github.com/justshivv/Opentune/releases/latest" data-latest-apk><svg aria-hidden="true"><use href="#i-down"/></svg>Download for Android <span class="sub" id="dl-size" hidden></span></a>
-        <a class="btn" href="player/"><svg aria-hidden="true"><use href="#i-play"/></svg>Listen in your browser</a>
+  <section class="hero" id="hero">
+    <div class="hero-wall" aria-hidden="true"></div>
+    <div class="hero-light" aria-hidden="true"></div>
+    <div class="wrap hero-in">
+      <div class="hero-copy">
+        <a class="release-chip" href="#whats-new"><b id="ver-badge">New</b><span id="ver-note">Free and open source, updated often</span></a>
+        <h1>Every song.<br><em>No ads.</em></h1>
+        <p class="lede">OpenTune plays the whole YouTube Music catalogue with synced lyrics, offline downloads, live radio and podcasts. No account, no subscription.</p>
+        <div class="btn-row">
+          <a class="btn btn-primary" href="https://github.com/justshivv/Opentune/releases/latest" data-latest-apk><svg aria-hidden="true"><use href="#i-down"/></svg>Download for Android <span class="sub" id="dl-size" hidden></span></a>
+          <a class="btn" href="player/"><svg aria-hidden="true"><use href="#i-play"/></svg>Listen in your browser</a>
+        </div>
+        <p class="hero-meta">Android 8.0 or newer · GPL-3.0 · <a href="https://github.com/justshivv/Opentune">Source on GitHub</a></p>
       </div>
-      <p class="hero-meta">Android 8.0 or newer · GPL-3.0 · <a href="https://github.com/justshivv/Opentune">Source on GitHub</a></p>
-    </div>
-    <div class="fan">
-      <div class="phone side left"><img src="img/app/lyrics.webp" width="640" height="1387" alt="Synced lyrics for Danny Boy by Johnny Cash, the line being sung in bright white."></div>
-      <div class="phone front"><img src="img/app/fullcover.webp" width="640" height="1387" alt="The OpenTune player showing Blinding Lights by The Weeknd, its cover filling the top of the screen." fetchpriority="high"></div>
-      <div class="phone side right"><img src="img/app/halo.webp" width="640" height="1387" alt="The halo player: a round cover ringed with light that moves with the music."></div>
+      <div>
+        <div class="np" id="np" role="group" aria-label="A preview of the OpenTune player">
+          <p class="np-from">Playing from <b>Your mix</b></p>
+          <div class="np-art" id="np-art"><img class="on" src="img/covers/weeknd.webp" width="560" height="560" alt="The cover of After Hours by The Weeknd" fetchpriority="high"></div>
+          <div class="np-meta">
+            <div><p class="np-title" id="np-title">Blinding Lights</p><p class="np-artist" id="np-artist">The Weeknd</p></div>
+            <span class="np-round" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3.600l2.500 5.300 5.800.700-4.300 4 1.100 5.800L12 16.600 6.900 19.400 8 13.600l-4.300-4 5.800-.700z"/></svg></span>
+            <span class="np-round" aria-hidden="true"><svg viewBox="0 0 24 24" fill="#fff"><circle cx="5.500" cy="12" r="1.900"/><circle cx="12" cy="12" r="1.900"/><circle cx="18.500" cy="12" r="1.900"/></svg></span>
+          </div>
+          <div class="np-seek" aria-hidden="true">
+            <div class="np-track"><div class="np-fill" id="np-fill"></div></div>
+            <div class="np-times"><span id="np-now">1:04</span><span>Good quality · 153 kbps</span><span id="np-left">-2:16</span></div>
+          </div>
+          <div class="np-ctl">
+            <button type="button" id="np-prev" aria-label="Previous song"><svg aria-hidden="true"><use href="#i-prev"/></svg></button>
+            <button type="button" class="np-play" id="np-play" aria-label="Pause the preview"><svg class="i-pause" viewBox="0 0 96 116" aria-hidden="true"><rect x="4" width="34" height="116" rx="12"/><rect x="58" width="34" height="116" rx="12"/></svg><svg class="i-play" viewBox="0 0 96 116" aria-hidden="true"><path d="M14 8.500v99a6 6 0 0 0 9.200 5.100l72-49.500a6 6 0 0 0 0-10.200l-72-49.500A6 6 0 0 0 14 8.500z"/></svg></button>
+            <button type="button" id="np-next" aria-label="Next song"><svg aria-hidden="true"><use href="#i-next"/></svg></button>
+          </div>
+          <div class="np-dock" aria-hidden="true">
+            <span><svg viewBox="0 0 24 24"><path d="M12 3.200 3.600 10.300a1.600 1.600 0 0 0-.600 1.200V19a2 2 0 0 0 2 2h3.600a1 1 0 0 0 1-1v-4.200a2.400 2.400 0 0 1 4.800 0V20a1 1 0 0 0 1 1H19a2 2 0 0 0 2-2v-7.500a1.600 1.600 0 0 0-.600-1.200z"/></svg>Home</span>
+            <span><svg viewBox="0 0 24 24"><rect x="3.500" y="3.500" width="7.400" height="7.400" rx="2"/><rect x="13.100" y="3.500" width="7.400" height="7.400" rx="2"/><rect x="3.500" y="13.100" width="7.400" height="7.400" rx="2"/><rect x="13.100" y="13.100" width="7.400" height="7.400" rx="2"/></svg>Explore</span>
+            <span><svg viewBox="0 0 24 24"><rect x="4" y="9" width="16" height="12" rx="2.600"/><rect x="6" y="5.400" width="12" height="2" rx="1"/><rect x="8" y="2.400" width="8" height="1.800" rx="0.900"/></svg>Library</span>
+            <span><svg viewBox="0 0 24 24" style="fill:none;stroke:#fff;stroke-width:2.300;stroke-linecap:round"><circle cx="10.600" cy="10.600" r="6.400"/><path d="M15.400 15.400 20.400 20.400"/></svg>Search</span>
+          </div>
+        </div>
+        <p class="np-note" id="np-note">The player takes its colours from the cover. Try the next song.</p>
+      </div>
     </div>
   </section>
 
@@ -113,51 +139,67 @@
   </div>
 
   <section class="section" id="features" aria-labelledby="features-title">
+    <div class="wrap chapter">
+      <p class="karaoke" aria-label="Four lines of a song, each word lighting up as it is sung">
+        <span class="kl" style="--l:0.0s"><span class="kw" style="--t:0.0s">Turn <i aria-hidden="true">Turn</i></span><span class="kw" style="--t:0.28s">it <i aria-hidden="true">it</i></span><span class="kw" style="--t:0.56s">up, <i aria-hidden="true">up,</i></span><span class="kw" style="--t:0.84s">let <i aria-hidden="true">let</i></span><span class="kw" style="--t:1.12s">the <i aria-hidden="true">the</i></span><span class="kw" style="--t:1.4s">evening <i aria-hidden="true">evening</i></span><span class="kw" style="--t:1.68s">glow<i aria-hidden="true">glow</i></span></span>
+        <span class="kl" style="--l:2.4s"><span class="kw" style="--t:2.4s">Every <i aria-hidden="true">Every</i></span><span class="kw" style="--t:2.68s">street <i aria-hidden="true">street</i></span><span class="kw" style="--t:2.96s">is <i aria-hidden="true">is</i></span><span class="kw" style="--t:3.24s">a <i aria-hidden="true">a</i></span><span class="kw" style="--t:3.52s">melody<i aria-hidden="true">melody</i></span></span>
+        <span class="kl" style="--l:4.8s"><span class="kw" style="--t:4.8s">Sing <i aria-hidden="true">Sing</i></span><span class="kw" style="--t:5.08s">it <i aria-hidden="true">it</i></span><span class="kw" style="--t:5.36s">back <i aria-hidden="true">back</i></span><span class="kw" style="--t:5.64s">so <i aria-hidden="true">so</i></span><span class="kw" style="--t:5.92s">the <i aria-hidden="true">the</i></span><span class="kw" style="--t:6.2s">whole <i aria-hidden="true">whole</i></span><span class="kw" style="--t:6.48s">town <i aria-hidden="true">town</i></span><span class="kw" style="--t:6.76s">knows<i aria-hidden="true">knows</i></span></span>
+        <span class="kl" style="--l:7.2s"><span class="kw" style="--t:7.2s">This <i aria-hidden="true">This</i></span><span class="kw" style="--t:7.48s">one <i aria-hidden="true">one</i></span><span class="kw" style="--t:7.76s">is <i aria-hidden="true">is</i></span><span class="kw" style="--t:8.04s">yours, <i aria-hidden="true">yours,</i></span><span class="kw" style="--t:8.32s">and <i aria-hidden="true">and</i></span><span class="kw" style="--t:8.6s">it <i aria-hidden="true">it</i></span><span class="kw" style="--t:8.88s">plays <i aria-hidden="true">plays</i></span><span class="kw" style="--t:9.16s">free<i aria-hidden="true">free</i></span></span>
+      </p>
+      <div class="chapter-copy reveal">
+        <h2 id="features-title">Lyrics that keep time.</h2>
+        <p>Lines light up word by word as they're sung. Tap a line to jump there, or share the ones you love as a video.</p>
+        <ul class="sources" aria-label="Where the lyrics come from"><li>LRCLIB</li><li>Better Lyrics</li><li>KuGou</li><li>NetEase</li><li>and more</li></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="looks-title">
     <div class="wrap">
       <div class="section-head reveal">
-        <h2 id="features-title">Everything you listen to, in one app.</h2>
-        <p>Music, lyrics, radio and podcasts, with the player taking its colour from every cover.</p>
+        <h2 id="looks-title">A player that's yours.</h2>
+        <p>Seven layouts, from a full-screen cover to cassette and a glowing halo, with backgrounds drawn from the art.</p>
       </div>
-      <div class="bento">
-        <article class="card feat wide t-rose reveal">
-          <h3>Lyrics that keep time</h3>
-          <p>Lines light up word by word as they're sung, from LRCLIB, Better Lyrics, KuGou, NetEase and more. Tap a line to jump there.</p>
-          <div class="shot"><img src="img/app/lyrics.webp" width="640" height="1387" loading="lazy" alt="Synced lyrics for Danny Boy, the current line in bright white."></div>
-        </article>
-        <article class="card feat wide t-violet reveal">
-          <h3>Listen together</h3>
-          <p>Share a room code and friends hear the same second of the same song on their own phones, kept in step over an encrypted connection.</p>
-          <div class="shot"><img src="img/app/together.webp" width="640" height="1387" loading="lazy" alt="A Listen together room with its code, three listeners and the song playing."></div>
-        </article>
-        <article class="card feat t-amber reveal">
-          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.9 16.1a10 10 0 0 1 0-14.1M19.1 2a10 10 0 0 1 0 14.1M7.8 13.2a6 6 0 0 1 0-8.4M16.2 4.8a6 6 0 0 1 0 8.4"/><circle cx="12" cy="9" r="2"/><path d="m12 11-3 11m3-11 3 11"/></svg></div>
-          <h3>Live radio near you</h3>
-          <p>More than 50,000 stations, sorted by distance, with each stream's format and bitrate.</p>
-        </article>
-        <article class="card feat t-teal reveal">
-          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg></div>
-          <h3>Podcasts that remember</h3>
-          <p>Follow shows and every episode picks up where you stopped, next to your music.</p>
-        </article>
-        <article class="card feat big t-coral reveal">
-          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M21 12h-3M12 21v-3M3 12h3"/></svg></div>
-          <h3>A player that's yours</h3>
-          <p>Seven layouts, from a full-screen cover to vinyl, cassette and a glowing halo, with backgrounds drawn from the art.</p>
-        </article>
-        <article class="card sound t-violet reveal" id="sound">
-          <div>
-            <h3>Sound, taken seriously.</h3>
-            <p>Good defaults for everyone, and the controls a careful listener goes looking for.</p>
-          </div>
-          <dl class="specs">
-            <div><dt>The best stream first</dt><dd>Ranked by how it sounds, upgraded mid-song without a gap.</dd></div>
-            <div><dt>Lossless add-ons</dt><dd>Max quality looks for a lossless copy. <a href="addons/">How add-ons work</a>.</dd></div>
-            <div><dt>15-band EQ and AutoEq</dt><dd>Presets, plus corrections for more than 8,000 headphones.</dd></div>
-            <div><dt>Bit-perfect to a USB DAC</dt><dd>Each song at its own sample rate on Android 14 and newer.</dd></div>
-            <div><dt>One steady volume</dt><dd>Quiet and loud tracks levelled to the same loudness.</dd></div>
-            <div><dt>Crossfade and Automix</dt><dd>Songs blend, shaped by how one ends and the next begins.</dd></div>
-          </dl>
-        </article>
+    </div>
+    <div class="looks" tabindex="0" role="group" aria-label="Player layouts, scroll sideways for more">
+      <figure><div class="screen"><img src="img/app/fullcover.webp" width="640" height="1387" loading="lazy" alt="The player with the cover of After Hours filling the top of the screen."></div><figcaption><b>Full cover</b>The art, edge to edge</figcaption></figure>
+      <figure><div class="screen"><img src="img/app/classic.webp" width="640" height="1387" loading="lazy" alt="The classic player: a square cover over the title and controls."></div><figcaption><b>Classic</b>Cover, title, controls</figcaption></figure>
+      <figure><div class="screen"><img src="img/app/halo.webp" width="640" height="1387" loading="lazy" alt="The halo player: a round cover ringed with light."></div><figcaption><b>Halo</b>A ring that moves with the music</figcaption></figure>
+      <figure><div class="screen"><img src="img/app/cassette.webp" width="640" height="1387" loading="lazy" alt="The cassette player: a tape with turning reels."></div><figcaption><b>Cassette</b>Reels that turn as it plays</figcaption></figure>
+      <figure><div class="screen"><img src="img/app/polaroid.webp" width="640" height="1387" loading="lazy" alt="The polaroid player: the cover as a tilted instant photo."></div><figcaption><b>Polaroid</b>The cover as a photo</figcaption></figure>
+      <figure><div class="screen"><img src="img/app/amoled.webp" width="640" height="1387" loading="lazy" alt="The player on a pure black background."></div><figcaption><b>Black</b>Pure black for OLED screens</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="more-title">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <h2 id="more-title">Everything you listen to, in one app.</h2>
+        <p>Music, radio and podcasts, alone or with friends.</p>
+      </div>
+      <div class="trio">
+        <figure><div class="screen"><img src="img/app/together.webp" width="640" height="1387" loading="lazy" alt="A Listen together room with its code, three listeners and the song playing."></div><figcaption><b>Listen together</b>Share a room code and friends hear the same second of the same song, kept in step over an encrypted connection.</figcaption></figure>
+        <figure><div class="screen"><img src="img/app/radio.webp" width="640" height="1387" loading="lazy" alt="Live radio stations near you, each with its distance, format and bitrate."></div><figcaption><b>Live radio near you</b>More than 50,000 stations, sorted by distance, with each stream's format and bitrate.</figcaption></figure>
+        <figure><div class="screen"><img src="img/app/podcasts.webp" width="640" height="1387" loading="lazy" alt="The podcasts page: followed shows and their latest episodes."></div><figcaption><b>Podcasts that remember</b>Follow shows and every episode picks up where you stopped, next to your music.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="sound" aria-labelledby="sound-title">
+    <div class="wrap">
+      <div class="sound">
+        <div class="reveal">
+          <h2 id="sound-title">Sound, taken seriously.</h2>
+          <p>Good defaults for everyone, and the controls a careful listener goes looking for.</p>
+        </div>
+        <dl class="specs reveal">
+          <div><dt>The best stream first</dt><dd>Ranked by how it sounds, upgraded mid-song without a gap.</dd></div>
+          <div><dt>Lossless add-ons</dt><dd>Max quality looks for a lossless copy. <a href="addons/">How add-ons work</a>.</dd></div>
+          <div><dt>15-band EQ and AutoEq</dt><dd>Presets, plus corrections for more than 8,000 headphones.</dd></div>
+          <div><dt>Bit-perfect to a USB DAC</dt><dd>Each song at its own sample rate on Android 14 and newer.</dd></div>
+          <div><dt>One steady volume</dt><dd>Quiet and loud tracks levelled to the same loudness.</dd></div>
+          <div><dt>Crossfade and Automix</dt><dd>Songs blend, shaped by how one ends and the next begins.</dd></div>
+        </dl>
       </div>
       <ul class="chips" aria-label="Also in the app">
         <li><b>Offline</b> downloads</li>
@@ -192,13 +234,13 @@
         </ol>
         <p class="small-print">Every release lists the SHA-256 checksums of its APKs. You can also follow it with <a href="https://github.com/ImranR98/Obtainium">Obtainium</a>.</p>
       </div>
-      <ul class="elsewhere" id="everywhere">
-        <li class="card t-amber reveal">
+      <ul class="elsewhere reveal" id="everywhere">
+        <li>
           <h3>Android TV and Google TV</h3>
           <p>The same APK opens a TV layout for the remote. Sign in by scanning a code with your phone.</p>
-          <a class="btn btn-sm" href="https://github.com/justshivv/Opentune/releases/latest" data-latest-apk>Get the APK for your TV</a>
+          <div class="btn-row"><a class="btn btn-sm" href="https://github.com/justshivv/Opentune/releases/latest" data-latest-apk>Get the APK for your TV</a></div>
         </li>
-        <li class="card t-violet reveal">
+        <li>
           <h3>Windows, macOS and Linux</h3>
           <p>A desktop app with a sidebar, lyrics beside the page and the queue in view.</p>
           <div class="btn-row">
@@ -208,12 +250,12 @@
           </div>
           <p class="note">Not yet signed by Apple or Microsoft, so the first launch shows a warning. On a Mac, right-click the app and choose Open.</p>
         </li>
-        <li class="card t-teal reveal">
+        <li>
           <h3>In your browser</h3>
           <p>Chrome, Edge, Brave or Firefox, with a small extension that plays the music.</p>
-          <a class="btn btn-sm" href="player/"><svg aria-hidden="true"><use href="#i-play"/></svg>Open the web player</a>
+          <div class="btn-row"><a class="btn btn-sm" href="player/"><svg aria-hidden="true"><use href="#i-play"/></svg>Open the web player</a></div>
         </li>
-        <li class="card t-rose reveal">
+        <li>
           <h3>iPhone and iPad <span class="muted">· early</span></h3>
           <p>Installs through SideStore or AltStore with your own Apple ID. iOS 16 or newer.</p>
           <div class="btn-row">
@@ -277,7 +319,7 @@
   <div class="wrap">
     <div class="footer-grid">
       <div>
-        <a class="brand" href="./"><img src="img/opentune-logo.svg" alt="" width="30" height="30">OpenTune</a>
+        <a class="brand" href="./"><img src="img/opentune-logo.svg" alt="" width="32" height="32">OpenTune</a>
         <p style="margin-top:12px;max-width:34ch">A free, open-source music player for Android, TV, desktop and the web.</p>
       </div>
       <div><h3>App</h3><ul><li><a href="#features">Features</a></li><li><a href="#download">Download</a></li><li><a href="player/">Web player</a></li><li><a href="#whats-new">What's new</a></li></ul></div>
