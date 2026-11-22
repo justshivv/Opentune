@@ -1074,6 +1074,30 @@ object AppSettings {
         return !com.opentune.data.UnmeteredNetwork.available(cm)
     }
 
+    /** The lowest video bitrate worth sustaining, in kbps: below it a picture is not worth its stalls. */
+    private const val VIDEO_CEILING_MIN_KBPS = 400
+
+    /** The highest video bitrate a connection is ever asked to sustain, in kbps. */
+    private const val VIDEO_CEILING_MAX_KBPS = 12_000
+
+    /** The video bitrate assumed when a metered connection publishes no estimate, in kbps. */
+    private const val VIDEO_CEILING_FALLBACK_KBPS = 2_500
+
+    /**
+     * The video bitrate the current connection can be asked to sustain, in
+     * kbps: the link's own downstream estimate, discounted by a third, so a
+     * music video starts at a size the network can actually feed. When the
+     * system publishes no estimate, an unmetered link is trusted without a
+     * ceiling and a metered one gets the conservative fallback.
+     */
+    fun videoCeilingKbps(): Int {
+        val cm = connectivity ?: return VIDEO_CEILING_FALLBACK_KBPS
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return VIDEO_CEILING_FALLBACK_KBPS
+        val downstream = if (android.os.Build.VERSION.SDK_INT >= 29) caps.linkDownstreamBandwidthKbps else 0
+        if (downstream > 0) return (downstream * 7 / 10).coerceIn(VIDEO_CEILING_MIN_KBPS, VIDEO_CEILING_MAX_KBPS)
+        return if (com.opentune.data.UnmeteredNetwork.available(cm)) Int.MAX_VALUE else VIDEO_CEILING_FALLBACK_KBPS
+    }
+
     fun init(context: Context) {
         // A change still waiting to be written goes to the store it was made against first.
         flush()

@@ -350,14 +350,30 @@ object StreamResolver {
     suspend fun resolveVideo(videoId: String): String? {
         init
         unplayableReason(videoId)?.let { return null }
-        videoUrls[videoId]?.let { return it }
+        // The picture is picked for the connection asking: a stream this
+        // network cannot feed only stalls, so the best format here is the
+        // heaviest the connection can sustain, not the tallest one going.
+        val ceiling = AppSettings.videoCeilingKbps()
+        videoUrls[videoId]?.let { url ->
+            val kbps = videoKbps[videoId]
+            if (kbps == null || kbps <= ceiling) return url
+            // The held picture is heavier than this connection: forget it
+            // and resolve again under the ceiling.
+            videoUrls.remove(videoId)
+            videoKbps.remove(videoId)
+        }
         // Off the caller's thread, for the same reason as [videoAvailable]:
         // the walk's probes are raw network calls, and a main-thread caller
         // would have every one of them killed and conclude nothing is usable.
-        return withContext(Dispatchers.IO) {
-            innerTubeXVideo(videoId)
-                ?: playerStream(videoId, select = { response -> rankVideoFormats(response).filter { !it.muxed } })?.url
-        }?.also { videoUrls[videoId] = it; VideoAvailability.remember(videoId, true) }
+        val picked = withContext(Dispatchers.IO) {
+            val x = innerTubeXVideo(videoId, ceiling)
+            if (x != null) x.url to x.kbps
+            else playerStream(videoId, select = { response -> rankVideoForPlayback(response, ceiling) })?.let { it.url to it.kbps }
+        } ?: return null
+        videoUrls[videoId] = picked.first
+        videoKbps[videoId] = picked.second
+        VideoAvailability.remember(videoId, true)
+        return picked.first
     }
 
     /**
@@ -367,7 +383,7 @@ object StreamResolver {
      * is asked first and the walk only when it finds nothing. Probed and
      * excluded exactly like its audio streams.
      */
-    private suspend fun innerTubeXVideo(videoId: String): String? {
+    private suspend fun innerTubeXVideo(videoId: String, maxKbps: Int = Int.MAX_VALUE): InnerTubeXResolver.Extracted? {
         val skip = mutableSetOf<String>()
         repeat(INNERTUBEX_ATTEMPTS) {
             val found = try {
@@ -381,9 +397,18 @@ object StreamResolver {
                 return null
             } ?: return null
             if (probe(found.url, expectVideo = true) == Probe.OK) {
+                if (found.kbps > maxKbps) {
+                    // Playable, but heavier than the asking connection can
+                    // feed: not a refusal, so the client keeps its standing —
+                    // the caller falls back to the walk, whose ladder is
+                    // ranked under the same ceiling.
+                    TrackLog.d(TAG, "InnerTubeX video for $videoId at ${found.kbps} kbps is over the ${maxKbps} kbps ceiling; the walk picks instead")
+                    return null
+                }
                 TrackLog.d(TAG, "InnerTubeX served video for $videoId via ${found.clientName} at ${found.kbps} kbps")
                 videoUrls[videoId] = found.url
-                return found.url
+                videoKbps[videoId] = found.kbps
+                return found
             }
             InnerTubeXResolver.exclude(videoId, found.profileId)
             skip += found.profileId
@@ -1298,6 +1323,9 @@ object StreamResolver {
      */
     private val videoUrls = ConcurrentHashMap<String, String>()
 
+    /** The bitrate of each held video URL, so [resolveVideo] can tell a held picture is too heavy for the connection now asking and resolve it again under that connection's ceiling. */
+    private val videoKbps = ConcurrentHashMap<String, Int>()
+
     /**
      * Whether [videoId] has a music video worth switching to — meaning a
      * probed URL for it is held, not merely a format offered by some parsed
@@ -1337,6 +1365,7 @@ object StreamResolver {
         })
         if (stream != null) {
             videoUrls[videoId] = stream.url
+            videoKbps[videoId] = stream.kbps
             return true
         }
         if (answered && !offered) noVideo += videoId
@@ -1422,6 +1451,20 @@ object StreamResolver {
                 .thenByDescending { it.height }
                 .thenByDescending { it.url != null },
         )
+
+    /**
+     * [response]'s video-only formats in the order they are worth attempting
+     * on a connection that sustains at most [maxKbps]: the heaviest it allows
+     * first, the rest under it descending, then anything over it cheapest
+     * first — a rung over budget still beats no picture, and the cheapest
+     * such rung is the least wrong. [rankByQuality]'s ladder, for pictures.
+     */
+    private fun rankVideoForPlayback(response: JsonObject, maxKbps: Int): List<Video> {
+        val (within, over) = videoFormatList(response).filter { !it.muxed }.partition { it.kbps <= maxKbps }
+        val order = compareByDescending<Video> { it.url != null }
+        return within.sortedWith(compareByDescending<Video> { it.kbps }.then(order)) +
+                over.sortedWith(compareBy<Video> { it.kbps }.then(order))
+    }
 
     /**
      * What playback wants, best first: the formats the connection's ceiling
@@ -1922,6 +1965,7 @@ object StreamResolver {
         if (url.toHttpUrlOrNull()?.host?.endsWith("googlevideo.com") != true) return
         // A refused video URL is dropped too, so the next play re-resolves it
         // instead of failing on the same dead address.
+        videoUrls.filterValues { it == url }.keys.forEach { videoKbps.remove(it) }
         videoUrls.entries.removeAll { it.value == url }
         // A URL InnerTubeX minted is its refusal, not one of [CLIENTS]': it
         // excludes that client variant, and the next track starts on our walk.
