@@ -125,6 +125,8 @@ fun FloatingCard(
     onDismiss: () -> Unit,
     title: String? = null,
     icon: ImageVector? = null,
+    /** A drawable shown in the header tile instead of [icon]: a service's own logo, in its own colours. */
+    logo: Int? = null,
     subtitle: String? = null,
     dismissible: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp),
@@ -507,7 +509,13 @@ fun FloatingCard(
                         }
                         if (title != null) {
                             Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                if (icon != null) {
+                                if (logo != null) {
+                                    Box(
+                                        Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                        contentAlignment = Alignment.Center,
+                                    ) { androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(logo), null, Modifier.size(28.dp)) }
+                                    Spacer(Modifier.width(14.dp))
+                                } else if (icon != null) {
                                     Box(
                                         Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
                                         contentAlignment = Alignment.Center,

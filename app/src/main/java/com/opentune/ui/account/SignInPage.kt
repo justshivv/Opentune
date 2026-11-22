@@ -156,7 +156,7 @@ internal fun SignInPage(
             }
         }
     }
-    if (showHelp) FloatingCard(onDismiss = { showHelp = false }, title = service, icon = icon) {
+    if (showHelp) FloatingCard(onDismiss = { showHelp = false }, title = service, icon = icon, logo = logo) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(gives, style = MaterialTheme.typography.bodyLarge)
             Text(privacy ?: com.opentune.i18n.Tr.f(
