@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "歌曲以大致相同的音量播放",
 "Songs stream as they're stored, so FLAC stays lossless.": "歌曲按存储的原样串流，因此 FLAC 保持无损。",
 "Songs with a music video get a Song / Video switch in the player": "有音乐视频的歌曲会在播放器中显示 歌曲 / 视频 切换",
+"Solid system bars": "不透明的系统栏",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "状态栏和导航栏使用页面的背景，而不是让页面透过它们显示",
 "Songs you haven't played, from the radios of your favourites in each genre": "你没播放过的歌曲，来自每个流派中你最爱艺人的电台",
 "Songs you've played": "你播放过的歌曲",
 "Songs · {0}": "歌曲 · {0}",

@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "Lagu diputar dengan volume yang kurang lebih sama",
 "Songs stream as they're stored, so FLAC stays lossless.": "Lagu di-streaming sesuai file yang disimpan, sehingga FLAC tetap lossless.",
 "Songs with a music video get a Song / Video switch in the player": "Lagu yang memiliki video musik mendapatkan tombol Lagu / Video di pemutar",
+"Solid system bars": "Bilah sistem solid",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "Bilah status dan bilah navigasi memakai latar belakang halaman, bukan membiarkan halaman terlihat menembusnya",
 "Songs you haven't played, from the radios of your favourites in each genre": "Lagu yang belum Anda putar, dari radio favorit Anda di setiap genre",
 "Songs you've played": "Lagu yang pernah Anda putar",
 "Songs · {0}": "Lagu · {0}",

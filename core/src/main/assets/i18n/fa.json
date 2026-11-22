@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "آهنگ‌ها با صدای تقریباً یکسان پخش می‌شوند",
 "Songs stream as they're stored, so FLAC stays lossless.": "آهنگ‌ها همان‌طور که ذخیره شده‌اند پخش می‌شوند، پس FLAC بدون افت می‌ماند.",
 "Songs with a music video get a Song / Video switch in the player": "آهنگ‌هایی که موزیک ویدیو دارند، در پخش‌کننده یک کلید تعویض آهنگ / ویدیو می‌گیرند",
+"Solid system bars": "نوارهای سیستم غیرشفاف",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "نوار وضعیت و نوار پیمایش به‌جای اینکه صفحه از میانشان دیده شود، پس‌زمینه صفحه را می‌گیرند",
 "Songs you haven't played, from the radios of your favourites in each genre": "آهنگ‌هایی که پخش نکرده‌اید، از رادیوی محبوب‌هایتان در هر ژانر",
 "Songs you've played": "آهنگ‌هایی که پخش کرده‌اید",
 "Songs · {0}": "آهنگ‌ها · {0}",

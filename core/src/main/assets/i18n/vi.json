@@ -2204,6 +2204,8 @@
 "Songs play at about the same volume": "Các bài hát phát với âm lượng gần như nhau",
 "Songs stream as they're stored, so FLAC stays lossless.": "Bài hát được phát trực tuyến đúng như khi lưu trữ, nên FLAC vẫn lossless.",
 "Songs with a music video get a Song / Video switch in the player": "Các bài hát có video âm nhạc sẽ có nút chuyển Bài hát / Video trong trình phát",
+"Solid system bars": "Thanh hệ thống đặc",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "Thanh trạng thái và thanh điều hướng lấy nền của trang thay vì để trang hiện xuyên qua",
 "Songs you haven't played, from the radios of your favourites in each genre": "Những bài bạn chưa phát, từ radio của các bài yêu thích trong mỗi thể loại",
 "Songs you've played": "Bài hát bạn đã phát",
 "Songs · {0}": "Bài hát · {0}",

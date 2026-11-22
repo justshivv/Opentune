@@ -2243,6 +2243,8 @@
 "Songs play at about the same volume": "歌曲會以大致相同的音量播放",
 "Songs stream as they're stored, so FLAC stays lossless.": "歌曲會按儲存的原樣串流，因此 FLAC 會維持無損。",
 "Songs with a music video get a Song / Video switch in the player": "有音樂影片的歌曲會在播放器中顯示 歌曲 / 影片 切換",
+"Solid system bars": "不透明的系統列",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "狀態列和導覽列使用頁面的背景，而不是讓頁面透過它們顯示",
 "Songs you haven't played, from the radios of your favourites in each genre": "來自你各曲風最愛的電台、你還沒播放過的歌曲",
 "Songs you've played": "你播放過的歌曲",
 "Songs · {0}": "歌曲 · {0}",

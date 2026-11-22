@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "Les titres sont lus à peu près au même volume",
 "Songs stream as they're stored, so FLAC stays lossless.": "Les titres sont diffusés tels qu'ils sont stockés, le FLAC reste donc sans perte.",
 "Songs with a music video get a Song / Video switch in the player": "Les titres avec un clip musical disposent d'un bouton Titre / Vidéo dans le lecteur",
+"Solid system bars": "Barres système opaques",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "La barre d'état et la barre de navigation adoptent l'arrière-plan de la page au lieu de la laisser transparaître",
 "Songs you haven't played, from the radios of your favourites in each genre": "Des titres jamais écoutés, tirés des radios de vos favoris dans chaque genre",
 "Songs you've played": "Titres que vous avez écoutés",
 "Songs · {0}": "Titres · {0}",

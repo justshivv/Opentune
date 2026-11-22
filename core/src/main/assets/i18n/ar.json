@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "تُشغَّل الأغاني بمستوى صوت متقارب",
 "Songs stream as they're stored, so FLAC stays lossless.": "تُبث الأغاني كما هي مخزّنة، فتبقى ملفات FLAC بدون فقدان.",
 "Songs with a music video get a Song / Video switch in the player": "الأغاني التي لها فيديو موسيقي يظهر لها مبدّل أغنية / فيديو في المشغّل",
+"Solid system bars": "أشرطة النظام المعتمة",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "تأخذ شريط الحالة وشريط التنقل خلفية الصفحة بدلًا من إظهار الصفحة من خلالهما",
 "Songs you haven't played, from the radios of your favourites in each genre": "أغانٍ لم تشغّلها، من راديو مفضلاتك في كل نوع",
 "Songs you've played": "الأغاني التي شغّلتها",
 "Songs · {0}": "الأغاني · {0}",

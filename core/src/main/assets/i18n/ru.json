@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "Песни звучат примерно с одинаковой громкостью",
 "Songs stream as they're stored, so FLAC stays lossless.": "Песни передаются в том виде, в каком хранятся, поэтому FLAC остаётся без потерь.",
 "Songs with a music video get a Song / Video switch in the player": "Для песен с музыкальным видео в плеере появляется переключатель Песня / Видео",
+"Solid system bars": "Непрозрачные системные панели",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "Строка состояния и панель навигации получают фон страницы, а не показывают страницу сквозь себя",
 "Songs you haven't played, from the radios of your favourites in each genre": "Песни, которые вы не слушали, из радио ваших любимых исполнителей в каждом жанре",
 "Songs you've played": "Песни, которые вы слушали",
 "Songs · {0}": "Песни · {0}",

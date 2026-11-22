@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "노래가 거의 같은 음량으로 재생돼요",
 "Songs stream as they're stored, so FLAC stays lossless.": "노래는 저장된 그대로 스트리밍되므로 FLAC은 무손실로 유지돼요.",
 "Songs with a music video get a Song / Video switch in the player": "뮤직 비디오가 있는 노래는 플레이어에 노래 / 동영상 전환이 생깁니다",
+"Solid system bars": "불투명한 시스템 바",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "상태 표시줄과 탐색 바가 페이지를 비쳐 보이게 하지 않고 페이지의 배경을 사용합니다",
 "Songs you haven't played, from the radios of your favourites in each genre": "장르별로 좋아하는 노래의 라디오에서 아직 재생하지 않은 노래",
 "Songs you've played": "재생한 노래",
 "Songs · {0}": "노래 · {0}",

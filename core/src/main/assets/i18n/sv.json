@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "Låtar spelas på ungefär samma volym",
 "Songs stream as they're stored, so FLAC stays lossless.": "Låtar streamas som de är lagrade, så FLAC förblir förlustfritt.",
 "Songs with a music video get a Song / Video switch in the player": "Låtar med en musikvideo får en Låt / Video-växlare i spelaren",
+"Solid system bars": "Solida systemfält",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "Statusfältet och navigeringsfältet tar sidans bakgrund istället för att låta sidan lysa igenom",
 "Songs you haven't played, from the radios of your favourites in each genre": "Låtar du inte har spelat, från radiostationerna för dina favoriter i varje genre",
 "Songs you've played": "Låtar du har spelat",
 "Songs · {0}": "Låtar · {0}",

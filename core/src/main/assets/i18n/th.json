@@ -2204,6 +2204,8 @@
 "Songs play at about the same volume": "เพลงจะเล่นด้วยระดับเสียงใกล้เคียงกัน",
 "Songs stream as they're stored, so FLAC stays lossless.": "เพลงสตรีมตามรูปแบบที่จัดเก็บไว้ FLAC จึงยังไม่สูญเสียคุณภาพ",
 "Songs with a music video get a Song / Video switch in the player": "เพลงที่มีมิวสิกวิดีโอจะมีสวิตช์ เพลง / วิดีโอ ในเครื่องเล่น",
+"Solid system bars": "แถบระบบแบบทึบ",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "แถบสถานะและแถบนำทางจะใช้พื้นหลังของหน้าแทนที่จะให้หน้าแสดงทะลุผ่าน",
 "Songs you haven't played, from the radios of your favourites in each genre": "เพลงที่คุณยังไม่ได้เล่น จากวิทยุของเพลงโปรดในแต่ละแนวเพลง",
 "Songs you've played": "เพลงที่คุณเล่นแล้ว",
 "Songs · {0}": "เพลง · {0}",

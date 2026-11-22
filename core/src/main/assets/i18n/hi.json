@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "गाने लगभग एक ही वॉल्यूम पर चलते हैं",
 "Songs stream as they're stored, so FLAC stays lossless.": "गाने वैसे ही स्ट्रीम होते हैं जैसे रखे गए हैं, इसलिए FLAC लॉसलेस रहता है।",
 "Songs with a music video get a Song / Video switch in the player": "जिन गानों का म्यूज़िक वीडियो है, उन्हें प्लेयर में गाना / वीडियो स्विच मिलता है",
+"Solid system bars": "ठोस सिस्टम बार",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "स्टेटस बार और नेविगेशन बार पेज को अपने आर-पार दिखाने के बजाय पेज का बैकग्राउंड ले लेते हैं",
 "Songs you haven't played, from the radios of your favourites in each genre": "वे गाने जो आपने नहीं सुने, हर शैली में आपके पसंदीदा कलाकारों के रेडियो से",
 "Songs you've played": "आपके सुने गाने",
 "Songs · {0}": "गाने · {0}",

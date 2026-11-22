@@ -2243,6 +2243,8 @@
 "Songs play at about the same volume": "Utwory grają z mniej więcej tą samą głośnością",
 "Songs stream as they're stored, so FLAC stays lossless.": "Utwory są strumieniowane tak, jak są zapisane, więc FLAC pozostaje bezstratny.",
 "Songs with a music video get a Song / Video switch in the player": "Utwory z teledyskiem mają w odtwarzaczu przełącznik Utwór / Wideo",
+"Solid system bars": "Pełne paski systemowe",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "Pasek stanu i pasek nawigacji przyjmują tło strony, zamiast przepuszczać ją przez siebie",
 "Songs you haven't played, from the radios of your favourites in each genre": "Utwory, których nie słuchasz, z radia Twoich ulubionych w każdym gatunku",
 "Songs you've played": "Odtwarzane utwory",
 "Songs · {0}": "Utwory · {0}",

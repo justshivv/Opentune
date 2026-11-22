@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "A dalok nagyjából azonos hangerővel szólnak",
 "Songs stream as they're stored, so FLAC stays lossless.": "A dalok úgy streamelődnek, ahogy tárolva vannak, így a FLAC veszteségmentes marad.",
 "Songs with a music video get a Song / Video switch in the player": "A videóklippel rendelkező dalok Dal / Videó kapcsolót kapnak a lejátszóban",
+"Solid system bars": "Átlátszatlan rendszersávok",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "Az állapot- és navigációs sáv az oldal hátterét veszi fel, ahelyett hogy az oldal átlátszana rajtuk",
 "Songs you haven't played, from the radios of your favourites in each genre": "Még nem hallott dalok a kedvenceid rádióiból, műfajonként",
 "Songs you've played": "Hallgatott dalok",
 "Songs · {0}": "Dalok · {0}",

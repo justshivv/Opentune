@@ -2262,6 +2262,8 @@
 "Songs play at about the same volume": "曲をほぼ同じ音量で再生します",
 "Songs stream as they're stored, so FLAC stays lossless.": "曲は保存されている形式のままストリーミングされるため、FLAC はロスレスのままです。",
 "Songs with a music video get a Song / Video switch in the player": "ミュージックビデオのある曲はプレーヤーで 曲 / 動画 を切り替えられます",
+"Solid system bars": "不透明なシステムバー",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "ステータスバーとナビゲーションバーがページを透けさせる代わりに、ページの背景色になります",
 "Songs you haven't played, from the radios of your favourites in each genre": "各ジャンルのお気に入りのラジオから、まだ再生していない曲",
 "Songs you've played": "再生した曲",
 "Songs · {0}": "曲 · {0}",

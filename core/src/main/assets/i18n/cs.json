@@ -2204,6 +2204,8 @@
 "Songs play at about the same volume": "Skladby hrají přibližně stejně hlasitě",
 "Songs stream as they're stored, so FLAC stays lossless.": "Skladby se streamují tak, jak jsou uložené, takže FLAC zůstává bezztrátový.",
 "Songs with a music video get a Song / Video switch in the player": "Skladby s hudebním videem získají v přehrávači přepínač Skladba / Video",
+"Solid system bars": "Plné systémové lišty",
+"The status bar and navigation bar take the page's background instead of showing the page through them": "Stavový a navigační panel převezmou pozadí stránky, místo aby stránku nechaly prosvítat",
 "Songs you haven't played, from the radios of your favourites in each genre": "Skladby, které jste nehráli, z rádií vašich oblíbených interpretů v každém žánru",
 "Songs you've played": "Skladby, které jste přehráli",
 "Songs · {0}": "Skladby · {0}",
