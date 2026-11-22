@@ -29,6 +29,10 @@
   <a href="https://trendshift.io/repositories/311235?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-311235" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/311235" alt="justshivv%2FOpentune | Trendshift" width="250" height="55"/></a>
 </p>
 
+<p align="center">
+  <a href="https://rookieenough.github.io/Orion-Data/redirect.html?id=opentune&icon=https%3A%2F%2Fjustshivv.github.io%2FOpentune%2Ficon-512.png"><img src="https://raw.githubusercontent.com/RookieEnough/Orion-Store/refs/heads/main/assets/orion-badge.png" alt="Get it on Orion Store" height="52"></a>
+</p>
+
 # OpenTune
 
 A free music player for the YouTube Music catalogue, with no ads, no account
@@ -56,8 +60,6 @@ and in the browser. Sign in only if you want your likes and playlists.
 On Android, `arm64-v8a` fits almost every recent phone and `universal` runs on
 anything. Each release lists the SHA-256 checksums of its files, and the app
 checks for updates once a day and can update itself.
-
-<a href="https://rookieenough.github.io/Orion-Data/redirect.html?id=opentune&icon=https%3A%2F%2Fjustshivv.github.io%2FOpentune%2Ficon-512.png"><img src="https://raw.githubusercontent.com/RookieEnough/Orion-Store/refs/heads/main/assets/orion-badge.png" alt="Get it on Orion Store" height="52"></a>
 
 ## What it does
 
