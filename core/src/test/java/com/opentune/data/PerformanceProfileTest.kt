@@ -27,13 +27,24 @@ class PerformanceProfileTest {
         assertTrue(p.automix)
     }
 
-    @Test fun highPerformanceTurnsThemBackOn() {
-        val saver = performanceApplied(ui, pb, PerformanceProfile.BATTERY_SAVER)
+    @Test fun leavingBatterySaverRestoresTheUsersSwitches() {
+        val mine = ui.copy(movingCover = false)
+        val saver = performanceApplied(mine, pb, PerformanceProfile.BATTERY_SAVER)
         val (u, p) = performanceApplied(saver.first, saver.second, PerformanceProfile.PERFORMANCE)
         assertTrue(u.highRefreshRate)
         assertFalse(u.stillBackdrops)
-        assertTrue(u.animatedCovers); assertTrue(u.movingCover); assertTrue(u.blurLyrics)
+        // Given back as the user had them, not reset to the defaults.
+        assertFalse(u.movingCover)
+        assertTrue(u.animatedCovers); assertTrue(u.blurLyrics)
         assertEquals(AutomixPerformance.PERFORMANCE, p.automixPerformance)
+    }
+
+    @Test fun leavingALegacyBatterySaverRestoresTheDefaults() {
+        // Saved by an older build: Battery saver is the profile, its switches are in effect, no snapshot.
+        val legacy = ui.copy(performanceProfile = PerformanceProfile.BATTERY_SAVER, movingCover = false, animatedCovers = false)
+        val (u, _) = performanceApplied(legacy, pb, PerformanceProfile.PERFORMANCE)
+        assertTrue(u.movingCover)
+        assertTrue(u.animatedCovers)
     }
 
     @Test fun balancedSitsBetween() {
