@@ -218,9 +218,11 @@ const val HEADER_ART_PX = 720
 /**
  * Artwork handed to the media session — the lock screen, the notification,
  * Android Auto. Generous because those surfaces draw it large and take one
- * copy: unlike a list row, nothing goes back for a better one later.
+ * copy: unlike a list row, nothing goes back for a better one later. The
+ * media card in the notification shade spans the screen, and Android keeps
+ * session artwork up to 320dp (960px at 3x) before scaling it down itself.
  */
-const val NOTIFICATION_ART_PX = 544
+const val NOTIFICATION_ART_PX = 960
 
 /**
  * Artwork for the full player — the sleeve and the full-bleed banner both, and
