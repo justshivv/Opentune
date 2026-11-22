@@ -13,6 +13,7 @@ import com.opentune.data.connect.CTrack
 import com.opentune.data.connect.Connect
 import com.opentune.data.connect.Device
 import com.opentune.data.connect.meant
+import com.opentune.data.model.artworkAt
 
 /**
  * The player behind the media notification while another of the person's
@@ -52,7 +53,7 @@ internal class ConnectRemotePlayer : SimpleBasePlayer(Looper.getMainLooper()) {
             .setTitle(t.title)
             .setArtist(artist)
             .setAlbumTitle(t.album)
-            .setArtworkUri(t.thumb?.let(Uri::parse))
+            .setArtworkUri(t.thumb.artworkAt(com.opentune.data.model.NOTIFICATION_ART_PX)?.let(Uri::parse))
             .build()
         return MediaItemData.Builder("${t.id}#$i")
             .setMediaItem(MediaItem.Builder().setMediaId(t.id.ifBlank { "connect" }).setMediaMetadata(meta).build())

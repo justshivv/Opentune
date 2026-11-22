@@ -10,7 +10,9 @@ import com.opentune.data.download.Downloads
 import com.opentune.data.innertube.UpgradedTracks
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.model.QueueTier
+import com.opentune.data.model.NOTIFICATION_ART_PX
 import com.opentune.data.model.Song
+import com.opentune.data.model.artworkAt
 import com.opentune.data.subsonic.Subsonic
 import com.opentune.data.radio.Radio
 import androidx.media3.common.MimeTypes
@@ -99,8 +101,10 @@ fun Song.toMediaItem(): MediaItem =
             MediaMetadata.Builder()
                 .setTitle(title)
                 .setArtist(artist)
-                // A downloaded cover keeps the notification and lock screen right offline.
-                .setArtworkUri(Downloads.artFor(videoId)?.let(Uri::fromFile) ?: Subsonic.resolveCover(thumbnailUrl)?.let(Uri::parse))
+                // A downloaded cover keeps the notification and lock screen right offline. A song from
+                // a list carries the list's small thumbnail (60 to 120 px): asked for at the size the
+                // media card draws, not stretched over it in blocks.
+                .setArtworkUri(Downloads.artFor(videoId)?.let(Uri::fromFile) ?: Subsonic.resolveCover(thumbnailUrl).artworkAt(NOTIFICATION_ART_PX)?.let(Uri::parse))
                 .setAlbumTitle(albumName)
                 .setExtras(
                     Bundle().apply {
