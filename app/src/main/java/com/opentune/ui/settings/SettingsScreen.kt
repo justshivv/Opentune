@@ -1025,6 +1025,9 @@ private fun settingsSections(
                 Entry("Upgrade quality while playing", "better stream premium 256 opus swap") {
                     ToggleRow("Upgrade quality while playing", pb.qualityUpgrade, { v -> AppSettings.updatePlayback { it.copy(qualityUpgrade = v) } }, summary = "If a clearly better stream turns up a few seconds in, switch to it without stopping", icon = ImageVector.vectorResource(AppIcons.HighQuality), beta = true)
                 },
+                Entry("Video mode", "video music video watch song video switch player") {
+                    ToggleRow("Video mode", pb.videoModeEnabled, { v -> AppSettings.updatePlayback { it.copy(videoModeEnabled = v) } }, summary = "Songs with a music video get a Song / Video switch in the player", icon = ImageVector.vectorResource(AppIcons.PlayCircle), beta = true)
+                },
                 Entry("Automix", "auto mix dj blend beat transition seamless") {
                     ToggleRow(
                         "Automix",
@@ -1463,8 +1466,8 @@ private fun settingsSections(
                     // How a Canvas is shaded, so only while one can play.
                     SettingRow("Behind the title and controls", summary = ui.canvasLook.summary, icon = ImageVector.vectorResource(AppIcons.BlurOn),
                         enabled = ui.spotifyCanvas && !reduced, disabledReason = if (reduced) "Off while Reduce animation is on" else "Only with Spotify Canvas on", below = {
-                        PillSegmented(com.opentune.data.settings.CanvasLook.entries, ui.canvasLook, { it.label }, { v -> AppSettings.updateUi { it.copy(canvasLook = v) } })
-                    })
+                            PillSegmented(com.opentune.data.settings.CanvasLook.entries, ui.canvasLook, { it.label }, { v -> AppSettings.updateUi { it.copy(canvasLook = v) } })
+                        })
                     RowDivider()
                     ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = "Likes are saved to Spotify. Listening here does not add plays to Spotify history", icon = ImageVector.vectorResource(AppIcons.Favorite))
                     RowDivider()

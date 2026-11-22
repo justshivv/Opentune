@@ -418,6 +418,13 @@ data class PlaybackSettings(
     val streamDownloadsOnlyIfBetter: Boolean = true,
     /** Swap to a clearly better stream mid-song when one turns up. */
     val qualityUpgrade: Boolean = true,
+    /**
+     * Songs that have a music video get a Song / Video switch in the player,
+     * swapping the playing song onto its video and back where it stands.
+     * On by default; off takes the switch away, and no song is checked for
+     * a video at all.
+     */
+    val videoModeEnabled: Boolean = true,
     /** Community FLAC lookup runs after playback starts. Downloads remain YouTube audio. */
     val losslessStreaming: Boolean = false,
     /** No longer read: its default let FLAC stream on mobile data. See [losslessWifiOnly]. */

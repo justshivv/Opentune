@@ -77,6 +77,20 @@ class PlayerConnection(private val context: Context) {
     /** The song a video-availability walk is currently running for, if any. */
     private var videoCheckId: String? = null
 
+    init {
+        // The switch is a setting (on by default): turning it off takes the
+        // switch away at once, and a song playing its video comes back to
+        // its audio stream.
+        scope.launch {
+            AppSettings.playback.collect { playback ->
+                if (!playback.videoModeEnabled) {
+                    _videoAvailable.value = false
+                    if (_videoMode.value) setVideoMode(false)
+                }
+            }
+        }
+    }
+
     private val _videoSize = MutableStateFlow(VideoSize.UNKNOWN)
     /** The playing stream's picture size, so the video surface can fit itself. */
     val videoSize = _videoSize.asStateFlow()
@@ -300,13 +314,26 @@ class PlayerConnection(private val context: Context) {
         // is the picture-only one, so both video addresses count.
         _videoMode.value = (mixing?.item ?: player.currentMediaItem)?.localConfiguration?.uri
             ?.let { isVideoUri(it) || isVideoOnlyUri(it) } == true
-        _videoAvailable.value = id?.let { StreamResolver.hasVideo(it) } == true
+        _videoAvailable.value = AppSettings.playback.value.videoModeEnabled && id?.let { StreamResolver.hasVideo(it) } == true
         // A song served without its response ever being parsed (from the cache,
         // a download) has no answer yet: ask, and light the toggle if it has one.
-        if (id != null && !_videoAvailable.value && videoCheckId != id) {
+        if (id != null && !_videoAvailable.value && videoCheckId != id && AppSettings.playback.value.videoModeEnabled) {
             videoCheckId = id
             scope.launch {
-                if (StreamResolver.videoAvailable(id) && _currentSong.value?.videoId == id) _videoAvailable.value = true
+                // A song restored paused after a relaunch can be asked about
+                // before the probe's engine has warmed up: that ask comes
+                // back unanswered, which is not a no. Keep asking, a few
+                // seconds apart, while the song stays current and the answer
+                // stays unknown, so the switch still arrives on its own.
+                var tries = 0
+                while (_currentSong.value?.videoId == id && !StreamResolver.videoKnown(id) && tries < 6) {
+                    if (StreamResolver.videoAvailable(id)) {
+                        if (_currentSong.value?.videoId == id && AppSettings.playback.value.videoModeEnabled) _videoAvailable.value = true
+                        break
+                    }
+                    tries++
+                    if (!StreamResolver.videoKnown(id)) kotlinx.coroutines.delay(5_000)
+                }
                 if (videoCheckId == id) videoCheckId = null
             }
         }
@@ -442,6 +469,9 @@ class PlayerConnection(private val context: Context) {
     /** Switches the playing song between its audio stream and its music video, in place. */
     fun setVideoMode(on: Boolean) {
         if (_videoMode.value == on) return
+        // The setting is the feature's master switch: while it is off, no
+        // song is swapped onto its video.
+        if (on && !AppSettings.playback.value.videoModeEnabled) return
         val controller = controller ?: return
         val item = controller.currentMediaItem ?: return
         // The service makes the swap on its own player: its rendition swaps
