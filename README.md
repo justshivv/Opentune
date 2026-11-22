@@ -16,10 +16,17 @@
 
 <p align="center">
   <a href="https://github.com/justshivv/Opentune/actions/workflows/ci.yml"><img src="https://github.com/justshivv/Opentune/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0"></a>
   <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+">
-  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Dinstallations%26label%3Dinstalls&cacheSeconds=3600" alt="Installations reported"></a>
-  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Flabel%3Dactive%2520this%2520month&cacheSeconds=3600" alt="Active installations this month"></a>
+  <img src="https://img.shields.io/badge/Kotlin-Compose-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin and Jetpack Compose">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0"></a>
+  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Dinstallations%26label%3Dinstalls&cacheSeconds=300" alt="Installations reported"></a>
+  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Ddaily%26label%3Dlistening%2520today&cacheSeconds=300" alt="Installations active today"></a>
+  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Flabel%3Dactive%2520this%2520month&cacheSeconds=300" alt="Active installations this month"></a>
+</p>
+
+<p align="center">
+  <a href="https://trendshift.io/repositories/311235?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-311235" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/311235/daily?language=Kotlin" alt="justshivv%2FOpentune | Trendshift" width="250" height="55"/></a>
+  <a href="https://trendshift.io/repositories/311235?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-311235" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/311235" alt="justshivv%2FOpentune | Trendshift" width="250" height="55"/></a>
 </p>
 
 # OpenTune
@@ -125,8 +132,6 @@ accounts or listening history. You can turn it off under Settings › About.
 Questions, ideas and bug reports are welcome on
 [Discord](https://discord.gg/6udrCVh5n) and in the
 [issues](https://github.com/justshivv/Opentune/issues).
-
-<a href="https://trendshift.io/repositories/311235?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-311235" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/311235" alt="justshivv/Opentune on Trendshift" width="250" height="55"></a>
 
 ## Disclaimer
 
