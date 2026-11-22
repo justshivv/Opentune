@@ -1,6 +1,6 @@
 # OpenTune web preview
 
-This extends the existing GPL-3.0 BitChord React player and WXT browser extension at commit `edc1e6f36febf71a118e649411d2fc21b70ead45`. It reuses that implementation rather than rebuilding the web app. Upstream design/research notes are preserved under `docs/` with their original attribution.
+This extends an existing GPL-3.0 React player and WXT browser extension, named with its commit in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). It reuses that implementation rather than rebuilding the web app. Upstream design/research notes are preserved under `docs/` with their original attribution.
 
 OpenTune changes include branding, GitHub/Discord community links, URL audio add-ons, measured direct-FLAC validation, background quality upgrades, a separate extension identity, and GitHub Pages routing under `/Opentune/player/`. Chrome and Firefox extensions use the same protocol. Google/Spotify session cookies remain inside the extension; the player receives metadata and request results.
 

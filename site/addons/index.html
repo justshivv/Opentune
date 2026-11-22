@@ -109,7 +109,7 @@ article code { font-size: 0.88em; background: var(--bg-3); padding: 2px 6px; bor
 
 <section id="start" class="reveal">
   <h2>A small API. No extension runtime.</h2>
-  <p>OpenTune uses the <a href="https://bitchord.kushagrasingh.in/docs">BitChord HTTP add-on contract</a>. Listeners add your service root or <code>manifest.json</code> URL: in the Android app under Settings → Add-ons → Audio add-ons, and in the web player under Settings → Audio sources. No executable package is installed.</p>
+  <p>OpenTune uses a small HTTP add-on contract, described on this page. Listeners add your service root or <code>manifest.json</code> URL: in the Android app under Settings → Add-ons → Audio add-ons, and in the web player under Settings → Audio sources. No executable package is installed.</p>
   <p>The starter is a Cloudflare Worker with a small configurable catalog, CORS support and tests. It starts with an empty catalog; add your own audio URLs and their measured metadata before deploying.</p>
   <div class="code"><button class="copy" type="button">Copy</button><pre><code>cd examples/audio-addon
 node --test worker.test.mjs
