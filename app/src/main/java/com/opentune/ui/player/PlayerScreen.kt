@@ -2031,7 +2031,7 @@ fun PlayerLayout(
                                         1f
                                     )
                             }
-                            .size(width = 40.dp, height = 5.dp).clip(CircleShape)
+                            .size(width = 36.dp, height = 4.dp).clip(CircleShape)
                             .background(pillColour)
                             // Tapping the pill closes the player, without a ripple on it.
                             .clickable(
