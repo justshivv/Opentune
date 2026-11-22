@@ -3,796 +3,141 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/justshivv/Opentune/releases/latest"><b>Download the latest APK</b></a>
+  <a href="https://github.com/justshivv/Opentune/releases/latest"><b>Download</b></a>
   &nbsp;·&nbsp;
   <a href="https://justshivv.github.io/Opentune/">Website</a>
   &nbsp;·&nbsp;
+  <a href="https://justshivv.github.io/Opentune/player/">Web player</a>
+  &nbsp;·&nbsp;
+  <a href="docs/features.md">Features</a>
+  &nbsp;·&nbsp;
   <a href="https://discord.gg/6udrCVh5n">Discord</a>
-  &nbsp;·&nbsp;
-  <a href="#features">Features</a>
-  &nbsp;·&nbsp;
-  <a href="#building">Build it yourself</a>
 </p>
 
 <p align="center">
   <a href="https://github.com/justshivv/Opentune/actions/workflows/ci.yml"><img src="https://github.com/justshivv/Opentune/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+">
-  <img src="https://img.shields.io/badge/Kotlin-Compose-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin and Jetpack Compose">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0"></a>
-  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Dinstallations%26label%3Dinstalls&cacheSeconds=300" alt="Installations reported"></a>
-  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Ddaily%26label%3Dlistening%2520today&cacheSeconds=300" alt="Installations active today"></a>
-  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Flabel%3Dactive%2520this%2520month&cacheSeconds=300" alt="Active installations this month"></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+">
+  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Dinstallations%26label%3Dinstalls&cacheSeconds=3600" alt="Installations reported"></a>
+  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Flabel%3Dactive%2520this%2520month&cacheSeconds=3600" alt="Active installations this month"></a>
 </p>
-
-<p align="center">
-  <a href="https://trendshift.io/repositories/311235?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-311235" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/311235/daily?language=Kotlin" alt="justshivv%2FOpentune | Trendshift" width="250" height="55"/></a>
-  <a href="https://trendshift.io/repositories/311235?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-311235" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/311235" alt="justshivv%2FOpentune | Trendshift" width="250" height="55"/></a>
-</p>
-
-[![Get it on Orion Store](https://raw.githubusercontent.com/RookieEnough/Orion-Store/refs/heads/main/assets/orion-badge.png)](https://rookieenough.github.io/Orion-Data/redirect.html?id=opentune&icon=https%3A%2F%2Fjustshivv.github.io%2FOpentune%2Ficon-512.png)
 
 # OpenTune
 
-An Android music player for YouTube Music. It talks to YouTube's internal
-("Innertube") API directly, so there's no API key, no account required and
-no server of your own. Sign in if you want your likes and playlists.
-
-Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
-
-Questions, ideas or bug reports: join the
-[Discord](https://discord.gg/6udrCVh5n).
-
-Build-owner setup and current Last.fm, Discord and extension-update limits are
-documented in [service integrations](docs/service-integrations.md).
-
-## See it
+A free music player for the YouTube Music catalogue, with no ads, no account
+and no subscription. It runs on Android phones and TVs, Windows, macOS, Linux
+and in the browser. Sign in only if you want your likes and playlists.
 
 <p align="center">
-  <a href="docs/media/opentune-reel.mp4"><img src="docs/media/preview.gif" alt="OpenTune in 40 seconds" width="300" height="533"></a>
-  <br>
-  <sub><a href="docs/media/opentune-reel.mp4">Watch the 40-second video</a> (MP4, with sound)</sub>
+  <img src="site/img/app/fullcover.webp" alt="The player, its cover filling the top of the screen" width="19%">
+  <img src="site/img/app/lyrics.webp" alt="Synced lyrics, the line being sung in white" width="19%">
+  <img src="site/img/app/halo.webp" alt="The halo player: a round cover ringed with light" width="19%">
+  <img src="site/img/app/together.webp" alt="A Listen together room with its code and listeners" width="19%">
+  <img src="site/img/app/radio.webp" alt="Live radio stations near you" width="19%">
 </p>
 
-<table>
-  <tr>
-    <td><img src="docs/screenshots/01-player.jpg" alt="Player, coloured from the cover"></td>
-    <td><img src="docs/screenshots/02-lyrics.jpg" alt="Synced lyrics"></td>
-    <td><img src="docs/screenshots/03-explore.jpg" alt="Explore as a mood board"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/04-radio.jpg" alt="Live radio near you"></td>
-    <td><img src="docs/screenshots/05-together.jpg" alt="Listen together room"></td>
-    <td><img src="docs/screenshots/06-podcasts.jpg" alt="Podcasts"></td>
-  </tr>
-</table>
+## Get it
 
-## Install
+| Where | How |
+|---|---|
+| **Android phone or tablet** | Download the APK from the [latest release](https://github.com/justshivv/Opentune/releases/latest), open it and allow the install. Android 8.0 or newer. |
+| **Android TV, Google TV** | Install `OpenTune-TV-<version>.apk` from the [releases](https://github.com/justshivv/Opentune/releases) and sign in by scanning a code with your phone. [More](docs/install.md#android-tv) |
+| **Windows, macOS, Linux** | Desktop builds are attached to the [latest release](https://github.com/justshivv/Opentune/releases/latest). |
+| **Browser** | Open the [web player](https://justshivv.github.io/Opentune/player/). It needs a small companion extension. [More](docs/install.md#web-player-preview) |
+| **iPhone, iPad** (early build) | Through SideStore or AltStore, with your own Apple ID. [Steps](docs/install.md#iphone-and-ipad) |
 
-1. Open the [latest release](https://github.com/justshivv/Opentune/releases/latest)
-   and download the APK for your phone. `arm64-v8a` fits almost every phone
-   from the last several years; `universal` runs on anything.
-2. Open the file and allow your browser or file manager to install apps
-   when Android asks.
-3. That's it. OpenTune checks this repository for new releases once a day
-   and can update itself from Settings.
+On Android, `arm64-v8a` fits almost every recent phone and `universal` runs on
+anything. Each release lists the SHA-256 checksums of its files, and the app
+checks for updates once a day and can update itself.
 
-Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
+<a href="https://rookieenough.github.io/Orion-Data/redirect.html?id=opentune&icon=https%3A%2F%2Fjustshivv.github.io%2FOpentune%2Ficon-512.png"><img src="https://raw.githubusercontent.com/RookieEnough/Orion-Store/refs/heads/main/assets/orion-badge.png" alt="Get it on Orion Store" height="52"></a>
 
-### iPhone and iPad
+## What it does
 
-**Requires iOS/iPadOS 16 or newer. An Android APK cannot be installed on an iPhone.**
-OpenTune's native iOS build is an `.ipa`. It is not currently on the App Store or TestFlight.
+**Listening**
+- Plays the best stream it can find, and upgrades mid-song without a gap.
+- Crossfade and Automix, loudness levelling, a 15-band equalizer and AutoEq
+  corrections for more than 8,000 headphones.
+- Bit-perfect output to a USB DAC on Android 14 and newer.
+- Lossless audio from add-ons you choose to connect. [How add-ons work](docs/audio-addons.md)
+- Offline downloads, and the music files already on your phone.
 
-**Recommended: SideStore, or classic AltStore (not AltStore PAL)**
+**Lyrics**
+- Synced lyrics lit word by word, from several sources, that also work offline.
+- Tap a line to jump there, or share the lines you love as a picture or a video.
 
-1. On a Windows PC or Mac, follow the official [SideStore setup guide](https://sidestore.io)
-   or [classic AltStore installation guide](https://altstore.io). Complete that setup first,
-   including its required pairing, background refresh or companion software. Classic
-   AltStore needs AltServer available for refresh; SideStore has its own pairing/VPN setup.
-2. On your iPhone/iPad, open the installed SideStore or classic AltStore app. Go to
-   **Sources → Add source (+)** and paste this exact URL:
+**Beyond music**
+- Live radio from more than 50,000 stations, nearest first.
+- Podcasts and audiobooks that pick up where you stopped.
+- Listen together: share a room code and friends hear the same song in step.
 
-   ```text
-   https://justshivv.github.io/Opentune/ios/source.json
-   ```
+**Your library**
+- Likes, playlists, smart playlists, daily mixes and Replay stories.
+- Import from Spotify and YouTube playlists; scrobble to Last.fm and ListenBrainz.
+- Your own music server (Subsonic).
 
-3. Open the new OpenTune source, choose **OpenTune**, and tap **Install**. Let the
-   installer sign the app with your Apple ID. Enter Apple credentials only into the
-   installer you chose, never into an OpenTune issue, chat or website form.
-4. If iOS asks, enable **Settings → Privacy & Security → Developer Mode**, restart,
-   and confirm. If it reports an untrusted developer, open **Settings → General →
-   VPN & Device Management**, select your developer profile and choose **Trust**.
-   These prompts depend on the installer and iOS version.
-5. Open OpenTune from the Home Screen. Keep the same installer/source for updates.
-   With a free Apple ID the app normally needs re-signing every **7 days**:
-   enable the installer's refresh setup and check its expiry date. Background refresh
-   is not guaranteed, so refresh manually in the installer before expiry if needed.
+**Look and feel**
+- A player that takes its colours from the cover, in seven layouts, from a
+  full-screen cover to vinyl, cassette and a glowing halo.
+- Light, dark and pure black themes, accent colours, Liquid Glass, and
+  36 languages.
 
-**Alternative: install the IPA with a computer**
+**Around the phone**
+- Cast to Chromecasts, TVs and network speakers; Android Auto; a home-screen widget.
+- Name that song: hold the phone up and it tells you what's playing.
+- Your phone as the remote for the TV app.
 
-1. Download [OpenTune-iOS.ipa](https://github.com/justshivv/Opentune/releases/download/ios/OpenTune-iOS.ipa)
-   and install [Sideloadly](https://sideloadly.io) on your PC or Mac.
-2. Connect and unlock your iPhone/iPad, tap **Trust this computer**, choose that device
-   in Sideloadly, select the IPA, then follow its signing/install instructions.
-3. Complete the Developer Mode/Trust prompts above if shown. Use the same Apple ID
-   and installation method when updating; follow Sideloadly's refresh instructions.
+The full list, with how each part works, is in [docs/features.md](docs/features.md).
 
-**Common problems**
+## Documentation
 
-- **“Lacks marketplaceID”**: you are using AltStore PAL. Use SideStore or classic
-  AltStore installed through AltServer; PAL is a different distribution system.
-- **The file downloads but nothing installs**: Safari cannot install an IPA directly.
-  Import it into your configured installer, or use the source URL above.
-- **The app stops opening after a week**: refresh/re-sign it through the same installer.
-  Avoid deleting it first, because deleting the app also deletes its local data.
-- **Signing/device limit error**: free Apple accounts have signing and active-app limits.
-  Follow your installer's guidance to deactivate another app or wait for a signing slot.
+| | |
+|---|---|
+| [Features](docs/features.md) | Everything the app does, in detail |
+| [Installing](docs/install.md) | iPhone and iPad, Android TV and the web player, step by step |
+| [Audio add-ons](docs/audio-addons.md) | Connecting your own lossless sources |
+| [Android TV](docs/android-tv.md) | The TV app and the phone remote |
+| [Appearance options](docs/appearance-options.md) | Themes, layouts and glass |
+| [Languages](docs/languages.md) | Translations and how to add one |
+| [Service integrations](docs/service-integrations.md) | Last.fm, Discord and build-owner setup |
+| [Usage counts](docs/usage-counts.md) | What the app reports, and what it never does |
+| [Building](docs/building.md) | Building from source, CI, releases and the project layout |
 
-Without sideloading, you can also open the [web player](https://justshivv.github.io/Opentune/player/)
-from Safari and choose **Share → Add to Home Screen**. This installs the web app,
-not the native IPA. Safari on iOS cannot run our Chrome/Firefox session extension,
-so extension-dependent playback and account features are unavailable there.
-
-The native iOS build currently includes Home, search with recent searches,
-artist/album/playlist browsing, a player with synced lyrics and queue editing,
-shuffle, repeat (off, all, one), playback speed with or without a change of pitch,
-a sleep timer that fades out, background audio, lock-screen controls, AirPlay,
-likes, history, your own playlists, albums and playlists saved with the heart, and
-downloads for listening offline (one song, or Download all on an album or playlist).
-It still has less than Android: no equalizer, no sign-in, no add-on sources and
-lyrics from LRCLIB only.
-
-### Android TV
-
-OpenTune for TV is a separate app, made for the remote and a screen across
-the room. Install `OpenTune-TV-<version>.apk` from the
-[releases](https://github.com/justshivv/Opentune/releases) page; it shows
-up in the TV's row of apps. The phone APK doesn't run as a TV app.
-
-Typing a password with a remote is no fun, so you sign the TV in from
-your phone instead:
-
-1. On the TV, open Settings → Account and choose Sign in.
-2. Scan the QR code with a phone that has OpenTune (Settings → Link a
-   device → TV), on the same Wi-Fi, and approve sharing your YouTube
-   Music session. The code expires after two minutes.
-
-Your phone can also be the remote: a trackpad that moves a cursor on the
-TV, with taps, drags, two-finger scrolling and Back and Home gestures, or a
-pad of buttons. Pair it once from the TV's Settings and the phone's Link a
-device page.
-
-More in [docs/android-tv.md](docs/android-tv.md).
-
-The phone and the TV each keep their own local library.
-
-### Web player (preview)
-
-There's a player you open in a browser on a computer, written in React.
-You can browse, search and listen there. It plays YouTube Music through a
-companion browser extension, so you install that as well; it works in
-Chrome and Firefox. The extension isn't in the browser stores yet, so you
-load a preview package in developer mode. Your library stays in that
-browser.
-
-Open it at
-[justshivv.github.io/Opentune/player](https://justshivv.github.io/Opentune/player/).
-
-It's a preview, so not everything from the Android app is there. Audio
-add-ons work for direct FLAC over CORS-enabled media, and the audio stays
-on your own connection with no hosted proxy.
-
-## Highlights
-
-- **No ads in the app, no account, no server.** Signing in is optional and
-  only brings your likes and playlists along.
-- **Best audio by default**, with crossfade, loudness levelling, a 15-band
-  equalizer and AutoEq correction for 8,000+ headphones.
-- **Synced lyrics**, lit word by word, that also work offline with downloads.
-- **Listen together**: share a room code and friends hear the same song,
-  in step, on their own phones.
-- **Live radio** from 50,000+ stations, nearest first.
-- **Cast** to Chromecasts, smart TVs and network speakers on your Wi-Fi.
-- **On the web and the TV too.** A browser player (preview, with a
-  companion extension) and an Android TV app you sign in by scanning a
-  code from your phone.
-- **Name that song**: hold the phone up and it tells you what's playing.
-- **Podcasts**, downloads, Android Auto, a home-screen widget and imports
-  from Spotify and YouTube playlists.
-
-## Features
-
-### Listening
-
-- **Lossless audio from add-ons you choose.** Add a BitChord-compatible HTTPS
-  service or manifest URL in **Settings → Audio → Audio add-ons**. Enable sources
-  and put them in your preferred order. Max quality starts music through the
-  usual fast sources, then checks add-ons in the background. The first matching
-  lossless result wins. **Lossless below Max** enables those checks at other
-  playback qualities. Max downloads also try eligible add-ons that allow direct
-  file downloads. Signal Path reports the source and detected audio format;
-  availability and actual precision depend on the recording and service.
-  JioSaavn remains a lossy 320 kbps option with YouTube fallback. Network policy
-  and output restrictions still apply. See [audio add-ons](docs/audio-addons.md)
-  for setup, supported transports and platform limits.
-
-- **Two stream engines that switch on their own.**
-  InnerTubeX leads and
-  OpenTune's own client walk backs it up; after a failure the walk leads
-  for ten minutes, then InnerTubeX gets its turn back. NewPipeExtractor is
-  the last resort. Every stream URL is
-  test-fetched before playback, so a dead link fails fast instead of
-  spinning. Stats for nerds shows which engine served the track.
-- **Best audio by default.** Streams are ranked by how they sound, not by
-  raw bitrate, so Opus wins over AAC at a similar rate, on Wi-Fi and mobile
-  data alike, with a lower ceiling available per network.
-- **Quality upgrade.** A few seconds into a song, OpenTune looks for a
-  clearly better copy (your Premium account's 256 kbps streams, or Opus
-  when the song started on AAC) and switches to it without stopping. The
-  player's "…" menu has "Upgrade quality" to ask on demand.
-- **Crossfade** from 1 to 12 seconds, with equal-power curves so the blend
-  stays level. Off by default.
-- **One steady volume.** Loudness normalization uses YouTube's own
-  measurement of each song. Figures are kept on the device, so songs played
-  from the cache or from downloads get the same level as fresh ones. A
-  volume level sets where songs land: Quiet, Normal (YouTube's reference)
-  or Loud, the default, about 5 dB higher with a limiter so peaks don't
-  clip. On the phone's own speaker songs are never turned down, only quiet
-  ones lifted; headphones and Bluetooth are fully levelled.
-- **Your phone's own sound effects.** The audio session is opened to the
-  system, so Dolby Atmos, Samsung SoundAlive, the system equalizer and
-  similar effects apply to OpenTune the way they do to the stock players.
-- **A clean signal path.** With the equalizer and effects off, decoded
-  audio goes to the output untouched. When they're on, the app's own DSP
-  adds headroom so boosts don't clip. The player's Signal path dialog
-  shows every stage: source, engine, DSP, tempo, loudness, device effects,
-  the Android mixer's rate, volume and output.
-- **Bit-perfect USB output** (Android 14+, optional). A USB DAC gets the
-  song at its own rate with no mixing, resampling or effects, through
-  Android's bit-perfect mixer. The app applies the volume, and at full
-  volume the signal is bit-exact.
-- **Clarity** (optional). A tone curve that cuts rumble, firms up the
-  bass, clears mud and adds presence and air, with headroom and a soft
-  limiter so peaks stay clean.
-- **8D audio** (Remix). The music circles your head, slowly, at a medium
-  pace or fast: it pans from ear to ear with the small delay and softening
-  a sound has when it's beside or behind you. Best with headphones.
-- **3D sound** (Remix). The music goes all the way round you: in front,
-  overhead, behind and underneath, on a circle that tips up and over
-  every few turns. The near ear hears it louder and a fraction sooner,
-  the far ear duller; the treble changes the way the outer ear changes
-  it, brighter above and darker below; and a few faint echoes place it
-  in a room around you. Slow, medium or fast; best with headphones. It
-  isn't Dolby Atmos, which needs tracks mixed for it; it moves any
-  stereo song.
-- **A sleep timer that winds down.** Over the last few minutes (a third of
-  a short timer, at most three) the music fades out and the player
-  dims; "End of song" fades the last 15 seconds. A switch in the sleep
-  timer turns it off.
-- **Fast starts and skips.** Playback begins after half a second of audio.
-  The songs either side of the current one are found before you get to
-  them, and the next one is buffered while this one plays. Played songs
-  stay in a song cache (512 MB by default) for instant replays and seeks.
-- **Daily mixes.** Home has mixes made on the phone from what you play,
-  new each day: one for each of your top three artists with the songs you
-  play around them, one for this time of day, On repeat and Rediscover
-  (favourites you haven't played lately). When a mix runs out, autoplay
-  carries on.
-- **Covers for your playlists.** A playlist made in the app shows four of
-  its songs' covers as a collage; with fewer, it gets a soft gradient in
-  colours picked from its name, so it always looks the same.
-- **Queue and radio.** Autoplay keeps similar songs coming, also after a
-  song you started on its own from Home or search. Shuffle,
-  repeat, play next, add to queue, swipe-to-queue on any row, and
-  drag-to-reorder in the player's queue. Shuffle, repeat and autoplay
-  each feel different under your finger (a riffle, a loop closing, a
-  swell) and move in their own way as they change.
-- **Pick who recommends.** Autoplay and Home's "Because you played" can
-  follow YouTube Music's radio, Spotify's recommendations or JioSaavn's
-  (Settings → Playback → Recommendations). Spotify's picks come from the
-  "Recommended" list on its public song pages, after ListenBrainz's public
-  lookup finds the song there; JioSaavn's come from its public
-  recommendations. No account or key is needed. Only song names are read,
-  each one is found on YouTube Music and plays from there, and when a
-  service doesn't know a song, YouTube Music's radio takes over.
-- **Sound tools.** A 15-band equalizer (ISO 25 Hz to 16 kHz) with presets,
-  tone and balance, bass boost,
-  stereo widening, skip silence, USB DAC preference, optional 32-bit float
-  output, and a Remix sheet for speed, pitch and reverb (Slowed + reverb,
-  Nightcore and more).
-- **Headphone correction.** Pick your headphones from AutoEq's 8,000+
-  measurements and their parametric correction runs ahead of your own EQ,
-  so you start from a neutral sound.
-- **Sleep timer.** Stop after 15 to 90 minutes, or at the end of the song.
-- **Cast to a TV or speaker.** The Play on button in the player finds
-  Chromecasts (and TVs and speakers with Chromecast built in) and DLNA
-  renderers (most smart TVs, many network speakers, Kodi, VLC) on the same
-  Wi-Fi. No Google libraries are involved: OpenTune speaks the Cast
-  protocol and DLNA itself. The phone serves each song to the device from
-  a small web server of its own, so downloads, songs on the phone and
-  streams all cast. The queue, autoplay, the notification and every button
-  keep working as usual; the device follows, and its volume is in the same
-  sheet.
-- **What's this song?** From Home or the search bar, a page listens
-  through the microphone and names the song playing nearby. The phone
-  turns a few seconds of sound into an audio fingerprint (the method
-  [SongRec](https://github.com/marin-m/SongRec) worked out) and only the
-  fingerprint is sent to Shazam's lookup; the recording stays on the phone.
-  While it listens, a glowing button sends rings out and ripples with the
-  sound. What it finds can be played straight away and stays in a Found
-  lately list. The microphone is only asked for when you use it.
-- **SponsorBlock.** Music videos skip the parts viewers have marked as
-  non-music (talking, skits), sponsor reads, self-promotion and like or
-  subscribe reminders, using [SponsorBlock](https://sponsor.ajay.app)'s
-  segments. Choose the categories in Settings. Only a 4-character hash of
-  the video id is sent.
-- **Headphones and volume** (optional, off by default). Playback can carry
-  on when headphones are plugged in or a Bluetooth device connects, and
-  pause when the volume is turned all the way down, playing again when it
-  comes back up.
-- **Podcasts.** A tab of its own: search shows or episodes, browse
-  topics, popular episodes and shows to try from YouTube Music, and show
-  pages with every episode. Subscribe to shows (kept on the phone, no
-  account needed) to see their newest episodes up top. Episodes pick up
-  where you stopped, with "Continue listening" for the ones in progress
-  and a played mark for the ones finished.
-- **Internet radio.** 50,000+ live stations from
-  [Radio Browser](https://www.radio-browser.info), the free community
-  directory: stations near you, your country's most played, worldwide
-  favourites, genres and search. "Near you" uses approximate location,
-  only when you ask, sends Radio Browser a position rounded to about a
-  kilometre and keeps nothing; it lists stations nearest first with how far
-  away they are, then stations listed for your city or state that have no
-  map location (often the public broadcaster's FM channels), with the FM
-  frequency when the name carries one. Stations the directory lacks can be
-  added by stream address, or suggested to Radio Browser. The song on air shows in the player and notification when
-  the station sends it. Favourite stations are in Android Auto too.
-- **Listen together.** Start a room and share its code; friends who join
-  hear what you play, in step, each phone streaming the music itself. Guests
-  can add songs to the room's queue and chat, and the host can let everyone
-  play, pause, seek and skip. Pausing without control pauses just for you;
-  "Catch up" puts you back in step. Rooms run over public Nostr relays with
-  no account or server: messages are encrypted with a key from the room
-  code and sent as ephemeral events that relays don't keep. Invites open
-  with an `opentune://together/<code>` link or by typing the code.
-- **Picks up where you left off.** The queue, song and position come back
-  at launch, paused, without fetching anything until you press play.
-- **Home-screen widget.** Cover, title and artist, with previous,
-  play/pause, next and like. Play on the widget, or on a Bluetooth headset,
-  starts the saved queue even after the app was closed.
-- **Like and shuffle in the notification.** Both sit in the media
-  notification's extra buttons and in Android Auto, and stay in step with the
-  app.
-- **Android Auto.** Browse Home, Recent and Library (Liked, Downloads,
-  playlists, radio stations) on the car screen, search by typing or voice ("play … on
-  OpenTune"), and tap a song to play its list from there. Sideloaded
-  builds show up in Android Auto once "Unknown sources" is turned on in
-  Android Auto's developer settings.
-- **Android TV.** A separate TV app (`tv/`) with Home, Explore, Library
-  and Search, album and artist pages, and a Now Playing screen with synced
-  lyrics, the queue and the format of what's playing. The remote moves a
-  clear focus ring, OK plays, and left and right on the seek bar skip
-  through the song. You sign in by scanning a code with your phone.
-- **Wear OS.** A separate watch app (`wear/`) that plays on the watch
-  itself, over its Wi-Fi or LTE and Bluetooth headphones, with no phone
-  needed. Search by voice or keyboard, play your liked and recent songs on
-  the watch, skip, like, see what's up next, and turn the crown for volume.
-  It asks for headphones rather than playing from the watch's speaker.
-- **Desktop (early).** A Windows, macOS and Linux app (`desktop/`, run it
-  with `./gradlew :desktop:run`; CI builds an MSI, DMG and DEB). It has
-  Home (moods and genres, a speed dial and daily mixes made from what you
-  play there, quick picks, then YouTube Music's rows page after page, new
-  releases and the charts), a Library with your year so far, shortcuts, your
-  playlists, your mixes, this month's top songs and artists and what you
-  played last, search with recent searches, albums, playlists, artists and
-  podcasts, a queue that carries on with YouTube Music's up-next, synced
-  lyrics from the phone's sources (lit word by word, with a per-song source
-  and offset), your own playlists, liked and recent songs, your own
-  Subsonic server, the 15-band equalizer and its presets, speed,
-  balance, shuffle, repeat and a sleep timer. It's laid out like BitChord's
-  desktop app: an icon rail down the left, the player floating as a pill
-  over the foot of the page, and a column on the right with Now playing
-  (the cover, a lyrics preview and the artist), the full lyrics or the
-  queue. Artist pages open on Apple Music's photo of the artist with their
-  handwritten signature over it, and there's a New tab for new releases
-  and the charts. YouTube songs
-  play YouTube's Opus stream (about 160 kbps) through a bundled FFmpeg,
-  falling back to AAC; YouTube's player code runs on GraalJS; and the
-  library (liked songs, playlists and the full play history) is kept in
-  SQLite. It uses the phone app's code for YouTube Music, lyrics, Subsonic
-  and settings as-is, but finds streams with NewPipe only, so some songs
-  don't play yet. Signing in to YouTube Music isn't there. On Linux, songs
-  from your own server and JioSaavn still play through JavaFX, which needs
-  the system's FFmpeg libraries (libavcodec).
-- **Opens YouTube links.** music.youtube.com, youtube.com and youtu.be
-  links, or links shared to the app, open in OpenTune.
-
-### Library and account
-
-- **Sign in to YouTube Music** on Google's own page inside the app. Likes
-  sync to the account, your playlists show in Library, and Home turns
-  personal. The login cookie stays in app-private storage and is left out
-  of backups.
-- **Downloads** for offline listening, with a quality setting and Wi-Fi
-  only by default. They keep going after the app is closed. Every
-  playlist and album has Download all, which counts its way through and
-  ends with a little run of taps.
-- **Add songs to your playlists** from the playlist itself: search, or
-  pick from what you played lately, and tap + on each one.
-- **Library:** a card for your year so far (minutes, plays, top song and
-  artist) that opens your Wrapped, shortcuts to Liked, Downloads, On this
-  phone and Replay, your playlists from the app and from YouTube in one
-  list, and the last five songs you played, with the rest behind
-  "Show all".
-- **Smart playlists:** lists that fill themselves from rules and change as
-  you listen. Start from On repeat, Forgotten favourites, New to you,
-  All-time top 100 or Lossless on this phone, or set your own: where the
-  songs come from (played, liked, downloaded or all), how often and how
-  lately they were played, liked, downloaded or lossless only, one artist,
-  the order and how many. Save as playlist keeps a copy as it is now.
-- **Replay:** top songs, artists and albums from this device's history.
-- **Wrapped:** your listening as a quiet animated story. Each page is a
-  flat field of colour with one large shape drifting slowly on it (a low
-  sun, a wave, nested arcs, a grid of dots) under a fine film grain, with
-  the numbers set large in a serif and headlines that ink in from the
-  left. A new page opens as a circle growing from where you tapped. The
-  intro scatters your top covers like prints, and the top artist and top
-  song pages take their colours from the cover. Minutes listened, top artist and top five, top song and top five, what
-  part of the day you listen most, your biggest month and day, your
-  longest streak, the song you played most in one day and the one it all
-  started with, then a summary card with Play, Shuffle and Share, which
-  sends your Wrapped as a story-sized poster. Covers this
-  year, the last 30 days or all time. Tap to go on, tap the left side to
-  go back, hold to pause.
-- **Your own music server** (optional): Navidrome, Gonic, Airsonic,
-  Nextcloud Music or any Subsonic-compatible server. Browse recently added
-  and most played albums, artists and playlists, search, and play songs
-  as they're stored, so FLAC and hi-res files stay lossless. Also in
-  Android Auto. Only a sign-in token is kept, never the password, and it's
-  left out of backups.
-- **ListenBrainz** (optional): send what you play to your open
-  ListenBrainz history with your user token, and get its recommendations
-  as a shelf on Home.
-- **Sharper album covers**: the player shows the album's cover from Apple
-  Music (up to 3000px), Deezer (1200px) or the Cover Art Archive, in place
-  of YouTube's smaller cover or a video frame. A cover is only taken when
-  the title, artist and length (within 3 s) match.
-- **Animated covers** (optional): when Apple Music has a moving cover for
-  the album, it loops silently in the player's cover. With Spotify
-  connected (you sign in on Spotify's own page inside the app), a song's
-  Canvas loops behind the player. Both can be limited to Wi-Fi.
-- **Spotify playlists in Library**: once Spotify is connected, every
-  playlist in your Spotify library (and Liked Songs) shows up in Library
-  with a Spotify tag. Each song is found on YouTube Music, and the copies
-  follow changes on Spotify every few hours or when you tap to check.
-- **Spotify suggestions made for you**: with Spotify as the recommender
-  and Spotify connected, autoplay uses Spotify's song radio for your
-  account. Each pick is matched on YouTube Music to the same length (within
-  3 s), songs played in the last three hours are skipped, and artists in
-  your playlists and likes move a little nearer the front.
-- **Your listening, where it counts**: signed in to YouTube Music, plays
-  go into your YouTube Music history; Last.fm and ListenBrainz (optional)
-  get them as scrobbles. With Spotify connected, songs you like are saved
-  to your Spotify Liked Songs too, and Home shows Spotify's mixes made for
-  you (Daily Mixes, Discover Weekly, Release Radar), found on YouTube
-  Music. Plays aren't sent to Spotify, since the music streams from
-  YouTube Music, not Spotify.
-- **Last.fm scrobbling** (optional), with your own free Last.fm API key.
-  The password is only used once to get a session and isn't stored.
-- **Import playlists.** Settings › Import a playlist takes:
-  - a **YouTube Music or YouTube playlist link**, read in full however long
-    it is, and saved as a playlist on the phone (or played straight away);
-  - a **Spotify playlist, album or song link**, pasted or shared to
-    OpenTune from the Spotify app, with no sign-in. Each song is looked up
-    on YouTube Music and the closest catalogue match kept, with misses
-    listed. A song link plays straight away. Without signing in, Spotify
-    only shows a playlist's first 100 songs;
-  - **Export from Spotify**, for every song of any playlist or your Liked
-    Songs: [Exportify](https://exportify.app) opens inside OpenTune, you
-    sign in with Spotify there and tap Export (or Export All), and the
-    playlist comes straight back ready to import, with no file to find.
-    A CSV from Exportify, TuneMyMusic, Soundiiz and others can also be
-    picked from the phone; columns are found by their headers.
-
-  Nothing streams from Spotify.
-- **New-release alerts.** Follow an artist from their page (no account
-  needed) and a notification tells you when they put out an album or
-  single. Checked twice a day.
-- **Explicit content, marked.** Songs and albums YouTube Music marks
-  explicit carry a small "E" in front of the artist, as in the official
-  apps: in lists, on Home and in search, on the album page, in the player
-  and the mini player. The mark is kept with liked songs, playlists,
-  downloads and history.
-- **Hide explicit content** (optional): those songs and albums are left
-  out of Home, search, album and artist pages, autoplay and radio. Tracks
-  the catalogue doesn't label still show.
-- **Set as ringtone.** A downloaded song or a file on the phone can be the
-  ringtone, notification sound or alarm. A downloaded song is copied to
-  Ringtones/OpenTune first, since the system can't read app storage.
-- **Export and import** of settings, history, likes and playlists as JSON.
-- **Updates in the app.** OpenTune checks this repository's GitHub releases
-  every few hours: whenever the app comes to the front, hourly while it's
-  open, and twice a day in the background, with a notification when a new
-  version is out (or whenever you ask). When GitHub's API is over its
-  hourly limit, which happens often on mobile data where many phones share
-  one address, the latest release is read from the releases page instead.
-  It downloads the APK for your phone's processor, checks it against the release's SHA256SUMS and hands it to
-  Android's installer. Android only installs an update signed with the same
-  key as the installed app.
-
-### Look and feel
-
-- **An opening that dives into the logo.** At start the mark takes over
-  from the system splash at the same size, settles with a glint of light,
-  then turns into a window onto the app, outlined in white so it shows
-  even over a dark app, and rushes toward you until the app fills the
-  screen. Off under Settings › Motion, and
-  skipped with reduced motion.
-- **Liquid Glass.** The floating bars and player buttons frost and bend
-  what's behind them, like Apple's material (Android 13 and newer; frosted
-  glass below that, solid with "Reduce dynamic blur"). The glass blurs the
-  real page as it scrolls under it, not a flat colour. Album, playlist and
-  artist pages get a frosted top bar once the header scrolls away, which
-  fades out softly below the bar instead of ending in a line, and popup
-  sheets let the phone's blur of the screen behind show through.
-- **Moving cover art.** In the player the cover drifts and zooms slowly
-  while the song plays and settles when you pause; it works on the
-  full-screen cover too. It's made from the cover itself, so it works for
-  every song. Off in Settings, or with reduced motion.
-- **Pull to refresh with the logo.** On Home and Podcasts, pulling down
-  brings in the OpenTune mark and fills it with the playing song's colours
-  from left to right while the page follows your finger with some give; past the line
-  it ticks and pops, while it loads the mark sways like a sound wave with
-  light running across it, and when it's done it shrinks away.
-- **Skeleton loading.** Pages show the shape of what's coming while they
-  load, with one soft band of light sweeping across every placeholder.
-- **A dock that gets out of the way.** Home, Explore, Podcasts and Library
-  sit in a floating glass pill, each an icon over its name; a soft lens of
-  the accent colour slides to the open one and its icon fills in. Search
-  has its own round button beside the pill. The now-playing card above
-  takes its tint from the cover and has the play button inside a progress
-  ring. Scroll down and the dock gets out of the way; scroll up and it
-  comes back. Pick how: Minimize (like iOS 26, the default: the dock pill
-  contracts to the left into a circle holding the open tab, the other tabs
-  slipping under its edge, with the song in a slim bar beside it), Capsule
-  (the tabs and the song gather into one small capsule in the middle, the
-  open tab at one end and the cover, ringed by progress, at the other) or
-  Sink (the tabs sink away into a blur and the song settles into their
-  place). The lens can
-  Stretch like a drop, wobble like Jelly or Glide in one piece.
-- **Glass styles.** The dock, buttons and bars come in Frosted, Clear,
-  Heavy frost, Tinted (washed with the accent) or Smoke, for Liquid Glass
-  and frosted glass alike, or Liquid: Apple's clear glass, hardly frosted,
-  with a deep lens at the edges that bends and splits the light, vibrant
-  colour through it, a bright specular rim and a soft inner shade
-  (Android 13 and newer). Pages also blur and fade as they scroll under
-  the status bar; that's a switch of its own.
-- **Motion to taste.** Pages can Slide, Fade, Zoom or Rise into view, and
-  the player can open on a Spring, a Smooth glide, a Bouncy overshoot or
-  Snappy. On phones with 90 or 120 Hz screens the app asks for the fastest
-  rate, which can be turned off to save battery.
-- **Its own typeface.** Every screen is set in Outfit.
-- **Home greets you** by the time of day and your name, with your avatar
-  leading to settings. Below YouTube Music's own shelves it adds a radio
-  of your last song, albums, singles and similar artists for the artists
-  you play most, new releases, the charts, Explore, and playlists for a
-  couple of moods that change daily.
-- **Explore as a board.** Pills for artists to jump to (the ones you play
-  most first, then the charts' top artists), chips to narrow it to moods,
-  genres, new releases or charts, and a two-column board of mood cards,
-  new albums and chart playlists at different heights, Pinterest-style.
-- **An Apple Music-style player.** Cover, lyrics and queue modes, heart and
-  "…" buttons, the current lyric line under the title, the artist name
-  opening their page, time remaining,
-  large back/play/forward controls, a shuffle/repeat/autoplay pill, and the
-  name of the output device. Drag it down and it shrinks into a card
-  before it closes.
-- **Lyrics that rise into place.** Opening the lyrics slides them up on a
-  soft spring and brings them into focus from a blur while the cover sinks
-  back; closing them brings the cover forward again.
-- **Synced lyrics** from [LRCLIB](https://lrclib.net) (word by word where
-  it has the timing), KuGou (line-synced, strong on Asian music), NetEase
-  Cloud Music (line-synced, a large catalogue), Unison (the community
-  lyrics of [Better Lyrics](https://github.com/better-lyrics/better-lyrics),
-  often word by word; entries its users voted down are skipped), a music
-  video's own hand-made captions (timed to the video, as Better Lyrics
-  finds them) and YouTube Music (unsynced), in an order you set, each
-  credited under the lyrics. Plain
-  text never ends the search: every source is asked until one has the
-  song in time, a busy LRCLIB is asked again, and plain lyrics found while
-  a source was down are looked up again a little later. Titles are cleaned
-  before the lookup ("- 2009 Remaster", "(Deluxe Edition)", "feat." and
-  video noise go), LRCLIB's exact match and its search run side by side,
-  and a last search by title alone catches artists it spells another way,
-  taking only a hit by the same artist. Four animation
-  styles (Fluid, Karaoke, Focus zoom and Minimal), a per-song timing
-  offset, adjustable text size, left or centred lines, an optional glow on
-  the sung line, and lyrics saved with downloads so they work offline.
-- **Lyric cards.** The quote button in the lyrics opens a sheet where you
-  pick up to five lines and share them as a picture: over the blurred
-  cover, in the cover's colour, or on a light page.
-- **Lyrics while seeking.** Drag the seek bar and the line sung at that
-  spot shows above your finger (Settings › Player).
-- **One song menu everywhere:** round buttons up top for like, download,
-  add to playlist and share, then play next, add to queue, start radio,
-  view artist, open album, convert to the music video, and dislike (kept
-  out of autoplay); plus upgrade quality,
-  signal path, sleep timer, lyrics offset and copy log in the player.
-- **Player layouts:** Classic; Vinyl, where the cover turns as a record
-  while the song plays; Lyrics first, with a small cover on top and the
-  lyrics taking the rest; Minimal, with just the cover, title, seek bar
-  and controls; Cassette, a tape whose reels turn and wind from one side to
-  the other as the song goes on; Halo, a round cover in a ring of moving
-  bars; and Polaroid, the cover as an instant photo that sways gently.
-- **Wavy seek bar** (optional) that ripples while music plays.
-- **Quick screens.** Home opens on the last copy saved while the fresh one
-  loads; pages you've visited and searches you've made come back at once
-  and refresh in the background.
-- **iOS-style bounce** at the ends of every list.
-- **Smooth tab changes.** The dock's highlight stretches toward the tab
-  you pick and settles into it, without overshooting.
-- **Landscape player.** Turn the phone on its side and the cover fills
-  the left; the right shows where the sound is going, the song, a slim
-  time bar, the line being sung and the next ones in a serif, the
-  controls with like and output buttons, and the volume, all over a
-  blurred, dimmed cover. Lyrics and the queue open in the cover's place.
-- **Share with a picture.** Sharing a song sends its link with a square
-  image: the cover blurred into the background and, in the middle, the
-  cover in a dark rounded frame with the artist's photo and name at the
-  top, a share button and a heart, and the title, the time, a progress bar
-  and the controls over its foot.
-- **Player buttons in four designs.** Bloom: big bare glyphs, a soft disc
-  of light blooming behind each press. Capsule: play in an accent pill
-  that stretches wide while music plays, between skip buttons that tilt
-  toward where they go. Orbit: play inside the song's progress ring with a
-  comet of light circling it, and an arc that spins round a skip button
-  when tapped. Morph: a round button that ripples into a slowly turning
-  wavy shape while music plays, its outlined triangle folding into two
-  outlined bars, with skips that ripple when tapped. In all four, play
-  folds into pause and the skip arrows roll a step on with each tap.
-- **Song change.** The cover can Fade into the next, slide past in a
-  Carousel in the direction you skipped, Flip over like a card, drop onto
-  a Deck while the old one sinks under it, Zoom through as the old one
-  rushes past you, Dissolve from one blur into the other, turn like a
-  Cube, open out of the middle in a Reveal, or Toss the old one aside as
-  the new one lands. It applies to the full-screen cover too.
-- **Double-tap the cover** on either side to go back or ahead 10 seconds;
-  taps in a row add up, with a ripple and the total on the cover.
-- **A glow under the cover** in its own colours, which swells with the
-  bass (Settings › Player › Cover art).
-- **A burst of hearts.** Liking a song in the player throws small hearts
-  and sparks out in the cover's colours.
-- **Lyrics in colour.** The cover's colours drift slowly behind the
-  lyrics while they're open.
-- **Blurred headers.** Album, artist and playlist pages have their cover
-  blurred and stretched behind the top, fading into the page; artist photos
-  stay sharp at the top and melt into the blur below.
-- **What's new.** After an update, a short sheet lists what changed, once.
-- **Ambient light.** With the Gradient player background, wide soft
-  glows in the song's colours drift slowly under the controls, meeting and
-  mixing over a pale wash at the foot of the screen, and lift a little
-  with the music. The level is read from the app's own audio as it plays,
-  so no microphone permission is needed.
-- **A player you can feel.** Play swells into a deep thump, pause thumps
-  and fades, next rushes forward into a kick, previous kicks and pulls
-  back, a like beats twice like a heart, and dragging the seek bar ticks
-  past each tenth of the song. These stay strong even on a light setting.
-- **Haptic feedback you can tune**, from off to strong. Taps use the phone's
-  crisp haptic primitives where it has them, and follow the system's touch
-  feedback switch.
-- **Themes:** light, dark or system, Material You, accent colors, palette
-  styles, pure black, color from artwork, and reduced motion and blur.
-- **36 languages, the whole app.** Settings › Appearance › App language (or the
-  phone's own language) changes every screen: buttons, settings, menus,
-  notices, notifications and Android Auto. The TV app follows the TV's
-  language. Translations live in `core/src/main/assets/i18n/`, one file per
-  language keyed by the English text, and `scripts/i18n/extract.py` lists
-  what a language still lacks.
-
-YouTube's audio is lossy, so there's no lossless or Dolby Atmos stream
-option from YouTube. Lossless can come from your own music server or the
-optional community sources described above. The optional JioSaavn route
-remains lossy. Source availability varies, and a FLAC header does not prove
-that the upstream master was never transcoded. See the
-[source review](docs/audio-source-review.md) for current limitations.
-
-OpenTune does not decrypt Deezer streams. Animated covers use the token
-Apple Music's web player ships in its own page, and Spotify Canvas uses the
-web player's token for your own Spotify sign-in, as do the Spotify
-playlists in Library and the personal Spotify suggestions; Spotify's
-terms don't allow that use, so it stays off
-until you connect Spotify yourself.
-
-Not built yet: lyric translation.
-
-## Usage counts
-
-The new usage system uses a random installation ID, version, activity dates (India time) and
-daily play totals. IDs survive app updates and are excluded from backups and device
-transfers. Reinstalling or clearing app data creates a new ID. The server deduplicates
-installations and merges cumulative play totals, so upload retries do not inflate counts.
-No hardware identifiers, accounts, song names or listening history are sent. Turn it off
-under Settings > About > Count this phone in usage numbers. Debug builds never count.
-
-The badge above and `GET /v1/public` expose only aggregate counts (total installations
-and daily, weekly and monthly active installations) with no sign-in; `GET /v1/badge`
-returns the same as a [Shields endpoint](https://shields.io/badges/endpoint-badge), so
-the README count refreshes itself. The full breakdown — versions, plays, downloads and
-per-day active numbers — stays behind the owner login on the usage dashboard. These are
-measured anonymous reports, not fraud-proof head counts, and there is no "active right
-now": the finest granularity is a calendar day.
-
-The website separately reports unique browsers requesting APKs and GitHub's raw APK
-download events. Neither means unique people or completed installs. Historical Abacus
-counters cannot be converted into unique installations. The free-tier
-[Worker and D1 backend](usage-api/README.md) needs deployment; until its URL is configured,
-the dashboard shows unique counts as unavailable. Up to 30 days of pending reports retry
-during subsequent app use.
-
-## Building
-
-Open the repository in Android Studio, or build from the command line:
+## Build it yourself
 
 ```
-./gradlew assembleDebug        # app/build/outputs/apk/debug/app-<abi>-debug.apk
-./gradlew assembleRelease      # app/build/outputs/apk/release/app-<abi>-release.apk
+./gradlew assembleDebug        # app/build/outputs/apk/debug/
 ./gradlew testDebugUnitTest    # unit tests
-./gradlew lintDebug            # lint
 ```
 
-Each build makes one APK per processor type (`arm64-v8a` for most phones,
-`armeabi-v7a`, `x86_64`) and a `universal` one that runs anywhere. Release
-builds go through R8, which only removes unused code: nothing is renamed,
-so crash logs stay readable (see `app/proguard-rules.pro`).
+You need JDK 17 or newer and an Android SDK with platform 37. Details, release
+signing and the project layout are in [docs/building.md](docs/building.md).
 
-You need JDK 17 or newer (CI uses 21) and an Android SDK with platform 37
-(InnerTubeX is compiled against it; the app targets 36), set through
-`ANDROID_HOME` or `local.properties`.
+## Privacy
 
-### CI and releases
+OpenTune has no ads and needs no account. Usage counting sends a random
+installation ID, the app version and daily play totals; never song names,
+accounts or listening history. You can turn it off under Settings › About.
+[What is counted](docs/usage-counts.md) · [Privacy policy](https://justshivv.github.io/Opentune/privacy/)
 
-GitHub Actions builds, tests and lints every push (`.github/workflows/ci.yml`)
-and keeps the release APKs as an artifact. Pushing a tag such as `v0.2.0`
-builds signed APKs and publishes them as a GitHub release
-(`.github/workflows/release.yml`). Release signing uses the repository
-secrets `OPENTUNE_KEYSTORE_BASE64`, `OPENTUNE_KEYSTORE_PASSWORD`,
-`OPENTUNE_KEY_ALIAS` and `OPENTUNE_KEY_PASSWORD` when they're set, and the
-debug key otherwise. Set the secrets before the first release: the in-app
-updater can only install a release signed with the same key as the copy
-already on the phone, and a CI runner's debug key changes from run to run.
+## Community
 
-## Project layout
+Questions, ideas and bug reports are welcome on
+[Discord](https://discord.gg/6udrCVh5n) and in the
+[issues](https://github.com/justshivv/Opentune/issues).
 
-```
-app/src/main/java/com/opentune/
-  data/innertube/   Innertube client and parser, StreamResolver (engine switch),
-                    InnerTubeXResolver, PoToken WebView
-  data/             account, downloads, library, history, lyrics, loudness, settings
-  playback/         PlaybackService (ExoPlayer, cache, loudness, upgrade, sleep timer),
-                    Crossfade, DSP
-  ui/               Compose screens: home, explore, search, library, player, settings
-ios/
-  OpenTuneCore/     Swift package: YouTube Music client and parsers, LRCLIB lyrics,
-                    likes and history (Foundation only; `swift test` runs on Linux too)
-  OpenTune/         SwiftUI app: screens, AVPlayer playback, lock screen, AirPlay
-  project.yml       XcodeGen project (`xcodegen generate`, then open in Xcode)
-docs/               README banner, screenshots and the 40-second video
-```
-
-The README's screenshots are drawn from the app's own screens by
-`ReadmeScreenshotTest`, which runs when `OPENTUNE_SHOT_ART` points at a
-folder of cover images (they aren't kept in the repository).
+<a href="https://trendshift.io/repositories/311235?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-311235" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/311235" alt="justshivv/Opentune on Trendshift" width="250" height="55"></a>
 
 ## Disclaimer
 
-The screenshots and video show real albums, artists and songs to show the
-app as it's used. Cover art, names and recordings belong to their owners.
-OpenTune isn't affiliated with or endorsed by YouTube, Google, Spotify or
-any artist or label shown.
+The screenshots show real albums, artists and songs to show the app as it's
+used. Cover art, names and recordings belong to their owners. OpenTune isn't
+affiliated with or endorsed by YouTube, Google, Spotify or any artist or label
+shown.
 
 ## License
 
 OpenTune is licensed under the GNU General Public License v3.0. See
-[LICENSE](LICENSE). Code, libraries, fonts and data from other projects
-are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), as their
-licences require.
+[LICENSE](LICENSE). Code, libraries, fonts and data from other projects are
+listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), as their licences
+require.
