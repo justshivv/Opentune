@@ -383,6 +383,62 @@ private fun DeveloperCard(name: String, avatarUrl: String, profileUrl: String) {
     }
 }
 
+/**
+ * The About page's Contributors sheet: the repo's contributors, read from
+ * GitHub as the sheet opens (see [com.opentune.data.Contributors]), one row
+ * per person, a tap opening their GitHub profile.
+ */
+@Composable
+private fun ContributorsSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var people by remember { mutableStateOf<List<com.opentune.data.Contributors.Person>?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val loaded = com.opentune.data.Contributors.people()
+        if (loaded == null) failed = true else people = loaded
+    }
+    com.opentune.ui.components.FloatingCard(onDismiss = onDismiss, title = "Contributors", icon = ImageVector.vectorResource(AppIcons.People)) {
+        val list = people
+        when {
+            failed -> Text(
+                com.opentune.i18n.Tr.f("Couldn't load the contributors. Check your connection and try again."),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 14.dp),
+            )
+            list == null -> Box(Modifier.fillMaxWidth().padding(vertical = 22.dp), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
+            }
+            list.isEmpty() -> Text(
+                com.opentune.i18n.Tr.f("No contributors yet."),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 14.dp),
+            )
+            else -> list.forEach { person ->
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Artwork(person.avatarUrl, Modifier.size(44.dp), CircleShape)
+                    Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp).weight(1f))
+                    // Only the GitHub badge is the button, as on the developers' cards above.
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
+                            .clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, person.profileUrl.toUri())) } },
+                    ) {
+                        Icon(githubLogo, "GitHub", Modifier.size(19.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** The last row of a folded subsection: "See more" with how many are tucked away, or "See less". */
 @Composable
 private fun SeeMoreRow(open: Boolean, hidden: Int, onClick: () -> Unit) {
@@ -457,6 +513,7 @@ private fun settingsSections(
     var showWhatsNew by remember { mutableStateOf(false) }
     var checkingUpdates by remember { mutableStateOf(false) }
     var supportDialog by remember { mutableStateOf(false) }
+    var contributorsOpen by remember { mutableStateOf(false) }
     val pendingUpdate by UpdateCheck.pending.collectAsState()
     var updateBytes by remember { mutableStateOf(0L) }
     var playerStyleDialog by remember { mutableStateOf(false) }
@@ -578,6 +635,7 @@ private fun settingsSections(
         BuildConfig.VERSION_NAME, onDismiss = { showWhatsNew = false },
     )
     if (supportDialog) com.opentune.ui.components.SupportDialog(onDismiss = { supportDialog = false })
+    if (contributorsOpen) ContributorsSheet { contributorsOpen = false }
     if (followedDialog) FollowedArtistsDialog(onDismiss = { followedDialog = false })
     if (hiddenDialog) HiddenDialog(onDismiss = { hiddenDialog = false })
     if (appIconDialog) AppIconDialog { appIconDialog = false }
@@ -2010,6 +2068,9 @@ private fun settingsSections(
                     )
                 },
                 Entry("OpenTune community", "github discord community addons developer") { CommunityBanner() },
+                Entry("Contributors", "contributors github community helpers developers") {
+                    NavRow("Contributors", { contributorsOpen = true }, summary = "The people who pitch in with fixes and improvements", icon = ImageVector.vectorResource(AppIcons.People))
+                },
                 Entry("Support OpenTune", "donate upi pay money tip support developer") {
                     NavRow("Support OpenTune", { supportDialog = true }, summary = "A small thank-you helps keep OpenTune going", icon = ImageVector.vectorResource(AppIcons.Favorite))
                 },
