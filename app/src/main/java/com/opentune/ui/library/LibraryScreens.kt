@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import com.opentune.ui.theme.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
@@ -55,9 +56,12 @@ import com.opentune.data.model.artworkAt
 import com.opentune.data.settings.AppSettings
 import com.opentune.ui.browse.SongActions
 import com.opentune.ui.browse.ShuffleButton
+import com.opentune.ui.browse.dismissPlaylistSearch
+import com.opentune.ui.browse.playlistSearchResults
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.GlassIconButton
 import com.opentune.ui.components.MessageState
+import com.opentune.ui.components.glass
 import com.opentune.ui.components.PageHeader
 import com.opentune.ui.components.SectionHeader
 import com.opentune.ui.components.SongListItem
@@ -87,7 +91,23 @@ private val audioPermission =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO
     else Manifest.permission.READ_EXTERNAL_STORAGE
 
-/** Audio files on the device, after asking for permission to read them. */
+/** The device page's own colour, for its tint when no cover colours it. */
+private val DEVICE_SEED = androidx.compose.ui.graphics.Color(0xFF5E7A8C)
+
+/** How many device songs the page lays out at a time; see LocalMusicScreen. */
+private const val LOCAL_PAGE_SIZE = 50
+
+/** How much of the screen's height the device hero takes, as the playlist pages' heroes do. */
+private const val LOCAL_HERO_FRACTION = 0.68f
+
+/**
+ * Audio files on the device, after asking for permission to read them.
+ *
+ * Built as the playlist pages are: a tinted page whose background follows the
+ * cover, a glass top bar with search, sort and the page's menu, and a hero
+ * carrying the cover, the counts and the play row. The cover is the first
+ * song on the device whose album really has artwork.
+ */
 @Composable
 fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -97,67 +117,289 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
     var songs by remember { mutableStateOf<List<Song>?>(null) }
+    var dated by remember { mutableStateOf<List<Pair<Song, Long>>>(emptyList()) }
+    var heroSong by remember { mutableStateOf<Song?>(null) }
     LaunchedEffect(granted, library.localFolder, library.filterNonMusic) {
-        if (granted) songs = runCatching { LocalMusic.tracks(context, library) }.getOrDefault(emptyList())
+        if (granted) {
+            val loaded = runCatching { LocalMusic.tracksDated(context, library) }.getOrDefault(emptyList())
+            dated = loaded
+            songs = loaded.map { it.first }
+            heroSong = runCatching { LocalMusic.firstWithArtwork(context, loaded.map { it.first }) }.getOrNull()
+        }
     }
 
     // Songs can be picked together, as on a playlist: long-press one and Select, then add the
     // picked ones to playlists or the queue at once.
     val selection = com.opentune.ui.components.rememberSongSelection()
-    val selectionRows = remember(songs) { songs.orEmpty().map { it.videoId to it } }
-    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
-    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
-    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item { PageHeader("On this device", onBack = onBack) }
-        when {
-            !granted -> item {
-                MessageState(
-                    ImageVector.vectorResource(AppIcons.Folder),
-                    "Play music saved on your phone",
-                    Modifier.padding(top = 32.dp),
-                    message = "OpenTune needs permission to read audio files. Nothing leaves your device.",
-                    action = { Button(onClick = { launcher.launch(audioPermission) }) { Text("Allow access") } },
-                )
+    // Looking through the songs, their order, and the page's own menu, as the
+    // playlist pages have them.
+    val search = remember { com.opentune.ui.browse.PlaylistSearch() }
+    val searching = search.open
+    val query = search.query
+    var order by remember { mutableStateOf(com.opentune.ui.browse.ListOrder.DEFAULT) }
+    var sortOpen by remember { mutableStateOf(false) }
+    var moreOpen by remember { mutableStateOf(false) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val band = com.opentune.ui.components.rememberRubberBand()
+    // The list is revealed a page at a time, as on the Liked page: with
+    // hundreds of files, laying out every row up front makes the page stutter.
+    var shownCount by remember { androidx.compose.runtime.mutableIntStateOf(LOCAL_PAGE_SIZE) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val heroHeightPx = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * LOCAL_HERO_FRACTION).dp.toPx() }
+    val barHeightPx = with(density) { 56.dp.toPx() }
+    // The top bar turns solid once the hero's title zone has scrolled under it.
+    val barSolid by remember(heroHeightPx, barHeightPx) {
+        androidx.compose.runtime.derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > heroHeightPx - barHeightPx
+        }
+    }
+    LaunchedEffect(searching, query) {
+        if (searching) listState.scrollToItem(0)
+    }
+    val all = songs.orEmpty()
+    val shown = remember(all, dated, query, order) {
+        val q = query.trim()
+        val found = if (q.isEmpty()) all else all.filter { it.title.contains(q, true) || it.artist.contains(q, true) }
+        when (order) {
+            // The scan's own order: by title, as MediaStore returns them.
+            com.opentune.ui.browse.ListOrder.DEFAULT -> found
+            com.opentune.ui.browse.ListOrder.RECENT -> {
+                val stamp = dated.associate { (song, added) -> song.videoId to added }
+                found.sortedByDescending { stamp[it.videoId] ?: 0L }
             }
-            songs == null -> items(8) { SongRowPlaceholder() }
-            songs.isNullOrEmpty() -> item {
-                MessageState(ImageVector.vectorResource(AppIcons.Folder), "No music found", Modifier.padding(top = 32.dp), message = "Check the folder and filter in Settings › Local music.")
-            }
-            else -> {
-                val list = songs.orEmpty()
-                item {
-                    Text(
-                        com.opentune.i18n.Tr.f("{0} songs", list.size) + (library.localFolder?.let { com.opentune.i18n.Tr.f(" in {0}", it) } ?: ""),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp),
+            com.opentune.ui.browse.ListOrder.A_TO_Z -> found.sortedBy { it.title.lowercase() }
+            com.opentune.ui.browse.ListOrder.Z_TO_A -> found.sortedByDescending { it.title.lowercase() }
+        }
+    }
+    val selectionRows = remember(shown) { shown.map { it.videoId to it } }
+    val coverUrl = heroSong?.thumbnailUrl?.takeIf { it.isNotBlank() }
+
+    com.opentune.ui.browse.ListPageTint(coverUrl = coverUrl, seed = DEVICE_SEED) {
+        // The page's menu is composed inside the tint, so its sheet wears the page's colours.
+        if (moreOpen) LocalMusicMoreSheet(all, heroSong, actions) { moreOpen = false }
+        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
+            com.opentune.ui.components.PageBackdropScope {
+                com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
+                    com.opentune.ui.browse.PlaylistSearchHeader(search) {
+                        val returning = com.opentune.ui.browse.rememberSearchReturn(search, listState) { i, o -> i > 0 || o > heroHeightPx - barHeightPx }
+                        val topSolid = searching || barSolid || returning
+                        TopNavBar("On this device", topSolid, onBack) {
+                            Row(Modifier.height(48.dp).then(if (topSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { if (searching) search.close() else search.open = true }) {
+                                    Icon(if (searching) ImageVector.vectorResource(AppIcons.Close) else ImageVector.vectorResource(AppIcons.Search), "Search this list")
+                                }
+                                Box {
+                                    IconButton(onClick = { sortOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.Sort), "Sort") }
+                                    com.opentune.ui.browse.ListSortMenu(sortOpen, order, onPick = { order = it; sortOpen = false }, onDismiss = { sortOpen = false })
+                                }
+                                IconButton(onClick = { moreOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.MoreHoriz), "More") }
+                            }
+                        }
+                    }
+                    com.opentune.ui.components.SongSelectionBar(
+                        selection,
+                        rows = selectionRows,
+                        onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.TopCenter),
                     )
-                    PlayButtons(
-                        onPlay = { actions.playAll(list, 0, false, "On this device") },
-                        onShuffle = { actions.playAll(list, 0, true, "On this device") },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
-                    )
-                }
-                itemsIndexed(list, key = { _, s -> s.videoId }) { i, song ->
-                    SongListItem(
-                        song = song,
-                        onClick = { actions.playAll(list, i, false, "On this device") },
-                        isCurrent = song.videoId == actions.currentVideoId,
-                        isPlaying = actions.isPlaying,
-                        onPlayNext = { actions.playNext(song) },
-                        onAddToQueue = { actions.addToQueue(song) },
-                    )
+                }) {
+                    // The cover's blur and fade behind the songs, when Settings ask for the cover-coloured page.
+                    com.opentune.ui.browse.ListPageWash()
+                    // The hero runs to the very top of the screen, so the list keeps only the
+                    // bottom inset (room for the dock); the hero carries its own top shade.
+                    LazyColumn(
+                        state = listState,
+                        overscrollEffect = band,
+                        contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                        modifier = Modifier.fillMaxSize().playlistSearchResults(search),
+                    ) {
+                        when {
+                            !granted -> {
+                                item { Spacer(Modifier.height(96.dp)) }
+                                item {
+                                    MessageState(
+                                        ImageVector.vectorResource(AppIcons.Folder),
+                                        "Play music saved on your phone",
+                                        Modifier.padding(top = 32.dp),
+                                        message = "OpenTune needs permission to read audio files. Nothing leaves your device.",
+                                        action = { Button(onClick = { launcher.launch(audioPermission) }) { Text("Allow access") } },
+                                    )
+                                }
+                            }
+                            songs == null -> {
+                                item { LocalMusicSkeleton(band, listState) }
+                                items(8) { SongRowPlaceholder() }
+                            }
+                            else -> {
+                                if (!searching) item(key = "local-hero") {
+                                    LocalMusicHero(
+                                        heroSong, all, library.localFolder,
+                                        onPlay = { actions.playAll(shown, 0, false, "On this device") },
+                                        onShuffle = { actions.playAll(shown, 0, true, "On this device") },
+                                        onSmartShuffle = { actions.smartShuffle(shown, "On this device") },
+                                        band = band,
+                                        listState = listState,
+                                    )
+                                }
+                                when {
+                                    all.isEmpty() -> item {
+                                        MessageState(ImageVector.vectorResource(AppIcons.Folder), "No music found", Modifier.padding(top = 32.dp), message = "Check the folder and filter in Settings › Local music.")
+                                    }
+                                    shown.isEmpty() -> item { Text(com.opentune.ui.theme.tr("No matching songs"), Modifier.padding(24.dp)) }
+                                    else -> {
+                                        itemsIndexed(shown.take(shownCount), key = { _, s -> s.videoId }) { i, song ->
+                                            SongListItem(
+                                                song = song,
+                                                onClick = { actions.playAll(shown, i, false, "On this device") },
+                                                modifier = Modifier.animateItem(),
+                                                isCurrent = song.videoId == actions.currentVideoId,
+                                                isPlaying = actions.isPlaying,
+                                                onPlayNext = { actions.playNext(song) },
+                                                onAddToQueue = { actions.addToQueue(song) },
+                                            )
+                                        }
+                                        if (shownCount < shown.size) {
+                                            item(key = "local-more") {
+                                                // Reached the end of what's shown: the app's loader turns
+                                                // for a beat, the next page lands, and the loader moves
+                                                // down with the end (or is gone, on the last page).
+                                                LaunchedEffect(shownCount) {
+                                                    kotlinx.coroutines.delay(700)
+                                                    shownCount = minOf(shownCount + LOCAL_PAGE_SIZE, shown.size)
+                                                }
+                                                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                                                    androidx.compose.material3.CircularProgressIndicator()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
-    com.opentune.ui.components.SongSelectionBar(
-        selection,
-        rows = selectionRows,
-        onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
-        modifier = Modifier.align(androidx.compose.ui.Alignment.TopCenter),
-    )
+}
+
+/**
+ * The device page while its songs are still being read: the hero's shape as
+ * a skeleton — the cover across the whole top, with the title, the counts
+ * and the two buttons as bars over its fade — as the Liked page shows it.
+ */
+@Composable
+private fun LocalMusicSkeleton(band: com.opentune.ui.components.RubberBandOverscroll? = null, listState: androidx.compose.foundation.lazy.LazyListState? = null) {
+    com.opentune.ui.browse.ListHero(cover = { m -> com.opentune.ui.components.Placeholder(m, androidx.compose.ui.graphics.RectangleShape) }, band = band, listState = listState) {
+        run {
+            com.opentune.ui.components.Placeholder(Modifier.width(200.dp).height(26.dp))
+            com.opentune.ui.components.Placeholder(Modifier.padding(top = 10.dp).width(140.dp).height(16.dp))
+            Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.opentune.ui.components.Placeholder(Modifier.weight(1f).height(52.dp), RoundedCornerShape(26.dp))
+                com.opentune.ui.components.Placeholder(Modifier.weight(1f).height(52.dp), RoundedCornerShape(26.dp))
+            }
+            Spacer(Modifier.height(16.dp))
+        }
     }
+}
+
+/**
+ * The device page's hero, in the Liked page's shape: the cover across the
+ * whole top (the first song whose album has artwork), the title and the
+ * counts over its fade, then the play row.
+ */
+@Composable
+private fun LocalMusicHero(
+    heroSong: Song?, songs: List<Song>, folder: String?,
+    onPlay: () -> Unit, onShuffle: () -> Unit, onSmartShuffle: () -> Unit,
+    band: com.opentune.ui.components.RubberBandOverscroll? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState? = null,
+) {
+    com.opentune.ui.browse.ListHero(
+        cover = { m ->
+            Artwork(heroSong?.thumbnailUrl?.takeIf { it.isNotBlank() }, m, shape = androidx.compose.ui.graphics.RectangleShape, placeholder = ImageVector.vectorResource(AppIcons.Album))
+        },
+        footPadding = 18.dp,
+        band = band,
+        listState = listState,
+    ) {
+        run {
+            Text(
+                "On this device",
+                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (songs.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    com.opentune.ui.browse.playlistMeta(songs) + (folder?.let { "  •  " + it } ?: ""),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(18.dp))
+                com.opentune.ui.browse.ListPlayRow(
+                    enabled = true,
+                    saved = false,
+                    onPlay = onPlay,
+                    onShuffle = onShuffle,
+                    onSmartShuffle = onSmartShuffle,
+                    onSave = null,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The device page's own menu, as a playlist page's menu: the cover and the
+ * name, then what can be done with the whole library. No Download all: the
+ * songs are already on the device.
+ */
+@Composable
+private fun LocalMusicMoreSheet(
+    songs: List<Song>,
+    heroSong: Song?,
+    actions: SongActions,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    com.opentune.ui.components.FloatingCard(
+        onDismiss = onDismiss,
+        contentPadding = PaddingValues(0.dp),
+        expandable = true,
+        startExpanded = false,
+        fullFraction = 1f,
+        header = {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Artwork(heroSong?.thumbnailUrl?.takeIf { it.isNotBlank() }, Modifier.size(56.dp), shape = RoundedCornerShape(14.dp), placeholder = ImageVector.vectorResource(AppIcons.Album))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("On this device", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(com.opentune.ui.share.ListShare.countLine(songs.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+            }
+            androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        },
+    ) {
+        val card = com.opentune.ui.components.LocalFloatingCard.current
+        val close: () -> Unit = { card?.close() ?: onDismiss() }
+        Column {
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.PlaylistPlay), "Play next") {
+                close()
+                songs.asReversed().forEach(actions.playNext)
+            }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.QueueMusic), "Add to queue") {
+                close()
+                songs.forEach(actions.addToQueue)
+            }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Share), "Share") {
+                close()
+                com.opentune.ui.share.ListShare.shareLocal(context, "On this device", songs)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
     }
 }
 
