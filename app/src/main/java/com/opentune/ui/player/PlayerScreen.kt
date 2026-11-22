@@ -536,6 +536,11 @@ fun PlayerLayout(
     // The plain cover flies, square or edge to edge; the vinyl, cassette and other designs just change view.
     // (The same test as Settings' and the flying cover's, playerCoverEdgeToEdge.)
     val fullStyle = !landscape && com.opentune.ui.components.playerCoverEdgeToEdge(state.ui, theme)
+    // While the music video shows, it takes the full cover's place in every style,
+    // not only the edge-to-edge one: the backdrop draws it full width from the top
+    // and the pane leaves its place to it, the way the full style already does.
+    // Sideways keeps the designs' own frames: the takeover is a portrait layout.
+    val videoTakeover = state.videoMode && !landscape
     val flies = !state.ui.reduceAnimation && !docked && !landscape &&
             style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
             style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST
@@ -981,8 +986,8 @@ fun PlayerLayout(
                     Modifier.fillMaxSize(),
                     animate = !state.ui.reduceAnimation && !state.ui.stillBackdrops,
                     // While it flies the cover is drawn by the flight, not here as well.
-                    fullCover = fullStyle,
-                    fullCoverVisible = fullCover && !flight.active,
+                    fullCover = fullStyle || videoTakeover,
+                    fullCoverVisible = (fullCover || (videoTakeover && pane == Pane.COVER)) && !flight.active,
                     artworkMotion = artworkMotion,
                     fullCoverBottom = with(LocalDensity.current) {
                         coverBottomPx.takeIf { it > 0f }?.toDp()
@@ -1242,7 +1247,7 @@ fun PlayerLayout(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     // The plain cover has the taps built in; every other design is wrapped in them here.
-                                    val ownTaps = !fullCover && style !in listOf(
+                                    val ownTaps = !fullCover && !videoTakeover && style !in listOf(
                                         PlayerStyle.VINYL,
                                         PlayerStyle.CASSETTE,
                                         PlayerStyle.HALO,
@@ -1251,7 +1256,9 @@ fun PlayerLayout(
                                     val design: @Composable () -> Unit = {
                                         when {
                                             // Keep the full-cover layout mounted while its exit animates.
-                                            fullStyle ->
+                                            // In video mode every style leaves the cover's place to
+                                            // the backdrop's picture, this one included.
+                                            fullStyle || videoTakeover ->
                                                 ArtworkSwipeArea(
                                                     onSwipeNext = actions.next,
                                                     onSwipePrevious = actions.previous,
