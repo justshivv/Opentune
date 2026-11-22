@@ -14,9 +14,8 @@ class SongPartsTest {
         // This copy of Blinding Lights has its parts unnamed, so the chorus is worked out.
         val lyrics = LyricsPlus.parse(resource("lyricsplus-blinding-lights.json"), 200_000) as Lyrics.Synced
         assertEquals(listOf(60_964L, 117_106L, 150_712L, 184_342L), SongParts.inferred(lyrics.lines))
-        // Its parts still mark the bar.
+        // Its parts are still read.
         assertEquals(9, lyrics.parts.size)
-        assertEquals(27_395L, SongParts.marks(lyrics).first())
     }
 
     @Test fun namedChorusesWin() {

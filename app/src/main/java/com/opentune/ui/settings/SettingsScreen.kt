@@ -1425,9 +1425,6 @@ private fun settingsSections(
                         PillSegmented(com.opentune.data.settings.SignalPathStyle.entries, ui.signalPathStyle, { it.label }, { v -> AppSettings.updateUi { it.copy(signalPathStyle = v) } })
                     })
                 },
-                Entry("Song part marks", "seek bar chorus verse dots marks parts") {
-                    ToggleRow("Song part marks", ui.seekbarMarks, { v -> AppSettings.updateUi { it.copy(seekbarMarks = v) } }, summary = "Small dots on the seek bar where the verse and chorus begin, when the lyrics mark them", icon = ImageVector.vectorResource(AppIcons.MoreHoriz))
-                },
                 Entry("Skip to chorus", "chorus jump skip button song parts") {
                     ToggleRow("Skip to chorus button", ui.skipToChorus, { v -> AppSettings.updateUi { it.copy(skipToChorus = v) } }, summary = "A button under the title that jumps to the next chorus, when the lyrics mark one", icon = ImageVector.vectorResource(AppIcons.FastForward))
                 },

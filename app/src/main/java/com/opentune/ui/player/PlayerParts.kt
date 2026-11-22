@@ -1003,8 +1003,6 @@ fun SeekBar(
     playing: Boolean = false,
     /** The lyric line sung at a moment, shown above the finger while the bar is dragged. */
     lyricAt: ((Long) -> String?)? = null,
-    /** Where the song's parts (verse, chorus) begin, in ms, marked as small gaps in the track. */
-    marks: List<Long> = emptyList(),
     quality: (@Composable () -> Unit)? = null,
 ) {
     var dragFraction by remember(durationMs) { mutableStateOf<Float?>(null) }
@@ -1049,10 +1047,8 @@ fun SeekBar(
     }
     val gradientEnd = MaterialTheme.colorScheme.tertiary
     val gradient = look.seekbarColor == com.opentune.data.settings.SeekbarColor.GRADIENT
-    val shownMarks = if (look.seekbarMarks) marks else emptyList()
     val inactive = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
     val bufferedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-    val markDot = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
 
     val seekHaptics = com.opentune.ui.components.rememberHaptics()
     fun fraction(): Float = dragFraction ?: heldFraction
@@ -1181,16 +1177,6 @@ fun SeekBar(
                     drawRoundRect(Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), Offset(0f, y), Size(size.width * f, h), r)
                 } else {
                     drawRoundRect(active, Offset(0f, y), Size(size.width * f, h), r)
-                }
-                // A small dot where each part of the song still to come begins. Ones already
-                // played aren't drawn: cut into the played line (the wave above all) they read as breaks.
-                if (durationMs > 0) {
-                    val played = size.width * f
-                    val clear = maxOf(thumbRadius.toPx(), h) + 2.dp.toPx()
-                    shownMarks.forEach { ms ->
-                        val x = size.width * (ms.toFloat() / durationMs)
-                        if (x > played + clear && x < size.width - h) drawCircle(markDot, h * 0.32f, Offset(x, size.height / 2))
-                    }
                 }
                 if (thumbRadius > 0.dp) {
                     val at = Offset(size.width * f, size.height / 2)

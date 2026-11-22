@@ -1271,7 +1271,6 @@ fun PlayerLayout(
                     val synced = (state.lyrics as? LyricsState.Found)?.lyrics as? com.opentune.data.lyrics.Lyrics.Synced
                     // Lyrics are timed against the song shifted by the offset; the bar is the song's own time.
                     val choruses = remember(synced, offsetMs) { synced?.let { com.opentune.data.lyrics.SongParts.choruses(it).map { ms -> ms - offsetMs } }.orEmpty() }
-                    val marks = remember(synced, offsetMs) { synced?.let { com.opentune.data.lyrics.SongParts.marks(it).map { ms -> ms - offsetMs } }.orEmpty() }
                     val nextChorus by androidx.compose.runtime.produceState<Long?>(null, choruses) {
                         while (true) {
                             value = com.opentune.data.lyrics.SongParts.nextChorus(choruses, position())
@@ -1299,7 +1298,7 @@ fun PlayerLayout(
                             val lyricAt: ((Long) -> String?)? = if (state.ui.lyricScrubPreview && synced != null) {
                                 { ms -> synced.lines.lastOrNull { it.startMs <= ms + offsetMs }?.text?.takeIf { it.isNotBlank() } }
                             } else null
-                            SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation && !apple, playing = state.isPlaying, lyricAt = lyricAt, marks = marks, quality = { if (state.ui.sourcePill) SourceQualityBadge(current.videoId, state.audioFormat, onClick = { showSignal = true }) })
+                            SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation && !apple, playing = state.isPlaying, lyricAt = lyricAt, quality = { if (state.ui.sourcePill) SourceQualityBadge(current.videoId, state.audioFormat, onClick = { showSignal = true }) })
                             if (state.ui.statsForNerds) {
                                 Box(Modifier.fillMaxWidth().clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
                             }

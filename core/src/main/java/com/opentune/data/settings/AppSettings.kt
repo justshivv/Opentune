@@ -547,8 +547,6 @@ data class InterfaceSettings(
     val seekbarTime: SeekbarTime = SeekbarTime.LEFT,
     /** The audio details page: cards of format, routing and source, or the live pipeline. */
     val signalPathStyle: SignalPathStyle = SignalPathStyle.DETAILS,
-    /** Small dots on the seek bar where the song's parts (verse, chorus) begin. */
-    val seekbarMarks: Boolean = true,
     /** A "Skip to chorus" button beside the source pill, when the lyrics mark the chorus. */
     val skipToChorus: Boolean = false,
     /** The pill under the title naming where the audio comes from and its quality. */

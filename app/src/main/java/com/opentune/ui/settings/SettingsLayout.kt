@@ -98,7 +98,7 @@ internal val SETTINGS_CATEGORIES = listOf(
             "Layout" to listOf("Player layout", "Player background", "Player buttons", "Player beside the page"),
             "Cover art" to listOf("Full-screen cover art", "Match background to cover", "Cover corners", "Glow under the cover", "Song change", "Album covers"),
             "Animated covers and Canvas" to listOf("Animated covers", "Moving cover art", "Animated covers on Wi-Fi only", "Moving covers on Home"),
-            "Seek bar" to listOf("Wavy seek bar", "Lyric preview while seeking", "Seek bar thickness", "Seek bar handle", "Seek bar colour", "Seek bar time", "Song part marks"),
+            "Seek bar" to listOf("Wavy seek bar", "Lyric preview while seeking", "Seek bar thickness", "Seek bar handle", "Seek bar colour", "Seek bar time"),
             "On the player" to listOf("Lyrics preview", "Audio quality label", "Audio details page", "Comments button", "Skip to chorus", "Double-tap to skip 10 seconds", "Show stats for nerds"),
             "Hide from the player" to listOf("Hide volume bar", "Hide device volume bar", "Hide song status", "Hide output device"),
         ),
