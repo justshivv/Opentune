@@ -59,6 +59,7 @@ import com.opentune.ui.components.SheetButton
 import com.opentune.ui.components.SheetTone
 import com.opentune.ui.components.rememberHaptics
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -261,6 +262,8 @@ fun LyricCardSheet(
         if (videoLines.isEmpty() || !coverDone) null
         else LyricVideo(videoLines, cover, moving.takeIf { useMotion }, song.title, song.artist, if (videoCard) LyricVideo.Layout.CARD else LyricVideo.Layout.STORY, showLogo)
     }
+    // Making the video: how far along, 0 to 1, while it runs.
+    var making by remember { mutableStateOf<Float?>(null) }
     // The video playing in the sheet, drawn small from the same frames it will be made of.
     var frame by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     LaunchedEffect(video, kind) {
@@ -273,6 +276,8 @@ fun LyricCardSheet(
             val began = System.nanoTime()
             var n = 0
             while (true) {
+                // Held while the video is being made, so the making has every core.
+                if (making != null) { kotlinx.coroutines.delay(200); continue }
                 val t = ((System.nanoTime() - began) / 1_000_000) % v.lengthMs
                 val b = bitmaps[n++ % 2]
                 val c = android.graphics.Canvas(b)
@@ -283,8 +288,6 @@ fun LyricCardSheet(
             }
         }
     }
-    // Making the video: how far along, 0 to 1, while it runs.
-    var making by remember { mutableStateOf<Float?>(null) }
     var made by remember { mutableStateOf<java.io.File?>(null) }
     LaunchedEffect(video, withSong) { made = null }
     fun makeVideo(then: (java.io.File) -> Unit) {
@@ -294,23 +297,26 @@ fun LyricCardSheet(
         making = 0f
         scope.launch {
             val result = runCatching {
-                // Its own frames at full size, on one thread, as OpenGL needs.
-                val full = LyricVideo(lines, cover, moving.takeIf { useMotion }, song.title, song.artist, if (videoCard) LyricVideo.Layout.CARD else LyricVideo.Layout.STORY, showLogo)
-                val audio = if (withSong) {
-                    VideoFiles.audioSource(song.videoId)?.let { source ->
-                        withContext(Dispatchers.IO) { LyricVideoEncoder.audio(source, full.startMs - offsetMs, full.startMs - offsetMs + full.lengthMs) }
-                    }
+                // Its frames at full size, drawn side by side by copies of it.
+                val make = { LyricVideo(lines, cover, moving.takeIf { useMotion }, song.title, song.artist, if (videoCard) LyricVideo.Layout.CARD else LyricVideo.Layout.STORY, showLogo) }
+                val startMs = LyricVideo.startOf(lines)
+                val lengthMs = LyricVideo.lengthOf(lines)
+                // The song is read while the frames are drawn, not before them.
+                val audio = if (withSong) async(Dispatchers.IO) {
+                    // A song that can't be read leaves the video without it, never fails it.
+                    runCatching { VideoFiles.audioSource(song.videoId)?.let { source -> LyricVideoEncoder.audio(source, startMs - offsetMs, startMs - offsetMs + lengthMs) } }.getOrNull()
                 } else null
                 val file = VideoFiles.fresh(context, "OpenTune-lyrics-${song.videoId}.mp4")
+                // OpenGL wants one thread for all of its calls.
                 val thread = java.util.concurrent.Executors.newSingleThreadExecutor()
                 try {
                     withContext(thread.asCoroutineDispatcher()) {
-                        LyricVideoEncoder.encode(full, audio, file) { p -> making = p }
+                        LyricVideoEncoder.encode(make, audio, file) { p -> making = p }
                     }
                 } finally {
                     thread.shutdown()
                 }
-                if (withSong && audio == null) com.opentune.data.Pills.error("Made without the song: it couldn't be read", context)
+                if (withSong && audio?.await() == null) com.opentune.data.Pills.error("Made without the song: it couldn't be read", context)
                 file
             }
             making = null

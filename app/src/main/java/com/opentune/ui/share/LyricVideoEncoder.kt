@@ -21,7 +21,12 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 
 /**
  * Writes a [LyricVideo] to an MP4: H.264 at 30 frames a second, and, when it can be read, the
@@ -38,15 +43,17 @@ internal object LyricVideoEncoder {
      * Encodes [video] to [out], calling [progress] with 0 to 1 as it goes. [audio] is muxed in
      * alongside when there is one. Throws when the phone can't encode it.
      */
-    suspend fun encode(video: LyricVideo, audio: Audio?, out: File, progress: (Float) -> Unit) {
+    suspend fun encode(make: () -> LyricVideo, audioJob: kotlinx.coroutines.Deferred<Audio?>?, out: File, progress: (Float) -> Unit) = coroutineScope {
+        val workers = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(1, 4)
+        val video = make()
+        val painters = listOf(video) + List(workers - 1) { make() }
         val frames = (video.lengthMs * LyricVideo.FPS / 1000).toInt()
+        var audio: Audio? = null
         val (codec, width, height) = videoEncoder(video.width, video.height)
         val muxer = MediaMuxer(out.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         val surface = codec.createInputSurface()
         codec.start()
         val gl = GlTarget(surface, width, height)
-        val frame = Bitmap.createBitmap(video.width, video.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(frame)
         val info = MediaCodec.BufferInfo()
         var videoTrack = -1
         var audioTrack = -1
@@ -59,7 +66,7 @@ internal object LyricVideoEncoder {
                 muxer.writeSampleData(audioTrack, ByteBuffer.wrap(bytes), i)
             }
         }
-        fun drain(end: Boolean) {
+        suspend fun drain(end: Boolean) {
             if (end) codec.signalEndOfInputStream()
             while (true) {
                 val o = codec.dequeueOutputBuffer(info, if (end) 10_000 else 0)
@@ -67,7 +74,9 @@ internal object LyricVideoEncoder {
                     o == MediaCodec.INFO_TRY_AGAIN_LATER -> if (!end) return
                     o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         videoTrack = muxer.addTrack(codec.outputFormat)
-                        if (audio != null) audioTrack = muxer.addTrack(audio.format)
+                        // The song, read meanwhile; needed now, as every track goes in before the muxer starts.
+                        audio = audioJob?.await()
+                        audio?.let { audioTrack = muxer.addTrack(it.format) }
                         muxer.start()
                         started = true
                     }
@@ -86,10 +95,9 @@ internal object LyricVideoEncoder {
             }
         }
         try {
-            for (n in 0 until frames) {
-                coroutineContext.ensureActive()
-                val t = n * 1000L / LyricVideo.FPS
-                video.draw(canvas, t)
+            FrameRing.run(frames, painters.size, video.width, video.height,
+                draw = { worker, n, b -> painters[worker].draw(Canvas(b), n * 1000L / LyricVideo.FPS) },
+            ) { n, frame ->
                 gl.draw(frame, n * 1_000_000_000L / LyricVideo.FPS)
                 drain(end = false)
                 progress((n + 1f) / frames)
@@ -101,7 +109,6 @@ internal object LyricVideoEncoder {
             codec.release()
             gl.release()
             surface.release()
-            frame.recycle()
             runCatching { if (started) muxer.stop() }
             muxer.release()
         }
@@ -369,6 +376,54 @@ internal object LyricVideoEncoder {
 
         companion object {
             private const val EGL_RECORDABLE_ANDROID = 0x3142
+        }
+    }
+}
+
+/**
+ * Frames drawn side by side and taken in order. Each of [workers] threads draws every
+ * [workers]th frame into a ring of bitmaps a little larger than the number of workers; the
+ * caller's thread [take]s them one after another (OpenGL wants its calls on one thread). A
+ * frame waits for its place in the ring until the frame that used it last has been taken, so
+ * no worker can run ahead and hold every bitmap while the one wanted next waits for one.
+ */
+internal object FrameRing {
+    suspend fun run(
+        frames: Int,
+        workers: Int,
+        width: Int,
+        height: Int,
+        draw: (worker: Int, frame: Int, into: Bitmap) -> Unit,
+        take: suspend (frame: Int, Bitmap) -> Unit,
+    ) = coroutineScope {
+        val ring = List(workers + 2) { Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888) }
+        val drawn = List(frames) { kotlinx.coroutines.CompletableDeferred<Bitmap>() }
+        // How many frames have been taken: frame m may use its place once frame m - ring.size has.
+        val taken = kotlinx.coroutines.flow.MutableStateFlow(0)
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(workers)
+        val jobs = (0 until workers).map { k ->
+            launch(pool.asCoroutineDispatcher()) {
+                var m = k
+                while (m < frames) {
+                    taken.first { it > m - ring.size }
+                    val b = ring[m % ring.size]
+                    draw(k, m, b)
+                    drawn[m].complete(b)
+                    m += workers
+                }
+            }
+        }
+        try {
+            for (n in 0 until frames) {
+                coroutineContext.ensureActive()
+                take(n, drawn[n].await())
+                taken.value = n + 1
+            }
+        } finally {
+            jobs.forEach { it.cancel() }
+            jobs.joinAll()
+            pool.shutdown()
+            ring.forEach { it.recycle() }
         }
     }
 }

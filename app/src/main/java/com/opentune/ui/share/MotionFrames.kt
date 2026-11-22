@@ -26,8 +26,6 @@ import okhttp3.Request
  * pixels across, so the whole loop fits in a few megabytes and draws at any size.
  */
 internal class MotionFrames(private val frames: List<Bitmap>, private val fps: Float) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-
     /** Draws the frame at [ms], blended into the next so the slow loop moves smoothly, over [dst]. */
     fun draw(c: Canvas, ms: Long, dst: RectF) {
         if (frames.isEmpty()) return
@@ -35,11 +33,12 @@ internal class MotionFrames(private val frames: List<Bitmap>, private val fps: F
         val i = at.toInt() % frames.size
         val next = (i + 1) % frames.size
         val blend = at - at.toInt()
-        paint.alpha = 255
+        // A paint of its own each time: the same frames are drawn from several threads at once
+        // (the preview, and the video's frames being made side by side).
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         c.drawBitmap(frames[i], null, dst, paint)
         paint.alpha = (blend * 255).toInt()
         c.drawBitmap(frames[next], null, dst, paint)
-        paint.alpha = 255
     }
 
     companion object {
