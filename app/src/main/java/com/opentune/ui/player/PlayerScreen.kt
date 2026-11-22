@@ -1460,7 +1460,13 @@ fun PlayerLayout(
                     )
                     // Drawn outside the player's own colours, so given them here: the title and
                     // its buttons changed colour as they flew.
-                    bigTitle?.let { title -> CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                    // The same glass as the buttons at rest, bending the player's own backdrop: given
+                    // the page's instead, the star and more buttons showed the app's accent as they flew.
+                    bigTitle?.let { title -> CompositionLocalProvider(
+                        LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+                        LocalBackdrop provides backdrop,
+                        LocalHazeState provides null,
+                    ) {
                         TitleFlight(
                             current, isLiked, title,
                             big = if (flight.toSmall || !flying) from else to,
