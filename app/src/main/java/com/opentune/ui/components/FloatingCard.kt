@@ -238,6 +238,12 @@ fun FloatingCard(
             ) {
                 val maxCard = maxHeight
                 val density = LocalDensity.current
+                // Pulled up to the whole page, the card runs under the status and navigation bars, edge
+                // to edge: the room kept for them outside it goes as it grows, and comes back inside
+                // it instead, so nothing of it sits under the clock. Kept outside, it left a hard band
+                // of the page above and below a card that was meant to be the page.
+                val barsTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                val barsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 // The card's own height with everything shown, measured as it lays out;
                 // an expandable card never grows past it, so a short menu has no empty foot.
                 var naturalPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
@@ -254,13 +260,23 @@ fun FloatingCard(
                 // height: one capped by its content keeps its card shape at its top.
                 val fullscreen = expandable && fullFraction >= 1f && fullPx >= with(density) { maxCard.toPx() } - 1f
                 // How far the card's square-off has got: 1 at rest, 0 pulled up to the whole
-                // page. Read only from layout and draw code (the insets below, the layer and
-                // the rim), never while composing: a pull writes [extra] on every move, and a
-                // read here would rebuild the whole card — handle, title, content and all —
-                // on every one of them, which is what made dragging a sheet crawl.
+                // page. It runs only over the last of the pull — the status bar's own
+                // height of it, once the card's top edge reaches the bar — so the top
+                // keeps the sheet's own shape for the whole climb and reaches under the
+                // bar only at the very end; spread over the whole pull, the top stretched
+                // from the first move, long before it arrived. Read only from layout and
+                // draw code (the insets below, the layer and the rim), never while
+                // composing: a pull writes [extra] on every move, and a read here would
+                // rebuild the whole card — handle, title, content and all — on every one
+                // of them, which is what made dragging a sheet crawl.
                 val edgeNow = {
                     if (!fullscreen) 1f
-                    else 1f - if (range > 0f) (extra / range).coerceIn(0f, 1f) else 1f
+                    else if (range <= 0f) 0f
+                    else {
+                        val stretch = minOf(with(density) { barsTop.toPx() }, range)
+                        if (stretch <= 0f) 1f - (extra / range).coerceIn(0f, 1f)
+                        else 1f - ((extra - (range - stretch)) / stretch).coerceIn(0f, 1f)
+                    }
                 }
                 // The same square-off, coarsened for the layout insets: the insets set the
                 // card's width, and a width that creeps a pixel at a time makes the whole
@@ -358,12 +374,6 @@ fun FloatingCard(
                         }
                     }
                 }
-                // Pulled up to the whole page, the card runs under the status and navigation bars, edge
-                // to edge: the room kept for them outside it goes as it grows, and comes back inside
-                // it instead, so nothing of it sits under the clock. Kept outside, it left a hard band
-                // of the page above and below a card that was meant to be the page.
-                val barsTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                val barsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 Column(
                     Modifier
                         .insetBy {
@@ -487,11 +497,14 @@ fun FloatingCard(
                         .pointerInput(Unit) { detectTapGestures { } }
                         .insetBy {
                             val insideF = if (fullscreen) 1f - edgeLayout() else 0f
-                            // The bottom room is the navigation bar's exactly, no more:
-                            // the sheet's fill runs under the bar, and its content
-                            // stops at the bar's own top edge, with no dead band of
-                            // fill above it.
-                            InsetsPx(10.dp.roundToPx(), 10.dp.roundToPx() + (barsTop * insideF).roundToPx(), 10.dp.roundToPx(), barsBottom.roundToPx())
+                            // The top room at full height is the status bar's exactly:
+                            // the card's own 10dp gives way to it as the sheet becomes
+                            // the page, instead of stacking on top of it, so the handle
+                            // sits right under the bar. The bottom room is the
+                            // navigation bar's exactly, no more: the sheet's fill runs
+                            // under the bar, and its content stops at the bar's own
+                            // top edge, with no dead band of fill above it.
+                            InsetsPx(10.dp.roundToPx(), ((10.dp * (1f - insideF)) + (barsTop * insideF)).roundToPx(), 10.dp.roundToPx(), barsBottom.roundToPx())
                         },
                 ) {
                     // The handle and title pull the card down; content below keeps its own gestures.
