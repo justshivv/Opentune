@@ -152,12 +152,17 @@ object ExternalStreams {
         if ("\nCouldn't switch" in detail) report(videoId, detail.substringBefore("\nCouldn't switch"))
     }
 
-    fun allowed(lossless: Boolean? = null): Boolean = AppSettings.playback.value.let {
+    /** [playing]: for what plays now, which the output matters to; a download keeps its FLAC whatever plays it later. */
+    fun allowed(lossless: Boolean? = null, playing: Boolean = true): Boolean = AppSettings.playback.value.let {
         val maximum = AppSettings.effectiveAudioQuality == AudioQuality.MAX
-        val enabled = when (lossless) { true -> maximum || it.losslessStreaming; false -> it.jioSaavnQuality; null -> maximum || it.losslessStreaming || it.jioSaavnQuality }
+        val flac = (maximum || it.losslessStreaming) && !(playing && speakerHold())
+        val enabled = when (lossless) { true -> flac; false -> it.jioSaavnQuality; null -> flac || it.jioSaavnQuality }
         enabled && (lossless != false || AppSettings.effectiveAudioQuality.maxKbps >= 320) &&
             (!it.losslessWifiOnly || !AppSettings.onMeteredNetwork())
     }
+
+    /** Lossless is held back: sound is on the phone's speaker and the setting asks for that. */
+    fun speakerHold(): Boolean = AppSettings.playback.value.losslessOffSpeaker && AppSettings.onPhoneSpeaker()
 
     private val losslessInFlight = ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Rendition?>>()
 
@@ -234,6 +239,7 @@ object ExternalStreams {
         if (!allowed()) {
             report(videoId, if (AppSettings.playback.value.losslessWifiOnly && AppSettings.onMeteredNetwork())
                 "External sources skipped: Unmetered networks only is on. Turn it off in Settings to try FLAC and JioSaavn on mobile data."
+                else if (speakerHold()) "Lossless skipped: sound is on the phone's speaker and Not on the phone's speaker is on. Connect headphones or turn it off in Settings."
                 else "External sources disabled for the current quality settings.")
             return null
         }

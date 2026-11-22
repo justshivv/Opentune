@@ -532,18 +532,8 @@ class PlaybackService : MediaLibraryService() {
         }
         scope.launch { trackListening(player) }
         scope.launch {
-            AppSettings.playback.map { listOf(it.losslessStreaming, it.losslessWifiOnly, it.losslessHiRes, it.jioSaavnQuality, it.qobuzRelayUrl, it.wifiQuality, it.mobileQuality) }
-                .distinctUntilChanged().collect {
-                    val item = player.currentMediaItem
-                    val uri = item?.localConfiguration?.uri?.let(::selectedUri)
-                    if (item != null && uri != null) {
-                        val rendition = externalStreamKeyOf(uri)?.let { ExternalStreams.get(item.mediaId, it) }
-                        if (rendition != null && !ExternalStreams.allowed(rendition.lossless)) {
-                            swapToUpgrade(player, item.mediaId, youtubeFallbackUri(item.mediaId))
-                        }
-                    }
-                    scheduleUpgrade()
-                }
+            AppSettings.playback.map { listOf(it.losslessStreaming, it.losslessWifiOnly, it.losslessOffSpeaker, it.losslessHiRes, it.jioSaavnQuality, it.qobuzRelayUrl, it.wifiQuality, it.mobileQuality) }
+                .distinctUntilChanged().collect { recheckExternal(player) }
         }
         scope.launch {
             AppSettings.playback.map { Triple(it.loudnessNormalization, it.normalizeOnSpeaker, it.volumeLevel) }.distinctUntilChanged().collect { applyLoudness() }
@@ -2787,12 +2777,14 @@ class PlaybackService : MediaLibraryService() {
                 devicesListed = true
                 return
             }
+            outputsChanged(addedDevices)
             if (addedDevices.orEmpty().any { it.isSink && it.type in LISTENING_DEVICES }) resumeOnConnect()
         }
 
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
             applyPreferredDevice()
             if (removedDevices.orEmpty().any { it.type in USB_OUTPUTS }) BitPerfectUsb.devicesChanged()
+            outputsChanged(removedDevices)
         }
     }
     private var devicesListed = false
@@ -2890,14 +2882,29 @@ class PlaybackService : MediaLibraryService() {
         player.seekTo(player.currentPosition)
     }
 
+    private fun onPhoneSpeaker(): Boolean = AppSettings.onPhoneSpeaker()
+
     /**
-     * Whether sound is going to the phone's own speaker: no headphones,
-     * Bluetooth audio, USB, HDMI, dock or line output is connected. Android
-     * routes media to any of those as soon as it appears.
+     * What plays is checked against the settings and the output again: an external stream
+     * no longer allowed goes back to YouTube's, and one newly allowed is looked for.
      */
-    private fun onPhoneSpeaker(): Boolean {
-        val outputs = audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS) ?: return false
-        return outputs.none { it.isSink && it.type in EXTERNAL_OUTPUTS }
+    private suspend fun recheckExternal(player: ExoPlayer) {
+        val item = player.currentMediaItem
+        val uri = item?.localConfiguration?.uri?.let(::selectedUri)
+        if (item != null && uri != null) {
+            val rendition = externalStreamKeyOf(uri)?.let { ExternalStreams.get(item.mediaId, it) }
+            if (rendition != null && !ExternalStreams.allowed(rendition.lossless)) {
+                swapToUpgrade(player, item.mediaId, youtubeFallbackUri(item.mediaId))
+            }
+        }
+        scheduleUpgrade()
+    }
+
+    /** Headphones on or off with Not on the phone's speaker set: lossless follows the output. */
+    private fun outputsChanged(devices: Array<out AudioDeviceInfo>?) {
+        if (!AppSettings.playback.value.losslessOffSpeaker || devices.orEmpty().none { it.isSink && it.type in EXTERNAL_OUTPUTS }) return
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        scope.launch { recheckExternal(player) }
     }
 
     /** Route to a USB DAC when one is plugged in and the setting asks for it. */
@@ -3431,27 +3438,10 @@ class PlaybackService : MediaLibraryService() {
          * Outputs a person listens on privately, as opposed to the phone's
          * speaker. The BLE types are plain ints that older Android never reports.
          */
-        @android.annotation.SuppressLint("InlinedApi")
-        val LISTENING_DEVICES = setOf(
-            AudioDeviceInfo.TYPE_WIRED_HEADSET,
-            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-            AudioDeviceInfo.TYPE_USB_HEADSET,
-            AudioDeviceInfo.TYPE_BLE_HEADSET,
-            AudioDeviceInfo.TYPE_BLE_SPEAKER,
-        )
+        val LISTENING_DEVICES get() = AudioOutputs.LISTENING
         /** A USB DAC or headset, the outputs exclusive mode takes. */
         val USB_OUTPUTS = setOf(AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET)
-        /** Outputs that take media away from the phone's speaker. */
-        val EXTERNAL_OUTPUTS = LISTENING_DEVICES + setOf(
-            AudioDeviceInfo.TYPE_USB_DEVICE,
-            AudioDeviceInfo.TYPE_USB_ACCESSORY,
-            AudioDeviceInfo.TYPE_HDMI,
-            AudioDeviceInfo.TYPE_LINE_ANALOG,
-            AudioDeviceInfo.TYPE_LINE_DIGITAL,
-            AudioDeviceInfo.TYPE_AUX_LINE,
-            AudioDeviceInfo.TYPE_DOCK,
-        )
+        val EXTERNAL_OUTPUTS get() = AudioOutputs.EXTERNAL
         const val ACTION_LIKE = "com.opentune.LIKE"
         const val ACTION_SHUFFLE = "com.opentune.SHUFFLE"
         val LIKE_COMMAND = SessionCommand(ACTION_LIKE, Bundle.EMPTY)

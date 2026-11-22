@@ -120,4 +120,21 @@ class ExternalStreamsTest {
         AppSettings.updatePlayback { it.copy(losslessWifiOnly = false) }
         assertTrue(ExternalStreams.allowed(true))
     }
+    @Test fun thePhoneSpeakerPlaysNoFlacWhenAskedButHeadphonesAndDownloadsStillDo() {
+        val app = RuntimeEnvironment.getApplication()
+        AppSettings.init(app)
+        val audio = org.robolectric.Shadows.shadowOf(app.getSystemService(android.media.AudioManager::class.java))
+        audio.setOutputDevices(listOf(org.robolectric.shadows.AudioDeviceInfoBuilder.newBuilder().setType(android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER).build()))
+        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessWifiOnly = false, losslessOffSpeaker = false) }
+        assertTrue("off by default, the speaker still gets FLAC", ExternalStreams.allowed(true))
+        AppSettings.updatePlayback { it.copy(losslessOffSpeaker = true) }
+        assertTrue(AppSettings.onPhoneSpeaker())
+        assertFalse(ExternalStreams.allowed(true))
+        assertTrue("a download keeps its FLAC", ExternalStreams.allowed(true, playing = false))
+        audio.setOutputDevices(listOf(org.robolectric.shadows.AudioDeviceInfoBuilder.newBuilder().setType(android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES).build()))
+        assertFalse(AppSettings.onPhoneSpeaker())
+        assertTrue(ExternalStreams.allowed(true))
+        audio.setOutputDevices(listOf(org.robolectric.shadows.AudioDeviceInfoBuilder.newBuilder().setType(android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP).build()))
+        assertTrue("Bluetooth headphones get FLAC too", ExternalStreams.allowed(true))
+    }
 }

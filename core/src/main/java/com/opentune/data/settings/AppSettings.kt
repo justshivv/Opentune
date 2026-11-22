@@ -464,6 +464,11 @@ data class PlaybackSettings(
      * batteries. A new name, so everyone starts with it on; it can be turned off in Settings.
      */
     val losslessWifiOnly: Boolean = true,
+    /**
+     * The phone's own speaker plays YouTube's stream even with Lossless chosen: it can't
+     * carry the difference, so FLAC there only costs data and battery. Off by default.
+     */
+    val losslessOffSpeaker: Boolean = false,
     val losslessHiRes: Boolean = false,
     val jioSaavnQuality: Boolean = false,
     /** Optional base URL implementing Meld's /api/get-music and /api/download-music protocol. */
@@ -1036,6 +1041,7 @@ val SEED_COLORS = listOf(
 object AppSettings {
     private var prefs: SharedPreferences? = null
     private var connectivity: ConnectivityManager? = null
+    private var audio: android.media.AudioManager? = null
 
     // coerceInputValues: a choice a later version dropped reads back as that setting's default
     // instead of failing the whole file.
@@ -1075,6 +1081,17 @@ object AppSettings {
                 caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
+    /**
+     * Whether sound goes to the phone's own speaker: no headphones, Bluetooth audio, USB,
+     * HDMI, dock or line output is connected. Android routes media to any of those as
+     * soon as it appears.
+     */
+    fun onPhoneSpeaker(): Boolean {
+        val outputs = audio?.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS) ?: return false
+        // What GET_DEVICES_OUTPUTS lists are all outputs: no isSink check needed.
+        return outputs.none { it.type in com.opentune.playback.AudioOutputs.EXTERNAL }
+    }
+
     /** On mobile data or another metered network; Wi-Fi under a VPN counts as Wi-Fi. */
     fun onMeteredNetwork(): Boolean {
         val cm = connectivity ?: return false
@@ -1112,6 +1129,7 @@ object AppSettings {
         val p = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         prefs = p
         connectivity = context.getSystemService(ConnectivityManager::class.java)
+        audio = context.getSystemService(android.media.AudioManager::class.java)
         val saved = p.getString(K_STATE, null)?.let { runCatching { json.parseToJsonElement(it) }.getOrNull() }
         val migrated = saved?.let(::migrateGlassStyle)
         val stored = migrated?.let { runCatching { json.decodeFromJsonElement(SettingsState.serializer(), it) }.getOrNull() }
