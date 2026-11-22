@@ -439,6 +439,11 @@ data class PlaybackSettings(
     val preloadUpcoming: Boolean = true,
     /** Deepen preloading (20s buffer, 3 neighbours resolved) when on Wi-Fi or unmetered networks. */
     val preloadBoostOnWifi: Boolean = false,
+    /**
+     * With [preloadUpcoming], how much of a song ahead that starts on its FLAC is fetched before
+     * it plays: its first seconds only, or as much as of a YouTube song.
+     */
+    val losslessPreload: LosslessPreload = LosslessPreload.START,
     /** A downloaded song streams in its best quality while there's internet; its file plays offline. */
     val streamDownloadsOnline: Boolean = true,
     /** With [streamDownloadsOnline], mobile data streams too; off, a downloaded song streams on Wi-Fi only. */
@@ -863,6 +868,14 @@ enum class VolumeLevel(val label: String, val summary: String, val offsetDb: Flo
     QUIET("Quiet", "About 5 dB under YouTube's level, for quiet rooms and long listens", -5f, 3f),
     NORMAL("Normal", "YouTube's own reference level", 0f, 3f),
     LOUD("Loud", "About 5 dB over YouTube's level, held by a limiter so peaks don't clip", 5f, 9f),
+}
+
+/** How far a FLAC is fetched ahead: see [PlaybackSettings.losslessPreload]. */
+@Serializable
+enum class LosslessPreload(val label: String, val summary: String) {
+    START("Off", "Songs ahead fetch only their first 10 seconds of FLAC, enough to start on it at once"),
+    UNMETERED("Unmetered only", "On Wi-Fi, songs ahead fetch their FLAC as far as a YouTube song; on mobile data, the first 10 seconds"),
+    ALWAYS("Always", "Songs ahead fetch their FLAC as far as a YouTube song, on any network"),
 }
 
 /** Whose recommendations pick the songs autoplay adds. Every song still plays from YouTube Music. */

@@ -457,6 +457,9 @@ class PlaybackService : MediaLibraryService() {
             .setLoadControl(
                 LossyHoldBack(loadControl, LOSSY_AHEAD_MS * 1_000L, FLAC_AHEAD_MS * 1_000L,
                     flac = { item -> item.localConfiguration?.uri?.let { externalStreamKeyOf(selectedUri(it)) } != null },
+                    flacStartUs = FLAC_START_AHEAD_MS * 1_000L,
+                    playing = { nowPlayingId },
+                    whole = { wholeFlacAhead },
                 ) { lossyHeldBack?.isActive == true },
             )
             .setAudioAttributes(
@@ -539,7 +542,7 @@ class PlaybackService : MediaLibraryService() {
             AppSettings.playback.map { Triple(it.loudnessNormalization, it.normalizeOnSpeaker, it.volumeLevel) }.distinctUntilChanged().collect { applyLoudness() }
         }
         scope.launch {
-            AppSettings.playback.map { it.preloadUpcoming to it.preloadBoostOnWifi }.distinctUntilChanged().collect { (preload, _) ->
+            AppSettings.playback.map { Triple(it.preloadUpcoming, it.preloadBoostOnWifi, it.losslessPreload) }.distinctUntilChanged().collect { (preload, _, _) ->
                 updatePreload(player)
                 // Off, nothing more is looked up or fetched for songs ahead; on again, they're readied now.
                 if (preload) prefetchAhead() else stopReadyingAhead()
@@ -2666,7 +2669,19 @@ class PlaybackService : MediaLibraryService() {
     private fun warmAheadCount(): Int =
         if (isWifiBoosted()) WARM_WIFI_AHEAD else WARM_STANDARD_AHEAD
 
+    /**
+     * Songs ahead fetch their FLAC as far as a YouTube song (see [LosslessPreload]); read on
+     * the playback thread, so worked out here, when the settings or the network change.
+     */
+    @Volatile private var wholeFlacAhead = false
+
     private fun updatePreload(target: ExoPlayer? = null) {
+        val pb = AppSettings.playback.value
+        wholeFlacAhead = pb.preloadUpcoming && when (pb.losslessPreload) {
+            com.opentune.data.settings.LosslessPreload.START -> false
+            com.opentune.data.settings.LosslessPreload.UNMETERED -> !AppSettings.onMeteredNetwork()
+            com.opentune.data.settings.LosslessPreload.ALWAYS -> true
+        }
         val player = target ?: (mediaSession?.player as? ExoPlayer) ?: return
         val durationUs = preloadDurationUs()
         player.preloadConfiguration =
@@ -3496,6 +3511,8 @@ class PlaybackService : MediaLibraryService() {
         const val LOSSY_AHEAD_MS = 60_000L
         /** How far ahead a FLAC is fetched: a skip partway costs the part heard and this much. */
         const val FLAC_AHEAD_MS = 60_000L
+        /** How much of a song ahead's FLAC is fetched before it plays, unless the whole of it is asked for. */
+        const val FLAC_START_AHEAD_MS = 10_000L
         const val BACK_BUFFER_MS = 30_000
         const val MIN_LOUDNESS_GAIN_MB = -1500
         const val MAX_LOUDNESS_GAIN_MB = 900

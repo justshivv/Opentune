@@ -19,6 +19,9 @@ import androidx.media3.exoplayer.upstream.Allocator
  * - [flacAheadUs] while the song being fetched is a FLAC ([flac]). Fetched in pieces (see
  *   [ChunkedDataSource]) and only this far ahead, a song skipped partway has used the data
  *   for the part heard and a minute more, not the whole file.
+ * - [flacStartUs] of a FLAC song that is still ahead of the one playing ([playing] names that
+ *   one): enough for it to start on its FLAC at once, not its whole file before it's reached.
+ * While [whole] says so, a FLAC is fetched as far as any other stream instead.
  * Otherwise, and once the search is over, [base] buffers as far as it likes.
  */
 // The older forms Media3 still calls on some paths are passed on too.
@@ -29,6 +32,9 @@ internal class LossyHoldBack(
     private val aheadUs: Long,
     private val flacAheadUs: Long = Long.MAX_VALUE,
     private val flac: (MediaItem) -> Boolean = { false },
+    private val flacStartUs: Long = Long.MAX_VALUE,
+    private val playing: () -> String? = { null },
+    private val whole: () -> Boolean = { false },
     private val held: () -> Boolean,
 ) : LoadControl {
     // Kept for the playback thread, the only one that calls this.
@@ -61,8 +67,11 @@ internal class LossyHoldBack(
     override fun retainBackBufferFromKeyframe(): Boolean = base.retainBackBufferFromKeyframe()
     override fun shouldContinueLoading(playbackPositionUs: Long, bufferedDurationUs: Long, playbackSpeed: Float): Boolean =
         base.shouldContinueLoading(playbackPositionUs, bufferedDurationUs, playbackSpeed)
-    override fun shouldContinuePreloading(playerId: PlayerId, timeline: Timeline, mediaPeriodId: MediaSource.MediaPeriodId, bufferedDurationUs: Long): Boolean =
-        base.shouldContinuePreloading(playerId, timeline, mediaPeriodId, bufferedDurationUs)
+    override fun shouldContinuePreloading(playerId: PlayerId, timeline: Timeline, mediaPeriodId: MediaSource.MediaPeriodId, bufferedDurationUs: Long): Boolean {
+        // A preload is always of a song ahead; its buffer is its own.
+        if (bufferedDurationUs >= flacStartUs && !whole() && item(timeline, mediaPeriodId)?.let(flac) == true) return false
+        return base.shouldContinuePreloading(playerId, timeline, mediaPeriodId, bufferedDurationUs)
+    }
     override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean = base.shouldStartPlayback(parameters)
     override fun shouldStartPlayback(timeline: Timeline, mediaPeriodId: MediaSource.MediaPeriodId, bufferedDurationUs: Long,
         playbackSpeed: Float, rebuffering: Boolean, targetLiveOffsetUs: Long): Boolean =
@@ -73,15 +82,38 @@ internal class LossyHoldBack(
     override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
         val ahead = parameters.bufferedDurationUs
         if (ahead >= aheadUs && held()) return false
-        if (ahead >= flacAheadUs && loading(parameters)?.let(flac) == true) return false
+        val item = loading(parameters)
+        if (item != null && flac(item) && !whole()) {
+            val now = playing()
+            if (now != null && item.mediaId != now) {
+                if (intoAhead(parameters, now) >= flacStartUs) return false
+            } else if (ahead >= flacAheadUs) return false
+        }
         return base.shouldContinueLoading(parameters)
     }
 
-    /** The song the player is fetching now. */
-    private fun loading(p: LoadControl.Parameters): MediaItem? {
+    /**
+     * How much of a song ahead is fetched: what's buffered past the end of the one playing
+     * ([now]). Where that song's length isn't known, all of what's buffered counts, so it
+     * stops early rather than late.
+     */
+    private fun intoAhead(p: LoadControl.Parameters, now: String): Long {
         val timeline = p.timeline
+        for (i in 0 until timeline.windowCount) {
+            val w = timeline.getWindow(i, window)
+            if (w.mediaItem.mediaId != now) continue
+            if (w.durationUs == C.TIME_UNSET) break
+            return p.bufferedDurationUs - (w.durationUs - p.playbackPositionUs).coerceAtLeast(0)
+        }
+        return p.bufferedDurationUs
+    }
+
+    /** The song the player is fetching now. */
+    private fun loading(p: LoadControl.Parameters): MediaItem? = item(p.timeline, p.mediaPeriodId)
+
+    private fun item(timeline: Timeline, id: MediaSource.MediaPeriodId): MediaItem? {
         if (timeline.isEmpty) return null
-        val index = timeline.getIndexOfPeriod(p.mediaPeriodId.periodUid)
+        val index = timeline.getIndexOfPeriod(id.periodUid)
         if (index == C.INDEX_UNSET) return null
         return timeline.getWindow(timeline.getPeriod(index, period).windowIndex, window).mediaItem
     }
