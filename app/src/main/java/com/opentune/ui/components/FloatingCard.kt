@@ -118,7 +118,7 @@ val LocalFloatingCard = compositionLocalOf<FloatingCardScope?> { null }
 /**
  * The app's one sheet, and every popup in the app is built on it: the screen's
  * width up to [SHEET_MAX_WIDTH] and centred past it, flush to the bottom of
- * the screen, rounded only at the top, rising over
+ * the screen, rising over
  * the page. Its fill is the reader's choice (see [SheetStyle]): a frosted
  * blur of the screen behind it, or the app's own theme, solid, wearing
  * whatever theme the page under it wears. It has a grab handle, an optional
@@ -487,9 +487,11 @@ fun FloatingCard(
                         .pointerInput(Unit) { detectTapGestures { } }
                         .insetBy {
                             val insideF = if (fullscreen) 1f - edgeLayout() else 0f
-                            // The bottom room is the navigation bar's at every height:
-                            // the sheet's fill runs under it, its content never does.
-                            InsetsPx(10.dp.roundToPx(), 10.dp.roundToPx() + (barsTop * insideF).roundToPx(), 10.dp.roundToPx(), 14.dp.roundToPx() + barsBottom.roundToPx())
+                            // The bottom room is the navigation bar's exactly, no more:
+                            // the sheet's fill runs under the bar, and its content
+                            // stops at the bar's own top edge, with no dead band of
+                            // fill above it.
+                            InsetsPx(10.dp.roundToPx(), 10.dp.roundToPx() + (barsTop * insideF).roundToPx(), 10.dp.roundToPx(), barsBottom.roundToPx())
                         },
                 ) {
                     // The handle and title pull the card down; content below keeps its own gestures.
