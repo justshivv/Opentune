@@ -325,7 +325,7 @@ class PlaybackService : MediaLibraryService() {
                     // over it. One item to the queue and the seek bar; two
                     // streams underneath, started together.
                     val audioSide = this.createMediaSource(mediaItem.buildUpon().setUri(audioUriFor(id)).build())
-                    val videoSide = sources.createMediaSource(mediaItem.buildUpon().setUri(videoOnlyUri(id)).build())
+                    val videoSide = sources.createMediaSource(mediaItem.buildUpon().setUri(videoOnlyUri(id, videoStepOf(uri))).build())
                     // The picture side leads: a merged source publishes its
                     // first source's item as the playing one, and the player
                     // reads video mode off that item's address — led by the
@@ -1374,6 +1374,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             watchStall(playbackState)
+            watchVideoStall(playbackState)
             if (playbackState == Player.STATE_READY) {
                 updateExternalStats()
                 healVideoMode()
@@ -3122,6 +3123,45 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    private var videoStallJob: Job? = null
+
+    /**
+     * A music video that stops to buffer mid-song and doesn't come back
+     * within [VIDEO_STALL_MS] steps its picture down a rung, from where it
+     * stopped: the resolver forgets the stalled stream and picks a lighter
+     * one (see [StreamResolver.stepDownVideo]), and the item is rebuilt on
+     * it, the way a stalled better stream falls back. At most
+     * [MAX_VIDEO_STEPS] a song — a connection that can't hold the lightest
+     * useful picture won't be fixed by another swap.
+     */
+    private fun watchVideoStall(state: Int) {
+        videoStallJob?.cancel()
+        if (state != Player.STATE_BUFFERING) return
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val item = player.currentMediaItem ?: return
+        val uri = item.localConfiguration?.uri ?: return
+        if (!isVideoUri(uri)) return
+        if (videoStepOf(uri) >= MAX_VIDEO_STEPS) return
+        // Only mid-song: the start and a seek buffer by design.
+        if (player.currentPosition < STALL_MIN_POSITION_MS) return
+        val at = player.currentPosition
+        videoStallJob = scope.launch {
+            delay(VIDEO_STALL_MS)
+            if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@launch
+            if (player.currentMediaItem?.localConfiguration?.uri != uri || kotlin.math.abs(player.currentPosition - at) > 1_000) return@launch
+            if (!StreamResolver.stepDownVideo(item.mediaId)) return@launch
+            Log.w(TAG, "Music video for ${item.mediaId} stalled for ${VIDEO_STALL_MS}ms at ${at}ms; stepping its picture down")
+            val index = player.currentMediaItemIndex
+            swappingTo = item.mediaId
+            player.replaceMediaItem(index, item.buildUpon().setUri(videoStreamUri(item.mediaId, videoStepOf(uri) + 1)).build())
+            updateExternalStats()
+            applyLoudness()
+            player.seekTo(index, at)
+            player.prepare()
+            PlaybackRequests.report("The video kept stopping, so its quality stepped down to match the connection")
+        }
+    }
+
     /** The stream the song last switched from, to go back to if the new one fails. */
     private var beforeSwap: Pair<String, android.net.Uri>? = null
 
@@ -3408,6 +3448,10 @@ class PlaybackService : MediaLibraryService() {
         /** Stuck buffering this long mid-song, a better stream gives way to the regular one. */
         const val STALL_FALLBACK_MS = 6_000L
         const val STALL_MIN_POSITION_MS = 3_000L
+        /** Stuck buffering this long mid-song, a music video's picture steps down a rung. */
+        const val VIDEO_STALL_MS = 6_000L
+        /** How many times one song's picture may step down after stalls. */
+        const val MAX_VIDEO_STEPS = 2
         const val FAR_BUFFER_MS = 15 * 60 * 1000
         const val FAR_BUFFER_BYTES = 48 * 1024 * 1024
         /** How far ahead a stream that a FLAC may replace is fetched; past the 30 s the player wants at least. */

@@ -353,7 +353,7 @@ object StreamResolver {
         // The picture is picked for the connection asking: a stream this
         // network cannot feed only stalls, so the best format here is the
         // heaviest the connection can sustain, not the tallest one going.
-        val ceiling = AppSettings.videoCeilingKbps()
+        val ceiling = minOf(AppSettings.videoCeilingKbps(), videoStepCaps[videoId] ?: Int.MAX_VALUE)
         videoUrls[videoId]?.let { url ->
             val kbps = videoKbps[videoId]
             if (kbps == null || kbps <= ceiling) return url
@@ -374,6 +374,23 @@ object StreamResolver {
         videoKbps[videoId] = picked.second
         VideoAvailability.remember(videoId, true)
         return picked.first
+    }
+
+    /**
+     * Steps [videoId]'s picture down after a stall: the held stream is
+     * forgotten and the next resolve is capped near the rung under the one
+     * that stalled, for the rest of the session. False when there is no
+     * held stream to judge by, or the picture is already at the lightest
+     * rung worth showing — a connection that can't hold that won't be
+     * fixed by another swap.
+     */
+    fun stepDownVideo(videoId: String): Boolean {
+        val servedKbps = videoKbps[videoId] ?: return false
+        if (servedKbps <= VIDEO_STEP_FLOOR_KBPS) return false
+        videoStepCaps[videoId] = (servedKbps * 55 / 100).coerceAtLeast(VIDEO_STEP_FLOOR_KBPS)
+        videoUrls.remove(videoId)
+        videoKbps.remove(videoId)
+        return true
     }
 
     /**
@@ -1325,6 +1342,12 @@ object StreamResolver {
 
     /** The bitrate of each held video URL, so [resolveVideo] can tell a held picture is too heavy for the connection now asking and resolve it again under that connection's ceiling. */
     private val videoKbps = ConcurrentHashMap<String, Int>()
+
+    /** Per-song picture ceilings set by a stall step-down (see [stepDownVideo]): a song that kept stopping keeps its lighter picture for the session, whatever the connection's own ceiling says. */
+    private val videoStepCaps = ConcurrentHashMap<String, Int>()
+
+    /** The lightest picture rung worth showing, in kbps: at or under it a stall step-down has nowhere left to go. */
+    private const val VIDEO_STEP_FLOOR_KBPS = 450
 
     /**
      * Whether [videoId] has a music video worth switching to — meaning a
