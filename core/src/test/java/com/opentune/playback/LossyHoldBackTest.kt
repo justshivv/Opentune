@@ -16,6 +16,7 @@ class LossyHoldBackTest {
     private val wantsMore = object : LoadControl {
         override fun getAllocator(playerId: PlayerId): Allocator = throw UnsupportedOperationException()
         override fun shouldContinueLoading(parameters: LoadControl.Parameters) = true
+        override fun shouldContinuePreloading(playerId: PlayerId, timeline: Timeline, mediaPeriodId: androidx.media3.exoplayer.source.MediaSource.MediaPeriodId, bufferedDurationUs: Long) = true
     }
     private fun ahead(seconds: Long) = LoadControl.Parameters(PlayerId.UNSET, Timeline.EMPTY, LoadControl.EMPTY_MEDIA_PERIOD_ID,
         0L, seconds * 1_000_000L, 1f, true, false, 0L, 0L)
@@ -57,5 +58,45 @@ class LossyHoldBackTest {
         org.robolectric.shadows.ShadowLooper.idleMainLooper(500, java.util.concurrent.TimeUnit.MILLISECONDS)
         player.stop()
         player.release()
+    }
+    /** Two songs in a row, each 200 s: [a] playing, [b] ahead. */
+    private val queue = object : Timeline() {
+        val items = listOf(androidx.media3.common.MediaItem.Builder().setMediaId("a").setUri("https://cdn.example/a").build(),
+            androidx.media3.common.MediaItem.Builder().setMediaId("b").setUri("https://cdn.example/b").build())
+        override fun getWindowCount() = 2
+        override fun getWindow(windowIndex: Int, window: Window, defaultPositionProjectionUs: Long): Window =
+            window.set(windowIndex, items[windowIndex], null, C.TIME_UNSET, C.TIME_UNSET, C.TIME_UNSET, true, false, null, 0L, 200_000_000L, windowIndex, windowIndex, 0L)
+        override fun getPeriodCount() = 2
+        override fun getPeriod(periodIndex: Int, period: Period, setIds: Boolean): Period =
+            period.set(periodIndex, periodIndex, periodIndex, 200_000_000L, 0L)
+        override fun getIndexOfPeriod(uid: Any) = uid as? Int ?: C.INDEX_UNSET
+        override fun getUidOfPeriod(periodIndex: Int): Any = periodIndex
+    }
+    /** At [positionS] into song a, with [bufferedS] fetched past it, the loader on song [loading]. */
+    private fun at(positionS: Long, bufferedS: Long, loading: Int) = LoadControl.Parameters(PlayerId.UNSET, queue,
+        androidx.media3.exoplayer.source.MediaSource.MediaPeriodId(loading), positionS * 1_000_000L, bufferedS * 1_000_000L, 1f, true, false, C.TIME_UNSET, C.TIME_UNSET)
+
+    @Test fun aFlacSongAheadIsFetchedOnlyItsFirstSecondsUnlessTheWholeIsAskedFor() {
+        var whole = false
+        val control = LossyHoldBack(wantsMore, 60_000_000L, 60_000_000L, flac = { it.mediaId == "b" },
+            flacStartUs = 10_000_000L, playing = { "a" }, whole = { whole }) { false }
+        // 190 s into a: 10 s of it left, so 15 s buffered is 5 s of b.
+        assertTrue(control.shouldContinueLoading(at(190, 15, loading = 1)))
+        assertFalse(control.shouldContinueLoading(at(190, 20, loading = 1)))
+        // Nearer the end the same 10 s of b is all it gets.
+        assertFalse(control.shouldContinueLoading(at(199, 11, loading = 1)))
+        // ExoPlayer's own preload of the next song stops there too.
+        assertFalse(control.shouldContinuePreloading(PlayerId.UNSET, queue, androidx.media3.exoplayer.source.MediaSource.MediaPeriodId(1), 10_000_000L))
+        whole = true
+        assertTrue(control.shouldContinueLoading(at(190, 120, loading = 1)))
+        assertTrue(control.shouldContinuePreloading(PlayerId.UNSET, queue, androidx.media3.exoplayer.source.MediaSource.MediaPeriodId(1), 30_000_000L))
+    }
+
+    @Test fun theFlacPlayingKeepsItsMinuteAheadAndAYouTubeSongAheadIsNotHeld() {
+        val control = LossyHoldBack(wantsMore, 60_000_000L, 60_000_000L, flac = { it.mediaId == "a" },
+            flacStartUs = 10_000_000L, playing = { "a" }) { false }
+        assertTrue(control.shouldContinueLoading(at(0, 50, loading = 0)))
+        assertFalse(control.shouldContinueLoading(at(0, 60, loading = 0)))
+        assertTrue("b is YouTube's: fetched as before", control.shouldContinueLoading(at(190, 120, loading = 1)))
     }
 }

@@ -1076,6 +1076,11 @@ private fun settingsSections(
                 Entry("Preload upcoming songs", "latency fast skip instant buffer lossless flac data") {
                     ToggleRow("Preload upcoming songs", pb.preloadUpcoming, { v -> AppSettings.updatePlayback { it.copy(preloadUpcoming = v) } }, summary = "Readies the next two songs so they start instantly", icon = ImageVector.vectorResource(AppIcons.Speed))
                 },
+                if (pb.preloadUpcoming) Entry("Preload whole lossless songs", "preload lossless flac data wifi unmetered buffer") {
+                    SettingRow("Preload whole lossless songs", summary = pb.losslessPreload.summary, icon = ImageVector.vectorResource(AppIcons.HighQuality), below = {
+                        PillSegmented(com.opentune.data.settings.LosslessPreload.entries, pb.losslessPreload, { it.label }, { v -> AppSettings.updatePlayback { it.copy(losslessPreload = v) } })
+                    })
+                } else null,
                 if (pb.preloadUpcoming) Entry("Boost preloading on Wi-Fi", "preload wifi unmetered buffer performance speed") {
                     ToggleRow(
                         "Boost preloading on Wi-Fi",
