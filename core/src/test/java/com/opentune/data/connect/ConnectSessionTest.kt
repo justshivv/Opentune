@@ -504,6 +504,21 @@ class ConnectSessionTest {
         assertEquals("b", onLoop { a.view.value.activeId })
     }
 
+    @Test fun aRestartsHelloOvertakingItsGoodbyeStillHearsAPausedDevice() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        pair(a, b)
+        b.plays(y)
+        eventually("a shows b") { a.view.value.activeId == "b" }
+        onLoop { b.player.playing = false; b.session.localChanged() }
+        Thread.sleep(50)
+        // a's goodbye takes a slow relay: its new hello gets to b first, so b still knows a.
+        hub.rule = { m -> if (m is ConnectMsg.Leave) listOf(200L) else listOf(0L) }
+        a.restart()
+        // b is paused, so it says its state again only when told someone new is listening.
+        eventually("a hears b's state again") { a.view.value.activeId == "b" }
+    }
+
     @Test fun bothDontKeepPlayingWhenTheAnswerAndThePauseAreLost() {
         val a = Dev("a", "Phone").start()
         val b = Dev("b", "Chrome").start()

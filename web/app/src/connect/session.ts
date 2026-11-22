@@ -497,7 +497,15 @@ export class ConnectSession {
         return this.onState(msg, known, now);
       case 'leave':
         // A goodbye from before something newer it said (a restart's hello overtaking it) is stale.
-        if (msg.seq < latest) return;
+        // That hello found this device still known, so nothing went back: the restarted one
+        // hasn't heard of it, and a paused one won't say its state again unasked.
+        if (msg.seq < latest) {
+          if (known) {
+            this.sayPresence();
+            this.sayState(true);
+          }
+          return;
+        }
         this.leftAt.set(msg.from, msg.seq);
         this.devices.delete(msg.from);
         this.offsets.delete(msg.from);

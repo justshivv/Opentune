@@ -511,6 +511,22 @@ describe('handovers over real-world relays', () => {
     stop();
   });
 
+  it("hears a paused device again when a restart's hello overtakes its goodbye", async () => {
+    const { devs: [a, b], chaos, restart, stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome' });
+    play(b!, y);
+    await eventually('a shows b', () => a!.view?.activeId === 'b');
+    b!.s.playing = false;
+    b!.session.localChanged();
+    await wait(50);
+    // a's goodbye takes a slow relay: its new hello gets to b first, so b still knows a.
+    chaos.rule = (m) => (m.type === 'leave' ? [200] : [0]);
+    const again = restart(a!);
+    // b is paused, so it says its state again only when told someone new is listening.
+    await eventually("a hears b's state again", () => again.view?.activeId === 'b');
+    again.session.stop();
+    stop();
+  });
+
   it('leaves one device playing when the answer and the pause are lost', async () => {
     const { devs: [a, b], chaos, stop } = await chaotic({ id: 'a', name: 'Phone' }, { id: 'b', name: 'Chrome' });
     play(a!, x);
