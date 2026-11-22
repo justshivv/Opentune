@@ -7,6 +7,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
@@ -96,7 +97,10 @@ internal fun rememberCoverLikeColor(artworkUrl: String?, fallback: Color): Color
     val onDark = LocalContentColor.current.luminance() > 0.5f
     // Plain memory, not state: it only bridges the gap and never needs to recompose anything.
     val last = remember { LastLikeColor() }
-    val target = if (palette.isEmpty()) last.color ?: fallback
+    // An opt-in extra (Settings > Like button colour): off, the heart keeps its usual colour.
+    val coloured = com.opentune.data.settings.AppSettings.ui.collectAsState().value.likeCoverColor
+    val target = if (!coloured) fallback
+    else if (palette.isEmpty()) last.color ?: fallback
     else (coverLikeColor(palette, onDark) ?: fallback).also { last.color = it }
     return animateColorAsState(target, tween(900), label = "coverLike").value
 }

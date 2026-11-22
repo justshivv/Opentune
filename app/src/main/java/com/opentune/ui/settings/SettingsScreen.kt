@@ -1497,6 +1497,9 @@ private fun settingsSections(
                 Entry("Audio quality label", "audio source quality pill badge codec bitrate jiosaavn youtube") {
                     ToggleRow("Show the quality label", ui.sourcePill, { v -> AppSettings.updateUi { it.copy(sourcePill = v) } }, summary = "Shows quality below the seek bar; tap for the signal path", icon = ImageVector.vectorResource(AppIcons.HighQuality))
                 },
+                Entry("Like button colour", "like heart star favourite favorite cover colour color player") {
+                    ToggleRow("Like button colour", ui.likeCoverColor, { v -> AppSettings.updateUi { it.copy(likeCoverColor = v) } }, summary = "The filled heart and star take the playing cover's colour", icon = ImageVector.vectorResource(AppIcons.Favorite))
+                },
                 Entry("Album covers", "artwork cover musicbrainz cover art archive video thumbnail") {
                     ToggleRow("Sharper album covers", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "Shows sharper album covers from Apple Music, Deezer and more", icon = ImageVector.vectorResource(AppIcons.Album))
                 },

@@ -560,6 +560,8 @@ data class InterfaceSettings(
     val skipToChorus: Boolean = false,
     /** The pill under the title naming where the audio comes from and its quality. */
     val sourcePill: Boolean = true,
+    /** The filled like heart (and the Apple-style star) takes the playing cover's colour. */
+    val likeCoverColor: Boolean = false,
     /** A soft light in the cover's colour under the player's cover. */
     val coverGlow: Boolean = true,
     /** Double-tapping the cover's left or right side goes back or on ten seconds. */
