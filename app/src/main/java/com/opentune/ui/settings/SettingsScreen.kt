@@ -1009,6 +1009,9 @@ private fun settingsSections(
                 Entry("Unmetered networks only", "flac saavn mobile wifi data") {
                     ToggleRow("Unmetered networks only", pb.losslessWifiOnly, { v -> AppSettings.updatePlayback { it.copy(losslessWifiOnly = v) } }, summary = "Uses YouTube on mobile data, even with Lossless on", icon = ImageVector.vectorResource(AppIcons.Wifi))
                 },
+                Entry("Not on the phone's speaker", "flac lossless speaker headphones bluetooth output") {
+                    ToggleRow("Not on the phone's speaker", pb.losslessOffSpeaker, { v -> AppSettings.updatePlayback { it.copy(losslessOffSpeaker = v) } }, summary = "When on, the phone's own speaker plays YouTube even with Lossless selected. Headphones, Bluetooth, USB and other outputs still get FLAC", icon = ImageVector.vectorResource(AppIcons.HighQuality))
+                },
                 // On the main Settings page; here only so searching finds it.
                 Entry("Audio sources", "audio add-ons addons source URL manifest order priority lossless flac high res") {
                     NavRow("Audio sources", { audioAddons = true }, summary = audioSourcesSummary(), icon = ImageVector.vectorResource(AppIcons.Extension))

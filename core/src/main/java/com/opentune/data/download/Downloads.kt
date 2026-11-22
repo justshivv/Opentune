@@ -215,8 +215,8 @@ object Downloads {
         // A FLAC search that recently found nothing, with the same add-ons on, isn't counted on.
         val noFlac = DownloadedCopy.missHolds(_entries.value[videoId]?.losslessMiss, System.currentTimeMillis(), DownloadedCopy.addonSet())
         val possible = when {
-            com.opentune.data.lossless.ExternalStreams.allowed(true) && !noFlac -> DownloadedCopy.CD_KBPS
-            com.opentune.data.lossless.ExternalStreams.allowed(false) -> 320
+            com.opentune.data.lossless.ExternalStreams.allowed(true, playing = false) && !noFlac -> DownloadedCopy.CD_KBPS
+            com.opentune.data.lossless.ExternalStreams.allowed(false, playing = false) -> 320
             else -> youtube
         }
         return maxOf(known ?: 0, possible, youtube)

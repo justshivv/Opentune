@@ -39,6 +39,7 @@ class SettingsDefaultsTest {
             assertEquals(com.opentune.data.history.ListeningHistoryTarget.YOUTUBE_MUSIC, settings.playback.listeningHistoryTarget)
             assertFalse(settings.playback.losslessUnmeteredOnly)
             assertTrue(settings.playback.losslessWifiOnly)
+            assertFalse(settings.playback.losslessOffSpeaker)
             assertTrue(settings.playback.preloadUpcoming)
             assertFalse(settings.playback.preloadBoostOnWifi)
             assertTrue(settings.lyrics.preferWordSynced)
