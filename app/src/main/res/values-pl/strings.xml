@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Odtwarzany utwór z przyciskami odtwarzania, pomijania i polubienia</string>
     <string name="widget_nothing_playing">Nic nie jest odtwarzane</string>
-    <string name="widget_open">Dotknij, aby otworzyć OpenTune</string>
+    <string name="widget_open">Dotknij, aby otworzyć NepTune</string>
     <string name="widget_like">Polub</string>
     <string name="widget_unlike">Usuń z polubionych</string>
     <string name="widget_previous">Poprzedni</string>

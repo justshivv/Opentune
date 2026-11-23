@@ -152,9 +152,9 @@ fun performanceApplied(ui: InterfaceSettings, pb: PlaybackSettings, profile: Per
 /** How music reaches the DAC unchanged. */
 @Serializable
 enum class BitPerfectOutput(val label: String, val summary: String) {
-    OFF("Off", "Audio goes through Android's mixer and OpenTune's effects"),
+    OFF("Off", "Audio goes through Android's mixer and NepTune's effects"),
     USB_ANDROID("USB DAC", "Android 14 opens the DAC at each track's own rate and bit depth, without mixing or resampling"),
-    USB_DIRECT("USB DAC (direct driver)", "OpenTune drives the DAC itself, on any Android version, at each track's own rate. Asks for USB permission"),
+    USB_DIRECT("USB DAC (direct driver)", "NepTune drives the DAC itself, on any Android version, at each track's own rate. Asks for USB permission"),
     BUILT_IN("Built-in DAC (exclusive)", "For phones and players with their own DAC: the headphone or line output opened exclusively at each track's rate. Not every device allows it"),
     HEADPHONE_JACK("Headphone jack", "The phone's own 3.5 mm jack at each track's rate and bit depth: Android 14's bit-perfect path where the phone offers it for the jack, otherwise the jack opened exclusively. Not every phone allows it"),
 }

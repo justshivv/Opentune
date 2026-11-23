@@ -321,7 +321,7 @@ internal fun ReplayStory(summary: ReplaySummary, range: ReplayRange, onDismiss: 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(com.opentune.i18n.Tr.f("Replay · {0}", range.heading()), Modifier.weight(1f), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Icon(painterResource(com.opentune.R.drawable.ic_launcher_monochrome), null, Modifier.size(30.dp), tint = Color.White)
-                        Text("OpenTune", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("NepTune", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Spacer(Modifier.height(14.dp))
                     p.content(this)

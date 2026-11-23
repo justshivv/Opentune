@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">चल रहे गाने को चलाएँ, छोड़ें या पसंद करें</string>
     <string name="widget_nothing_playing">कुछ नहीं चल रहा</string>
-    <string name="widget_open">OpenTune खोलने के लिए टैप करें</string>
+    <string name="widget_open">NepTune खोलने के लिए टैप करें</string>
     <string name="widget_like">पसंद करें</string>
     <string name="widget_unlike">पसंदीदा गानों से हटाएँ</string>
     <string name="widget_previous">पिछला</string>

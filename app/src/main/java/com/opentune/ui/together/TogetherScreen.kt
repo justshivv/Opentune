@@ -239,7 +239,7 @@ internal fun StartRoom(
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Hero(height = 148.dp)
                 Text(
-                    if (invite != null) "Listen with your friends in OpenTune. Tap Join when you’re ready."
+                    if (invite != null) "Listen with your friends in NepTune. Tap Join when you’re ready."
                     else "Start a room and friends hear what you play, in step, on their own phones. Or join a friend's room with their code.",
                     style = MaterialTheme.typography.bodyLarge,
                     // Body text at full strength: the grey it had read faint on black.

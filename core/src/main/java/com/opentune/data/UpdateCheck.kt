@@ -273,7 +273,7 @@ object UpdateCheck {
         )
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(com.opentune.core.R.drawable.ic_stat_opentune)
-            .setContentTitle(com.opentune.i18n.Tr.f("OpenTune {0} is out", release.version))
+            .setContentTitle(com.opentune.i18n.Tr.f("NepTune {0} is out", release.version))
             .setContentText(com.opentune.i18n.Tr.f("Tap to update from {0}", BuildConfig.VERSION_NAME))
             .setContentIntent(open)
             .setAutoCancel(true)

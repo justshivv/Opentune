@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Bài đang phát, kèm phát, bỏ qua và thích</string>
     <string name="widget_nothing_playing">Không có gì đang phát</string>
-    <string name="widget_open">Nhấn để mở OpenTune</string>
+    <string name="widget_open">Nhấn để mở NepTune</string>
     <string name="widget_like">Thích</string>
     <string name="widget_unlike">Xóa khỏi mục Đã thích</string>
     <string name="widget_previous">Trước</string>

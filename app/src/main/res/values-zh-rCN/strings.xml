@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">显示正在播放的歌曲，可播放、跳过和点赞</string>
     <string name="widget_nothing_playing">没有正在播放的内容</string>
-    <string name="widget_open">点按打开 OpenTune</string>
+    <string name="widget_open">点按打开 NepTune</string>
     <string name="widget_like">喜欢</string>
     <string name="widget_unlike">从喜欢中移除</string>
     <string name="widget_previous">上一首</string>

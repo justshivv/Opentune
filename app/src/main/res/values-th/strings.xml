@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">เพลงที่กำลังเล่น พร้อมปุ่มเล่น ข้าม และถูกใจ</string>
     <string name="widget_nothing_playing">ไม่มีเพลงที่กำลังเล่น</string>
-    <string name="widget_open">แตะเพื่อเปิด OpenTune</string>
+    <string name="widget_open">แตะเพื่อเปิด NepTune</string>
     <string name="widget_like">ถูกใจ</string>
     <string name="widget_unlike">นำออกจากรายการที่ถูกใจ</string>
     <string name="widget_previous">ก่อนหน้า</string>

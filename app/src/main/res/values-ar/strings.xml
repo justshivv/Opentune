@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">ما يُشغَّل الآن، مع التشغيل والتخطي والإعجاب</string>
     <string name="widget_nothing_playing">لا شيء قيد التشغيل</string>
-    <string name="widget_open">انقر لفتح OpenTune</string>
+    <string name="widget_open">انقر لفتح NepTune</string>
     <string name="widget_like">إعجاب</string>
     <string name="widget_unlike">إزالة من الإعجابات</string>
     <string name="widget_previous">السابق</string>

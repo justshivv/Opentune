@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">ಈಗ ಪ್ಲೇ ಆಗುತ್ತಿರುವ ಹಾಡು, ಪ್ಲೇ, ಸ್ಕಿಪ್ ಮತ್ತು ಲೈಕ್ ಜೊತೆಗೆ</string>
     <string name="widget_nothing_playing">ಏನೂ ಪ್ಲೇ ಆಗುತ್ತಿಲ್ಲ</string>
-    <string name="widget_open">OpenTune ತೆರೆಯಲು ಟ್ಯಾಪ್ ಮಾಡಿ</string>
+    <string name="widget_open">NepTune ತೆರೆಯಲು ಟ್ಯಾಪ್ ಮಾಡಿ</string>
     <string name="widget_like">ಲೈಕ್</string>
     <string name="widget_unlike">ಲೈಕ್ ಮಾಡಿದವುಗಳಿಂದ ತೆಗೆದುಹಾಕಿ</string>
     <string name="widget_previous">ಹಿಂದಿನದು</string>

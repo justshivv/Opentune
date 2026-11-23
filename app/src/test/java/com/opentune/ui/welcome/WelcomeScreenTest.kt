@@ -184,7 +184,7 @@ class WelcomeScreenTest {
         val shadow = shadowOf(compose.activity)
         while (shadow.nextStartedActivity != null) Unit
 
-        tap("Star OpenTune on GitHub")
+        tap("Star NepTune on GitHub")
         val github = shadow.nextStartedActivity
         assertEquals(Intent.ACTION_VIEW, github.action)
         assertEquals(Support.REPO, github.dataString)

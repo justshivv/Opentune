@@ -306,7 +306,7 @@ fun LyricCardSheet(
                     // A song that can't be read leaves the video without it, never fails it.
                     runCatching { VideoFiles.audioSource(song.videoId)?.let { source -> LyricVideoEncoder.audio(source, startMs - offsetMs, startMs - offsetMs + lengthMs) } }.getOrNull()
                 } else null
-                val file = VideoFiles.fresh(context, "OpenTune-lyrics-${song.videoId}.mp4")
+                val file = VideoFiles.fresh(context, "NepTune-lyrics-${song.videoId}.mp4")
                 // OpenGL wants one thread for all of its calls.
                 val thread = java.util.concurrent.Executors.newSingleThreadExecutor()
                 try {
@@ -327,7 +327,7 @@ fun LyricCardSheet(
     val list = rememberLazyListState()
     // Open on the line being sung, a little way down so the lines before it show too.
     LaunchedEffect(Unit) { if (pickable && startAt > 0) list.scrollToItem((startAt - 2).coerceAtLeast(0)) }
-    val fileName = "OpenTune-lyrics-${song.videoId}${if (story) "-story" else ""}.png"
+    val fileName = "NepTune-lyrics-${song.videoId}${if (story) "-story" else ""}.png"
     val isVideo = kind == ShareKind.VIDEO
     val ready = if (isVideo) video != null && making == null else preview != null
     FloatingCard(
@@ -355,7 +355,7 @@ fun LyricCardSheet(
                         makeVideo { file ->
                             scope.launch {
                                 val saved = runCatching { VideoFiles.save(context, file) }.isSuccess
-                                if (saved) com.opentune.data.Pills.done("Saved to Movies/OpenTune", context) else com.opentune.data.Pills.error("Couldn't save the video", context)
+                                if (saved) com.opentune.data.Pills.done("Saved to Movies/NepTune", context) else com.opentune.data.Pills.error("Couldn't save the video", context)
                             }
                         }
                         return@SheetButton
@@ -363,7 +363,7 @@ fun LyricCardSheet(
                     val card = preview ?: return@SheetButton
                     scope.launch {
                         val saved = runCatching { ShareCard.saveImage(context, card, fileName) }.isSuccess
-                        if (saved) com.opentune.data.Pills.done("Saved to Pictures/OpenTune", context) else com.opentune.data.Pills.error("Couldn't save the card", context)
+                        if (saved) com.opentune.data.Pills.done("Saved to Pictures/NepTune", context) else com.opentune.data.Pills.error("Couldn't save the card", context)
                     }
                 },
             )
@@ -431,7 +431,7 @@ fun LyricCardSheet(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
                     onClick = { haptics.tick(); videoCard = !videoCard },
                 )
-                com.opentune.ui.components.ToggleRow("Show the OpenTune logo", showLogo, { haptics.tick(); showLogo = it })
+                com.opentune.ui.components.ToggleRow("Show the NepTune logo", showLogo, { haptics.tick(); showLogo = it })
                 com.opentune.ui.components.ToggleRow(
                     "Include the song", withSong, { haptics.tick(); withSong = it },
                     summary = "The part of the song the lines are sung in, under the video",

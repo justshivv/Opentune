@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">What\'s playing, with play, skip and like</string>
     <string name="widget_nothing_playing">எதுவும் ஒலிக்கவில்லை</string>
-    <string name="widget_open">Tap to open OpenTune</string>
+    <string name="widget_open">Tap to open NepTune</string>
     <string name="widget_like">விருப்பம்</string>
     <string name="widget_unlike">Remove from Liked</string>
     <string name="widget_previous">முந்தையது</string>

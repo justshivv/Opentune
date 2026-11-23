@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">सध्या वाजणारे गाणे, प्ले, स्किप आणि लाइकसह</string>
     <string name="widget_nothing_playing">काहीही वाजत नाही</string>
-    <string name="widget_open">OpenTune उघडण्यासाठी टॅप करा</string>
+    <string name="widget_open">NepTune उघडण्यासाठी टॅप करा</string>
     <string name="widget_like">लाइक</string>
     <string name="widget_unlike">लाइक केलेल्यांमधून काढा</string>
     <string name="widget_previous">मागील</string>

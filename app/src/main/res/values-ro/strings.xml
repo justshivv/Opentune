@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Ce se redă acum, cu redare, salt și apreciere</string>
     <string name="widget_nothing_playing">Nu se redă nimic</string>
-    <string name="widget_open">Atinge pentru a deschide OpenTune</string>
+    <string name="widget_open">Atinge pentru a deschide NepTune</string>
     <string name="widget_like">Apreciez</string>
     <string name="widget_unlike">Elimină din aprecieri</string>
     <string name="widget_previous">Anterioara</string>

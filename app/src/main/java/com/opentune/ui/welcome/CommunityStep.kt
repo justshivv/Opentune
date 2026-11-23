@@ -81,14 +81,14 @@ internal fun CommunityStep(reduceMotion: Boolean) {
         Column(Modifier.widthIn(max = 600.dp).fillMaxWidth()) {
             StepTitle(
                 "Made together",
-                "OpenTune is free and open source, and it grows with the people who listen on it. Both of these are optional.",
+                "NepTune is free and open source, and it grows with the people who listen on it. Both of these are optional.",
             )
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 CommunityCard(
                     logo = githubLogo,
                     accent = MaterialTheme.colorScheme.onSurface,
                     onAccent = MaterialTheme.colorScheme.surface,
-                    title = "Star OpenTune on GitHub",
+                    title = "Star NepTune on GitHub",
                     line = "A star helps more listeners find the app. It opens GitHub, where you can star it if you like.",
                     url = { CommunityLinks.github },
                     reduceMotion = reduceMotion,

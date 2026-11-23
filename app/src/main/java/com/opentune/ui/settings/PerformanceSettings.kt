@@ -72,7 +72,7 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
         "High performance mode",
         ui.highRefreshRate,
         { v -> AppSettings.updateUi { it.copy(highRefreshRate = v) } },
-        summary = if (ui.highRefreshRate) com.opentune.i18n.Tr.f("{0} Hz requested. Android may lower it when needed.", chosen) else "Runs the screen at a faster rate while OpenTune is open, for smoother scrolling",
+        summary = if (ui.highRefreshRate) com.opentune.i18n.Tr.f("{0} Hz requested. Android may lower it when needed.", chosen) else "Runs the screen at a faster rate while NepTune is open, for smoother scrolling",
         icon = ImageVector.vectorResource(AppIcons.Speed),
     )
     if (ui.highRefreshRate && rates.size > 1) {
@@ -93,7 +93,7 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
         RowDivider()
         SettingRow(
             "Allow unrestricted battery use",
-            summary = "Keeps Android from slowing OpenTune down to save power",
+            summary = "Keeps Android from slowing NepTune down to save power",
             icon = ImageVector.vectorResource(AppIcons.BatteryChargingFull),
             onClick = { requestUnrestricted(context) },
         )
@@ -107,7 +107,7 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
             text = {
                 Text(
                     "Android slows down apps it saves battery on, so frames drop and the first scrolls stutter. " +
-                        "Unrestricted use lets OpenTune keep the faster refresh rate. You can change this later in Android's settings.",
+                        "Unrestricted use lets NepTune keep the faster refresh rate. You can change this later in Android's settings.",
                     modifier = Modifier.padding(top = 4.dp),
                 )
             },

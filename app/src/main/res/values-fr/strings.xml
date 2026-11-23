@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Le titre en cours, avec lecture, passage et j\'aime</string>
     <string name="widget_nothing_playing">Aucune lecture</string>
-    <string name="widget_open">Appuyez pour ouvrir OpenTune</string>
+    <string name="widget_open">Appuyez pour ouvrir NepTune</string>
     <string name="widget_like">J’aime</string>
     <string name="widget_unlike">Retirer des titres aimés</string>
     <string name="widget_previous">Précédent</string>

@@ -38,8 +38,8 @@ import com.opentune.ui.theme.AppIcons
 object Support {
     val REPO: String get() = com.opentune.data.config.RemoteConfig.current.github
     const val UPI_ID = "whoosthis@axl"
-    private const val PAYEE = "OpenTune"
-    private const val NOTE = "Support OpenTune"
+    private const val PAYEE = "NepTune"
+    private const val NOTE = "Support NepTune"
     /** Suggested amounts, in rupees. */
     val AMOUNTS = listOf(49, 99, 199, 499)
 
@@ -115,10 +115,10 @@ fun SupportDialog(onDismiss: () -> Unit) {
     FloatingDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(ImageVector.vectorResource(AppIcons.Favorite), null) },
-        title = { Text("Support OpenTune") },
+        title = { Text("Support NepTune") },
         text = {
             Column {
-                Text("OpenTune has no ads and nothing to sell. If it has added a little something to your days, a small thank-you helps keep it going, and every one is truly appreciated.")
+                Text("NepTune has no ads and nothing to sell. If it has added a little something to your days, a small thank-you helps keep it going, and every one is truly appreciated.")
                 Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Support.AMOUNTS.forEach { a ->
                         FilterChip(selected = text == a.toString(), onClick = { text = a.toString() }, label = { Text("₹$a") })
@@ -176,8 +176,8 @@ fun InviteCard(invite: Support.Invite, onDismiss: () -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    if (discord) "Talk to other listeners, swap add-ons, report bugs and hear about new features first. It's where OpenTune gets shaped."
-                    else "OpenTune is free and open source. A star on GitHub helps more listeners find the app, and takes a second."
+                    if (discord) "Talk to other listeners, swap add-ons, report bugs and hear about new features first. It's where NepTune gets shaped."
+                    else "NepTune is free and open source. A star on GitHub helps more listeners find the app, and takes a second."
                 )
                 androidx.compose.material3.FilledTonalButton(
                     onClick = { open(if (discord) Support.DISCORD else Support.REPO) },

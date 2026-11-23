@@ -20,7 +20,7 @@ import kotlinx.coroutines.withContext
  *
  * A file on the phone is used where it is. A downloaded song lives in the
  * app's private storage, which the system's ringer can't read, so a copy
- * goes to Ringtones/OpenTune first, marked as a ringtone rather than music
+ * goes to Ringtones/NepTune first, marked as a ringtone rather than music
  * so it doesn't turn up in music apps.
  */
 object Ringtones {
@@ -70,7 +70,7 @@ object Ringtones {
                 resolver.update(uri, ContentValues().apply { put(kind.column, 1) }, null, null)
                 return uri
             }
-            values.put(MediaStore.Audio.Media.RELATIVE_PATH, "${Environment.DIRECTORY_RINGTONES}/OpenTune")
+            values.put(MediaStore.Audio.Media.RELATIVE_PATH, "${Environment.DIRECTORY_RINGTONES}/NepTune")
             values.put(MediaStore.Audio.Media.IS_PENDING, 1)
             val uri = resolver.insert(collection, values) ?: error("Couldn't add the ringtone")
             try {
@@ -83,7 +83,7 @@ object Ringtones {
             return uri
         }
         @Suppress("DEPRECATION")
-        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_RINGTONES), "OpenTune").apply { mkdirs() }
+        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_RINGTONES), "NepTune").apply { mkdirs() }
         val target = File(dir, name)
         if (!target.exists()) file.copyTo(target)
         @Suppress("DEPRECATION")

@@ -199,7 +199,7 @@ fun ImportScreen(
         item { PageHeader("Import a playlist", onBack = onBack) }
         item {
             Text(
-                "Paste a Spotify or YouTube Music link, share one to OpenTune, or pick a CSV export. Songs play from YouTube Music. No sign-in needed.",
+                "Paste a Spotify or YouTube Music link, share one to NepTune, or pick a CSV export. Songs play from YouTube Music. No sign-in needed.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),

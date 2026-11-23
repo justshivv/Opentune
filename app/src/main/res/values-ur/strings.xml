@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">جو گانا چل رہا ہے، چلانے، چھوڑنے اور پسند کرنے کے ساتھ</string>
     <string name="widget_nothing_playing">کچھ نہیں چل رہا</string>
-    <string name="widget_open">OpenTune کھولنے کے لیے تھپتھپائیں</string>
+    <string name="widget_open">NepTune کھولنے کے لیے تھپتھپائیں</string>
     <string name="widget_like">پسند کریں</string>
     <string name="widget_unlike">پسندیدہ سے ہٹائیں</string>
     <string name="widget_previous">پچھلا</string>

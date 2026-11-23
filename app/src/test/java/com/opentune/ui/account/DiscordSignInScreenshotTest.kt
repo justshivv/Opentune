@@ -38,7 +38,7 @@ class DiscordSignInScreenshotTest {
         org.junit.Assert.assertEquals(page.height - 64f * compose.activity.resources.displayMetrics.density, browser.height, 1f)
         compose.onNodeWithContentDescription("Sign-in help").performClick()
         compose.mainClock.advanceTimeBy(1000)
-        compose.onNodeWithText("Use OpenTune's form").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Use NepTune's form").assertIsDisplayed().performClick()
         compose.mainClock.advanceTimeBy(1000)
         compose.waitForIdle()
         compose.onNodeWithText("Email or phone number").assertIsDisplayed()

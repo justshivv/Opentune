@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Wat er speelt, met afspelen, overslaan en leuk vinden</string>
     <string name="widget_nothing_playing">Er wordt niets afgespeeld</string>
-    <string name="widget_open">Tik om OpenTune te openen</string>
+    <string name="widget_open">Tik om NepTune te openen</string>
     <string name="widget_like">Leuk</string>
     <string name="widget_unlike">Verwijderen uit Leuk gevonden</string>
     <string name="widget_previous">Vorige</string>

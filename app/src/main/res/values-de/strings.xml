@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Was gerade läuft, mit Wiedergabe, Überspringen und Gefällt mir</string>
     <string name="widget_nothing_playing">Keine Wiedergabe</string>
-    <string name="widget_open">Tippen, um OpenTune zu öffnen</string>
+    <string name="widget_open">Tippen, um NepTune zu öffnen</string>
     <string name="widget_like">Gefällt mir</string>
     <string name="widget_unlike">Aus „Gefällt mir“ entfernen</string>
     <string name="widget_previous">Zurück</string>

@@ -334,7 +334,7 @@ fun SettingsScreen(
                 }
                 item {
                     Text(
-                        com.opentune.i18n.Tr.f("OpenTune {0} • GNU GPL v3 • Lyrics from LRCLIB", BuildConfig.VERSION_NAME),
+                        com.opentune.i18n.Tr.f("NepTune {0} • GNU GPL v3 • Lyrics from LRCLIB", BuildConfig.VERSION_NAME),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -592,7 +592,7 @@ private fun settingsSections(
             message = runCatching {
                 withContext(Dispatchers.IO) {
                     val doc = buildJsonObject {
-                        put("app", "OpenTune")
+                        put("app", "NepTune")
                         put("version", 1)
                         put("settings", AppSettings.exportJson())
                         put("history", History.exportJson())
@@ -610,7 +610,7 @@ private fun settingsSections(
             message = runCatching {
                 val doc = withContext(Dispatchers.IO) {
                     context.contentResolver.openInputStream(uri)?.use { AppSettings.json.parseToJsonElement(it.readBytes().decodeToString()) }
-                } as? JsonObject ?: error("not an OpenTune export")
+                } as? JsonObject ?: error("not a NepTune export")
                 doc["settings"]?.let(AppSettings::importJson)
                 doc["history"]?.let(History::importJson)
                 doc["library"]?.let(LibraryStore::importJson)
@@ -1043,7 +1043,7 @@ private fun settingsSections(
                     NavRow(
                         "Background playback",
                         { runCatching { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } },
-                        summary = if (ignoring) "Unrestricted: music keeps playing with the screen off" else "Restricted: if playback stops in the background, set OpenTune to Unrestricted",
+                        summary = if (ignoring) "Unrestricted: music keeps playing with the screen off" else "Restricted: if playback stops in the background, set NepTune to Unrestricted",
                         icon = ImageVector.vectorResource(AppIcons.BatteryChargingFull),
                     )
                 },
@@ -1284,7 +1284,7 @@ private fun settingsSections(
                         value = com.opentune.ui.theme.AppLanguages.selected(context).label)
                 },
                 Entry("App icon", "launcher icon design glass pearl midnight rose ocean") {
-                    NavRow("App icon", { appIconDialog = true }, summary = "Choose the OpenTune icon on your home screen", icon = ImageVector.vectorResource(AppIcons.Palette))
+                    NavRow("App icon", { appIconDialog = true }, summary = "Choose the NepTune icon on your home screen", icon = ImageVector.vectorResource(AppIcons.Palette))
                 },
                 Entry("Fonts & readability", "font typeface text weight bold thin ttf otf import custom") {
                     NavRow("Fonts & readability", { fontDialog = true }, summary = "Built-in fonts, text weight and your own font file", icon = ImageVector.vectorResource(AppIcons.TextFields), value = theme.font.label)
@@ -1830,14 +1830,14 @@ private fun settingsSections(
                                 val (copied, skipped) = com.opentune.data.download.Downloads.exportExisting(context.applicationContext)
                                 val note = buildString {
                                     append(if (copied == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", copied))
-                                    append(" copied to Music/OpenTune")
+                                    append(" copied to Music/NepTune")
                                     if (skipped > 0) append(com.opentune.i18n.Tr.f("; {0} in a format other apps can't play, download them again to export", skipped))
                                 }
                                 if (copied > 0 || skipped > 0) com.opentune.data.Pills.done(note, context)
                             }
                         },
                         summary = if (com.opentune.data.download.DownloadExport.supported)
-                            "Also saves each download to Music/OpenTune as AAC (M4A) or FLAC, so other music apps can play it"
+                            "Also saves each download to Music/NepTune as AAC (M4A) or FLAC, so other music apps can play it"
                         else "Needs Android 10 or newer",
                         icon = ImageVector.vectorResource(AppIcons.DownloadDone),
                         enabled = com.opentune.data.download.DownloadExport.supported,
@@ -2070,7 +2070,7 @@ private fun settingsSections(
                                 checkingUpdates = false
                             }
                         }
-                    }, summary = pendingUpdate?.let { com.opentune.i18n.Tr.f("OpenTune {0} is ready to install. You have {1}.", it.version, BuildConfig.VERSION_NAME) } ?: com.opentune.i18n.Tr.f("Current version: {0}", BuildConfig.VERSION_NAME), icon = ImageVector.vectorResource(AppIcons.Update), dot = pendingUpdate != null, busy = checkingUpdates)
+                    }, summary = pendingUpdate?.let { com.opentune.i18n.Tr.f("NepTune {0} is ready to install. You have {1}.", it.version, BuildConfig.VERSION_NAME) } ?: com.opentune.i18n.Tr.f("Current version: {0}", BuildConfig.VERSION_NAME), icon = ImageVector.vectorResource(AppIcons.Update), dot = pendingUpdate != null, busy = checkingUpdates)
                 },
                 Entry("Check for updates automatically", "update new version release auto") {
                     ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Checks GitHub for new versions and offers updates", icon = ImageVector.vectorResource(AppIcons.Autorenew))
@@ -2084,17 +2084,17 @@ private fun settingsSections(
                         icon = ImageVector.vectorResource(AppIcons.Info),
                     )
                 },
-                Entry("OpenTune community", "github discord community addons developer") { CommunityBanner() },
+                Entry("NepTune community", "github discord community addons developer") { CommunityBanner() },
                 Entry("Contributors", "contributors github community helpers developers") {
                     NavRow("Contributors", { contributorsOpen = true }, summary = "The people who pitch in with fixes and improvements", icon = ImageVector.vectorResource(AppIcons.People))
                 },
-                Entry("Support OpenTune", "donate upi pay money tip support developer") {
-                    NavRow("Support OpenTune", { supportDialog = true }, summary = "A small thank-you helps keep OpenTune going", icon = ImageVector.vectorResource(AppIcons.Favorite))
+                Entry("Support NepTune", "donate upi pay money tip support developer") {
+                    NavRow("Support NepTune", { supportDialog = true }, summary = "A small thank-you helps keep NepTune going", icon = ImageVector.vectorResource(AppIcons.Favorite))
                 },
                 Entry("Star on GitHub", "star github rate like") {
                     NavRow("Star on GitHub", {
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, com.opentune.ui.components.Support.REPO.toUri())) }
-                    }, summary = "Helps other people find OpenTune", icon = ImageVector.vectorResource(AppIcons.Star))
+                    }, summary = "Helps other people find NepTune", icon = ImageVector.vectorResource(AppIcons.Star))
                 },
                 Entry("Source code", "github open source license gpl") {
                     NavRow("Source code", {
@@ -2113,7 +2113,7 @@ private fun settingsSections(
                         scope.launch {
                             val log = LogExport.recent()
                             val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                                .putExtra(Intent.EXTRA_SUBJECT, com.opentune.i18n.Tr.f("OpenTune {0} log", BuildConfig.VERSION_NAME))
+                                .putExtra(Intent.EXTRA_SUBJECT, com.opentune.i18n.Tr.f("NepTune {0} log", BuildConfig.VERSION_NAME))
                                 .putExtra(Intent.EXTRA_TEXT, log)
                             context.startActivity(Intent.createChooser(send, "Share log"))
                         }

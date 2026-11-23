@@ -98,7 +98,7 @@ fun LinkDeviceScreen(
         val view = Intent(Intent.ACTION_VIEW, text.toUri())
         if (!com.opentune.ui.account.PairingLinks.receive(view)) {
             if (com.opentune.ui.Links.parse(text) != null || text.startsWith("opentune://")) com.opentune.ui.Links.receive(view)
-            else Pills.error("That isn't an OpenTune code", context)
+            else Pills.error("That isn't a NepTune code", context)
         }
     }
     val signedIn by AccountStore.signedIn.collectAsState()
@@ -122,7 +122,7 @@ fun LinkDeviceScreen(
         item { PageHeader("Link a device", onBack = onBack) }
         item {
             Text(
-                "Sign in your TV, open OpenTune on a computer, play on a speaker or listen with a friend.",
+                "Sign in your TV, open NepTune on a computer, play on a speaker or listen with a friend.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
@@ -175,7 +175,7 @@ fun LinkDeviceScreen(
                             "Send what's playing to a Chromecast, a Google speaker or a TV that plays over the network.",
                         ) {
                             Step(1, "Join the same Wi-Fi", "The speaker or TV and this phone need to be on the same network.")
-                            Step(2, "Pick it from the list", "OpenTune looks for devices nearby. The phone stays the remote.", last = true) {
+                            Step(2, "Pick it from the list", "NepTune looks for devices nearby. The phone stays the remote.", last = true) {
                                 Buttons({ SheetButton("Find devices", onClick = { casting = true }, icon = ImageVector.vectorResource(AppIcons.Cast), tone = SheetTone.Primary) })
                             }
                         }
@@ -184,7 +184,7 @@ fun LinkDeviceScreen(
                             "Listen to the same song at the same moment on two phones, wherever each of you is, and chat or talk as it plays.",
                         ) {
                             Step(1, "Start a room", "You get a code and a link to send.")
-                            Step(2, "Your friend joins", "They open the link, or type the code in OpenTune.", last = true) {
+                            Step(2, "Your friend joins", "They open the link, or type the code in NepTune.", last = true) {
                                 Buttons({ SheetButton("Listen together", onClick = onTogether, icon = ImageVector.vectorResource(AppIcons.Groups), tone = SheetTone.Primary) })
                             }
                         }
@@ -214,18 +214,18 @@ private fun TvSteps(
     share: (String) -> Unit,
     onRemote: () -> Unit,
 ) {
-    DeviceCard("Remote control", "Use this phone as a trackpad and remote for OpenTune on the TV: a cursor you steer with a finger, or a pad of buttons.", compact = true) {
+    DeviceCard("Remote control", "Use this phone as a trackpad and remote for NepTune on the TV: a cursor you steer with a finger, or a pad of buttons.", compact = true) {
         Buttons({ SheetButton("Control the TV", onClick = onRemote, icon = ImageVector.vectorResource(AppIcons.Tv), tone = SheetTone.Primary) })
     }
     DeviceCard("Android TV", "Sign the TV in with this phone's YouTube Music account. No typing with the remote.") {
-        Step(1, "Install OpenTune for TV", "A separate app made for the remote. Get OpenTune-TV from the latest release.") {
+        Step(1, "Install NepTune for TV", "A separate app made for the remote. Get NepTune-TV from the latest release.") {
             Buttons(
                 { SheetButton("Get the app", onClick = { open(RELEASES) }, icon = ImageVector.vectorResource(AppIcons.Download)) },
                 { SheetButton("Share", onClick = { share(RELEASES) }, icon = ImageVector.vectorResource(AppIcons.Share)) },
             )
         }
         Step(2, "Show the code on the TV", "On the TV, open Settings, then Account, and choose Sign in.")
-        Step(3, "Scan it with this phone", "Scan it right here in OpenTune, or with the phone's own camera app, then approve on this phone.", last = true) {
+        Step(3, "Scan it with this phone", "Scan it right here in NepTune, or with the phone's own camera app, then approve on this phone.", last = true) {
             if (signedIn) {
                 Buttons({ SheetButton("Open the camera", onClick = camera, icon = ImageVector.vectorResource(AppIcons.CameraAlt), tone = SheetTone.Primary) })
             } else {

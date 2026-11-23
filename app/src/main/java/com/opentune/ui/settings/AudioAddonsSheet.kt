@@ -137,7 +137,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
             }
             Text("Audio sources", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 24.dp))
             Text(
-                "Music starts straight away, then OpenTune looks for a better copy. Lossless quality checks your sources from the top down.",
+                "Music starts straight away, then NepTune looks for a better copy. Lossless quality checks your sources from the top down.",
                 style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant,
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp),
             )
@@ -371,7 +371,7 @@ private fun SmallPill(label: String, danger: Boolean = false, onClick: () -> Uni
 internal fun AddSourceCard(input: String, onInput: (String) -> Unit, working: Boolean, onDismiss: () -> Unit, onAdd: () -> Unit, error: String?) =
     com.opentune.ui.components.LinkEntryCard(
         title = "Add an audio source",
-        description = "Paste the link to a source's service or its manifest. OpenTune reads what it offers. Nothing is installed.",
+        description = "Paste the link to a source's service or its manifest. NepTune reads what it offers. Nothing is installed.",
         input = input, onInput = onInput, working = working, error = error,
         hint = "HTTPS, or http for a service on this device",
         workingLine = "Reading the source…",

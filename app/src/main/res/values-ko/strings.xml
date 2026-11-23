@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">재생 중인 곡을 보여 주고 재생, 건너뛰기, 좋아요를 할 수 있어요</string>
     <string name="widget_nothing_playing">재생 중인 곡 없음</string>
-    <string name="widget_open">탭하여 OpenTune 열기</string>
+    <string name="widget_open">탭하여 NepTune 열기</string>
     <string name="widget_like">좋아요</string>
     <string name="widget_unlike">좋아요 취소</string>
     <string name="widget_previous">이전</string>

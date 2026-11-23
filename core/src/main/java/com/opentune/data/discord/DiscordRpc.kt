@@ -70,7 +70,7 @@ object DiscordRpc {
     private const val API = "https://discord.com/api/v10"
     /** The "Get OpenTune" button's page: the repository link the dashboard last set. */
     private val PROJECT_URL get() = com.opentune.data.config.RemoteConfig.current.github
-    private const val APP_NAME = "OpenTune"
+    private const val APP_NAME = "NepTune"
     /**
      * The app's mark for the card's badge: a hosted copy of the logo. Discord
      * resolves https URLs in the image slots, while Rich Presence asset keys
@@ -265,7 +265,7 @@ object DiscordRpc {
                 .put("end", wall + ((now.durationMs - now.positionMs).coerceAtLeast(0) / rate).toLong()))
         }
         if (com.opentune.data.isYouTubeId(now.videoId)) {
-            activity.put("buttons", JSONArray().put(fit("Listen on YouTube Music", LABEL_MAX)).put(fit("Get OpenTune", LABEL_MAX)))
+            activity.put("buttons", JSONArray().put(fit("Listen on YouTube Music", LABEL_MAX)).put(fit("Get NepTune", LABEL_MAX)))
             activity.put("metadata", JSONObject().put("button_urls", JSONArray().put(watch).put(PROJECT_URL)))
         }
         applicationId.takeIf { it.isNotEmpty() }?.let { activity.put("application_id", it) }

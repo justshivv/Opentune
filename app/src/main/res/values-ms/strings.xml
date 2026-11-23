@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Lagu yang sedang dimainkan, dengan main, langkau dan suka</string>
     <string name="widget_nothing_playing">Tiada apa-apa dimainkan</string>
-    <string name="widget_open">Ketik untuk membuka OpenTune</string>
+    <string name="widget_open">Ketik untuk membuka NepTune</string>
     <string name="widget_like">Suka</string>
     <string name="widget_unlike">Alih keluar daripada Disukai</string>
     <string name="widget_previous">Sebelumnya</string>

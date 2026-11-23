@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Ό,τι παίζει τώρα, με αναπαραγωγή, παράλειψη και «μου αρέσει»</string>
     <string name="widget_nothing_playing">Δεν παίζει τίποτα</string>
-    <string name="widget_open">Πατήστε για να ανοίξει το OpenTune</string>
+    <string name="widget_open">Πατήστε για να ανοίξει το NepTune</string>
     <string name="widget_like">Μου αρέσει</string>
     <string name="widget_unlike">Αφαίρεση από τα αγαπημένα</string>
     <string name="widget_previous">Προηγούμενο</string>

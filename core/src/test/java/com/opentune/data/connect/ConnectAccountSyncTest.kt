@@ -15,9 +15,14 @@ class ConnectAccountSyncTest {
     }
 
     @Test fun onlyThePlaylistWithItsNameIsTaken() {
-        val mine = ShelfItem("OpenTune Connect", "Playlist", null, null, "VLPL123")
+        val mine = ShelfItem("NepTune Connect", "Playlist", null, null, "VLPL123")
         val others = listOf(ShelfItem("OpenTune Connect fans", "", null, null, "VLPL9"), ShelfItem("Liked Music", "", null, null, "VLLM"))
         assertEquals(mine, ConnectAccountSync.pick(others + mine))
         assertNull(ConnectAccountSync.pick(others))
+    }
+
+    @Test fun aPlaylistMadeBeforeTheRenameIsStillTaken() {
+        val legacy = ShelfItem("OpenTune Connect", "Playlist", null, null, "VLPL456")
+        assertEquals(legacy, ConnectAccountSync.pick(listOf(legacy)))
     }
 }

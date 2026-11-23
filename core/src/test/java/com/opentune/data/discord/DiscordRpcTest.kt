@@ -19,10 +19,10 @@ class DiscordRpcTest {
         val before = System.currentTimeMillis()
         val p = DiscordRpc.presence("token", now())
         val a = p.getJSONArray("activities").getJSONObject(0)
-        // A Listening activity: the card is headed "Listening to OpenTune · Labon Ko" and draws the progress bar.
+        // A Listening activity: the card is headed "Listening to NepTune · Labon Ko" and draws the progress bar.
         assertEquals(2, a.getInt("type"))
-        assertEquals("OpenTune · Labon Ko", a.getString("name"))
-        // The compact status line reads the name, so it leads with the app: "OpenTune · Labon Ko".
+        assertEquals("NepTune · Labon Ko", a.getString("name"))
+        // The compact status line reads the name, so it leads with the app: "NepTune · Labon Ko".
         assertEquals(0, a.getInt("status_display_type"))
         assertEquals("Labon Ko", a.getString("details"))
         assertEquals("Pritam", a.getString("state"))

@@ -71,7 +71,7 @@ object ShareCard {
                     draw(cover, song.title, song.artist, positionMs, duration, avatar = photo, subtitle = song.albumName, liked = liked)
                 }
             }.onFailure { Log.w(TAG, "couldn't make the share card", it) }.getOrNull()
-            sendImage(context, bitmap, "OpenTune-${song.videoId}.png", "${song.title} · ${song.artist}\n$link", song.title)
+            sendImage(context, bitmap, "NepTune-${song.videoId}.png", "${song.title} · ${song.artist}\n$link", song.title)
         }
     }
     /**
@@ -110,7 +110,7 @@ object ShareCard {
     val saveNeedsPermission get() = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
 
     /**
-     * Writes [bitmap] as a PNG to Pictures/OpenTune, where the gallery finds
+     * Writes [bitmap] as a PNG to Pictures/NepTune, where the gallery finds
      * it. From Android 10 this goes through MediaStore with no permission;
      * before that it needs WRITE_EXTERNAL_STORAGE, which the caller asks for.
      */
@@ -121,7 +121,7 @@ object ShareCard {
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/OpenTune")
+            values.put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/NepTune")
             values.put(MediaStore.Images.Media.IS_PENDING, 1)
             val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
             val uri = resolver.insert(collection, values) ?: error("Couldn't add the picture")
@@ -135,7 +135,7 @@ object ShareCard {
             uri
         } else {
             @Suppress("DEPRECATION")
-            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "OpenTune").apply { mkdirs() }
+            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "NepTune").apply { mkdirs() }
             val file = File(dir, fileName)
             file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             @Suppress("DEPRECATION")
@@ -237,7 +237,7 @@ object ShareCard {
         val pad = u * 0.012f
         val namePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = white; textSize = u * 0.037f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
         val subPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = soft; textSize = u * 0.033f }
-        val sub = subtitle?.takeIf { it.isNotBlank() } ?: "OpenTune"
+        val sub = subtitle?.takeIf { it.isNotBlank() } ?: "NepTune"
         val textMax = u * 0.36f
         val name = TextUtils.ellipsize(artist, namePaint, textMax, TextUtils.TruncateAt.END).toString()
         val subLine = TextUtils.ellipsize(sub, subPaint, textMax, TextUtils.TruncateAt.END).toString()
@@ -339,7 +339,7 @@ object ShareCard {
         c.restore()
     }
 
-    private const val BRAND = "OpenTune"
+    private const val BRAND = "NepTune"
     // Where the mark sits in the icon's 108-unit square.
     private const val MARK_LEFT = 27.8f
     private const val MARK_RIGHT = 80.3f

@@ -13,7 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Copies of finished downloads in the phone's Music folder (Music/OpenTune),
+ * Copies of finished downloads in the phone's Music folder (Music/NepTune),
  * named "Artist - Title", for other music apps to find and play. Settings ›
  * Downloads › Export compatible downloads turns it on.
  *
@@ -38,7 +38,7 @@ object DownloadExport {
     /** Whether [file] is in a format the Music collection takes. */
     fun compatible(file: File): Boolean = file.extension.lowercase() in MIME
 
-    /** Adds a copy of [file] for [song] to Music/OpenTune; its row's URI, or null where it can't be. */
+    /** Adds a copy of [file] for [song] to Music/NepTune; its row's URI, or null where it can't be. */
     suspend fun publish(context: Context, song: SongRef, file: File): Uri? = withContext(Dispatchers.IO) {
         if (!supported || !file.exists()) return@withContext null
         val ext = file.extension.lowercase()
@@ -52,7 +52,7 @@ object DownloadExport {
             song.albumName?.takeIf { it.isNotBlank() }?.let { put(MediaStore.Audio.Media.ALBUM, it) }
             put(MediaStore.Audio.Media.MIME_TYPE, mime)
             put(MediaStore.Audio.Media.IS_MUSIC, 1)
-            put(MediaStore.Audio.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MUSIC}/OpenTune")
+            put(MediaStore.Audio.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MUSIC}/NepTune")
             put(MediaStore.Audio.Media.IS_PENDING, 1)
         }
         val uri = runCatching { resolver.insert(collection, values) }

@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Lo que suena, con reproducir, saltar y me gusta</string>
     <string name="widget_nothing_playing">Nada en reproducción</string>
-    <string name="widget_open">Toca para abrir OpenTune</string>
+    <string name="widget_open">Toca para abrir NepTune</string>
     <string name="widget_like">Me gusta</string>
     <string name="widget_unlike">Quitar de Me gusta</string>
     <string name="widget_previous">Anterior</string>

@@ -184,8 +184,8 @@ object ListenBrainz {
                         put("track_name", l.track)
                         l.album?.let { put("release_name", it) }
                         put("additional_info", buildJsonObject {
-                            put("media_player", "OpenTune")
-                            put("submission_client", "OpenTune")
+                            put("media_player", "NepTune")
+                            put("submission_client", "NepTune")
                             put("submission_client_version", BuildConfig.VERSION_NAME)
                             l.durationMs?.let { put("duration_ms", it) }
                             l.videoId?.let {

@@ -31,7 +31,7 @@ internal object VideoFiles {
         context.startActivity(Intent.createChooser(send, null))
     }
 
-    /** Copies [file] to Movies/OpenTune, where the gallery finds it. */
+    /** Copies [file] to Movies/NepTune, where the gallery finds it. */
     suspend fun save(context: Context, file: File): Uri = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
@@ -39,7 +39,7 @@ internal object VideoFiles {
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/OpenTune")
+            values.put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/NepTune")
             values.put(MediaStore.Video.Media.IS_PENDING, 1)
             val uri = resolver.insert(MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values) ?: error("Couldn't add the video")
             try {
@@ -52,7 +52,7 @@ internal object VideoFiles {
             uri
         } else {
             @Suppress("DEPRECATION")
-            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "OpenTune").apply { mkdirs() }
+            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "NepTune").apply { mkdirs() }
             val target = File(dir, file.name)
             file.copyTo(target, overwrite = true)
             @Suppress("DEPRECATION")

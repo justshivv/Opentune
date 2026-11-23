@@ -1,8 +1,8 @@
 <resources>
-    <string name="app_name" translatable="false">OpenTune</string>
+    <string name="app_name" translatable="false">NepTune</string>
     <string name="widget_description">What\'s playing, with play, skip and like</string>
     <string name="widget_nothing_playing">Nothing playing</string>
-    <string name="widget_open">Tap to open OpenTune</string>
+    <string name="widget_open">Tap to open NepTune</string>
     <string name="widget_like">Like</string>
     <string name="widget_unlike">Remove from Liked</string>
     <string name="widget_previous">Previous</string>

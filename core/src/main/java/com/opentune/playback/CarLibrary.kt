@@ -51,7 +51,7 @@ class CarLibrary(private val context: Context) {
 
     private var homeCache: Pair<Long, List<HomeShelf>>? = null
 
-    fun root(): MediaItem = folder(ROOT, "OpenTune", browsableStyle = MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM)
+    fun root(): MediaItem = folder(ROOT, "NepTune", browsableStyle = MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM)
 
     /** Extras for the root: search is supported, folders show as a grid and songs as a list. */
     fun rootExtras(): Bundle = Bundle().apply {

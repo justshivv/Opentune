@@ -164,11 +164,11 @@ private fun ConfirmWebShare() {
     var status by remember(current) { mutableStateOf<String?>(null) }
     FloatingCard(onDismiss = { if (!busy) PairingLinks.dismissWeb() }, title = "Sign in the web player") {
         Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Share this phone's sign-ins with the OpenTune web player? Approve only if you just scanned the code in your own browser.")
+            Text("Share this phone's sign-ins with the NepTune web player? Approve only if you just scanned the code in your own browser.")
             if (choices.offered) Column { ShareChoiceRows(choices, enabled = !busy) }
             else Text("This phone isn't signed in to anything the web player asked for. Sign in to Discord on this phone first.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                "Sealed so that only the OpenTune extension in that browser can open it. The web page and the relays that carry it see none of it.",
+                "Sealed so that only the NepTune extension in that browser can open it. The web page and the relays that carry it see none of it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

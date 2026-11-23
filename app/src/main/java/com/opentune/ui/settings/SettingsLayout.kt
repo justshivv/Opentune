@@ -30,7 +30,7 @@ internal val MAIN_PAGE_ONLY = setOf("Audio sources")
 /** A short line under a subsection's card, saying what it's for. */
 internal val GROUP_NOTES = mapOf(
     "YouTube Music" to "A Google account can have Personal and Brand profiles. Each has its own library, likes and history.",
-    "Connected services" to "Each one is optional. Spotify brings over your playlists; songs still play through OpenTune's own sources.",
+    "Connected services" to "Each one is optional. Spotify brings over your playlists; songs still play through NepTune's own sources.",
 )
 
 /**
@@ -152,7 +152,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "about", "About", "Source code, community, help and privacy", AppIcons.Info,
         listOf(
             "Developers" to listOf("justshivv", "aerluc"),
-            "Community" to listOf("OpenTune community", "Contributors", "Source code", "Star on GitHub", "Support OpenTune"),
+            "Community" to listOf("NepTune community", "Contributors", "Source code", "Star on GitHub", "Support NepTune"),
             "Help" to listOf("Show the welcome again", "Export diagnostics"),
             "Privacy" to listOf("Count this phone in usage numbers"),
         ),

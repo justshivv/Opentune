@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">ప్లే అవుతున్న పాట, ప్లే, స్కిప్ మరియు లైక్‌తో</string>
     <string name="widget_nothing_playing">ఏదీ ప్లే కావడం లేదు</string>
-    <string name="widget_open">OpenTune తెరవడానికి నొక్కండి</string>
+    <string name="widget_open">NepTune తెరవడానికి నొక్కండి</string>
     <string name="widget_like">లైక్</string>
     <string name="widget_unlike">లైక్ చేసినవాటి నుండి తీసివేయండి</string>
     <string name="widget_previous">మునుపటి</string>

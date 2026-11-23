@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Det som spelas, med spela, hoppa över och gilla</string>
     <string name="widget_nothing_playing">Inget spelas</string>
-    <string name="widget_open">Tryck för att öppna OpenTune</string>
+    <string name="widget_open">Tryck för att öppna NepTune</string>
     <string name="widget_like">Gilla</string>
     <string name="widget_unlike">Ta bort från gillade</string>
     <string name="widget_previous">Föregående</string>

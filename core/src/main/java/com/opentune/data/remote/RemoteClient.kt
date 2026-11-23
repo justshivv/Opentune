@@ -62,7 +62,7 @@ class RemoteClient(private val phoneName: () -> String) : AutoCloseable {
         fun stop() { stopped = true; runCatching { socket?.close() } }
 
         fun run(tv: PairedTv, where: List<Pair<String, Int>>, onReached: (String, Int) -> Unit) {
-            var failure = com.opentune.i18n.Tr.f("Couldn't reach {0}. Open OpenTune on the TV, on the same Wi-Fi.", tv.name)
+            var failure = com.opentune.i18n.Tr.f("Couldn't reach {0}. Open NepTune on the TV, on the same Wi-Fi.", tv.name)
             try {
                 val key = PairingCrypto.decode(tv.key)
                 var open: Opened? = null
@@ -147,7 +147,7 @@ class RemoteClient(private val phoneName: () -> String) : AutoCloseable {
         catch (e: AuthFailure) {
             throw IOException(if (e.refused) "The TV doesn't take that code any more. Make a new one on the TV." else "That isn't the TV that showed the code.")
         }
-        catch (e: IOException) { throw IOException("Couldn't reach the TV. Keep both on the same Wi-Fi, with OpenTune open on the TV.") }
+        catch (e: IOException) { throw IOException("Couldn't reach the TV. Keep both on the same Wi-Fi, with NepTune open on the TV.") }
         o.socket.use {
             o.channel.send(RemoteMessage.PairRequest(phoneName()))
             val granted = o.channel.receive() as? RemoteMessage.PairGranted ?: throw IOException("The TV didn't accept the code. It may have been used already.")

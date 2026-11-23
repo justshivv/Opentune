@@ -76,7 +76,7 @@ fun AccountSyncAsk() {
         properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
         icon = { Icon(ImageVector.vectorResource(AppIcons.Sync), null) },
         title = { Text("Find your devices through YouTube?") },
-        text = { Text("OpenTune keeps a private playlist in your YouTube account that holds a key, so your devices find each other.") },
+        text = { Text("NepTune keeps a private playlist in your YouTube account that holds a key, so your devices find each other.") },
         confirmButton = { com.opentune.ui.components.SheetButton("Turn on", onClick = { Connect.setAccountSync(true) }) },
         dismissButton = { com.opentune.ui.components.SheetButton("Not now", onClick = { Connect.setAccountSync(false) }, closes = true) },
     )
@@ -192,7 +192,7 @@ fun ConnectScreen(contentPadding: PaddingValues, joining: String?, onBack: () ->
                 "Sync through my YouTube account",
                 accountSync == true,
                 { Connect.setAccountSync(it) },
-                summary = "Devices signed in to the same account join by themselves. Keeps a private, empty playlist named OpenTune Connect in your library.",
+                summary = "Devices signed in to the same account join by themselves. Keeps a private, empty playlist named NepTune Connect in your library.",
                 icon = ImageVector.vectorResource(AppIcons.Sync),
             )
         }
@@ -229,6 +229,6 @@ private fun share(context: Context, text: String) {
 }
 
 private fun copy(context: Context, text: String) {
-    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("OpenTune", text))
+    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("NepTune", text))
     Pills.info(Tr.t("Copied"), context)
 }

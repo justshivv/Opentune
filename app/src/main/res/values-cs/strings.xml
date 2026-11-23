@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Co právě hraje, s přehráváním, přeskočením a označením Líbí se mi</string>
     <string name="widget_nothing_playing">Nic nehraje</string>
-    <string name="widget_open">Klepnutím otevřete OpenTune</string>
+    <string name="widget_open">Klepnutím otevřete NepTune</string>
     <string name="widget_like">Líbí se mi</string>
     <string name="widget_unlike">Odebrat z oblíbených</string>
     <string name="widget_previous">Předchozí</string>

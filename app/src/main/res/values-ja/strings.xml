@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">再生中の曲を表示し、再生・スキップ・高評価ができます</string>
     <string name="widget_nothing_playing">再生中の曲はありません</string>
-    <string name="widget_open">タップして OpenTune を開く</string>
+    <string name="widget_open">タップして NepTune を開く</string>
     <string name="widget_like">高評価</string>
     <string name="widget_unlike">高評価から削除</string>
     <string name="widget_previous">前へ</string>

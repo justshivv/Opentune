@@ -234,8 +234,8 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
                                         ImageVector.vectorResource(AppIcons.Folder),
                                         "Play music saved on your phone",
                                         Modifier.padding(top = 32.dp),
-                                        message = if (refused) "Access to audio files is off for OpenTune. You can allow it in the app's settings."
-                                            else "OpenTune needs permission to read audio files. Nothing leaves your device.",
+                                        message = if (refused) "Access to audio files is off for NepTune. You can allow it in the app's settings."
+                                            else "NepTune needs permission to read audio files. Nothing leaves your device.",
                                         action = {
                                             if (refused) Button(onClick = {
                                                 runCatching {

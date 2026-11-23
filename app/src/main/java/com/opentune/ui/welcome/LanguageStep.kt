@@ -171,7 +171,7 @@ internal fun LanguageStep(
             // The grid's own padding already holds half the title's margin.
             StepTitle(
                 "Choose your language",
-                "OpenTune's words and the music it suggests follow it. You can change it any time in Settings.",
+                "NepTune's words and the music it suggests follow it. You can change it any time in Settings.",
                 horizontal = 12.dp,
             )
         }

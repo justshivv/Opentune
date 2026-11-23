@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Что играет сейчас: воспроизведение, пропуск и лайк</string>
     <string name="widget_nothing_playing">Ничего не играет</string>
-    <string name="widget_open">Нажмите, чтобы открыть OpenTune</string>
+    <string name="widget_open">Нажмите, чтобы открыть NepTune</string>
     <string name="widget_like">Нравится</string>
     <string name="widget_unlike">Убрать из понравившегося</string>
     <string name="widget_previous">Предыдущий</string>

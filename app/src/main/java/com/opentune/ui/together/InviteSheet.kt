@@ -193,11 +193,11 @@ internal fun readBack(qr: QrModules, scale: Int = 4, quiet: Int = 4): String? {
 
 /** Opens the share sheet with the room's link and code. */
 internal fun shareRoom(context: Context, code: RoomCode) {
-    val text = com.opentune.i18n.Tr.f("Listen with me on OpenTune. Room code: {0}\n{1}", code.pretty, code.link)
+    val text = com.opentune.i18n.Tr.f("Listen with me on NepTune. Room code: {0}\n{1}", code.pretty, code.link)
     context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Invite to your room"))
 }
 
 internal fun copyCode(context: Context, code: RoomCode, toast: Boolean = true) {
-    context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("OpenTune room", code.pretty))
+    context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("NepTune room", code.pretty))
     if (toast) com.opentune.data.Pills.done("Code copied", context)
 }

@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">آهنگ در حال پخش، با پخش، رد کردن و پسندیدن</string>
     <string name="widget_nothing_playing">چیزی پخش نمی‌شود</string>
-    <string name="widget_open">برای باز کردن OpenTune ضربه بزنید</string>
+    <string name="widget_open">برای باز کردن NepTune ضربه بزنید</string>
     <string name="widget_like">پسندیدن</string>
     <string name="widget_unlike">حذف از پسندیده‌ها</string>
     <string name="widget_previous">قبلی</string>
