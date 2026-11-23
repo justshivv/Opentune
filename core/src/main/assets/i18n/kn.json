@@ -3555,5 +3555,19 @@
 "…and {0} more": "…ಮತ್ತು ಇನ್ನೂ {0}",
 "Lyrics line stays": "ಸಾಹಿತ್ಯದ ಸಾಲು ಹಾಗೆಯೇ ಇರುತ್ತದೆ",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas ಪರದೆಯನ್ನು ಆಕ್ರಮಿಸಿದಾಗ, ಪ್ರಸ್ತುತ ಸಾಹಿತ್ಯದ ಸಾಲು ನಿಯಂತ್ರಣಗಳೊಂದಿಗೆ ಜಾರಿ ಹೋಗದೆ ಶೀರ್ಷಿಕೆಯ ಕೆಳಗೆ ಉಳಿಯುತ್ತದೆ.",
-"Only with Canvas takes the screen on": "'Canvas takes the screen' ಆನ್ ಇದ್ದಾಗ ಮಾತ್ರ"
+"Only with Canvas takes the screen on": "'Canvas takes the screen' ಆನ್ ಇದ್ದಾಗ ಮಾತ್ರ",
+"Exit full screen": "ಪೂರ್ಣ ಸ್ಕ್ರೀನ್‌ನಿಂದ ಹೊರಬನ್ನಿ",
+"Video quality": "ವೀಡಿಯೊ ಗುಣಮಟ್ಟ",
+"Playing at {0}": "{0} ನಲ್ಲಿ ಪ್ಲೇ ಆಗುತ್ತಿದೆ",
+"{0} s": "{0} ಸೆ",
+"Fit": "ಹೊಂದಿಸು",
+"Fill": "ತುಂಬಿಸು",
+"Fit the whole picture": "ಸಂಪೂರ್ಣ ಚಿತ್ರ ತೋರಿಸಿ",
+"Fill the screen": "ಸ್ಕ್ರೀನ್ ತುಂಬಿಸಿ",
+"Video quality on Wi-Fi": "Wi-Fi ನಲ್ಲಿ ವೀಡಿಯೊ ಗುಣಮಟ್ಟ",
+"Video quality on mobile data": "ಮೊಬೈಲ್ ಡೇಟಾದಲ್ಲಿ ವೀಡಿಯೊ ಗುಣಮಟ್ಟ",
+"Auto · follows the connection": "ಸ್ವಯಂ · ಸಂಪರ್ಕಕ್ಕೆ ತಕ್ಕಂತೆ",
+"Auto": "ಸ್ವಯಂ",
+"Seek": "ಮುಂದೆ-ಹಿಂದೆ",
+"The video couldn't play at {0}, so it's back on Auto": "ವೀಡಿಯೊ {0} ನಲ್ಲಿ ಪ್ಲೇ ಆಗಲಿಲ್ಲ, ಆದ್ದರಿಂದ ಮತ್ತೆ ಸ್ವಯಂಗೆ ಬಂದಿದೆ"
 }

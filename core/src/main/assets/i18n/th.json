@@ -3546,5 +3546,19 @@
 "…and {0} more": "…และอีก {0}",
 "Lyrics line stays": "บรรทัดเนื้อเพลงยังคงแสดงอยู่",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "ขณะที่ Canvas แสดงเต็มหน้าจอ บรรทัดเนื้อเพลงปัจจุบันจะยังคงอยู่ใต้ชื่อเพลง แทนที่จะเลื่อนหายไปพร้อมกับปุ่มควบคุม",
-"Only with Canvas takes the screen on": "เฉพาะเมื่อเปิด 'Canvas takes the screen' เท่านั้น"
+"Only with Canvas takes the screen on": "เฉพาะเมื่อเปิด 'Canvas takes the screen' เท่านั้น",
+"Exit full screen": "ออกจากเต็มหน้าจอ",
+"Video quality": "คุณภาพวิดีโอ",
+"Playing at {0}": "กำลังเล่นที่ {0}",
+"{0} s": "{0} วิ",
+"Fit": "พอดี",
+"Fill": "เต็ม",
+"Fit the whole picture": "แสดงภาพทั้งหมด",
+"Fill the screen": "เต็มหน้าจอ",
+"Video quality on Wi-Fi": "คุณภาพวิดีโอเมื่อใช้ Wi-Fi",
+"Video quality on mobile data": "คุณภาพวิดีโอเมื่อใช้อินเทอร์เน็ตมือถือ",
+"Auto · follows the connection": "อัตโนมัติ · ตามการเชื่อมต่อ",
+"Auto": "อัตโนมัติ",
+"Seek": "เลื่อน",
+"The video couldn't play at {0}, so it's back on Auto": "เล่นวิดีโอที่ {0} ไม่ได้ จึงกลับไปเป็นอัตโนมัติ"
 }

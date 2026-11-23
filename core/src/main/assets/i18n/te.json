@@ -3617,5 +3617,19 @@
 "…and {0} more": "…ఇంకా {0}",
 "Lyrics line stays": "పాట లైన్ అలాగే ఉంటుంది",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas స్క్రీన్‌ను ఆక్రమించినప్పుడు, ప్రస్తుత పాట లైన్ నియంత్రణలతో పాటు జారిపోకుండా శీర్షిక క్రింద అలాగే ఉంటుంది.",
-"Only with Canvas takes the screen on": "'Canvas takes the screen' ఆన్‌లో ఉన్నప్పుడు మాత్రమే"
+"Only with Canvas takes the screen on": "'Canvas takes the screen' ఆన్‌లో ఉన్నప్పుడు మాత్రమే",
+"Exit full screen": "పూర్తి స్క్రీన్ నుండి నిష్క్రమించండి",
+"Video quality": "వీడియో నాణ్యత",
+"Playing at {0}": "{0}లో ప్లే అవుతోంది",
+"{0} s": "{0} సె",
+"Fit": "సరిపెట్టు",
+"Fill": "నింపు",
+"Fit the whole picture": "మొత్తం చిత్రాన్ని చూపించు",
+"Fill the screen": "స్క్రీన్‌ను నింపు",
+"Video quality on Wi-Fi": "Wi-Fiలో వీడియో నాణ్యత",
+"Video quality on mobile data": "మొబైల్ డేటాలో వీడియో నాణ్యత",
+"Auto · follows the connection": "ఆటో · కనెక్షన్‌ను బట్టి",
+"Auto": "ఆటో",
+"Seek": "ముందుకు/వెనక్కు",
+"The video couldn't play at {0}, so it's back on Auto": "వీడియో {0}లో ప్లే కాలేదు, కాబట్టి మళ్లీ ఆటోకు వచ్చింది"
 }

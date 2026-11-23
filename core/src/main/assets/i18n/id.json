@@ -3617,5 +3617,19 @@
 "…and {0} more": "…dan {0} lainnya",
 "Lyrics line stays": "Baris lirik tetap tampil",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Saat Canvas menguasai layar, baris lirik saat ini tetap berada di bawah judul alih-alih bergeser pergi bersama kontrol.",
-"Only with Canvas takes the screen on": "Hanya dengan 'Canvas takes the screen' aktif"
+"Only with Canvas takes the screen on": "Hanya dengan 'Canvas takes the screen' aktif",
+"Exit full screen": "Keluar dari layar penuh",
+"Video quality": "Kualitas video",
+"Playing at {0}": "Diputar di {0}",
+"{0} s": "{0} dtk",
+"Fit": "Pas",
+"Fill": "Penuh",
+"Fit the whole picture": "Tampilkan seluruh gambar",
+"Fill the screen": "Penuhi layar",
+"Video quality on Wi-Fi": "Kualitas video saat Wi-Fi",
+"Video quality on mobile data": "Kualitas video saat data seluler",
+"Auto · follows the connection": "Otomatis · mengikuti koneksi",
+"Auto": "Otomatis",
+"Seek": "Geser",
+"The video couldn't play at {0}, so it's back on Auto": "Video tidak bisa diputar di {0}, jadi kembali ke Otomatis"
 }

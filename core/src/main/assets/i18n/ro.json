@@ -3546,5 +3546,19 @@
 "…and {0} more": "…și încă {0}",
 "Lyrics line stays": "Versul rămâne afișat",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Cât timp un Canvas ocupă ecranul, versul curent rămâne sub titlu în loc să dispară odată cu comenzile.",
-"Only with Canvas takes the screen on": "Numai cu „Canvas takes the screen” activat"
+"Only with Canvas takes the screen on": "Numai cu „Canvas takes the screen” activat",
+"Exit full screen": "Ieși din ecran complet",
+"Video quality": "Calitate video",
+"Playing at {0}": "Se redă la {0}",
+"{0} s": "{0} s",
+"Fit": "Încadrează",
+"Fill": "Umple",
+"Fit the whole picture": "Arată toată imaginea",
+"Fill the screen": "Umple ecranul",
+"Video quality on Wi-Fi": "Calitate video prin Wi-Fi",
+"Video quality on mobile data": "Calitate video prin date mobile",
+"Auto · follows the connection": "Automat · după conexiune",
+"Auto": "Automat",
+"Seek": "Derulează",
+"The video couldn't play at {0}, so it's back on Auto": "Videoclipul nu a putut fi redat la {0}, așa că a revenit la automat"
 }

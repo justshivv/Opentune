@@ -3546,5 +3546,19 @@
 "…and {0} more": "…dan {0} lagi",
 "Lyrics line stays": "Baris lirik kekal dipaparkan",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Apabila Canvas menguasai skrin, baris lirik semasa kekal di bawah tajuk dan bukannya hilang bersama kawalan.",
-"Only with Canvas takes the screen on": "Hanya dengan 'Canvas takes the screen' dihidupkan"
+"Only with Canvas takes the screen on": "Hanya dengan 'Canvas takes the screen' dihidupkan",
+"Exit full screen": "Keluar skrin penuh",
+"Video quality": "Kualiti video",
+"Playing at {0}": "Dimainkan pada {0}",
+"{0} s": "{0} s",
+"Fit": "Muat",
+"Fill": "Penuh",
+"Fit the whole picture": "Tunjukkan seluruh gambar",
+"Fill the screen": "Penuhkan skrin",
+"Video quality on Wi-Fi": "Kualiti video melalui Wi-Fi",
+"Video quality on mobile data": "Kualiti video melalui data mudah alih",
+"Auto · follows the connection": "Auto · mengikut sambungan",
+"Auto": "Auto",
+"Seek": "Cari",
+"The video couldn't play at {0}, so it's back on Auto": "Video tidak dapat dimainkan pada {0}, jadi kembali ke Auto"
 }

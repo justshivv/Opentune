@@ -3617,5 +3617,19 @@
 "…and {0} more": "…ほか {0} 件",
 "Lyrics line stays": "歌詞ラインが残ります",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas が画面いっぱいに表示されている間、現在の歌詞ラインはコントロールと一緒に消えず、タイトルの下に残ります。",
-"Only with Canvas takes the screen on": "「Canvas takes the screen」がオンの場合のみ"
+"Only with Canvas takes the screen on": "「Canvas takes the screen」がオンの場合のみ",
+"Exit full screen": "全画面を終了",
+"Video quality": "動画の画質",
+"Playing at {0}": "{0} で再生中",
+"{0} s": "{0} 秒",
+"Fit": "全体",
+"Fill": "拡大",
+"Fit the whole picture": "映像全体を表示",
+"Fill the screen": "画面いっぱいに表示",
+"Video quality on Wi-Fi": "Wi-Fi 接続時の動画の画質",
+"Video quality on mobile data": "モバイルデータ通信時の動画の画質",
+"Auto · follows the connection": "自動 · 接続に合わせる",
+"Auto": "自動",
+"Seek": "シーク",
+"The video couldn't play at {0}, so it's back on Auto": "{0} で再生できなかったため、自動に戻しました"
 }

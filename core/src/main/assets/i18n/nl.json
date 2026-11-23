@@ -3617,5 +3617,19 @@
 "…and {0} more": "…en nog {0}",
 "Lyrics line stays": "Songtekstregel blijft staan",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Terwijl een Canvas het scherm overneemt, blijft de huidige songtekstregel onder de titel staan in plaats van met de bediening weg te schuiven.",
-"Only with Canvas takes the screen on": "Alleen met 'Canvas takes the screen' ingeschakeld"
+"Only with Canvas takes the screen on": "Alleen met 'Canvas takes the screen' ingeschakeld",
+"Exit full screen": "Volledig scherm sluiten",
+"Video quality": "Videokwaliteit",
+"Playing at {0}": "Speelt af in {0}",
+"{0} s": "{0} s",
+"Fit": "Passend",
+"Fill": "Vullen",
+"Fit the whole picture": "Het hele beeld tonen",
+"Fill the screen": "Het scherm vullen",
+"Video quality on Wi-Fi": "Videokwaliteit via wifi",
+"Video quality on mobile data": "Videokwaliteit via mobiele data",
+"Auto · follows the connection": "Automatisch · volgt de verbinding",
+"Auto": "Automatisch",
+"Seek": "Spoelen",
+"The video couldn't play at {0}, so it's back on Auto": "De video kon niet in {0} afspelen en staat weer op automatisch"
 }

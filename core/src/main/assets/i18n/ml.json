@@ -3546,5 +3546,19 @@
 "…and {0} more": "…കൂടാതെ {0} എണ്ണം കൂടി",
 "Lyrics line stays": "വരികൾ അങ്ങനെ തന്നെ നിലനിൽക്കും",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas സ്ക്രീൻ ഏറ്റെടുക്കുമ്പോൾ, നിലവിലെ വരി നിയന്ത്രണങ്ങൾക്കൊപ്പം മാറിപ്പോകാതെ തലക്കെട്ടിന് താഴെ നിലനിൽക്കും.",
-"Only with Canvas takes the screen on": "'Canvas takes the screen' ഓൺ ആയിരിക്കുമ്പോൾ മാത്രം"
+"Only with Canvas takes the screen on": "'Canvas takes the screen' ഓൺ ആയിരിക്കുമ്പോൾ മാത്രം",
+"Exit full screen": "പൂർണ്ണ സ്ക്രീനിൽ നിന്ന് പുറത്തുകടക്കുക",
+"Video quality": "വീഡിയോ ഗുണനിലവാരം",
+"Playing at {0}": "{0}-ൽ പ്ലേ ചെയ്യുന്നു",
+"{0} s": "{0} സെ",
+"Fit": "ഫിറ്റ്",
+"Fill": "നിറയ്ക്കുക",
+"Fit the whole picture": "മുഴുവൻ ചിത്രവും കാണിക്കുക",
+"Fill the screen": "സ്ക്രീൻ നിറയ്ക്കുക",
+"Video quality on Wi-Fi": "Wi-Fi-ലെ വീഡിയോ ഗുണനിലവാരം",
+"Video quality on mobile data": "മൊബൈൽ ഡാറ്റയിലെ വീഡിയോ ഗുണനിലവാരം",
+"Auto · follows the connection": "ഓട്ടോ · കണക്ഷൻ അനുസരിച്ച്",
+"Auto": "ഓട്ടോ",
+"Seek": "മുന്നോട്ട്/പിന്നോട്ട്",
+"The video couldn't play at {0}, so it's back on Auto": "വീഡിയോ {0}-ൽ പ്ലേ ആയില്ല, അതിനാൽ വീണ്ടും ഓട്ടോയിലാണ്"
 }

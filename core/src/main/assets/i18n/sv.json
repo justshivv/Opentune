@@ -3617,5 +3617,19 @@
 "…and {0} more": "…och {0} till",
 "Lyrics line stays": "Textraden stannar kvar",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Medan en Canvas tar över skärmen stannar den aktuella textraden kvar under titeln i stället för att glida bort med kontrollerna.",
-"Only with Canvas takes the screen on": "Endast med 'Canvas takes the screen' påslaget"
+"Only with Canvas takes the screen on": "Endast med 'Canvas takes the screen' påslaget",
+"Exit full screen": "Avsluta helskärm",
+"Video quality": "Videokvalitet",
+"Playing at {0}": "Spelas i {0}",
+"{0} s": "{0} s",
+"Fit": "Anpassa",
+"Fill": "Fyll",
+"Fit the whole picture": "Visa hela bilden",
+"Fill the screen": "Fyll skärmen",
+"Video quality on Wi-Fi": "Videokvalitet via wifi",
+"Video quality on mobile data": "Videokvalitet via mobildata",
+"Auto · follows the connection": "Auto · följer anslutningen",
+"Auto": "Auto",
+"Seek": "Spola",
+"The video couldn't play at {0}, so it's back on Auto": "Videon kunde inte spelas i {0}, så den är tillbaka på Auto"
 }

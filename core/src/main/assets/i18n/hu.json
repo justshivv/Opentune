@@ -3617,5 +3617,19 @@
 "…and {0} more": "…és még {0}",
 "Lyrics line stays": "A dalszövegsor megmarad",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Amikor a Canvas átveszi a képernyőt, az aktuális dalszövegsor a cím alatt marad, ahelyett hogy a vezérlőkkel együtt elcsúszna.",
-"Only with Canvas takes the screen on": "Csak bekapcsolt «Canvas takes the screen» esetén"
+"Only with Canvas takes the screen on": "Csak bekapcsolt «Canvas takes the screen» esetén",
+"Exit full screen": "Kilépés a teljes képernyőből",
+"Video quality": "Videóminőség",
+"Playing at {0}": "Lejátszás: {0}",
+"{0} s": "{0} mp",
+"Fit": "Igazítás",
+"Fill": "Kitöltés",
+"Fit the whole picture": "Az egész kép látszik",
+"Fill the screen": "A képernyő kitöltése",
+"Video quality on Wi-Fi": "Videóminőség Wi-Fi-n",
+"Video quality on mobile data": "Videóminőség mobiladaton",
+"Auto · follows the connection": "Automatikus · a kapcsolathoz igazodik",
+"Auto": "Automatikus",
+"Seek": "Tekerés",
+"The video couldn't play at {0}, so it's back on Auto": "A videó nem indult {0} minőségben, ezért visszaállt automatikusra"
 }

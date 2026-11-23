@@ -3617,5 +3617,19 @@
 "…and {0} more": "…και {0} ακόμη",
 "Lyrics line stays": "Η γραμμή στίχων παραμένει",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Όταν το Canvas καταλαμβάνει την οθόνη, η τρέχουσα γραμμή στίχων παραμένει κάτω από τον τίτλο αντί να εξαφανίζεται μαζί με τα χειριστήρια.",
-"Only with Canvas takes the screen on": "Μόνο με ενεργοποιημένο το «Canvas takes the screen»"
+"Only with Canvas takes the screen on": "Μόνο με ενεργοποιημένο το «Canvas takes the screen»",
+"Exit full screen": "Έξοδος από πλήρη οθόνη",
+"Video quality": "Ποιότητα βίντεο",
+"Playing at {0}": "Παίζει σε {0}",
+"{0} s": "{0} δ",
+"Fit": "Προσαρμογή",
+"Fill": "Γέμισμα",
+"Fit the whole picture": "Ολόκληρη η εικόνα",
+"Fill the screen": "Γέμισμα οθόνης",
+"Video quality on Wi-Fi": "Ποιότητα βίντεο μέσω Wi-Fi",
+"Video quality on mobile data": "Ποιότητα βίντεο μέσω δεδομένων κινητής",
+"Auto · follows the connection": "Αυτόματα · ανάλογα με τη σύνδεση",
+"Auto": "Αυτόματα",
+"Seek": "Μετάβαση",
+"The video couldn't play at {0}, so it's back on Auto": "Το βίντεο δεν έπαιξε σε {0}, οπότε επέστρεψε στο αυτόματο"
 }

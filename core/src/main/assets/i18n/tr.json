@@ -3546,5 +3546,19 @@
 "…and {0} more": "…ve {0} tane daha",
 "Lyrics line stays": "Şarkı sözü satırı kalır",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas ekranı kaplarken, geçerli şarkı sözü satırı kontrollerle birlikte kaybolmak yerine başlığın altında kalır.",
-"Only with Canvas takes the screen on": "Yalnızca 'Canvas takes the screen' açıkken"
+"Only with Canvas takes the screen on": "Yalnızca 'Canvas takes the screen' açıkken",
+"Exit full screen": "Tam ekrandan çık",
+"Video quality": "Video kalitesi",
+"Playing at {0}": "{0} oynatılıyor",
+"{0} s": "{0} sn",
+"Fit": "Sığdır",
+"Fill": "Doldur",
+"Fit the whole picture": "Görüntünün tamamını göster",
+"Fill the screen": "Ekranı doldur",
+"Video quality on Wi-Fi": "Wi-Fi'da video kalitesi",
+"Video quality on mobile data": "Mobil veride video kalitesi",
+"Auto · follows the connection": "Otomatik · bağlantıya göre",
+"Auto": "Otomatik",
+"Seek": "Sar",
+"The video couldn't play at {0}, so it's back on Auto": "Video {0} oynatılamadı, bu yüzden yeniden Otomatik"
 }

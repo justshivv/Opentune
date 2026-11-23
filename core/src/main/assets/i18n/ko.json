@@ -3617,5 +3617,19 @@
 "…and {0} more": "…외 {0}개",
 "Lyrics line stays": "가사 줄이 그대로 유지됩니다",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas가 화면을 채우는 동안 현재 가사 줄이 컨트롤과 함께 사라지지 않고 제목 아래에 그대로 유지됩니다.",
-"Only with Canvas takes the screen on": "'Canvas takes the screen'이 켜진 경우에만"
+"Only with Canvas takes the screen on": "'Canvas takes the screen'이 켜진 경우에만",
+"Exit full screen": "전체 화면 종료",
+"Video quality": "동영상 화질",
+"Playing at {0}": "{0}(으)로 재생 중",
+"{0} s": "{0}초",
+"Fit": "맞춤",
+"Fill": "채우기",
+"Fit the whole picture": "화면 전체 보기",
+"Fill the screen": "화면 채우기",
+"Video quality on Wi-Fi": "Wi-Fi 사용 시 동영상 화질",
+"Video quality on mobile data": "모바일 데이터 사용 시 동영상 화질",
+"Auto · follows the connection": "자동 · 연결에 맞춤",
+"Auto": "자동",
+"Seek": "탐색",
+"The video couldn't play at {0}, so it's back on Auto": "{0}(으)로 재생할 수 없어 자동으로 돌아갔습니다"
 }

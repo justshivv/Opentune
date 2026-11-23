@@ -3617,5 +3617,19 @@
 "…and {0} more": "…以及另外 {0} 首",
 "Lyrics line stays": "歌词行保持显示",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "当 Canvas 占满屏幕时，当前歌词行会保留在标题下方，而不是随控件一起滑走。",
-"Only with Canvas takes the screen on": "仅当“Canvas takes the screen”开启时"
+"Only with Canvas takes the screen on": "仅当“Canvas takes the screen”开启时",
+"Exit full screen": "退出全屏",
+"Video quality": "视频画质",
+"Playing at {0}": "正在以 {0} 播放",
+"{0} s": "{0} 秒",
+"Fit": "适应",
+"Fill": "填充",
+"Fit the whole picture": "显示完整画面",
+"Fill the screen": "填满屏幕",
+"Video quality on Wi-Fi": "Wi-Fi 下的视频画质",
+"Video quality on mobile data": "移动数据下的视频画质",
+"Auto · follows the connection": "自动 · 随网络调整",
+"Auto": "自动",
+"Seek": "拖动进度",
+"The video couldn't play at {0}, so it's back on Auto": "视频无法以 {0} 播放，已改回自动"
 }

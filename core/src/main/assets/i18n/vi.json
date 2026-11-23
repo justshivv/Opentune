@@ -3546,5 +3546,19 @@
 "…and {0} more": "…và {0} khác",
 "Lyrics line stays": "Dòng lời bài hát vẫn hiển thị",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Khi Canvas chiếm toàn màn hình, dòng lời bài hát hiện tại vẫn ở dưới tiêu đề thay vì trượt đi cùng các nút điều khiển.",
-"Only with Canvas takes the screen on": "Chỉ khi bật 'Canvas takes the screen'"
+"Only with Canvas takes the screen on": "Chỉ khi bật 'Canvas takes the screen'",
+"Exit full screen": "Thoát toàn màn hình",
+"Video quality": "Chất lượng video",
+"Playing at {0}": "Đang phát ở {0}",
+"{0} s": "{0} giây",
+"Fit": "Vừa khung",
+"Fill": "Lấp đầy",
+"Fit the whole picture": "Hiện toàn bộ hình",
+"Fill the screen": "Lấp đầy màn hình",
+"Video quality on Wi-Fi": "Chất lượng video khi dùng Wi-Fi",
+"Video quality on mobile data": "Chất lượng video khi dùng dữ liệu di động",
+"Auto · follows the connection": "Tự động · theo kết nối",
+"Auto": "Tự động",
+"Seek": "Tua",
+"The video couldn't play at {0}, so it's back on Auto": "Không phát được video ở {0}, nên đã quay về Tự động"
 }

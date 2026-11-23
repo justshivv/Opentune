@@ -3617,5 +3617,19 @@
 "…and {0} more": "…و {0} مورد دیگر",
 "Lyrics line stays": "خط متن ترانه باقی می‌ماند",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "وقتی Canvas صفحه را می‌گیرد، خط فعلی متن ترانه زیر عنوان باقی می‌ماند و همراه کنترل‌ها کنار نمی‌رود.",
-"Only with Canvas takes the screen on": "فقط با روشن بودن «Canvas takes the screen»"
+"Only with Canvas takes the screen on": "فقط با روشن بودن «Canvas takes the screen»",
+"Exit full screen": "خروج از تمام‌صفحه",
+"Video quality": "کیفیت ویدیو",
+"Playing at {0}": "در حال پخش با {0}",
+"{0} s": "{0} ث",
+"Fit": "جا شدن",
+"Fill": "پر کردن",
+"Fit the whole picture": "نمایش کل تصویر",
+"Fill the screen": "پر کردن صفحه",
+"Video quality on Wi-Fi": "کیفیت ویدیو با Wi-Fi",
+"Video quality on mobile data": "کیفیت ویدیو با داده تلفن همراه",
+"Auto · follows the connection": "خودکار · بر اساس اتصال",
+"Auto": "خودکار",
+"Seek": "جابه‌جایی",
+"The video couldn't play at {0}, so it's back on Auto": "ویدیو با {0} پخش نشد، پس به خودکار برگشت"
 }

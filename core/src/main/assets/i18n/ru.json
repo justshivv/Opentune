@@ -3617,5 +3617,19 @@
 "…and {0} more": "…и ещё {0}",
 "Lyrics line stays": "Строка текста остаётся",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Пока Canvas занимает экран, текущая строка текста остаётся под названием, а не уезжает вместе с элементами управления.",
-"Only with Canvas takes the screen on": "Только при включённой опции «Canvas takes the screen»"
+"Only with Canvas takes the screen on": "Только при включённой опции «Canvas takes the screen»",
+"Exit full screen": "Выйти из полноэкранного режима",
+"Video quality": "Качество видео",
+"Playing at {0}": "Играет в {0}",
+"{0} s": "{0} с",
+"Fit": "Вписать",
+"Fill": "Заполнить",
+"Fit the whole picture": "Показать кадр целиком",
+"Fill the screen": "Заполнить экран",
+"Video quality on Wi-Fi": "Качество видео по Wi-Fi",
+"Video quality on mobile data": "Качество видео в мобильной сети",
+"Auto · follows the connection": "Авто · по соединению",
+"Auto": "Авто",
+"Seek": "Перемотка",
+"The video couldn't play at {0}, so it's back on Auto": "Видео не воспроизвелось в {0}, поэтому качество снова авто"
 }

@@ -3617,5 +3617,19 @@
 "…and {0} more": "…இன்னும் {0}",
 "Lyrics line stays": "பாடல் வரி அப்படியே இருக்கும்",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas திரையை ஆக்கிரமிக்கும் போது, தற்போதைய பாடல் வரி கட்டுப்பாடுகளுடன் விலகிச் செல்லாமல் தலைப்பின் கீழ் அப்படியே இருக்கும்.",
-"Only with Canvas takes the screen on": "'Canvas takes the screen' இயக்கத்தில் இருக்கும் போது மட்டும்"
+"Only with Canvas takes the screen on": "'Canvas takes the screen' இயக்கத்தில் இருக்கும் போது மட்டும்",
+"Exit full screen": "முழுத்திரையிலிருந்து வெளியேறு",
+"Video quality": "வீடியோ தரம்",
+"Playing at {0}": "{0} இல் இயங்குகிறது",
+"{0} s": "{0} வி",
+"Fit": "பொருத்து",
+"Fill": "நிரப்பு",
+"Fit the whole picture": "முழுப் படத்தையும் காட்டு",
+"Fill the screen": "திரையை நிரப்பு",
+"Video quality on Wi-Fi": "Wi-Fi இல் வீடியோ தரம்",
+"Video quality on mobile data": "மொபைல் டேட்டாவில் வீடியோ தரம்",
+"Auto · follows the connection": "தானியங்கு · இணைப்பைப் பொறுத்து",
+"Auto": "தானியங்கு",
+"Seek": "நகர்த்து",
+"The video couldn't play at {0}, so it's back on Auto": "வீடியோ {0} இல் இயங்கவில்லை, எனவே மீண்டும் தானியங்குக்குத் திரும்பியது"
 }

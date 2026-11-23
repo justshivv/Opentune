@@ -3617,5 +3617,19 @@
 "…and {0} more": "…y {0} más",
 "Lyrics line stays": "La línea de la letra permanece",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Mientras un Canvas ocupa la pantalla, la línea actual de la letra permanece bajo el título en lugar de deslizarse con los controles.",
-"Only with Canvas takes the screen on": "Solo con «Canvas takes the screen» activado"
+"Only with Canvas takes the screen on": "Solo con «Canvas takes the screen» activado",
+"Exit full screen": "Salir de pantalla completa",
+"Video quality": "Calidad de vídeo",
+"Playing at {0}": "Reproduciendo en {0}",
+"{0} s": "{0} s",
+"Fit": "Ajustar",
+"Fill": "Llenar",
+"Fit the whole picture": "Ver la imagen entera",
+"Fill the screen": "Llenar la pantalla",
+"Video quality on Wi-Fi": "Calidad de vídeo con Wi-Fi",
+"Video quality on mobile data": "Calidad de vídeo con datos móviles",
+"Auto · follows the connection": "Automática · según la conexión",
+"Auto": "Automática",
+"Seek": "Buscar",
+"The video couldn't play at {0}, so it's back on Auto": "El vídeo no se pudo reproducir en {0}, así que vuelve a automática"
 }
