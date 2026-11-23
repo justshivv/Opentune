@@ -459,6 +459,10 @@ data class PlaybackSettings(
      * a video at all.
      */
     val videoModeEnabled: Boolean = true,
+    /** Music-video size on Wi-Fi, by its short side (720 is 720p); 0 is Auto, the size the connection can feed. */
+    val wifiVideoQuality: Int = 0,
+    /** Music-video size on mobile data; see [wifiVideoQuality]. */
+    val mobileVideoQuality: Int = 0,
     /** Community FLAC lookup runs after playback starts. Downloads remain YouTube audio. */
     val losslessStreaming: Boolean = false,
     /** No longer read: its default let FLAC stream on mobile data. See [losslessWifiOnly]. */

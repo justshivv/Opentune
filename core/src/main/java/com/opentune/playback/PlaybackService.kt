@@ -245,7 +245,7 @@ class PlaybackService : MediaLibraryService() {
         val index = player.currentMediaItemIndex
         val position = player.currentPosition
         val playing = player.isPlaying
-        player.replaceMediaItem(index, item.buildUpon().setUri(videoStreamUri(id)).build())
+        player.replaceMediaItem(index, item.buildUpon().setUri(videoStreamUri(id, height = videoHeightFor(id))).build())
         if (position > 0) player.seekTo(index, position)
         if (playing) player.play()
     }
@@ -335,7 +335,7 @@ class PlaybackService : MediaLibraryService() {
                     // over it. One item to the queue and the seek bar; two
                     // streams underneath, started together.
                     val audioSide = this.createMediaSource(mediaItem.buildUpon().setUri(audioUriFor(id)).build())
-                    val videoSide = sources.createMediaSource(mediaItem.buildUpon().setUri(videoOnlyUri(id, videoStepOf(uri))).build())
+                    val videoSide = sources.createMediaSource(mediaItem.buildUpon().setUri(videoOnlyUri(id, videoStepOf(uri), videoHeightOf(uri))).build())
                     // The picture side leads: a merged source publishes its
                     // first source's item as the playing one, and the player
                     // reads video mode off that item's address — led by the
@@ -676,7 +676,7 @@ class PlaybackService : MediaLibraryService() {
                 val uri = if (on) {
                     videoAudioStash = id to (item.localConfiguration?.uri ?: trackUri(id))
                     videoModeSongId = id
-                    videoStreamUri(id)
+                    videoStreamUri(id, height = videoHeightFor(id))
                 } else {
                     if (videoModeSongId == id) videoModeSongId = null
                     audioUriFor(id).also { if (videoAudioStash?.first == id) videoAudioStash = null }
@@ -690,6 +690,30 @@ class PlaybackService : MediaLibraryService() {
                 val playing = player.isPlaying
                 player.replaceMediaItem(index, item.buildUpon().setUri(uri).build())
                 if (position > 0) player.seekTo(index, position)
+                if (playing) player.play()
+            }
+        }
+        // Another video size chosen: the playing video item is built again on it where it
+        // stands, with the song's audio on the same rendition (see audioUriFor), the way a
+        // stall step-down rebuilds it.
+        scope.launch {
+            PlaybackRequests.videoQuality.collect { id ->
+                val player = mediaSession?.player as? ExoPlayer ?: return@collect
+                val item = player.currentMediaItem ?: return@collect
+                if (item.mediaId != id) return@collect
+                val uri = item.localConfiguration?.uri ?: return@collect
+                if (!isVideoUri(uri) && !isVideoOnlyUri(uri)) return@collect
+                autoVideoOnly.remove(id)
+                val height = videoHeightFor(id)
+                if (videoHeightOf(uri) == height) return@collect
+                val index = player.currentMediaItemIndex
+                val position = player.currentPosition
+                val playing = player.playWhenReady
+                swappingTo = id
+                launch { delay(4_000); if (swappingTo == id) swappingTo = null }
+                player.replaceMediaItem(index, item.buildUpon().setUri(videoStreamUri(id, height = height)).build())
+                if (position > 0) player.seekTo(index, position)
+                player.prepare()
                 if (playing) player.play()
             }
         }
@@ -1753,6 +1777,13 @@ class PlaybackService : MediaLibraryService() {
 
     /** The song a heal swap is carrying back to its video item, if one is in flight. */
     @Volatile private var healingVideoTo: String? = null
+
+    /** Songs whose video failed at a chosen size this session: they stay on Auto until another size is chosen. */
+    private val autoVideoOnly = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** The picture size to build [id]'s video item for: the one chosen for this network, or Auto after it failed. */
+    private fun videoHeightFor(id: String): Int =
+        if (id in autoVideoOnly) com.opentune.data.innertube.VideoQuality.AUTO else com.opentune.data.innertube.VideoQuality.now()
     /** The FLAC search the player's buffering waits on (see [LossyHoldBack]); read on the playback thread. */
     @Volatile private var lossyHeldBack: Job? = null
 
@@ -3181,6 +3212,8 @@ class PlaybackService : MediaLibraryService() {
         // Once prepared, the item reads as its picture side (the merged source's lead).
         if (!isVideoUri(uri) && !isVideoOnlyUri(uri)) return
         if (videoStepOf(uri) >= MAX_VIDEO_STEPS) return
+        // A size the listener chose is kept, stalls and all, as YouTube keeps it; Auto is what steps.
+        if (videoHeightOf(uri) > 0) return
         // Only mid-song: the start and a seek buffer by design.
         if (player.currentPosition < STALL_MIN_POSITION_MS) return
         val at = player.currentPosition
@@ -3300,6 +3333,25 @@ class PlaybackService : MediaLibraryService() {
             return
         }
         val raw = item.localConfiguration?.uri
+        val chosenHeight = raw?.let(::videoHeightOf) ?: 0
+        if (raw != null && chosenHeight > 0 && (isVideoUri(raw) || isVideoOnlyUri(raw))) {
+            // A size the listener chose wouldn't play (this phone couldn't decode it after all,
+            // or its link was refused): the video goes on at Auto, where it stands, and stays on
+            // Auto for the session. If Auto fails too, the branch below takes it back to the song.
+            Log.w(TAG, "Music video for $mediaId failed at ${chosenHeight}p (${error.errorCodeName}); trying Auto")
+            autoVideoOnly += mediaId
+            StreamResolver.forgetVideo(mediaId)
+            val cache = AudioCache.get(this)
+            scope.launch(Dispatchers.IO) { runCatching { cacheKeyOf(videoOnlyUri(mediaId, height = chosenHeight))?.let(cache::removeResource) } }
+            val index = player.currentMediaItemIndex
+            val position = player.currentPosition
+            swappingTo = mediaId
+            player.replaceMediaItem(index, item.buildUpon().setUri(videoStreamUri(mediaId)).setMimeType(null).build())
+            player.seekTo(index, position)
+            player.prepare()
+            PlaybackRequests.report(com.opentune.i18n.Tr.f("The video couldn't play at {0}, so it's back on Auto", "${chosenHeight}p"))
+            return
+        }
         if (raw != null && (isVideoUri(raw) || isVideoOnlyUri(raw))) {
             // The music video wouldn't play (no stream unlocked, the link was refused, or
             // this phone can't decode it). The song itself is fine: back to its audio at the

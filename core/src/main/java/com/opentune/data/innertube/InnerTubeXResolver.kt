@@ -64,6 +64,11 @@ object InnerTubeXResolver {
         /** InnerTubeX's catalog id for the exact client variant; what exclusions key on. */
         val profileId: String,
         val headers: Map<String, String>,
+        /** A video's picture size, 0 when unknown or for audio. */
+        val width: Int = 0,
+        val height: Int = 0,
+        /** The picture heights the video is offered at, for the quality list. */
+        val availableHeights: List<Int> = emptyList(),
     )
 
     private var prefs: SharedPreferences? = null
@@ -258,6 +263,8 @@ object InnerTubeXResolver {
     suspend fun extractVideo(
         videoId: String,
         skipClients: Set<String> = emptySet(),
+        /** The tallest picture wanted, in pixels; null for no limit. */
+        maxHeight: Int? = null,
     ): Extracted? {
         if (prefs == null) return null
         bindSession()
@@ -267,7 +274,7 @@ object InnerTubeXResolver {
             // extractor runs audio-only and the stream it returns has no
             // videoUrl, so this function could only ever answer null (the
             // 2026-11-21 device log shows 27 extractions, all wantVideo=false).
-            hints = ContentHints(wantVideo = true)
+            hints = ContentHints(wantVideo = true, maxVideoHeight = maxHeight)
                 .withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true),
             excludedClients = excludedFor(videoId) + skipClients,
             audioQuality = AudioQuality.AUTO,
@@ -284,6 +291,9 @@ object InnerTubeXResolver {
             clientName = stream.clientName,
             profileId = stream.profileId,
             headers = stream.headers,
+            width = stream.videoWidth ?: 0,
+            height = stream.videoHeight ?: 0,
+            availableHeights = stream.availableVideoHeights.orEmpty(),
         )
         if (minted.size >= MAX_REMEMBERED) minted.clear()
         minted[extracted.url] = extracted

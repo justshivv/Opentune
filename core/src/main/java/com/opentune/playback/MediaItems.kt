@@ -72,24 +72,34 @@ fun externalStreamUri(videoId: String, rendition: String): Uri =
 fun externalStreamKeyOf(uri: Uri): String? =
     if (videoIdOf(uri) != null) uri.getQueryParameter("external")?.takeIf { it.isNotBlank() } else null
 
-/** The same song as its music video: an alternate rendition, like an external stream. [step] counts the picture's stall step-downs (see PlaybackService's video stall watch). */
-fun videoStreamUri(videoId: String, step: Int = 0): Uri =
+/**
+ * The same song as its music video: an alternate rendition, like an external stream. [step] counts the
+ * picture's stall step-downs (see PlaybackService's video stall watch); [height] is a picture size the
+ * listener chose (720 for 720p), 0 for Auto.
+ */
+fun videoStreamUri(videoId: String, step: Int = 0, height: Int = 0): Uri =
     streamUri(videoId, upgraded = false).buildUpon().appendQueryParameter("video", "1")
         .apply { if (step > 0) appendQueryParameter("vstep", step.toString()) }
+        .apply { if (height > 0) appendQueryParameter("vh", height.toString()) }
         .build()
 
 fun isVideoUri(uri: Uri): Boolean =
     videoIdOf(uri) != null && uri.getQueryParameter("video") == "1"
 
 /** The video rendition's picture alone, without its own audio: the factory's video side. */
-fun videoOnlyUri(videoId: String, step: Int = 0): Uri =
+fun videoOnlyUri(videoId: String, step: Int = 0, height: Int = 0): Uri =
     streamUri(videoId, upgraded = false).buildUpon().appendQueryParameter("video", "only")
         .apply { if (step > 0) appendQueryParameter("vstep", step.toString()) }
+        .apply { if (height > 0) appendQueryParameter("vh", height.toString()) }
         .build()
 
 /** How many times a video item's picture has stepped down after a stall. */
 fun videoStepOf(uri: Uri): Int =
     if (videoIdOf(uri) != null) uri.getQueryParameter("vstep")?.toIntOrNull() ?: 0 else 0
+
+/** The picture size a video item was built for, 0 for Auto. */
+fun videoHeightOf(uri: Uri): Int =
+    if (videoIdOf(uri) != null) uri.getQueryParameter("vh")?.toIntOrNull() ?: 0 else 0
 
 fun isVideoOnlyUri(uri: Uri): Boolean =
     videoIdOf(uri) != null && uri.getQueryParameter("video") == "only"
@@ -98,8 +108,10 @@ fun isVideoOnlyUri(uri: Uri): Boolean =
 fun cacheKeyOf(uri: Uri): String? = videoIdOf(uri)?.let { id ->
     externalStreamKeyOf(uri)?.let { "$id:external:$it" }
         ?: if (isVideoUri(uri) || isVideoOnlyUri(uri)) {
+            // Each size its own entry: a picture half cached from one format and finished from another never parses.
             val step = videoStepOf(uri)
-            if (step > 0) "$id:video:s$step" else "$id:video"
+            val height = videoHeightOf(uri)
+            "$id:video" + (if (step > 0) ":s$step" else "") + (if (height > 0) ":h$height" else "")
         } else if (isUpgradedUri(uri)) "$id:hq" else id
 }
 
