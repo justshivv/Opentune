@@ -456,6 +456,10 @@ private fun Results(
             // The mixed page comes back as one list; show it in sections the way
             // YouTube Music does: songs, then artists, albums, playlists.
             val sections = remember(state.data) { state.data.groupBy(::sectionOf).toList() }
+            val topSongs = remember(state.data) {
+                state.data.mapNotNull { r -> when (r) { is SearchResult.TopTrack -> r.song; is SearchResult.Track -> r.song; else -> null } }.take(3)
+            }
+            com.opentune.ui.components.PreloadCandidates("search", topSongs)
             LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
                 sections.forEach { (title, rows) ->
                     if (sections.size > 1) {

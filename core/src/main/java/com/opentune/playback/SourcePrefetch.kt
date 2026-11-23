@@ -89,6 +89,26 @@ internal fun aheadWanted(
 }
 
 /**
+ * As [aheadWanted], with the places chosen by a [QueuePlan] rather than counted: the songs at
+ * [saavnAt] of [upcoming] are looked up on JioSaavn, and those at [losslessAt] for their FLAC too.
+ * A song there twice is readied once, with its FLAC if either place wants it.
+ */
+internal fun aheadPlanned(
+    upcoming: List<Song>,
+    preload: Boolean,
+    saavn: Boolean,
+    lossless: Boolean,
+    saavnAt: Set<Int>,
+    losslessAt: Set<Int>,
+    eligible: (Song) -> Boolean = { true },
+): List<AheadWant> {
+    if (!preload || (!saavn && !lossless)) return emptyList()
+    val near = if (lossless) upcoming.filterIndexed { i, _ -> i in losslessAt }.mapTo(HashSet()) { it.videoId } else emptySet()
+    val wanted = upcoming.filterIndexed { i, _ -> (saavn && i in saavnAt) || i in losslessAt && lossless }
+    return wanted.filter(eligible).distinctBy { it.videoId }.map { AheadWant(it.videoId, it, it.videoId in near) }
+}
+
+/**
  * The lookups readying songs ahead, by video id, and the rules they keep:
  *  - each waits [settleMs] first, so a song skipped past within a moment is never looked up;
  *  - at most [atOnce] run at a time;

@@ -94,6 +94,17 @@ object LyricsRepository {
         find(videoId, title, artist, durationMs).lyrics
 
     /**
+     * Finds a song's lyrics before it plays, so they show the moment it starts. [durationMs] may
+     * be a card's, to the second: the player's own figure finds them within [CLOSE_S] of it.
+     */
+    suspend fun prefetch(videoId: String, title: String, artist: String, durationMs: Long) {
+        if (durationMs > 0) find(videoId, title, artist, durationMs)
+    }
+
+    /** The other lengths, in seconds either side, lyrics readied ahead are found under. */
+    private val NEAR_SECONDS = listOf(-1L, 1L, -2L, 2L)
+
+    /**
      * The lyrics for a song, then better ones if they turn up: when only
      * plain text (or nothing, or line sync where word sync is wanted) was
      * found while a source was down or slow, the sources are asked again
@@ -130,8 +141,13 @@ object LyricsRepository {
         val settings = AppSettings.lyrics.value
         val chosen = settings.chosen[videoId]
         // The duration is in the key: lyrics found for one length aren't reused for another.
-        val key = "$videoId|${durationMs / 1000}|${settings.ordered.filter { it.enabled }.joinToString(",") { it.source.name }}|${settings.preferWordSynced}|$chosen"
+        val tail = "|${settings.ordered.filter { it.enabled }.joinToString(",") { it.source.name }}|${settings.preferWordSynced}|$chosen"
+        val seconds = durationMs / 1000
+        val key = "$videoId|$seconds$tail"
         cache[key]?.let { return Found(it, true) }
+        // Readied ahead from a card, whose length is only to the second (see [prefetch]): within
+        // [CLOSE_S] it's the same recording.
+        if (durationMs > 0) for (off in NEAR_SECONDS) cache["$videoId|${seconds + off}$tail"]?.let { return Found(it, true) }
         // A source picked for this song from the player goes first, on its own, as it comes.
         if (chosen != null) {
             answerOf(chosen, videoId, title, artist, durationMs).await().getOrNull()?.let { LyricsQuality.tidy(it, durationMs) }?.let { picked ->

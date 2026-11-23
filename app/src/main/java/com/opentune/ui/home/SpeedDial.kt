@@ -106,6 +106,12 @@ internal fun SpeedDialSection(
             Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), "Show all", Modifier.size(28.dp))
         }
         val pager = rememberPagerState(pageCount = { pageCount })
+        val onPage = remember(shown, pager.currentPage) {
+            shown.drop(pager.currentPage * PER_PAGE).take(PER_PAGE).mapNotNull { item ->
+                item.videoId?.let { com.opentune.data.model.Song(it, item.title, item.subtitle, item.thumbnailUrl, isVideo = item.video) }
+            }
+        }
+        com.opentune.ui.components.PreloadCandidates("speed-dial", onPage)
         BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 8.dp)) {
             val tile = (maxWidth - SIDE * 2 - GAP * 2) / 3
             // Reserve only occupied rows. A short page must not leave two blank rows
