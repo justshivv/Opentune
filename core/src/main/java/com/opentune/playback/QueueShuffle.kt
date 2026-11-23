@@ -44,6 +44,16 @@ internal object QueueShuffle {
     }
 
     /**
+     * [items] with every song that [order] has (but [isPick]'s, smart shuffle's own) back in
+     * [order]'s order, matched by [id]; songs that weren't there, picks kept and songs queued
+     * since, keep their places. For smart shuffle off, which reorders all the songs to come.
+     */
+    fun <T> putBack(items: List<T>, order: List<T>, isPick: (T) -> Boolean, id: (T) -> String): List<T> {
+        val ids = order.mapTo(HashSet(), id)
+        return restore(items, { id(it) in ids && !isPick(it) }, order, id)
+    }
+
+    /**
      * How many songs at the end of [queue] AutoPlay has just added: the run of AutoPlay's songs
      * at the end whose [id]s aren't in [known].
      */

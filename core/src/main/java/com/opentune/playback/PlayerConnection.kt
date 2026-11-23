@@ -369,6 +369,7 @@ class PlayerConnection(private val context: Context) {
         SmartShuffle.clear()
         val kept = handQueued(controller)
         beforeShuffle = null
+        beforeSmart = null
         controller.setMediaItems((listOf(song.copy(queueTier = QueueTier.CONTEXT)) + kept).map { it.toMediaItem() }, 0, 0L)
         controller.prepare()
         controller.play()
@@ -452,6 +453,7 @@ class PlayerConnection(private val context: Context) {
         val stamp = ++queueStamp
         // A new queue: a shuffle turned on for the last one has nothing to put back.
         beforeShuffle = null
+        beforeSmart = null
         val headSize = maxOf(QUEUE_CHUNK, startIndex + 1)
         val head = ordered.take(headSize)
         controller.setMediaItems(head.map { it.toMediaItem() }, startIndex.coerceIn(head.indices), startPositionMs)
@@ -541,6 +543,7 @@ class PlayerConnection(private val context: Context) {
      */
     private fun shuffleUpcoming(controller: MediaController) {
         controller.shuffleModeEnabled = false
+        beforeSmart = null
         val from = controller.currentMediaItemIndex + 1
         val items = (from until controller.mediaItemCount).map(controller::getMediaItemAt)
         shuffled = QueueShuffle.movable(items) { it.queueTier }
@@ -611,8 +614,9 @@ class PlayerConnection(private val context: Context) {
         when (from.next(_smartShuffleAvailable.value)) {
             ShuffleMode.ON -> shuffleUpcoming(controller)
             // Smart shuffle makes its own order from the songs to come, whatever order they're in.
-            ShuffleMode.SMART -> { beforeShuffle = null; smartShuffleOn(controller) }
-            ShuffleMode.OFF -> if (from == ShuffleMode.SMART) smartShuffleOff(controller) else unshuffleUpcoming(controller)
+            // The order from before shuffle is kept through it, for off to put back.
+            ShuffleMode.SMART -> { keepOrderForSmart(controller); smartShuffleOn(controller) }
+            ShuffleMode.OFF -> if (from == ShuffleMode.SMART) { smartShuffleOff(controller); restoreAfterSmart(controller) } else unshuffleUpcoming(controller)
         }
         publishShuffle(controller)
         return _shuffleMode.value
@@ -665,6 +669,34 @@ class PlayerConnection(private val context: Context) {
         }
         if (mixed.isNotEmpty()) controller.addMediaItems(mixed)
         startSmartShuffle(origin, list, seed)
+    }
+
+    /**
+     * The songs to come in the order they had before shuffle, while smart shuffle that followed
+     * it is on: smart shuffle mixes them all again, so the order shuffle kept is taken as the
+     * whole queue to come with its shuffled songs put back. Null when there's none to put back.
+     */
+    private var beforeSmart: List<MediaItem>? = null
+
+    private fun keepOrderForSmart(controller: MediaController) {
+        val before = beforeShuffle
+        beforeShuffle = null
+        shuffleKnown.clear()
+        beforeSmart = before?.let { b ->
+            val from = controller.currentMediaItemIndex + 1
+            val items = (from until controller.mediaItemCount).map(controller::getMediaItemAt)
+            QueueShuffle.restore(items, ::restorable, b) { it.mediaId }
+        }
+    }
+
+    /** Shuffle, then smart shuffle, then off: the songs to come go back to the order they had before shuffle. */
+    private fun restoreAfterSmart(controller: MediaController) {
+        val order = beforeSmart ?: return
+        beforeSmart = null
+        val from = controller.currentMediaItemIndex + 1
+        val items = (from until controller.mediaItemCount).map(controller::getMediaItemAt)
+        val restored = QueueShuffle.putBack(items, order, { it.toSong().smartShuffle }) { it.mediaId }
+        if (restored != items) replaceAfter(controller, from, restored)
     }
 
     /** Takes out the added songs not played yet; the list's own songs keep their order. */
@@ -791,6 +823,7 @@ class PlayerConnection(private val context: Context) {
     fun dismiss() {
         QueueStore.clear()
         beforeShuffle = null
+        beforeSmart = null
         val controller = controller ?: return
         controller.stop()
         controller.clearMediaItems()

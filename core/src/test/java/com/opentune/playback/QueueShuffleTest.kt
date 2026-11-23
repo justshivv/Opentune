@@ -132,6 +132,41 @@ class QueueShuffleTest {
         assertEquals(upcoming + fresh, QueueShuffle.restore(placed, restorable, before) { it.id })
     }
 
+    /**
+     * Shuffle, then smart shuffle, then off: the order from before shuffle comes back, as it
+     * does for shuffle then off. Smart shuffle mixed every song to come again (those queued by
+     * hand and AutoPlay's too) and slotted in its picks, so the order shuffle kept was lost.
+     */
+    @Test fun shuffleThenSmartShuffleThenOffPutsTheOrderBack() {
+        val tier = { t: T -> t.tier }
+        val upcoming = listOf(hand("h")) + (1..8).map { list("s$it") } + (1..2).map { auto("a$it") }
+        val movable = QueueShuffle.movable(upcoming, tier)
+        val restorable = { t: T -> movable(t) || t.tier == com.opentune.data.model.QueueTier.AUTOPLAY }
+        // Shuffle on.
+        val (shuffled, _) = QueueShuffle.mix(upcoming, movable, Random(6))
+        val before = upcoming.filter(restorable)
+        // Smart shuffle: the order to put back is the whole queue to come as it was before shuffle.
+        val order = QueueShuffle.restore(shuffled, restorable, before) { it.id }
+        assertEquals(upcoming, order)
+        val picks = (1..3).map { T("pick$it", com.opentune.data.model.QueueTier.CONTEXT) }
+        val smart = (shuffled.shuffled(Random(8)) + picks).shuffled(Random(10))
+        assertNotEquals(upcoming, smart.filterNot { it in picks })
+        // Off: the picks not played yet go, one was kept; the rest go back.
+        val kept = picks.first()
+        val afterOff = smart.filterNot { it in picks && it != kept }
+        val restored = QueueShuffle.putBack(afterOff, order, { it in picks }) { it.id }
+        assertEquals(upcoming, restored.filterNot { it == kept })
+        // The kept pick stays where it was.
+        assertEquals(afterOff.indexOf(kept), restored.indexOf(kept))
+    }
+
+    @Test fun putBackLeavesSongsQueuedSinceWhereTheyAre() {
+        val order = (1..5).map { list("s$it") }
+        val now = listOf(list("s3"), hand("new"), list("s1"), list("s5"), list("s2"))
+        val restored = QueueShuffle.putBack(now, order, { false }) { it.id }
+        assertEquals(listOf("s1", "new", "s2", "s3", "s5"), restored.map { it.id })
+    }
+
     /** Issue 64's case: one song into AutoPlay, shuffled; more AutoPlay arrives and is mixed with all of it. */
     @Test fun arrivalsMixWithAutoPlaysWholeShuffleWhenThereIsNoList() {
         val tier = { t: T -> t.tier }
