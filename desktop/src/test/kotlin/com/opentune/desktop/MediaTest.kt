@@ -57,6 +57,37 @@ class MediaTest {
         assertTrue("peak $loudest", loudest in 0.25f..0.5f)
     }
 
+    @Test fun everyPieceAFilterGivesOutIsKept() {
+        assertTrue("FFmpeg should load", Ffmpeg.available)
+        // A filter that gives four pieces for each frame pushed, as atempo does when it slows a song.
+        val filter = org.bytedeco.javacv.FFmpegFrameFilter("asetnsamples=n=240", 2).apply {
+            sampleFormat = org.bytedeco.ffmpeg.global.avutil.AV_SAMPLE_FMT_FLT
+            sampleRate = 48_000
+            start()
+        }
+        try {
+            val input = FloatArray(960 * 2) { it.toFloat() }
+            val frame = Frame().apply {
+                sampleRate = 48_000
+                audioChannels = 2
+                samples = arrayOf(java.nio.FloatBuffer.wrap(input))
+            }
+            val out = ArrayList<Float>()
+            var pieces = 0
+            FfmpegEngine.filterEach(filter, frame) { piece ->
+                pieces++
+                val b = piece.samples!!.first() as java.nio.FloatBuffer
+                while (b.hasRemaining()) out += b.get()
+                true
+            }
+            assertEquals(4, pieces)
+            assertEquals(input.toList(), out)
+        } finally {
+            filter.stop()
+            filter.release()
+        }
+    }
+
     @Test fun graalJsRunsCurrentJavaScript() {
         // The shape of YouTube's throttling function: a named function over a string.
         assertEquals("cba", JavaScript.run("function f(a){return a.split('').reverse().join('')}", "f", "abc"))

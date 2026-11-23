@@ -106,11 +106,10 @@ internal class FfmpegEngine(
                     emitting = false
                 }
                 val frame: Frame = g.grabSamples() ?: break
-                val pieces = filter?.let { f -> f.push(frame); generateSequence { f.pullSamples() }.toList() } ?: listOf(frame)
-                for (piece in pieces) {
-                    val samples = piece.samples?.firstOrNull() as? FloatBuffer ?: continue
+                filterEach(filter, frame) { piece ->
+                    val samples = piece.samples?.firstOrNull() as? FloatBuffer ?: return@filterEach true
                     val count = samples.remaining()
-                    if (count < AudioBus.CHANNELS) continue
+                    if (count < AudioBus.CHANNELS) return@filterEach true
                     if (!emitting) {
                         emitting = true
                         runStart = at
@@ -121,12 +120,13 @@ internal class FfmpegEngine(
                     samples.get(floats, 0, count)
                     val frames = count / AudioBus.CHANNELS
                     at += (frames * speed).toLong()
-                    if (!voice.write(floats, 0, frames)) break
+                    if (!voice.write(floats, 0, frames)) return@filterEach false
                     if (!started) {
                         started = true
                         onStarted()
                         onPlaying(true)
                     }
+                    true
                 }
             }
             if (!disposed && seekRequest == null) {
@@ -199,6 +199,24 @@ internal class FfmpegEngine(
     }
 
     internal companion object {
+        /**
+         * Pushes [frame] through [filter] (none: the frame as it is) and hands [use] each piece
+         * that comes out, before pulling the next: the filter gives every piece in one and the
+         * same frame, overwritten by the next pull, so pieces gathered up first all held the
+         * last one's samples. Stops early when [use] returns false.
+         */
+        inline fun filterEach(filter: FFmpegFrameFilter?, frame: Frame, use: (Frame) -> Boolean) {
+            if (filter == null) {
+                use(frame)
+                return
+            }
+            filter.push(frame)
+            while (true) {
+                val piece = filter.pullSamples() ?: return
+                if (!use(piece)) return
+            }
+        }
+
         /**
          * The FFmpeg filter chain for [speed] and the equalizer [eq]: the preamp, a
          * peaking filter two-thirds of an octave wide per band, bass and treble as
