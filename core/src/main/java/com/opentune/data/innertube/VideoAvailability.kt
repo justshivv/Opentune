@@ -35,9 +35,17 @@ object VideoAvailability {
     @Volatile private var saved = Saved()
 
     fun init(context: Context) {
-        val f = File(context.applicationContext.filesDir, "video-availability.json")
+        val dir = context.applicationContext.filesDir
+        val f = File(dir, "video-availability-2.json")
         file = f
         runCatching { json.decodeFromString<Saved>(f.readText()) }.getOrNull()?.let { saved = it }
+        // The first file counted art tracks (a still of the cover) as having a video:
+        // its "no" answers still hold, its "yes" ones are asked again.
+        val old = File(dir, "video-availability.json")
+        if (old.exists()) {
+            if (!f.exists()) runCatching { json.decodeFromString<Saved>(old.readText()) }.getOrNull()?.let { saved = Saved(none = it.none) }
+            old.delete()
+        }
     }
 
     /** The settled answer for [videoId]: true or false, or null when it was never settled. */

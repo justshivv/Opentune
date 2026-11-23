@@ -1368,10 +1368,36 @@ object StreamResolver {
      * no URL was ever resolved for it, and resolving one at load time is
      * exactly what failed under load. Only a URL in hand counts.
      */
-    fun hasVideo(videoId: String): Boolean = videoUrls.containsKey(videoId) || VideoAvailability.known(videoId) == true
+    fun hasVideo(videoId: String): Boolean =
+        VideoAvailability.known(videoId) == true || (videoUrls.containsKey(videoId) && artTracks[videoId] == false)
 
     /** Whether the video question has a settled answer for [videoId], either way. */
-    fun videoKnown(videoId: String): Boolean = videoUrls.containsKey(videoId) || videoId in noVideo || VideoAvailability.known(videoId) != null
+    fun videoKnown(videoId: String): Boolean =
+        VideoAvailability.known(videoId) != null || videoId in noVideo || artTracks[videoId] == true ||
+            (videoUrls.containsKey(videoId) && artTracks[videoId] == false)
+
+    /**
+     * Songs asked about as art tracks: true for one, false for anything else. An
+     * art track's "video" is the song over a still of its cover, so it has no
+     * music video to switch to, though its picture streams resolve like any other.
+     */
+    private val artTracks = ConcurrentHashMap<String, Boolean>()
+
+    /** Whether [videoId] is an art track, asked of YouTube Music once; null when it couldn't be asked. */
+    private suspend fun isArtTrack(videoId: String): Boolean? {
+        artTracks[videoId]?.let { return it }
+        val queue = try {
+            withContext(Dispatchers.IO) { Innertube.next(videoId) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            TrackLog.w(TAG, "Couldn't tell whether $videoId is an art track: ${e.javaClass.simpleName}: ${e.message}")
+            return null
+        }
+        return (InnertubeParser.musicVideoType(queue, videoId) == ART_TRACK).also { artTracks[videoId] = it }
+    }
+
+    private const val ART_TRACK = "MUSIC_VIDEO_TYPE_ATV"
 
     /** Tracks a client walk answered for, none of which offered a playable video. */
     private val noVideo = ConcurrentHashMap.newKeySet<String>()
@@ -1408,11 +1434,25 @@ object StreamResolver {
      * song is only ever asked about once.
      */
     suspend fun videoAvailable(videoId: String): Boolean {
-        if (videoUrls.containsKey(videoId)) return true
         if (videoId in noVideo) return false
         // Settled once, settled for good: the kept answer needs no network.
         VideoAvailability.known(videoId)?.let { return it }
         if (!com.opentune.data.isYouTubeId(videoId)) return false
+        // An art track's picture is a still of the cover: switching to it showed the
+        // cover again, as if the video never loaded. Unasked (offline), nothing is settled.
+        when (isArtTrack(videoId)) {
+            true -> {
+                noVideo += videoId
+                VideoAvailability.remember(videoId, false)
+                return false
+            }
+            null -> return false
+            false -> Unit
+        }
+        if (videoUrls.containsKey(videoId)) {
+            VideoAvailability.remember(videoId, true)
+            return true
+        }
         // The walk is network work; a caller on the main thread (the player
         // connection is one) would have its probes killed by the platform's
         // main-thread network ban and conclude every video is unusable.

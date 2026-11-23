@@ -1340,6 +1340,19 @@ object InnertubeParser {
      * version of each song: the one YouTube Music would play, or with
      * [songsOnly] the catalogue track over its music video when it has one.
      */
+    /**
+     * What kind of upload [videoId] is, as a watch queue (`next` response) names it:
+     * "MUSIC_VIDEO_TYPE_ATV" for an art track (the song over a still of its cover),
+     * "MUSIC_VIDEO_TYPE_OMV" for an official music video, and so on. Null when the
+     * queue doesn't list it, as itself or as another version's counterpart.
+     */
+    fun musicVideoType(root: JsonElement, videoId: String): String? =
+        watchRows(root).asSequence()
+            .flatMap { (primary, other) -> sequenceOf(primary, other) }
+            .firstOrNull { it?.s("videoId") == videoId }
+            ?.o("navigationEndpoint")?.o("watchEndpoint")?.o("watchEndpointMusicSupportedConfigs")
+            ?.o("watchEndpointMusicConfig")?.s("musicVideoType")
+
     fun parseWatchQueue(root: JsonElement, songsOnly: Boolean = false, allVersions: Boolean = false): List<Song> {
         val out = LinkedHashMap<String, Song>()
         watchRows(root).forEach { (primary, other) ->
