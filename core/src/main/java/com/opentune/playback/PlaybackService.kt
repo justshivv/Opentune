@@ -2787,8 +2787,9 @@ class PlaybackService : MediaLibraryService() {
 
     /**
      * Looks up [item]'s SponsorBlock segments and, while it plays, jumps
-     * over each one the first time playback enters it. Seeking back into a
-     * segment afterwards plays it: that was asked for.
+     * over each one as playback enters it. Seeking back into a segment
+     * afterwards plays it: that was asked for. Back before its start (the
+     * song played again from the top), it's skipped again.
      */
     private fun watchSegments(item: MediaItem?) {
         segmentsJob?.cancel()
@@ -2799,11 +2800,12 @@ class PlaybackService : MediaLibraryService() {
             val segments = SponsorBlock.segments(id, pb.sponsorBlockCategories)
             if (segments.isEmpty()) return@launch
             val player = mediaSession?.player ?: return@launch
-            val skipped = HashSet<String>()
-            while (player.currentMediaItem?.mediaId == id && skipped.size < segments.size) {
+            var skipped: Set<String> = emptySet()
+            while (player.currentMediaItem?.mediaId == id) {
                 delay(if (player.isPlaying) SEGMENT_POLL_MS else SEGMENT_IDLE_POLL_MS)
                 if (!player.isPlaying) continue
                 val at = player.currentPosition
+                skipped = SponsorBlock.stillSkipped(skipped, segments, at)
                 val duration = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
                 val segment = segments.firstOrNull {
                     it.uuid !in skipped && at >= it.startMs && at < it.endMs - SEGMENT_END_SLACK_MS && SponsorBlock.fits(it, duration)

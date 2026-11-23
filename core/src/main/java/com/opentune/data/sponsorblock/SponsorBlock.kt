@@ -116,5 +116,13 @@ object SponsorBlock {
     fun fits(segment: Segment, playingDurationMs: Long): Boolean =
         segment.videoDurationMs <= 0 || playingDurationMs <= 0 || kotlin.math.abs(segment.videoDurationMs - playingDurationMs) <= 2_000
 
+    /**
+     * Of the segments [skipped] already, the ones that stay skipped with playback at
+     * [atMs]: playback back before one's start (the song played again from the top,
+     * say) skips it again, while a seek into one plays it, as that was asked for.
+     */
+    fun stillSkipped(skipped: Set<String>, segments: List<Segment>, atMs: Long): Set<String> =
+        skipped.filterTo(HashSet()) { uuid -> segments.firstOrNull { it.uuid == uuid }?.let { atMs >= it.startMs } ?: true }
+
     private fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull
 }
