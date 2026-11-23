@@ -76,9 +76,26 @@ object MusicRepository {
     private val json = Json { ignoreUnknownKeys = true }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** What Home showed last time, kept on disk so the app opens on it. */
+    /**
+     * What Home showed last time, kept on disk so the app opens on it, and the
+     * [homeLocale] it was made for (none in copies saved before it was kept).
+     */
     @Serializable
-    private class SavedHome(val first: List<HomeShelf>, val more: List<HomeShelf> = emptyList())
+    private class SavedHome(val first: List<HomeShelf>, val more: List<HomeShelf> = emptyList(), val locale: String? = null)
+
+    /**
+     * The country and language Home is made for. YouTube's Home, charts, new releases
+     * and moods differ by both, so what's kept of Home is kept per locale: after a move
+     * to another country (a new SIM, a trip) Home is fetched for it, not shown for the old one.
+     */
+    fun homeLocale(): String = "${Innertube.currentRegion}-${Innertube.currentLanguage}"
+
+    /**
+     * The [homeLocale] of the Home [init] read from disk. A copy saved before the
+     * locale was kept counts as this one's, so an update doesn't open on an empty Home.
+     */
+    @Volatile var savedHomeLocale: String? = null
+        private set
 
     private val _homeMore = MutableStateFlow<List<HomeShelf>>(emptyList())
 
@@ -129,6 +146,8 @@ object MusicRepository {
         // Copies saved before Home had more pages were a bare list.
             ?: runCatching { SavedHome(json.decodeFromString(ListSerializer(HomeShelf.serializer()), text)) }.getOrNull()
             ?: return null
+        savedHomeLocale = saved.locale ?: homeLocale()
+        homeMoreLocale = savedHomeLocale
         _homeMore.value = saved.more
         return saved.first
     }
@@ -166,7 +185,17 @@ object MusicRepository {
     /** The songs the last picks shelf showed, so a refresh brings new ones forward. */
     @Volatile private var lastPicks: Set<String> = emptySet()
 
+    /** The [homeLocale] [homeMore] was made for. */
+    @Volatile private var homeMoreLocale: String? = null
+
     suspend fun home(): List<HomeShelf> = io { coroutineScope {
+        val locale = homeLocale()
+        if (homeMoreLocale != null && homeMoreLocale != locale) {
+            // Another country's shelves don't stay up while this one's load.
+            homeMoreJob?.cancelAndJoin()
+            _homeMore.value = emptyList()
+        }
+        homeMoreLocale = locale
         if (homeRefreshRequested.getAndSet(false)) {
             // Join before invalidating, so an older load cannot repopulate stale caches.
             homeMoreJob?.cancelAndJoin()
@@ -189,7 +218,7 @@ object MusicRepository {
         // In the exported log, so a Home that looks wrong can be compared with what YouTube sent.
         DebugLog.d("Home", "first page: " + first.joinToString { "${it.title} (${it.items.size}${if (it.personal) ", for the account" else ""})" })
         homeMoreJob?.cancel()
-        homeMoreJob = scope.launch { followHome(first, InnertubeParser.sectionListContinuation(response)) }
+        homeMoreJob = scope.launch { followHome(first, InnertubeParser.sectionListContinuation(response), locale) }
         first
     } }
 
@@ -208,7 +237,7 @@ object MusicRepository {
      * The shelves from the last load stay up until the first new batch
      * arrives, so a refresh doesn't empty the bottom of the page.
      */
-    private suspend fun followHome(first: List<HomeShelf>, token: String?) = coroutineScope {
+    private suspend fun followHome(first: List<HomeShelf>, token: String?, locale: String) = coroutineScope {
         val lock = Any()
         val pages = mutableListOf<HomeShelf>()
         val extras = arrayOfNulls<List<HomeShelf>>(HomeSource.entries.size)
@@ -242,13 +271,19 @@ object MusicRepository {
             }
         }
     }.also {
-        saveHome(SavedHome(first, _homeMore.value))
+        saveHome(SavedHome(first, _homeMore.value, locale))
     }
 
     /** Where Home's extra shelves come from, in the order they're shown. */
     private enum class HomeSource { SEED, RADIO, LISTENBRAINZ, ARTISTS, NEW_RELEASES, CHARTS, EXPLORE, MOODS }
 
-    private class Fetched(val shelves: List<HomeShelf>, val at: Long, val engine: Recommender = AppSettings.playback.value.recommender)
+    private class Fetched(
+        val shelves: List<HomeShelf>,
+        val at: Long,
+        val engine: Recommender = AppSettings.playback.value.recommender,
+        /** Charts, new releases and moods are a country's own: not reused in another. */
+        val locale: String = homeLocale(),
+    )
     private val extrasCache = java.util.concurrent.ConcurrentHashMap<HomeSource, Fetched>()
 
     /**
@@ -263,8 +298,9 @@ object MusicRepository {
         if (History.records.value.isNotEmpty() && source in setOf(HomeSource.CHARTS, HomeSource.EXPLORE)) return emptyList()
         val now = System.currentTimeMillis()
         val engine = AppSettings.playback.value.recommender
+        val locale = homeLocale()
         val cached = extrasCache[source]?.takeIf {
-            source != HomeSource.RADIO || it.engine == engine
+            (source != HomeSource.RADIO || it.engine == engine) && it.locale == locale
         }
         // The seed follows whoever is followed now, so it keeps its own cache.
         if (source != HomeSource.SEED) cached?.takeIf { now - it.at < EXTRAS_FRESH_MS }?.let { return it.shelves }
@@ -285,7 +321,7 @@ object MusicRepository {
             DebugLog.w("MusicRepository", "Home's ${source.name.lowercase()} shelves failed", e)
             return cached?.shelves.orEmpty()
         }
-        extrasCache[source] = Fetched(shelves, now, engine)
+        extrasCache[source] = Fetched(shelves, now, engine, locale)
         return shelves
     }
 
@@ -307,7 +343,7 @@ object MusicRepository {
         val artists = HomeSeed.artists(NewReleases.followed.value, History.records.value.size)
         val ids = artists.map { it.browseId }
         val now = System.currentTimeMillis()
-        val cached = seedCache?.takeIf { it.first == ids && now - it.second.at < EXTRAS_FRESH_MS }
+        val cached = seedCache?.takeIf { it.first == ids && it.second.locale == homeLocale() && now - it.second.at < EXTRAS_FRESH_MS }
         if (cached != null) return@coroutineScope cached.second.shelves
         val seeds = artists.map { a ->
             async {

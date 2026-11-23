@@ -29,7 +29,7 @@ class HomePicksTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     @Test fun picksLeadHomeAndHistoryIsOneTapAway() {
         val picks = HomeShelf("Recommended for you", (1..8).map { ShelfItem("Song $it", "Artist", null, "id$it", null) })
-        ScreenCache.put("home:${com.opentune.data.settings.AppSettings.playback.value.recommender.name}", listOf(picks))
+        ScreenCache.put(homeCacheKey(), listOf(picks))
         compose.setContent {
             MaterialTheme(darkColorScheme()) {
                 Surface {

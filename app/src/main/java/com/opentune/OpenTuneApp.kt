@@ -58,7 +58,10 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
             if (com.opentune.ui.spotify.SpotifyConnection.connected.value) com.opentune.ui.spotify.SpotifyConnection.cookie() else null
         }
         // Last session's Home, shown at once and refreshed in the background.
-        MusicRepository.init(this)?.let { ScreenCache.put("home:${com.opentune.data.settings.AppSettings.playback.value.recommender.name}", it, at = 0L) }
+        // Kept under the country and language it was made for: opened somewhere else, Home is fetched afresh.
+        MusicRepository.init(this)?.let { saved ->
+            ScreenCache.put(com.opentune.ui.home.homeCacheKey(locale = MusicRepository.savedHomeLocale ?: MusicRepository.homeLocale()), saved, at = 0L)
+        }
         // After history, library, downloads and account: they tell an existing user from a new one.
         com.opentune.data.Welcome.settle(this)
     }

@@ -714,7 +714,7 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { r ->
                 com.opentune.data.MusicRepository.refreshHomeRecommendations()
-                com.opentune.ui.ScreenCache.invalidate("home:${r.name}")
+                com.opentune.ui.ScreenCache.invalidate(com.opentune.ui.home.homeCacheKey(r))
                 AppSettings.updatePlayback { it.copy(recommender = r) }
             },
             onDismiss = { recommenderDialog = false },

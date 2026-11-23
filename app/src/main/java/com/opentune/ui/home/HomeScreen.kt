@@ -90,6 +90,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
 
+/**
+ * Home's [com.opentune.ui.ScreenCache] key: one per recommendation engine, and per country
+ * and language ([MusicRepository.homeLocale]), so another country's Home is never shown as this one's.
+ */
+internal fun homeCacheKey(
+    recommender: com.opentune.data.settings.Recommender = AppSettings.playback.value.recommender,
+    locale: String = MusicRepository.homeLocale(),
+): String = "home:${recommender.name}:$locale"
+
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -109,7 +118,7 @@ fun HomeScreen(
     val closedBanners by com.opentune.data.config.HomeDismissals.banners.collectAsState()
     val closedPlaylists by com.opentune.data.config.HomeDismissals.playlists.collectAsState()
     val playback by AppSettings.playback.collectAsState()
-    val loader = rememberLoader("home:${playback.recommender.name}") { MusicRepository.home() }
+    val loader = rememberLoader(homeCacheKey(playback.recommender)) { MusicRepository.home() }
     val state by loader.state.collectAsState()
     val refreshing by loader.refreshing.collectAsState()
     // New picks shown as soon as they're made, while the rest of the page reloads. They stay
