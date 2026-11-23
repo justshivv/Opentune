@@ -296,9 +296,11 @@ private fun LyricsPeek(lines: PeekLines, next: Boolean, animate: Boolean, onClic
 private fun TimeBar(position: () -> Long, durationMs: Long, onSeek: (Long) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     var drag by remember { mutableStateOf<Float?>(null) }
-    val p = position()
-    val fraction = drag ?: if (durationMs > 0) (p.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    val shownMs = (fraction * durationMs).toLong()
+    // The bar reads the position as it's drawn, and the times only change once a second: read
+    // here while composing, the whole bar and its times were built again on every frame.
+    val now by rememberUpdatedState(position)
+    fun fraction(): Float = drag ?: if (durationMs > 0) (now().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+    val shownMs by remember(durationMs) { derivedStateOf { (fraction() * durationMs).toLong() / 1000 * 1000 } }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(formatTime(shownMs), style = MaterialTheme.typography.labelLarge, color = scheme.primary)
         Box(
@@ -320,7 +322,7 @@ private fun TimeBar(position: () -> Long, durationMs: Long, onSeek: (Long) -> Un
                     val h = (if (drag != null) 8 else 6).dp.toPx()
                     val top = (size.height - h) / 2f
                     drawRoundRect(scheme.onSurface.copy(alpha = 0.22f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2f))
-                    drawRoundRect(scheme.onSurface.copy(alpha = 0.85f), Offset(0f, top), Size(size.width * fraction, h), CornerRadius(h / 2f))
+                    drawRoundRect(scheme.onSurface.copy(alpha = 0.85f), Offset(0f, top), Size(size.width * fraction(), h), CornerRadius(h / 2f))
                 },
         )
         Text("-" + formatTime((durationMs - shownMs).coerceAtLeast(0)), style = MaterialTheme.typography.labelLarge, color = scheme.primary)

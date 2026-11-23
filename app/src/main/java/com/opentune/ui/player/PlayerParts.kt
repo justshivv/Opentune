@@ -1104,6 +1104,8 @@ fun SeekBar(
         .animateFloat(-0.3f, 1.3f, infiniteRepeatable(tween(1_300, easing = LinearEasing)), label = "sweep") else null
     val sheen = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
 
+    // The wave's path, made again in place each frame rather than a new one every frame.
+    val wavePath = remember { Path() }
     // A remote or keyboard focuses the bar and moves through the song with left and right.
     var focused by remember { mutableStateOf(false) }
     val focusRing = MaterialTheme.colorScheme.primary
@@ -1198,7 +1200,8 @@ fun SeekBar(
                     val mid = size.height / 2
                     val endX = size.width * f
                     fun waveY(x: Float) = mid + amp * sin(x / length * 2 * PI.toFloat() + phase)
-                    val wavePath = Path().apply {
+                    wavePath.apply {
+                        reset()
                         moveTo(0f, waveY(0f))
                         var x = 1f
                         while (x < endX) {
