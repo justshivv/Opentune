@@ -591,7 +591,7 @@ private val PODCAST_WORDS = Regex("podcast|episode", RegexOption.IGNORE_CASE)
 
 /** Songs-only shelves of four or more are laid out as quick picks. */
 private fun HomeShelf.isQuickPicks(): Boolean =
-    items.size >= 4 && items.all { it.videoId != null && it.browseId == null }
+    !videos && items.size >= 4 && items.all { it.videoId != null && it.browseId == null }
 
 /** Home uses a single paged track list followed by collection and track cards. */
 internal data class HomeSections(val quickPicks: HomeShelf?, val cards: List<HomeShelf>, val speedDial: HomeShelf? = null)
@@ -639,7 +639,9 @@ fun HomeShelfView(
     action: (@Composable () -> Unit)? = null,
 ) {
     Box(modifier) {
-        if (songRows && shelf.isQuickPicks()) {
+        if (shelf.videos) {
+            VideoShelf(shelf, onItemClick, action)
+        } else if (songRows && shelf.isQuickPicks()) {
             QuickPicks(shelf, onItemClick)
         } else {
             if (covers == null) {
