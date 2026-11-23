@@ -301,6 +301,25 @@ fun rememberSeekCount(vm: PlayerViewModel): () -> Long {
 
 private enum class Pane { COVER, LYRICS, QUEUE }
 
+/** How the player keeps the "Skip to chorus" button's next chorus up to date. */
+internal enum class ChorusWatch {
+    /** The button is off, or the song has no chorus found: nothing to look for. */
+    OFF,
+    /** The controls are out of sight: the button keeps what it had, and nothing is looked at. */
+    HOLD,
+    /** Paused: looked at again only when the position moves (a seek). */
+    ON_MOVE,
+    /** Playing, with the button in sight: looked at twice a second. */
+    POLL,
+}
+
+internal fun chorusWatch(buttonOn: Boolean, hasChoruses: Boolean, controlsHidden: Boolean, playing: Boolean): ChorusWatch = when {
+    !buttonOn || !hasChoruses -> ChorusWatch.OFF
+    controlsHidden -> ChorusWatch.HOLD
+    playing -> ChorusWatch.POLL
+    else -> ChorusWatch.ON_MOVE
+}
+
 /** Puts one of the system's bars away while [hidden] holds, and brings it back the moment it stops holding. */
 @Composable
 private fun SystemBarHider(hidden: Boolean, type: Int) {
@@ -1627,11 +1646,20 @@ fun PlayerLayout(
                     // Lyrics are timed against the song shifted by the offset; the bar is the song's own time.
                     val choruses = remember(synced, offsetMs) { synced?.let { com.opentune.data.lyrics.SongParts.choruses(it).map { ms -> ms - offsetMs } }.orEmpty() }
                     val marks = remember(synced, offsetMs) { synced?.let { com.opentune.data.lyrics.SongParts.marks(it).map { ms -> ms - offsetMs } }.orEmpty() }
-                    val nextChorus by androidx.compose.runtime.produceState<Long?>(null, choruses) {
-                        while (true) {
-                            value =
-                                com.opentune.data.lyrics.SongParts.nextChorus(choruses, position())
-                            kotlinx.coroutines.delay(500)
+                    val watch = chorusWatch(state.ui.skipToChorus, choruses.isNotEmpty(), controlsHidden, state.isPlaying)
+                    val nextChorus by androidx.compose.runtime.produceState<Long?>(null, choruses, watch) {
+                        when (watch) {
+                            ChorusWatch.OFF -> value = null
+                            ChorusWatch.HOLD -> Unit
+                            ChorusWatch.ON_MOVE ->
+                                androidx.compose.runtime.snapshotFlow { com.opentune.data.lyrics.SongParts.nextChorus(choruses, position()) }
+                                    .collect { value = it }
+                            ChorusWatch.POLL -> while (true) {
+                                // Waits on a frame, so it stops with the screen off or the app out of sight.
+                                androidx.compose.runtime.withFrameMillis { }
+                                value = com.opentune.data.lyrics.SongParts.nextChorus(choruses, position())
+                                kotlinx.coroutines.delay(500)
+                            }
                         }
                     }
                     // Lyrics with nothing in the way: a few seconds untouched while they
