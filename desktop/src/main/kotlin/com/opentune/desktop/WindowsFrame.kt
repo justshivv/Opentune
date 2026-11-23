@@ -115,7 +115,7 @@ internal object WindowsFrame {
     /** Marks this start as not yet settled, then settled after [SETTLE_MS] of running. */
     private fun startGuard(transparent: Boolean) = runCatching {
         startFile.parentFile.mkdirs()
-        val api = (Renderer.entries.firstOrNull { it.skiko != null && it.skiko == drawingWith } ?: effective(_renderer.value, transparent)).name
+        val api = (rendererOf(drawingWith) ?: effective(_renderer.value, transparent)).name
         startFile.writeText(JSONObject().put("pending", true).put("transparent", transparent).put("renderer", api).toString())
         Thread({
             Thread.sleep(SETTLE_MS)
@@ -143,9 +143,24 @@ internal object WindowsFrame {
 
     fun setRenderer(r: Renderer) { _renderer.value = r; save() }
 
-    /** The renderer this run draws with, as Skia names it. */
+    /** The renderer this run draws with, as Skia names it: what was asked for, then what the window got. */
     @Volatile var drawingWith: String? = null
         private set
+
+    /** Which of [Renderer] Skia's [api] name is: any of its software ones is Software. */
+    fun rendererOf(api: String?): Renderer? = when {
+        api == null -> null
+        api.startsWith("SOFTWARE") -> Renderer.SOFTWARE
+        else -> Renderer.entries.firstOrNull { it.skiko == api }
+    }
+
+    /**
+     * What the window really draws with once it's open ([api], Skia's name for it): Skia moves on
+     * to the next renderer by itself when one won't start, and SKIKO_RENDER_API overrides the choice.
+     */
+    fun drew(api: String?) {
+        if (isWindows && api != null && api != "UNKNOWN") drawingWith = api
+    }
 
     /** What [r] comes to on this computer: Automatic is Direct3D for a see-through window, OpenGL otherwise. */
     private fun effective(r: Renderer, seeThrough: Boolean): Renderer = when (r) {
@@ -175,11 +190,18 @@ internal object WindowsFrame {
                 save()
             }
         }
+        // SKIKO_RENDER_API set by hand (the way round a blank window, issue 93) is what Skia reads
+        // first, whatever is chosen here: what this run draws with is that.
+        forcedApi?.let { drawingWith = it; return }
         val seeThrough = drawn && isWindows11 && _material.value != Material.OFF
         val use = effective(_renderer.value, seeThrough)
         drawingWith = use.skiko
         use.skiko?.let { System.setProperty("skiko.renderApi", it) }
     }
+
+    /** The renderer SKIKO_RENDER_API asks for, as Skia reads it; null when it's not set. */
+    private val forcedApi: String? get() = System.getenv("SKIKO_RENDER_API")?.trim()?.uppercase()?.takeIf { it.isNotEmpty() }
+        ?.let { if (it == "SOFTWARE") "SOFTWARE_FAST" else it }
 
     private const val SETTLE_MS = 20_000L
 

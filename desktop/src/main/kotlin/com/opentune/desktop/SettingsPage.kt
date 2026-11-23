@@ -588,7 +588,7 @@ private fun WindowRows() {
     )
     if (WindowsFrame.isWindows) {
         val renderer by WindowsFrame.renderer.collectAsState()
-        val inUse = WindowsFrame.drawingWith?.let { api -> WindowsFrame.Renderer.entries.firstOrNull { it.skiko == api } }
+        val inUse = WindowsFrame.rendererOf(WindowsFrame.drawingWith)
         SegmentedRow(
             "Renderer",
             detail = "How the window is drawn${inUse?.let { " (now ${it.label})" } ?: ""}. Automatic is OpenGL, or Direct3D with Mica or Acrylic on. If OpenTune closes on its own as it opens, the next start moves to another by itself. Takes effect when OpenTune next opens.",

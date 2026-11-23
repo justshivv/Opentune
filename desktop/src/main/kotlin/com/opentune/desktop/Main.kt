@@ -111,7 +111,11 @@ fun main(args: Array<String>) {
         ) {
             window.minimumSize = java.awt.Dimension(760, 520)
             // Which of Skia's renderers this window drew with (DirectX, OpenGL, Metal or software), for the log.
-            androidx.compose.runtime.LaunchedEffect(Unit) { CrashLog.note("Renderer: ${runCatching { window.renderApi }.getOrNull()}") }
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                val api = runCatching { window.renderApi }.getOrNull()
+                CrashLog.note("Renderer: $api")
+                WindowsFrame.drew(api?.name)
+            }
             DesktopWindow.style(window)
             DesktopWindow.window = window
             DesktopWindow.close = close

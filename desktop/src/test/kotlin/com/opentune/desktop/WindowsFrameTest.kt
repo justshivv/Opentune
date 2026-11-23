@@ -23,6 +23,16 @@ import org.junit.Test
  * Windows with a display (CI's Windows machine); skipped everywhere else.
  */
 class WindowsFrameTest {
+    @Test fun skiasRendererNamesAreTheChoicesInSettings() {
+        // SKIKO_RENDER_API=SOFTWARE (issue 93) and the software fallback are both Software, so the tray stops offering it.
+        assertEquals(WindowsFrame.Renderer.SOFTWARE, WindowsFrame.rendererOf("SOFTWARE_FAST"))
+        assertEquals(WindowsFrame.Renderer.SOFTWARE, WindowsFrame.rendererOf("SOFTWARE_COMPAT"))
+        assertEquals(WindowsFrame.Renderer.OPENGL, WindowsFrame.rendererOf("OPENGL"))
+        assertEquals(WindowsFrame.Renderer.DIRECT3D, WindowsFrame.rendererOf("DIRECT3D"))
+        assertEquals(null, WindowsFrame.rendererOf("ANGLE"))
+        assertEquals(null, WindowsFrame.rendererOf(null))
+    }
+
     @Test fun ownFrame() {
         assumeTrue(WindowsFrame.isWindows && !GraphicsEnvironment.isHeadless())
         assertTrue("JNA and the setting should allow the frame", WindowsFrame.drawn)

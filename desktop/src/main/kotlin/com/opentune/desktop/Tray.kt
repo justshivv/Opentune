@@ -44,7 +44,7 @@ internal fun ApplicationScope.TrayMenu(onShow: () -> Unit, onQuit: () -> Unit) {
             // A window that opens and stays black (an older Intel graphics driver) is still
             // running, so the start guard never moves it to another renderer. From here the
             // listener can, without the window: Software draws on any computer.
-            if (WindowsFrame.isWindows && WindowsFrame.drawingWith != WindowsFrame.Renderer.SOFTWARE.skiko) {
+            if (WindowsFrame.isWindows && WindowsFrame.rendererOf(WindowsFrame.drawingWith) != WindowsFrame.Renderer.SOFTWARE) {
                 Item("Window blank? Draw without the graphics card, then quit") {
                     WindowsFrame.setRenderer(WindowsFrame.Renderer.SOFTWARE)
                     onQuit()
