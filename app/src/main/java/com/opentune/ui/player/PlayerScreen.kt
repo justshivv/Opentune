@@ -77,6 +77,7 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.keepScreenOn
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.positionInRoot
@@ -815,9 +816,14 @@ fun PlayerLayout(
             }
         }
 
+        // Settings › Keep the screen on for lyrics: only while the lyrics are the page in view.
+        // The lyrics view is kept built behind the cover, so it can't hold the flag itself:
+        // it kept the screen on as long as the player was open, on any page.
+        val lyricsInView = pane == Pane.LYRICS || (pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST && !landscape)
         Box(
             Modifier
                 .fillMaxSize()
+                .then(if (state.ui.keepScreenOnLyrics && lyricsInView) Modifier.keepScreenOn() else Modifier)
                 .graphicsLayer {
                     // Dragging down turns the player into a card over the app,
                     // the way iOS sheets do: it shrinks from the top edge and
