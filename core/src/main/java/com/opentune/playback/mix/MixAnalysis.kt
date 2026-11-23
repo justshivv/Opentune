@@ -489,6 +489,16 @@ fun crossfadePlan(durationMs: Long, fadeMs: Long, ending: Ending?, opening: Open
     return MixPlan(mixAtMs = end - blend, outEndMs = end, inFromMs = opening?.startMs ?: 0L, blendMs = blend)
 }
 
+/** What the listener has asked of Automix in Settings; the defaults are Automix as it always was. */
+data class AutomixOptions(
+    /** A blend of about this long, in ms, kept to whole bars; null lets the two songs decide. */
+    val lengthMs: Long? = null,
+    /** How far apart two tempos may be and still be kept in step, 0.08 for 8 %. */
+    val tempoStretch: Double = 0.08,
+    /** Blend in full even where the reading is unsure: keys that clash, a beat that isn't clear. */
+    val alwaysMix: Boolean = false,
+)
+
 /**
  * Automix: a blend shaped by the two songs.
  *
@@ -497,12 +507,15 @@ fun crossfadePlan(durationMs: Long, fadeMs: Long, ending: Ending?, opening: Open
  * When the outgoing beat is clear the blend starts on a beat and lasts whole
  * bars, and when both songs have a clear beat at nearly the same tempo the
  * incoming song is kept in step with the outgoing one. The bass is traded
- * over rather than doubled.
+ * over rather than doubled. [options] can fix the length, narrow the tempo
+ * match, or have it blend in full where the reading is unsure.
  */
-fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
+fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?, options: AutomixOptions = AutomixOptions()): MixPlan {
     val end = ending?.endMs?.coerceAtMost(durationMs) ?: durationMs
     val outro = ending?.outroLengthMs ?: 0L
+    val fixed = options.lengthMs?.coerceIn(MIN_BLEND_MS, MAX_AUTOMIX_MS + 4_000)
     var blend = when {
+        fixed != null -> fixed
         ending == null -> DEFAULT_AUTOMIX_MS
         outro >= FADE_OUT_MS -> outro.coerceIn(MIN_AUTOMIX_MS, MAX_AUTOMIX_MS)
         opening?.quietIntro == true -> EASED_AUTOMIX_MS
@@ -511,28 +524,35 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
     // Intro over outro: the next song's quiet intro runs under the end of this one, so its full
     // sound arrives as this one finishes. Longer over a fade-out than over a song that stops dead.
     val introLength = opening?.bodyAtMs?.let { it - opening.startMs }
-    if (ending != null && introLength != null && introLength >= MIN_AUTOMIX_MS / 2) {
+    if (fixed == null && ending != null && introLength != null && introLength >= MIN_AUTOMIX_MS / 2) {
         blend = introLength.coerceAtMost(if (outro >= FADE_OUT_MS) MAX_AUTOMIX_MS + 4_000 else INTRO_OVER_STOP_MS)
     }
-    val outBeat = ending?.beat?.takeIf { it.sure }
-    val inBeat = opening?.beat?.takeIf { it.sure }
+    // A beat that's there but not clear counts only when asked to mix whatever the reading.
+    fun usable(b: Beat?) = b?.takeIf { it.sure || (options.alwaysMix && it.confidence >= UNSURE_BEAT) }
+    val outBeat = usable(ending?.beat)
+    val inBeat = usable(opening?.beat)
     var mixAt = end - blend
     var beatMs: Double? = null
     if (outBeat != null) {
-        // Whole bars of four: one, two, four or eight, whichever is nearest.
         val bar = outBeat.periodMs * 4
-        val bars = listOf(1, 2, 4, 8).minBy { abs(ln(it * bar / blend)) }
-        blend = (bars * bar).roundToLong().coerceIn(MIN_AUTOMIX_MS / 2, MAX_AUTOMIX_MS + 2_000)
+        blend = if (fixed != null) {
+            // The length asked for, to the nearest whole bar.
+            (Math.round(fixed / bar).coerceAtLeast(1) * bar).roundToLong().coerceIn(MIN_BLEND_MS, MAX_AUTOMIX_MS + 4_000)
+        } else {
+            // Whole bars of four: one, two, four or eight, whichever is nearest.
+            val bars = listOf(1, 2, 4, 8).minBy { abs(ln(it * bar / blend)) }
+            (bars * bar).roundToLong().coerceIn(MIN_AUTOMIX_MS / 2, MAX_AUTOMIX_MS + 2_000)
+        }
         // On the one of a bar where the bars are known, so the blend runs bar line to bar line.
         mixAt = outBeat.groupNearest(end - blend)
         if (mixAt > end - MIN_BLEND_MS) mixAt -= (outBeat.periodMs * outBeat.groupBeats).roundToLong()
         blend = min(blend, end - mixAt)
-        if (inBeat != null && abs(inBeat.periodMs / outBeat.periodMs - 1) <= TEMPO_MATCH) beatMs = outBeat.periodMs
+        if (inBeat != null && abs(inBeat.periodMs / outBeat.periodMs - 1) <= options.tempoStretch) beatMs = outBeat.periodMs
     }
-    // Two keys that clash can't overlap long without sounding wrong: a short blend.
+    // Two keys that clash can't overlap long without sounding wrong: a short blend, unless asked to mix anyway.
     val clash = ending?.key != null && opening?.key != null && ending.key.distance(opening.key) > 1 &&
         minOf(ending.key.confidence, opening.key.confidence) > KEY_SURE
-    if (clash && outro < FADE_OUT_MS) {
+    if (clash && outro < FADE_OUT_MS && !options.alwaysMix) {
         val bar = outBeat?.periodMs?.times(4)
         blend = minOf(blend, bar?.let { (it * 2).roundToLong() } ?: CLASH_BLEND_MS)
         mixAt = (outBeat?.groupNearest(end - blend) ?: (end - blend)).coerceAtMost(end - MIN_BLEND_MS)
@@ -577,7 +597,8 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
         inBeatMs = if (align > 1) inFrom else inBeat?.atOrAfter(inFrom) ?: inFrom,
         bassSwap = true,
         inBeatPeriodMs = if (beatMs != null) inBeat?.periodMs else null,
-        outSpeed = if (abs(speed - 1f) < 0.004f) 1f else speed,
+        // Off never stretches: only tempos already alike are kept in step, at their own speed.
+        outSpeed = if (abs(speed - 1f) < 0.004f || options.tempoStretch <= NO_STRETCH) 1f else speed,
         alignBeats = align,
         outFades = outro >= FADE_OUT_MS,
         inEases = opening?.quietIntro == true,
@@ -669,8 +690,10 @@ private const val DEFAULT_AUTOMIX_MS = 6_000L
 private const val EASED_AUTOMIX_MS = 6_000L
 private const val HARD_STOP_AUTOMIX_MS = 3_500L
 private const val MIN_BLEND_MS = 1_500L
-/** Tempos within this of each other are close enough to keep in step without stretching. */
-private const val TEMPO_MATCH = 0.08
+/** A tempo match this narrow or less stretches nothing (Tempo match off). */
+private const val NO_STRETCH = 0.004
+/** With Always mix, a beat this clear is used even though it isn't [Beat.SURE]. */
+private const val UNSURE_BEAT = 1.4f
 private const val KEY_SURE = 0.02f
 private const val CLASH_BLEND_MS = 2_500L
 private const val BASS_CUT_HZ = 200f
