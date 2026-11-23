@@ -156,6 +156,22 @@ class AudioBusTest {
         }
     }
 
+    @Test fun aFlacThatPlayedToItsEndLeavesNoFileBehind() {
+        org.junit.Assume.assumeTrue("otaudio wasn't built here", NativeAudio.available)
+        val file = tone(1_000.0, 0.5, rate = 44_100, format = "flac", codec = avcodec.AV_CODEC_ID_FLAC)
+        val ended = CountDownLatch(1)
+        val e = FlacEngine(
+            source = { file.inputStream() }, startAtMs = { 0 }, autoplay = true,
+            onStarted = {}, onEnd = { ended.countDown() }, onError = { ended.countDown() }, out = NativePcmOut("", exclusive = false),
+        )
+        assertTrue(ended.await(10, TimeUnit.SECONDS))
+        e.awaitClosed(2_000)
+        assertTrue("saved while it plays", e.savedFile.exists())
+        // The player moves on: the song's saved copy goes with it, not when the app quits.
+        e.dispose()
+        assertTrue("left in the temp folder", !e.savedFile.exists())
+    }
+
     @Test fun twentyFourBitTriesExclusiveIn32BitWordsBeforeShared() {
         val f = NativeAudio.Format.entries
         assertEquals(listOf(f[2] to true, f[3] to true, f[2] to false, f[3] to false, f[1] to false), outputTries(24, exclusive = true))

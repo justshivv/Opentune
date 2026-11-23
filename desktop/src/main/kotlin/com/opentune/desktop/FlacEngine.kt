@@ -111,6 +111,9 @@ internal class FlacEngine(
     @Volatile private var complete = false
     @Volatile private var failed: String? = null
     @Volatile private var disposed = false
+    /** The download's thread and the player's have finished with the file. */
+    @Volatile private var fetched = false
+    @Volatile private var played = false
     @Volatile private var paused = !autoplay
     @Volatile private var seekRequest: Long? = null
     /** Where a seek is going, said as the position until its first sound plays. */
@@ -165,7 +168,18 @@ internal class FlacEngine(
             if (!disposed) failed = e.message ?: "the download stopped"
         } finally {
             synchronized(lock) { lock.notifyAll() }
+            fetched = true
+            tidy()
         }
+    }
+
+    /**
+     * Deletes the saved file once the engine is disposed and neither thread has it open (Windows
+     * won't delete an open file). Each of the three calls this as it finishes; the last one deletes.
+     * Left until the app quit, a long listen filled the temp folder with a whole FLAC per song.
+     */
+    private fun tidy() = synchronized(file) {
+        if (disposed && fetched && played) file.delete()
     }
 
     /** The saved file, read as it grows: waits for more rather than ending early. */
@@ -214,7 +228,8 @@ internal class FlacEngine(
             if (!disposed) onError(e.message ?: "couldn't play the file")
         } finally {
             out.close()
-            if (disposed) file.delete()
+            played = true
+            tidy()
         }
     }
 
@@ -362,7 +377,11 @@ internal class FlacEngine(
         runCatching { input?.close() }
         synchronized(lock) { lock.notifyAll() }
         download.interrupt()
+        tidy()
     }
+
+    /** For tests: the file the download is saved to. */
+    internal val savedFile: File get() = file
 
     internal companion object {
         /** 24-bit little-endian samples to 16-bit, with triangular dither so the rounding is noise, not distortion. */
