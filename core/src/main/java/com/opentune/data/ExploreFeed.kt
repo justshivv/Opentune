@@ -32,26 +32,49 @@ object ExploreFeed {
     data class Canvas(val artists: List<Artist>, val tiles: List<Tile>)
 
     suspend fun load(): Canvas = coroutineScope {
-        val moods = async { runCatching { MusicRepository.moodsAndGenres() }.getOrDefault(emptyList()) }
-        val releases = async { runCatching { MusicRepository.shelves("FEmusic_new_releases", null) }.getOrDefault(emptyList()) }
-        val charts = async { runCatching { MusicRepository.chartShelves() }.getOrDefault(emptyList()) }
+        val moods = async { attempt { MusicRepository.moodsAndGenres() } }
+        val releases = async { attempt { MusicRepository.shelves("FEmusic_new_releases", null) } }
+        val charts = async { attempt { MusicRepository.chartShelves() } }
+        val mine = attempt { MusicRepository.personalArtists() }.getOrDefault(emptyList())
+        assemble(moods.await(), releases.await(), charts.await(), mine)
+    }
 
-        val chartShelves = charts.await()
-        val chartArtists = artistsOf(chartShelves)
-        val mine = MusicRepository.personalArtists()
-        val artists = mine.ifEmpty { chartArtists }.distinctBy { it.browseId }.take(24)
+    /**
+     * The board from its three sources, each of which may have failed: a part that failed is left
+     * out and the rest is shown (YouTube's moods page answers 404 in some places). Only when every
+     * part failed is the first failure thrown, so the page offers Retry instead of saying there's
+     * nothing to explore.
+     */
+    fun assemble(
+        moods: Result<List<com.opentune.data.model.MoodGenreSection>>,
+        releases: Result<List<com.opentune.data.model.HomeShelf>>,
+        charts: Result<List<com.opentune.data.model.HomeShelf>>,
+        mine: List<Artist> = emptyList(),
+    ): Canvas {
+        if (moods.isFailure && releases.isFailure && charts.isFailure) throw moods.exceptionOrNull()!!
+        val chartShelves = charts.getOrDefault(emptyList())
+        val artists = mine.ifEmpty { artistsOf(chartShelves) }.distinctBy { it.browseId }.take(24)
 
-        val moodTiles = moods.await().flatMap { section ->
+        val moodTiles = moods.getOrDefault(emptyList()).flatMap { section ->
             val kind = if (section.title.contains("genre", ignoreCase = true)) Kind.GENRE else Kind.MOOD
             section.items.map { Tile.Mood(it, kind) }
         }
-        val newTiles = releases.await().flatMap { shelf ->
+        val newTiles = releases.getOrDefault(emptyList()).flatMap { shelf ->
             shelf.items.filter { it.browseId != null }.map { Tile.Item(it, shelf.title, Kind.NEW) }
         }
         val chartTiles = chartShelves.flatMap { shelf ->
             shelf.items.filter { it.browseId?.startsWith("UC") == false }.map { Tile.Item(it, shelf.title, Kind.CHART) }
         }
-        Canvas(artists, weave(listOf(moodTiles, newTiles, chartTiles)).distinctBy { it.key })
+        return Canvas(artists, weave(listOf(moodTiles, newTiles, chartTiles)).distinctBy { it.key })
+    }
+
+    /** [block]'s result, or its failure; a cancellation still cancels. */
+    private suspend fun <T> attempt(block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
     /** The artists on a page's shelves (the charts' "Top artists"), each once, in order. */
