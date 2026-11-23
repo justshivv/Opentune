@@ -133,6 +133,7 @@ import com.opentune.ui.components.glass
 import com.opentune.ui.theme.PlayerTheme
 import com.opentune.ui.theme.rememberArtworkSeed
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1024,7 +1025,7 @@ fun PlayerLayout(
                     animate = !state.ui.reduceAnimation && !state.ui.stillBackdrops,
                     // While it flies the cover is drawn by the flight, not here as well.
                     fullCover = fullStyle || videoTakeover,
-                    fullCoverVisible = (fullCover || (videoTakeover && pane == Pane.COVER)) && !flight.active,
+                    fullCoverVisible = { (fullCover || (videoTakeover && pane == Pane.COVER)) && !flight.active },
                     artworkMotion = artworkMotion,
                     fullCoverBottom = with(LocalDensity.current) {
                         coverBottomPx.takeIf { it > 0f }?.toDp()
@@ -1201,26 +1202,32 @@ fun PlayerLayout(
                     // settles, and fade up behind the cover as it reaches the header.
                     var listsBuilt by remember { mutableStateOf(outerPane != Pane.COVER) }
                     LaunchedEffect(Unit) { delay(LISTS_PREWARM_MS); listsBuilt = true }
-                    LaunchedEffect(outerPane, flight.following, flight.active) {
+                    // The flight's state is followed here, not read while composing: as keys it made this
+                    // whole page (the cover page and the lists under it) compose again in the very frame
+                    // the cover landed, and that frame's stall was the jolt at the end of every fold.
+                    LaunchedEffect(outerPane) {
                         val target = if (outerPane == Pane.COVER) 0f else 1f
-                        if (flight.following && outerPane == Pane.COVER) {
-                            listsBuilt = true
-                            androidx.compose.runtime.snapshotFlow { flight.pull }
-                                .collect { listsShown.snapTo(it.coerceIn(0f, 1f)) }
-                        } else if (state.ui.reduceAnimation || flight.active) {
-                            listsBuilt = listsBuilt || target == 1f
-                            listsShown.snapTo(target)
-                        } else {
-                            listsBuilt = listsBuilt || target == 1f
-                            val left = kotlin.math.abs(target - listsShown.value)
-                            listsShown.animateTo(
-                                target,
-                                tween(
-                                    (PANE_SWITCH_MS * left).toInt().coerceAtLeast(120),
-                                    easing = FastOutSlowInEasing
-                                )
-                            )
-                        }
+                        androidx.compose.runtime.snapshotFlow { flight.following to flight.active }
+                            .collectLatest { (following, active) ->
+                                if (following && outerPane == Pane.COVER) {
+                                    listsBuilt = true
+                                    androidx.compose.runtime.snapshotFlow { flight.pull }
+                                        .collect { listsShown.snapTo(it.coerceIn(0f, 1f)) }
+                                } else if (state.ui.reduceAnimation || active) {
+                                    listsBuilt = listsBuilt || target == 1f
+                                    listsShown.snapTo(target)
+                                } else {
+                                    listsBuilt = listsBuilt || target == 1f
+                                    val left = kotlin.math.abs(target - listsShown.value)
+                                    if (left > 0f) listsShown.animateTo(
+                                        target,
+                                        tween(
+                                            (PANE_SWITCH_MS * left).toInt().coerceAtLeast(120),
+                                            easing = FastOutSlowInEasing
+                                        )
+                                    )
+                                }
+                            }
                     }
                     // A flying cover and the page beneath it share a clock, including the
                     // first layout frames. The list must not finish fading in ahead of it.
@@ -1989,6 +1996,9 @@ fun PlayerLayout(
             // between flights, out of sight and out of reach, wherever both its ends are known:
             // built only as a fold began, its first frame (the cover, both its images, the title and
             // its buttons all made at once) took several frames' time and the cover stalled.
+            // In a scope of its own: whether the cover is flying is read here while composing, and
+            // only this layer is built again when a flight starts and lands, not the whole player.
+            FlightScope {
             val flying = flight.active
             val from = if (flying) flight.from else bigCover()
             // Before the header is back (a swipe still under the finger), where it was last.
@@ -2060,6 +2070,7 @@ fun PlayerLayout(
                         )
                     } }
                 }
+            }
             }
             // The grab pill and the "Playing from" line under it, drawn over everything, the flying
             // cover included, so neither goes under the cover and pops back out when it lands. As the
@@ -3028,3 +3039,7 @@ internal class PaneFlight {
         com.opentune.ui.components.PlayerMorph.flying = false
     }
 }
+
+/** A recomposition scope of its own for [content], so what it reads rebuilds it alone. */
+@Composable
+private fun FlightScope(content: @Composable () -> Unit) = content()
