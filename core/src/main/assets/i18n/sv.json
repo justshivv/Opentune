@@ -3605,5 +3605,8 @@
 "{0}{1} episodes": "{0}{1} avsnitt",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…och {0} till"
+"…and {0} more": "…och {0} till",
+"Lyrics line stays": "Textraden stannar kvar",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Medan en Canvas tar över skärmen stannar den aktuella textraden kvar under titeln i stället för att glida bort med kontrollerna.",
+"Only with Canvas takes the screen on": "Endast med 'Canvas takes the screen' påslaget"
 }

@@ -3534,5 +3534,8 @@
 "{0}{1} episodes": "{0}{1}টি পর্ব",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…এবং আরও {0}টি"
+"…and {0} more": "…এবং আরও {0}টি",
+"Lyrics line stays": "লিরিক্স লাইন থেকে যায়",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas যখন স্ক্রিন দখল করে, বর্তমান লিরিক্স লাইনটি কন্ট্রোলের সঙ্গে সরে না গিয়ে শিরোনামের নিচে থেকে যায়।",
+"Only with Canvas takes the screen on": "শুধুমাত্র 'Canvas takes the screen' চালু থাকলেই"
 }

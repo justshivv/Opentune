@@ -3534,5 +3534,8 @@
 "{0}{1} episodes": "{0}{1} tập",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…và {0} khác"
+"…and {0} more": "…và {0} khác",
+"Lyrics line stays": "Dòng lời bài hát vẫn hiển thị",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Khi Canvas chiếm toàn màn hình, dòng lời bài hát hiện tại vẫn ở dưới tiêu đề thay vì trượt đi cùng các nút điều khiển.",
+"Only with Canvas takes the screen on": "Chỉ khi bật 'Canvas takes the screen'"
 }

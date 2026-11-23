@@ -3605,5 +3605,8 @@
 "{0}{1} episodes": "{0}{1} επεισόδια",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…και {0} ακόμη"
+"…and {0} more": "…και {0} ακόμη",
+"Lyrics line stays": "Η γραμμή στίχων παραμένει",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Όταν το Canvas καταλαμβάνει την οθόνη, η τρέχουσα γραμμή στίχων παραμένει κάτω από τον τίτλο αντί να εξαφανίζεται μαζί με τα χειριστήρια.",
+"Only with Canvas takes the screen on": "Μόνο με ενεργοποιημένο το «Canvas takes the screen»"
 }

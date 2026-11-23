@@ -3534,5 +3534,8 @@
 "{0}{1} episodes": "{0}{1} എപ്പിസോഡുകൾ",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…കൂടാതെ {0} എണ്ണം കൂടി"
+"…and {0} more": "…കൂടാതെ {0} എണ്ണം കൂടി",
+"Lyrics line stays": "വരികൾ അങ്ങനെ തന്നെ നിലനിൽക്കും",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas സ്ക്രീൻ ഏറ്റെടുക്കുമ്പോൾ, നിലവിലെ വരി നിയന്ത്രണങ്ങൾക്കൊപ്പം മാറിപ്പോകാതെ തലക്കെട്ടിന് താഴെ നിലനിൽക്കും.",
+"Only with Canvas takes the screen on": "'Canvas takes the screen' ഓൺ ആയിരിക്കുമ്പോൾ മാത്രം"
 }

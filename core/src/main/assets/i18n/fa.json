@@ -3605,5 +3605,8 @@
 "{0}{1} episodes": "{0}{1} قسمت",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…و {0} مورد دیگر"
+"…and {0} more": "…و {0} مورد دیگر",
+"Lyrics line stays": "خط متن ترانه باقی می‌ماند",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "وقتی Canvas صفحه را می‌گیرد، خط فعلی متن ترانه زیر عنوان باقی می‌ماند و همراه کنترل‌ها کنار نمی‌رود.",
+"Only with Canvas takes the screen on": "فقط با روشن بودن «Canvas takes the screen»"
 }

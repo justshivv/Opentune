@@ -3605,5 +3605,8 @@
 "{0}{1} episodes": "{0}{1} எபிசோடுகள்",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…இன்னும் {0}"
+"…and {0} more": "…இன்னும் {0}",
+"Lyrics line stays": "பாடல் வரி அப்படியே இருக்கும்",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas திரையை ஆக்கிரமிக்கும் போது, தற்போதைய பாடல் வரி கட்டுப்பாடுகளுடன் விலகிச் செல்லாமல் தலைப்பின் கீழ் அப்படியே இருக்கும்.",
+"Only with Canvas takes the screen on": "'Canvas takes the screen' இயக்கத்தில் இருக்கும் போது மட்டும்"
 }

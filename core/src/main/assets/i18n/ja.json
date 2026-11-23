@@ -3605,5 +3605,8 @@
 "{0}{1} episodes": "{0}{1} エピソード",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…ほか {0} 件"
+"…and {0} more": "…ほか {0} 件",
+"Lyrics line stays": "歌詞ラインが残ります",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas が画面いっぱいに表示されている間、現在の歌詞ラインはコントロールと一緒に消えず、タイトルの下に残ります。",
+"Only with Canvas takes the screen on": "「Canvas takes the screen」がオンの場合のみ"
 }

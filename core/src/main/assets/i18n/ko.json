@@ -3605,5 +3605,8 @@
 "{0}{1} episodes": "{0}{1}개 에피소드",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…외 {0}개"
+"…and {0} more": "…외 {0}개",
+"Lyrics line stays": "가사 줄이 그대로 유지됩니다",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas가 화면을 채우는 동안 현재 가사 줄이 컨트롤과 함께 사라지지 않고 제목 아래에 그대로 유지됩니다.",
+"Only with Canvas takes the screen on": "'Canvas takes the screen'이 켜진 경우에만"
 }

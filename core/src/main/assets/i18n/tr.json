@@ -3534,5 +3534,8 @@
 "{0}{1} episodes": "{0}{1} bölüm",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…ve {0} tane daha"
+"…and {0} more": "…ve {0} tane daha",
+"Lyrics line stays": "Şarkı sözü satırı kalır",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas ekranı kaplarken, geçerli şarkı sözü satırı kontrollerle birlikte kaybolmak yerine başlığın altında kalır.",
+"Only with Canvas takes the screen on": "Yalnızca 'Canvas takes the screen' açıkken"
 }

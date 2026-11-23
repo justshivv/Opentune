@@ -3534,5 +3534,8 @@
 "{0}{1} episodes": "{0}{1} episod",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…dan {0} lagi"
+"…and {0} more": "…dan {0} lagi",
+"Lyrics line stays": "Baris lirik kekal dipaparkan",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Apabila Canvas menguasai skrin, baris lirik semasa kekal di bawah tajuk dan bukannya hilang bersama kawalan.",
+"Only with Canvas takes the screen on": "Hanya dengan 'Canvas takes the screen' dihidupkan"
 }

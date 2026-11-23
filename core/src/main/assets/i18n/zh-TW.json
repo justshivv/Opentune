@@ -3582,5 +3582,8 @@
 "{0}{1} episodes": "{0}{1} 集",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…還有 {0} 個"
+"…and {0} more": "…還有 {0} 個",
+"Lyrics line stays": "歌詞行保持顯示",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "當 Canvas 佔滿螢幕時，目前歌詞行會保留在標題下方，而不是隨控制項一起滑走。",
+"Only with Canvas takes the screen on": "僅當「Canvas takes the screen」開啟時"
 }

@@ -3534,5 +3534,8 @@
 "{0}{1} episodes": "Epizody: {0}{1}",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…a další ({0})"
+"…and {0} more": "…a další ({0})",
+"Lyrics line stays": "Řádek textu zůstává",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Když Canvas převezme obrazovku, aktuální řádek textu zůstává pod názvem, místo aby odjel spolu s ovládáním.",
+"Only with Canvas takes the screen on": "Pouze se zapnutou funkcí 'Canvas takes the screen'"
 }

@@ -3605,5 +3605,8 @@
 "{0}{1} episodes": "Выпусков: {0}{1}",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…и ещё {0}"
+"…and {0} more": "…и ещё {0}",
+"Lyrics line stays": "Строка текста остаётся",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Пока Canvas занимает экран, текущая строка текста остаётся под названием, а не уезжает вместе с элементами управления.",
+"Only with Canvas takes the screen on": "Только при включённой опции «Canvas takes the screen»"
 }

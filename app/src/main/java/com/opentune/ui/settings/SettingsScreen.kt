@@ -1538,6 +1538,9 @@ private fun settingsSections(
                     ToggleRow("Canvas takes the screen", ui.canvasFocus, { v -> AppSettings.updateUi { it.copy(canvasFocus = v) } }, summary = "While a Canvas plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.", icon = ImageVector.vectorResource(AppIcons.Animation),
                         enabled = ui.spotifyCanvas && !reduced, disabledReason = if (reduced) "Off while Reduce animation is on" else "Only with Spotify Canvas on")
                     RowDivider()
+                    ToggleRow("Lyrics line stays", ui.canvasLyricsLine, { v -> AppSettings.updateUi { it.copy(canvasLyricsLine = v) } }, summary = "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.", icon = ImageVector.vectorResource(AppIcons.Lyrics),
+                        enabled = ui.spotifyCanvas && ui.canvasFocus && !reduced, disabledReason = if (reduced) "Off while Reduce animation is on" else if (!ui.spotifyCanvas) "Only with Spotify Canvas on" else "Only with Canvas takes the screen on")
+                    RowDivider()
                     ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = "Saves your likes to Spotify, without adding plays", icon = ImageVector.vectorResource(AppIcons.Favorite))
                     RowDivider()
                     ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = "Your Spotify mixes and playlists, played from YouTube Music", icon = ImageVector.vectorResource(AppIcons.Album))

@@ -1678,6 +1678,41 @@ fun PlayerLayout(
                             }
                         }
                     }
+                    // The song's lyric line. It is not one of the controls, so it does not
+                    // live inside their block: while a Canvas has taken the screen it can
+                    // stay behind under the title (canvasLyricsLine) as they slide away.
+                    // The queue and the lyrics page still take it away, as before.
+                    AnimatedVisibility(
+                        pane != Pane.LYRICS && pane != Pane.QUEUE && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST) && (!controlsHidden || (controlsAway && state.ui.canvasLyricsLine)),
+                        enter = expandVertically(
+                            spring(
+                                dampingRatio = 0.9f,
+                                stiffness = 380f
+                            ), expandFrom = Alignment.Bottom
+                        ) + slideInVertically(
+                            spring(
+                                dampingRatio = 0.9f,
+                                stiffness = 380f
+                            )
+                        ) { it / 2 } + fadeIn(tween(220)),
+                        exit = shrinkVertically(
+                            tween(520, easing = FastOutSlowInEasing),
+                            shrinkTowards = Alignment.Bottom
+                        ) + slideOutVertically(
+                            tween(
+                                520,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) { it / 2 } + fadeOut(tween(360)),
+                    ) {
+                        LyricPreview(
+                            state.lyrics,
+                            lyricsPosition,
+                            onOpen = { toggle(Pane.LYRICS) },
+                            Modifier.padding(top = 4.dp),
+                            plain = apple
+                        )
+                    }
                     // Lyrics with nothing in the way: a few seconds untouched while they
                     // play, and the controls slide down out of sight.
                     AnimatedVisibility(
@@ -1721,37 +1756,6 @@ fun PlayerLayout(
                                         }
                                     }
                                 }
-                            }
-                            AnimatedVisibility(
-                                pane != Pane.LYRICS && pane != Pane.QUEUE && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST),
-                                enter = expandVertically(
-                                    spring(
-                                        dampingRatio = 0.9f,
-                                        stiffness = 380f
-                                    ), expandFrom = Alignment.Bottom
-                                ) + slideInVertically(
-                                    spring(
-                                        dampingRatio = 0.9f,
-                                        stiffness = 380f
-                                    )
-                                ) { it / 2 } + fadeIn(tween(220)),
-                                exit = shrinkVertically(
-                                    tween(520, easing = FastOutSlowInEasing),
-                                    shrinkTowards = Alignment.Bottom
-                                ) + slideOutVertically(
-                                    tween(
-                                        520,
-                                        easing = FastOutSlowInEasing
-                                    )
-                                ) { it / 2 } + fadeOut(tween(360)),
-                            ) {
-                                LyricPreview(
-                                    state.lyrics,
-                                    lyricsPosition,
-                                    onOpen = { toggle(Pane.LYRICS) },
-                                    Modifier.padding(top = 4.dp),
-                                    plain = apple
-                                )
                             }
                             Spacer(Modifier.height(8.dp))
                             // The line at a point of the song, for the bubble shown while the bar is dragged.
