@@ -1436,8 +1436,13 @@ object StreamResolver {
                 TrackLog.d(TAG, "${video.videoId} isn't ${song.title}'s music video at its length")
                 continue
             }
-            // Another art track (a re-release, say) is no music video, and would search on in turn.
-            if (isArtTrack(video.videoId) != false || !videoAvailable(video.videoId)) continue
+            // Only an official music video: a fan upload at the song's length is mostly
+            // its title over a still picture, and another art track is no video at all.
+            if (isArtTrack(video.videoId) == null || videoTypes[video.videoId] != OFFICIAL_VIDEO) {
+                TrackLog.d(TAG, "${video.videoId} isn't ${song.title}'s official music video (${videoTypes[video.videoId]})")
+                continue
+            }
+            if (!videoAvailable(video.videoId)) continue
             TrackLog.d(TAG, "${song.title} ($videoId) plays over its music video ${video.videoId}, ${link.gaps.size} stretch(es) left out")
             links[videoId] = link
             return true
@@ -1452,6 +1457,9 @@ object StreamResolver {
      */
     private val artTracks = ConcurrentHashMap<String, Boolean>()
 
+    /** YouTube Music's kind of video for each song asked about in [isArtTrack]; empty when it named none. */
+    private val videoTypes = ConcurrentHashMap<String, String>()
+
     /** Whether [videoId] is an art track, asked of YouTube Music once; null when it couldn't be asked. */
     private suspend fun isArtTrack(videoId: String): Boolean? {
         artTracks[videoId]?.let { return it }
@@ -1463,7 +1471,9 @@ object StreamResolver {
             TrackLog.w(TAG, "Couldn't tell whether $videoId is an art track: ${e.javaClass.simpleName}: ${e.message}")
             return null
         }
-        val art = InnertubeParser.musicVideoType(queue, videoId) == ART_TRACK
+        val type = InnertubeParser.musicVideoType(queue, videoId)
+        videoTypes[videoId] = type.orEmpty()
+        val art = type == ART_TRACK
         if (art) {
             val versions = InnertubeParser.parseWatchQueue(queue, allVersions = true)
             versions.firstOrNull { it.videoId == videoId }?.let { song ->
@@ -1475,6 +1485,7 @@ object StreamResolver {
     }
 
     private const val ART_TRACK = "MUSIC_VIDEO_TYPE_ATV"
+    private const val OFFICIAL_VIDEO = "MUSIC_VIDEO_TYPE_OMV"
 
     /** Tracks a client walk answered for, none of which offered a playable video. */
     private val noVideo = ConcurrentHashMap.newKeySet<String>()
