@@ -353,6 +353,8 @@ object StreamResolver {
      */
     suspend fun resolveVideo(videoId: String, cap: Int = VideoQuality.AUTO): String? {
         init
+        // An art track's picture is its linked music video's.
+        links[videoId]?.let { return resolveVideo(it.videoId, cap) }
         unplayableReason(videoId)?.let { return null }
         // The picture is picked for the connection asking: a stream this
         // network cannot feed only stalls, so the best format here is the
@@ -389,7 +391,7 @@ object StreamResolver {
      * size it is offered at that this phone can decode, tallest first. Only
      * Auto until a response or an extraction has said what it offers.
      */
-    fun videoChoices(videoId: String): List<Int> = VideoQuality.choices(videoOffers[videoId].orEmpty())
+    fun videoChoices(videoId: String): List<Int> = VideoQuality.choices(videoOffers[links[videoId]?.videoId ?: videoId].orEmpty())
 
     /**
      * Forgets [videoId]'s held picture after it failed to play, so the next
@@ -1369,12 +1371,66 @@ object StreamResolver {
      * exactly what failed under load. Only a URL in hand counts.
      */
     fun hasVideo(videoId: String): Boolean =
-        VideoAvailability.known(videoId) == true || (videoUrls.containsKey(videoId) && artTracks[videoId] == false)
+        VideoAvailability.known(videoId) == true || links.containsKey(videoId) ||
+            (videoUrls.containsKey(videoId) && artTracks[videoId] == false)
 
     /** Whether the video question has a settled answer for [videoId], either way. */
     fun videoKnown(videoId: String): Boolean =
-        VideoAvailability.known(videoId) != null || videoId in noVideo || artTracks[videoId] == true ||
+        VideoAvailability.known(videoId) != null || videoId in noVideo || links.containsKey(videoId) ||
             (videoUrls.containsKey(videoId) && artTracks[videoId] == false)
+
+    /** The music video linked to [videoId], an art track, when one was found (see [VideoLinks]). */
+    fun videoLinkOf(videoId: String): VideoLink? = links[videoId]
+
+    /** Art tracks' music videos, found this session; looked for again after a restart. */
+    private val links = ConcurrentHashMap<String, VideoLink>()
+
+    /** Each art track as its watch queue lists it, with its other version there (its music video) where it has one. */
+    private val artSongs = ConcurrentHashMap<String, Pair<com.opentune.data.model.Song, com.opentune.data.model.Song?>>()
+
+    /**
+     * Looks for the music video of [videoId], an art track: the other version its
+     * watch queue pairs it with, else the first few videos a search for it finds.
+     * One whose length without its stretches that aren't the song matches the
+     * song's, and whose picture resolves, is linked. Null when the search
+     * couldn't be made, so nothing is settled.
+     */
+    private suspend fun linkVideo(videoId: String): Boolean? {
+        val (song, paired) = artSongs[videoId] ?: return false
+        val songMs = VideoLinks.lengthOf(song).takeIf { it > 0 } ?: return false
+        val found = try {
+            withContext(Dispatchers.IO) {
+                InnertubeParser.parseSearchPage(
+                    Innertube.search("${song.title} ${song.artist}", com.opentune.data.model.SearchFilter.VIDEOS.params),
+                    includeVideos = true,
+                ).rows
+            }.mapNotNull { (it as? com.opentune.data.model.SearchResult.Track)?.song }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            TrackLog.w(TAG, "Couldn't search for ${song.title}'s music video: ${e.javaClass.simpleName}: ${e.message}")
+            if (paired == null) return null
+            emptyList()
+        }
+        val candidates = (listOfNotNull(paired) + found.filter { VideoLinks.sameSong(song, it) }.take(VideoLinks.CANDIDATES))
+            .distinctBy { it.videoId }
+        for (video in candidates) {
+            val segments = if (AppSettings.playback.value.sponsorBlock) {
+                com.opentune.data.sponsorblock.SponsorBlock.segments(video.videoId, setOf(com.opentune.data.lyrics.LyricsGaps.CATEGORY))
+            } else emptyList()
+            val link = VideoLinks.check(songMs, video.videoId, VideoLinks.lengthOf(video), segments)
+            if (link == null) {
+                TrackLog.d(TAG, "${video.videoId} isn't ${song.title}'s music video at its length")
+                continue
+            }
+            // Another art track (a re-release, say) is no music video, and would search on in turn.
+            if (isArtTrack(video.videoId) != false || !videoAvailable(video.videoId)) continue
+            TrackLog.d(TAG, "${song.title} ($videoId) plays over its music video ${video.videoId}, ${link.gaps.size} stretch(es) left out")
+            links[videoId] = link
+            return true
+        }
+        return false
+    }
 
     /**
      * Songs asked about as art tracks: true for one, false for anything else. An
@@ -1394,7 +1450,15 @@ object StreamResolver {
             TrackLog.w(TAG, "Couldn't tell whether $videoId is an art track: ${e.javaClass.simpleName}: ${e.message}")
             return null
         }
-        return (InnertubeParser.musicVideoType(queue, videoId) == ART_TRACK).also { artTracks[videoId] = it }
+        val art = InnertubeParser.musicVideoType(queue, videoId) == ART_TRACK
+        if (art) {
+            val versions = InnertubeParser.parseWatchQueue(queue, allVersions = true)
+            versions.firstOrNull { it.videoId == videoId }?.let { song ->
+                val other = com.opentune.data.comments.SongComments.counterpart(queue, videoId)
+                artSongs[videoId] = song to other?.let { id -> versions.firstOrNull { it.videoId == id } }
+            }
+        }
+        return art.also { artTracks[videoId] = it }
     }
 
     private const val ART_TRACK = "MUSIC_VIDEO_TYPE_ATV"
@@ -1441,10 +1505,15 @@ object StreamResolver {
         // An art track's picture is a still of the cover: switching to it showed the
         // cover again, as if the video never loaded. Unasked (offline), nothing is settled.
         when (isArtTrack(videoId)) {
-            true -> {
-                noVideo += videoId
-                VideoAvailability.remember(videoId, false)
-                return false
+            // Its music video, where one is found, plays over it instead.
+            true -> when (linkVideo(videoId)) {
+                true -> return true
+                false -> {
+                    noVideo += videoId
+                    VideoAvailability.remember(videoId, false)
+                    return false
+                }
+                null -> return false
             }
             null -> return false
             false -> Unit
