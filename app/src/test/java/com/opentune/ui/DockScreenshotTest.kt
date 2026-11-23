@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import com.opentune.data.settings.DockMotion
+import com.kyant.backdrop.backdrops.layerBackdrop
 import java.io.File
 import org.junit.Rule
 import org.junit.Test
@@ -222,31 +223,46 @@ class DockScreenshotTest {
         }
     }
 
-    /** Picking another tab: the pill lifts off as raised glass, flies over and lands as a soft pill. */
+    /**
+     * Picking another tab: the pill lifts off as a round glass lens, flies over at full size and
+     * shrinks back into a soft pill. Over a recorded page, as in the app, so the lens bends the
+     * tabs under it.
+     */
     @Test fun hop() {
         var selected by mutableStateOf(1)
         compose.mainClock.autoAdvance = false
         compose.setContent {
             MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65))) { androidx.compose.material3.Surface(color = Color(0xFF0B0B0E)) {
-                Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF3A2A4A), Color(0xFF101014)))).padding(vertical = 24.dp)) {
-                    BottomChrome(
-                        inline = false,
-                        tabs = tabs(),
-                        selected = selected,
-                        onSelect = { selected = it },
-                        onExpand = {},
-                        searchSelected = false,
-                        onSearch = {},
-                        mini = null,
+                val page = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+                Box(Modifier.fillMaxWidth()) {
+                    Box(
+                        Modifier.matchParentSize().layerBackdrop(page)
+                            .background(Brush.horizontalGradient(listOf(Color(0xFF2B1B5A), Color(0xFF0E0E12), Color(0xFF6A3A12)))),
                     )
+                    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalBackdrop provides page) {
+                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp)) {
+                            BottomChrome(
+                                inline = false,
+                                tabs = tabs(),
+                                selected = selected,
+                                onSelect = { selected = it },
+                                onExpand = {},
+                                searchSelected = false,
+                                onSearch = {},
+                                mini = null,
+                            )
+                        }
+                    }
                 }
             } }
         }
         compose.mainClock.advanceTimeBy(500)
         save("dock-hop-rest", idle = false)
         compose.runOnUiThread { selected = 3 }
-        listOf(64L, 96L, 160L, 240L).forEach { ms ->
-            compose.mainClock.advanceTimeBy(ms - (if (ms == 64L) 0L else listOf(64L, 96L, 160L, 240L).let { it[it.indexOf(ms) - 1] }))
+        var at = 0L
+        listOf(32L, 64L, 100L, 140L, 180L, 220L, 280L, 360L).forEach { ms ->
+            compose.mainClock.advanceTimeBy(ms - at)
+            at = ms
             save("dock-hop-$ms", idle = false)
         }
         compose.mainClock.advanceTimeBy(1200)

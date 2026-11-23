@@ -36,6 +36,10 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.collectAsState
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.GlassStyle
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.highlight.Highlight
 import com.opentune.ui.components.LocalBackdrop
 import com.opentune.ui.components.liquidGlassOn
 import androidx.compose.ui.semantics.Role
@@ -764,6 +768,13 @@ private fun DockPill(
     // The soft pill and the raised lens are in the page's own ink, not the accent: a neutral
     // light over a dark theme, a neutral shade over a light one.
     val softPill = MaterialTheme.colorScheme.onSurface
+    // The raised lens is real glass where the phone can bend what's behind (Android 13+, blur on,
+    // not Lite): the dock itself is recorded, over the page's own recording, so the tabs it
+    // passes over swell and bend at its rim with a colour fringe.
+    val pageBackdrop = LocalBackdrop.current
+    val bends = hops && pageBackdrop != null && liquidGlassOn() && !com.opentune.ui.components.GlassPerformance.lite
+    val dockLayer = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+    val lensBackdrop = if (bends) com.kyant.backdrop.backdrops.rememberCombinedBackdrop(pageBackdrop!!, dockLayer) else null
     // The lens fades where it last was while Search is open.
     val lensAlpha by animateFloatAsState(
         if (shown != null) 1f else 0f,
@@ -775,6 +786,7 @@ private fun DockPill(
         Modifier
             .fillMaxSize()
             .dockShadow(pill)
+            .then(if (bends) Modifier.layerBackdrop(dockLayer) else Modifier)
             .glass(pill, tint = ink.film ?: MaterialTheme.colorScheme.surfaceContainerHigh)
             .dockHighlight(pill)
             .clip(pill)
@@ -966,36 +978,57 @@ private fun DockPill(
         }
     }
     if (hops) {
-        // The raised lens: clear glass wider than a tab and taller than the dock, lifted a little
-        // while it flies; it shows only while it's up (motion.hop above 0).
+        // The raised lens: a round piece of clear glass, about a tab wide and a little taller than
+        // the dock. It grows out of the soft pill as it lifts, flies to the new tab at full size,
+        // and there shrinks back into the pill as the pill fills in again. Where the phone can bend
+        // what's behind it, the tabs under it swell and bend at its rim with a colour fringe.
+        val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
         Box(
             Modifier
                 .matchParentSize()
                 .layout { measurable, constraints ->
                     val h = constraints.maxHeight
-                    val lensW = (slot * 1.24f).roundToPx()
-                    val lensH = (h * 1.16f).roundToInt()
-                    val placeable = measurable.measure(Constraints.fixed(lensW, lensH))
+                    val up = motion.hop.coerceIn(0f, 1f)
+                    val round = maxOf(slot.toPx(), h * LENS_HEIGHT)
+                    val w = androidx.compose.ui.util.lerp(slot.toPx(), round, up)
+                    val lh = androidx.compose.ui.util.lerp(h - DOCK_INSET.toPx() * 2, round, up)
+                    val placeable = measurable.measure(Constraints.fixed(w.roundToInt(), lh.roundToInt()))
                     layout(constraints.maxWidth, h) {
                         val slide = (anchor - DOCK_INSET - slot * (resting + 0.5f)).toPx() * fold()
                         val centre = DOCK_INSET.toPx() + slot.toPx() * (motion.x + 0.5f) + slide
-                        placeable.place((centre - lensW / 2f).roundToInt(), (h - lensH) / 2)
+                        placeable.place((centre - w / 2f).roundToInt(), ((h - lh) / 2f).roundToInt())
                     }
                 }
                 .graphicsLayer {
-                    val up = motion.hop.coerceIn(0f, 1f)
-                    alpha = up * lensAlpha * (1f - fold()).coerceIn(0f, 1f)
-                    val sc = 0.82f + 0.18f * up
-                    scaleX = sc
-                    scaleY = sc
-                    translationY = -4.dp.toPx() * up
-                    shape = pill
-                    clip = true
+                    // Fully there for most of the hop, fading only in the last moment of landing.
+                    alpha = (motion.hop / 0.3f).coerceIn(0f, 1f) * lensAlpha * (1f - fold()).coerceIn(0f, 1f)
                 }
-                // Clear glass: the tabs it passes over stay in sight through it, under a light sheen
-                // from the top and a bright rim, as a lens lifted off the dock.
-                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.03f), Color.White.copy(alpha = 0.08f))))
-                .border(1.4.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.70f), Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.35f))), pill),
+                .then(
+                    if (lensBackdrop != null) Modifier.drawBackdrop(
+                        backdrop = lensBackdrop,
+                        shape = { pill },
+                        effects = {
+                            val d = size.minDimension
+                            lens(d * 0.24f, d * 0.55f, depthEffect = true, chromaticAberration = true)
+                        },
+                        highlight = { Highlight.Default },
+                        onDrawSurface = {
+                            drawRect(Color.White.copy(alpha = if (dark) 0.03f else 0.10f))
+                            drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.10f else 0.18f), 0.45f to Color.Transparent))
+                        },
+                    ) else Modifier
+                        .clip(pill)
+                        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.02f), Color.White.copy(alpha = 0.06f))))
+                )
+                .border(
+                    1.dp,
+                    Brush.linearGradient(
+                        0f to Color.White.copy(alpha = if (dark) 0.55f else 0.85f),
+                        0.5f to Color.White.copy(alpha = if (dark) 0.08f else 0.2f),
+                        1f to Color.White.copy(alpha = if (dark) 0.35f else 0.6f),
+                    ),
+                    pill,
+                ),
         )
     }
     }
@@ -1004,11 +1037,14 @@ private fun DockPill(
 /** The longest a frame counts for in the dock pill's motion, in milliseconds. */
 private const val PILL_FRAME_MS = 20f
 
+/** The raised lens's size against the dock's height: a little taller, as BitChord's is. */
+private const val LENS_HEIGHT = 1.18f
+
 /**
  * The dock pill's hop, stepped by hand so each frame's time can be capped: its place, a spring
- * toward the open slot (damping 0.88, stiffness 260), and its height, which rises over the
- * first 150 ms and then falls back on a looser spring (0.62, 240), dipping once below rest as
- * it lands: the squash. Held under a finger it stays up where the finger is.
+ * toward the open slot (damping 0.9, stiffness 520), and its height, which rises over the
+ * first 90 ms, stays up until the lens is over the new tab, and then falls back on a looser
+ * spring (0.72, 300), dipping once below rest as it lands: the squash. Held under a finger it stays up where the finger is.
  */
 private class PillMotion(start: Float) {
     var x by mutableFloatStateOf(start)
@@ -1048,6 +1084,10 @@ private class PillMotion(start: Float) {
                 lift += dt * 1000f
                 hop = from + (1f - from) * FastOutSlowInEasing.transform((lift / RISE_MS).coerceAtMost(1f))
                 vh = 0f
+            } else if (kotlin.math.abs(x - target) > ARRIVED) {
+                // Still on its way: it stays up, at full size, until it's over the new tab.
+                hop = 1f
+                vh = 0f
             } else {
                 vh += (-H_STIFF * hop - H_DAMP * vh) * dt
                 hop += vh * dt
@@ -1058,12 +1098,14 @@ private class PillMotion(start: Float) {
     }
 
     private companion object {
-        const val RISE_MS = 150f
-        // Glides in without wobbling about the new place, and lands with one soft squash.
-        const val X_STIFF = 260f
-        val X_DAMP = 2f * 0.88f * kotlin.math.sqrt(260f)
-        const val H_STIFF = 240f
-        val H_DAMP = 2f * 0.62f * kotlin.math.sqrt(240f)
+        const val RISE_MS = 90f
+        /** How close to the new tab, in tabs, the lens is before it starts to land. */
+        const val ARRIVED = 0.12f
+        // Flies across quickly without wobbling about the new place, then lands with a small squash.
+        const val X_STIFF = 520f
+        val X_DAMP = 2f * 0.9f * kotlin.math.sqrt(520f)
+        const val H_STIFF = 300f
+        val H_DAMP = 2f * 0.72f * kotlin.math.sqrt(300f)
     }
 }
 
