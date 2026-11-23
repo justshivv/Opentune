@@ -116,6 +116,13 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
         attempt++
     }
 
+    // Back from the app's settings with location allowed, or from turning location on: look
+    // again, rather than keep saying it's off.
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        val n = near
+        if ((n is Near.NeedsPermission && ApproxLocation.granted(context)) || (n == Near.LocationOff && ApproxLocation.enabled(context))) attempt++
+        onPauseOrDispose { }
+    }
     LaunchedEffect(query, view, attempt) {
         if (query.isNotBlank() || view != RadioView.NearYou) return@LaunchedEffect
         near = when {

@@ -115,7 +115,15 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
     var granted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED)
     }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
+    // Refused: Android may not ask again, so the button opens the app's settings instead.
+    var refused by remember { mutableStateOf(false) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it; refused = !it }
+    // Allowed (or taken away) in the app's settings while away: read again on coming back, or
+    // the page kept asking for access it already had.
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        granted = ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED
+        onPauseOrDispose { }
+    }
     var songs by remember { mutableStateOf<List<Song>?>(null) }
     var dated by remember { mutableStateOf<List<Pair<Song, Long>>>(emptyList()) }
     var heroSong by remember { mutableStateOf<Song?>(null) }
@@ -226,8 +234,17 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
                                         ImageVector.vectorResource(AppIcons.Folder),
                                         "Play music saved on your phone",
                                         Modifier.padding(top = 32.dp),
-                                        message = "OpenTune needs permission to read audio files. Nothing leaves your device.",
-                                        action = { Button(onClick = { launcher.launch(audioPermission) }) { Text("Allow access") } },
+                                        message = if (refused) "Access to audio files is off for OpenTune. You can allow it in the app's settings."
+                                            else "OpenTune needs permission to read audio files. Nothing leaves your device.",
+                                        action = {
+                                            if (refused) Button(onClick = {
+                                                runCatching {
+                                                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                                        android.net.Uri.parse("package:${context.packageName}")))
+                                                }
+                                            }) { Text("Open settings") }
+                                            else Button(onClick = { launcher.launch(audioPermission) }) { Text("Allow access") }
+                                        },
                                     )
                                 }
                             }
