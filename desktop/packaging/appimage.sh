@@ -37,9 +37,20 @@ EOF
 cp "$here/icons/AppIcon.png" "$appdir/opentune.png"
 ln -s opentune.png "$appdir/.DirIcon"
 
+# A fixed appimagetool release, checked against its SHA-256 before it runs: never the moving
+# "continuous" build, and never a download that doesn't match. To move to a newer release,
+# change both lines together. APPIMAGETOOL still points at a copy of your own instead.
+APPIMAGETOOL_VERSION=1.9.0
+APPIMAGETOOL_SHA256=46fdd785094c7f6e545b61afcfb0f3d98d8eab243f644b4b17698c01d06083d1
 tool="${APPIMAGETOOL:-$work/appimagetool}"
 if [ ! -x "$tool" ]; then
-  curl -fsSL -o "$tool" https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+  curl -fsSL -o "$tool.download" "https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL_VERSION/appimagetool-x86_64.AppImage"
+  if ! echo "$APPIMAGETOOL_SHA256  $tool.download" | sha256sum -c --status -; then
+    rm -f "$tool.download"
+    echo "appimagetool $APPIMAGETOOL_VERSION didn't match its pinned SHA-256; not running it" >&2
+    exit 1
+  fi
+  mv "$tool.download" "$tool"
   chmod +x "$tool"
 fi
 mkdir -p "$(dirname "$out")"
