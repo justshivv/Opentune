@@ -493,6 +493,20 @@ object MusicRepository {
     private const val RECENT_SEEDS = 6
     private const val MAX_PICKS = 16
 
+    /**
+     * Where a YouTube or YouTube Music [url] leads: a podcast show, playlist, channel or song.
+     * YouTube Music is asked first, as it knows a podcast's playlist link is a show; YouTube's own
+     * site next, as only it knows channel handles (@name, /c/name, /user/name). Null when
+     * neither knows the link.
+     */
+    suspend fun resolveLink(url: String): com.opentune.data.innertube.ResolvedLink? = io {
+        val clean = ChannelLink.base(url)
+        suspend fun ask(call: suspend (String) -> kotlinx.serialization.json.JsonObject) = try {
+            InnertubeParser.parseResolvedUrl(call(clean))
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+        ask(Innertube::resolveMusicUrl) ?: ask(Innertube::resolveWebUrl)
+    }
+
     /** A charts page and the country it is for, as a two-letter code. */
     class Charts(val country: String?, val page: kotlinx.serialization.json.JsonObject)
 

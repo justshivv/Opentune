@@ -1331,6 +1331,12 @@ object Innertube {
     private const val WEB_VERSION = "2.20251101.00.00"
 
     /** A video's watch page as YouTube's site has it, for where its comments start. */
+    /** What YouTube Music makes of a link: a page (a podcast show, playlist, channel) or a song. */
+    suspend fun resolveMusicUrl(url: String): JsonObject = postMusic("navigation/resolve_url") { put("url", url) }
+
+    /** The same asked of YouTube's own site, which also knows channel handles (@name, /c/name, /user/name). */
+    suspend fun resolveWebUrl(url: String): JsonObject = postWeb("navigation/resolve_url") { put("url", url) }
+
     suspend fun webNext(videoId: String): JsonObject = postWeb("next") { put("videoId", videoId) }
 
     /** The next page of a video's comments, from a continuation [token]. */

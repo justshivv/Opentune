@@ -421,6 +421,16 @@ fun AppRoot(vm: PlayerViewModel) {
                 playerOpen = true
             }
             is LinkTarget.Browse -> nav.openBrowse(link.browseId)
+            // A channel by its handle, or a playlist that may be a podcast: YouTube says which page.
+            is LinkTarget.Resolve -> when (val found = MusicRepository.resolveLink(link.url)) {
+                is com.opentune.data.innertube.ResolvedLink.Page -> nav.openBrowse(found.browseId)
+                // A song: played as a shared song link is, by handing that link on (the effect runs again for it).
+                is com.opentune.data.innertube.ResolvedLink.Track -> { Links.open("https://music.youtube.com/watch?v=${found.videoId}"); return@LaunchedEffect }
+                null -> when (val back = link.fallback) {
+                    is LinkTarget.Browse -> nav.openBrowse(back.browseId)
+                    else -> com.opentune.data.Pills.error("Couldn't open that link")
+                }
+            }
             // Read for its title and artist, then found on YouTube Music; autoplay carries on from it.
             is LinkTarget.Elsewhere -> {
                 vm.player.connected.first { it }

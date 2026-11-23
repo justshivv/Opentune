@@ -16,6 +16,11 @@ sealed interface LinkTarget {
     data class PlaySearch(val query: String) : LinkTarget
     /** A song on another service (Apple Music, Deezer, Tidal…), to find and play here. */
     data class Elsewhere(val url: String) : LinkTarget
+    /**
+     * A link only YouTube can say the page of: a channel by its handle (`@name`, `/c/name`), or
+     * a playlist that may be a podcast show. Opens [fallback] when it can't be resolved.
+     */
+    data class Resolve(val url: String, val fallback: LinkTarget? = null) : LinkTarget
     /** A Spotify playlist, album or song shared to the app, to bring over. */
     data class SpotifyImport(val text: String) : LinkTarget
     /** An invite to a Listen together room. */
@@ -40,6 +45,9 @@ object Links {
     const val ACTION_OPEN_PLAYER = "com.opentune.action.OPEN_PLAYER"
 
     fun parse(text: String?): LinkTarget? {
+        // A channel by its handle, as a link or just "@name": only YouTube knows which channel it is.
+        text?.let { t -> Regex("""https?://\S+""").find(t)?.value ?: t.trim() }
+            ?.let(com.opentune.data.ChannelLink::channelUrl)?.let { return LinkTarget.Resolve(it) }
         val raw = text?.let { Regex("""https?://\S+""").find(it)?.value } ?: return null
         val uri = runCatching { URI(raw) }.getOrNull() ?: return null
         val host = uri.host?.lowercase() ?: return null
@@ -55,7 +63,8 @@ object Links {
             path.firstOrNull() == "watch" -> valid(query["v"])?.let(LinkTarget::Song)
                 ?: valid(query["list"])?.let { LinkTarget.Browse(playlistBrowseId(it)) }
             path.firstOrNull() == "shorts" -> valid(path.getOrNull(1))?.let(LinkTarget::Song)
-            path.firstOrNull() == "playlist" -> valid(query["list"])?.let { LinkTarget.Browse(playlistBrowseId(it)) }
+            // A podcast's episodes are a playlist too: YouTube Music says whether it's a show.
+            path.firstOrNull() == "playlist" -> valid(query["list"])?.let { LinkTarget.Resolve(raw, LinkTarget.Browse(playlistBrowseId(it))) }
             path.firstOrNull() == "browse" -> valid(path.getOrNull(1))?.let(LinkTarget::Browse)
             path.firstOrNull() == "channel" -> valid(path.getOrNull(1))?.let(LinkTarget::Browse)
             else -> null
@@ -88,23 +97,23 @@ object Links {
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
             else -> null
         }
-        com.opentune.data.connect.ConnectGroup.parse(text)?.let {
-            _incoming.value = LinkTarget.Connect(it.encoded)
-            return
-        }
-        com.opentune.data.together.RoomCode.find(text)?.let {
-            _incoming.value = LinkTarget.Together(it.raw)
-            return
-        }
-        if (text != null && com.opentune.data.spotify.Spotify.looksLikeSpotify(text)) {
-            _incoming.value = LinkTarget.SpotifyImport(text)
-            return
-        }
-        parse(text)?.let {
-            _incoming.value = it
-            return
-        }
-        com.opentune.data.links.MusicLinks.linkIn(text)?.let { _incoming.value = LinkTarget.Elsewhere(it) }
+        open(text)
+    }
+
+    /** What [text] links to, if the app can open it: the same links it takes when shared in. */
+    fun targetOf(text: String?): LinkTarget? {
+        com.opentune.data.connect.ConnectGroup.parse(text)?.let { return LinkTarget.Connect(it.encoded) }
+        com.opentune.data.together.RoomCode.find(text)?.let { return LinkTarget.Together(it.raw) }
+        if (text != null && com.opentune.data.spotify.Spotify.looksLikeSpotify(text)) return LinkTarget.SpotifyImport(text)
+        parse(text)?.let { return it }
+        return com.opentune.data.links.MusicLinks.linkIn(text)?.let(LinkTarget::Elsewhere)
+    }
+
+    /** Opens what [text] links to, as a shared link would be; false when it isn't a link the app knows. */
+    fun open(text: String?): Boolean {
+        val target = targetOf(text) ?: return false
+        _incoming.value = target
+        return true
     }
 
     fun consumed() {

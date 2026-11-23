@@ -158,8 +158,13 @@ fun SearchScreen(
     var sourcesFocused by remember { mutableStateOf(false) }
     val searching = explore == null || focused || sourcesFocused || query.isNotEmpty()
 
+    // A pasted link, or an @handle: opened as a shared link would be, not searched for. Search
+    // finds big channels; a small podcast is reached by its channel's link.
+    val link = remember(query) { pastedLink(query) }
+
     fun submit(q: String) {
         focus.clearFocus()
+        if (pastedLink(q) != null && com.opentune.ui.Links.open(q.trim())) return
         if (source == SearchSource.YOUTUBE) vm.submit(q) else { vm.onQueryChange(q); vm.remember(q) }
     }
 
@@ -229,6 +234,9 @@ fun SearchScreen(
                 .onFocusChanged { sourcesFocused = it.hasFocus })
         }
 
+        link?.let { target ->
+            OpenLinkRow(target, query.trim(), onOpen = { submit(query) }, modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp))
+        }
         when {
             !searching -> explore?.invoke()
             source == SearchSource.LIBRARY -> LibraryResults(query, library, libraryLists, contentPadding, currentVideoId, isPlaying, { focus.clearFocus(); onPlay(it) }, onPlayNext, onAddToQueue, { focus.clearFocus(); onOpenList(it) })
@@ -269,6 +277,44 @@ fun SearchScreen(
 }
 
 /** Both states occupy the same slot; focus changes only the glyph, never the field's layout. */
+/** What the search text links to when it's a link (or an @handle) the app can open, else null. */
+internal fun pastedLink(query: String): com.opentune.ui.LinkTarget? {
+    val q = query.trim()
+    // Only a link or a handle: a room code or a word in plain text is a search.
+    if (!q.contains("://") && !(q.startsWith("@") && com.opentune.data.ChannelLink.isChannel(q))) return null
+    return com.opentune.ui.Links.targetOf(q)
+}
+
+/** A row above the results offering to open the pasted link, named for where it leads. */
+@Composable
+private fun OpenLinkRow(target: com.opentune.ui.LinkTarget, text: String, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val channel = com.opentune.data.ChannelLink.channelUrl(text)
+    val (title, detail) = when {
+        channel != null -> "Open this channel" to channel.substringAfterLast('/')
+        target is com.opentune.ui.LinkTarget.Song -> "Play this song" to "From the link"
+        target is com.opentune.ui.LinkTarget.Resolve || target is com.opentune.ui.LinkTarget.Browse -> "Open this page" to "A playlist, podcast, album or channel"
+        target is com.opentune.ui.LinkTarget.Elsewhere -> "Find this song" to "From another music service"
+        target is com.opentune.ui.LinkTarget.SpotifyImport -> "Bring this over from Spotify" to "Opens the import"
+        target is com.opentune.ui.LinkTarget.Together -> "Join this room" to "Listen together"
+        else -> "Open this link" to text
+    }
+    androidx.compose.material3.Surface(
+        onClick = onOpen,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(ImageVector.vectorResource(AppIcons.Link), null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f), maxLines = 1)
+            }
+            Icon(ImageVector.vectorResource(AppIcons.ChevronRight), null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+        }
+    }
+}
+
 @Composable
 internal fun SearchLeadingIcon(back: Boolean, onBack: () -> Unit, onSearch: () -> Unit) {
     IconButton(onClick = if (back) onBack else onSearch, modifier = Modifier.size(48.dp)) {

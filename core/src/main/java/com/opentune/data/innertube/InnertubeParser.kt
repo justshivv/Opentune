@@ -216,6 +216,17 @@ object InnertubeParser {
     }
 
     /**
+     * Where a resolved link leads: a page's browse id, or a song's video id. Null when YouTube
+     * only handed the link back as a web address (it didn't know it).
+     */
+    fun parseResolvedUrl(response: JsonObject): ResolvedLink? {
+        val endpoint = response.o("endpoint") ?: return null
+        endpoint.o("browseEndpoint")?.s("browseId")?.takeIf { it.isNotBlank() }?.let { return ResolvedLink.Page(it) }
+        endpoint.o("watchEndpoint")?.s("videoId")?.takeIf { it.isNotBlank() }?.let { return ResolvedLink.Track(it) }
+        return null
+    }
+
+    /**
      * The country a charts page is for, as a two-letter code, or "ZZ" for the
      * global charts. YouTube answers a country it has no charts for with the
      * global ones and says so only in the country menu, whose button carries
@@ -1796,4 +1807,10 @@ private fun JsonArray?.isNotSquare(): Boolean {
     val height = last.s("height")?.toDoubleOrNull() ?: return false
     if (width <= 0 || height <= 0) return false
     return width / height !in 0.85..1.15
+}
+
+/** A YouTube or YouTube Music link, resolved: see [InnertubeParser.parseResolvedUrl]. */
+sealed interface ResolvedLink {
+    data class Page(val browseId: String) : ResolvedLink
+    data class Track(val videoId: String) : ResolvedLink
 }
