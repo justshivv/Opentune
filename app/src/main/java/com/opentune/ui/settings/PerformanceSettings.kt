@@ -136,9 +136,9 @@ internal val OFFERED_RATES = listOf(60, 90, 120)
 
 /** The refresh rates the screen offers at its current resolution, of [OFFERED_RATES], slowest first. */
 private fun supportedRates(context: Context): List<Int> {
-    @Suppress("DEPRECATION")
-    val display = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) context.display else
-        (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay) ?: return emptyList()
+    // Not context.display: from a context with no window of its own (one wrapped for the app's
+    // language, say) Android throws rather than answer. This falls back to the main screen.
+    val display = androidx.core.content.ContextCompat.getDisplayOrDefault(context)
     val now = display.mode
     return display.supportedModes
         .filter { it.physicalWidth == now.physicalWidth && it.physicalHeight == now.physicalHeight }
