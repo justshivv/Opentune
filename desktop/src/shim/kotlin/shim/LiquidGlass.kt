@@ -30,7 +30,10 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.traverseAncestors
 import dev.chrisbanes.haze.HazeArea
+import dev.chrisbanes.haze.HazeSourceNode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import org.jetbrains.skia.ColorFilter
@@ -45,24 +48,29 @@ import org.jetbrains.skia.RuntimeShaderBuilder
  * (Haze's sources: the window's backdrop, the page) through a lens at the rim, then a light blur
  * and lifted colours, over which go [film], a soft light across the top and a lit rim.
  *
- * An area being recorded right now is the one this glass sits in (a button on the page): that
- * one is left out, so the glass shows what's under the page there, as the frosted glass does.
+ * The area this glass sits in (a button on the page), and any above it, are left out, so the glass
+ * shows what's under the page there, as the frosted glass does. Drawing the page into a button on
+ * the page would put the page inside itself: Skia then drew it inside itself until the stack ran
+ * out and the app closed at once, with no report. Which area that is comes from where the glass
+ * sits in the layout ([GlassSource]), as Haze's own frosted glass works it out; whether the area
+ * was being recorded at the moment wasn't enough, since a button can be redrawn on its own.
  * Haze's own effect node rides along, drawing nothing, so this is redrawn whenever what's behind
  * it changes, as the frosted glass is.
  */
 @Composable
-internal fun Modifier.liquidGlass(haze: HazeState, shape: Shape, film: Color): Modifier {
+internal fun Modifier.liquidGlass(haze: HazeState, shape: Shape, film: Color, source: GlassSource = remember { GlassSource() }): Modifier {
     val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
     var at by remember { mutableStateOf(Offset.Zero) }
     val lens = remember { LensCache() }
     androidx.compose.runtime.DisposableEffect(lens) { onDispose { lens.drop() } }
     return this
+        .then(GlassSourceElement(haze, source))
         .onGloballyPositioned { at = it.positionOnScreen() }
         .drawBehind {
             val outline = shape.createOutline(size, layoutDirection, this)
             val clip = Path().apply { addOutline(outline) }
             clipPath(clip) {
-                drawBent(haze, at, cornerOf(outline), lens)
+                drawBent(haze, at, cornerOf(outline), lens, source.zIndex)
                 drawRect(film)
                 drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.10f else 0.16f), 0.45f to Color.Transparent))
             }
@@ -166,13 +174,54 @@ private object RetiredLenses {
     }
 }
 
+/**
+ * The z-index of the nearest area of the same [HazeState] this glass sits inside, or null when it
+ * sits in none. Areas from there up are never drawn into the glass.
+ */
+internal class GlassSource {
+    @Volatile var zIndex: Float? = null
+}
+
+/** Finds [GlassSource] for the glass from its place in the layout, when it's attached. */
+private data class GlassSourceElement(val haze: HazeState, val source: GlassSource) : ModifierNodeElement<GlassSourceNode>() {
+    override fun create() = GlassSourceNode(haze, source)
+    override fun update(node: GlassSourceNode) {
+        node.haze = haze
+        node.source = source
+        node.find()
+    }
+}
+
+@OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
+private class GlassSourceNode(var haze: HazeState, var source: GlassSource) : Modifier.Node() {
+    override fun onAttach() = find()
+
+    fun find() {
+        if (!isAttached) return
+        var found: Float? = null
+        traverseAncestors(SOURCE_KEY) { node ->
+            val s = node as? HazeSourceNode
+            if (s != null && s.state == haze) { found = s.zIndex; false } else true
+        }
+        source.zIndex = found
+    }
+}
+
+/** What Haze's sources are found by among a node's ancestors (its own key for them is internal). */
+@OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
+private val SOURCE_KEY: Any = HazeSourceNode(HazeState(), 0f, null).traverseKey
+
+/** The areas a glass may draw: below the one it sits in, and none being recorded as it draws. */
+internal fun drawableAreas(areas: List<HazeArea>, within: Float?, recording: (HazeArea) -> Boolean): List<HazeArea> =
+    areas.filter { it.contentLayer != null && (within == null || it.zIndex < within) && !recording(it) }.sortedBy { it.zIndex }
+
 /** What's behind, from the window's recorded areas, through the lens, the blur and the colour lift. */
-private fun DrawScope.drawBent(haze: HazeState, at: Offset, corner: Float, lens: LensCache) {
+private fun DrawScope.drawBent(haze: HazeState, at: Offset, corner: Float, lens: LensCache, within: Float?) {
     val w = size.width
     val h = size.height
     // Nothing to bend on glass with no area (a hidden or collapsed one).
     if (w < 1f || h < 1f) return
-    val areas = haze.areas.filter { it.contentLayer != null && !it.drawingNow() }.sortedBy { it.zIndex }
+    val areas = drawableAreas(haze.areas, within) { it.drawingNow() }
     if (areas.isEmpty()) return
     val bezel = minOf(22.dp.toPx(), w / 2f, h / 2f)
     val paint = lens.paintFor(w, h, corner, bezel, 5.dp.toPx() / 2f)
