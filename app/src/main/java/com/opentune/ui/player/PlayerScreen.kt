@@ -1437,9 +1437,13 @@ fun PlayerLayout(
                                                 if (flight.active && bigTitle != null) 0f else 1f
                                         },
                                 )
-                                // With the controls away over a Canvas, the title sits a little up from the bottom edge.
+                                // With the controls away over a Canvas, the title sits a little up from the bottom edge —
+                                // unless the lyric line is staying behind under it (canvasLyricsLine): then the
+                                // line takes the foot's place, at the exact distance it had before the slide.
+                                val lyricLineStays = controlsAway && state.ui.canvasLyricsLine && state.ui.lyricsPreview &&
+                                        ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced || state.lyrics is LyricsState.Loading)
                                 val footRoom by androidx.compose.animation.core.animateDpAsState(
-                                    if (controlsHidden) CANVAS_TITLE_FOOT else 0.dp,
+                                    if (controlsHidden && !lyricLineStays) CANVAS_TITLE_FOOT else 0.dp,
                                     if (controlsHidden) tween(520, easing = FastOutSlowInEasing) else spring(dampingRatio = 0.9f, stiffness = 380f),
                                     label = "canvasFoot",
                                 )
