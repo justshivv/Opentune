@@ -86,6 +86,7 @@ internal object AppIcons {
     val FormatQuote = R.drawable.symbol_format_quote_rounded
     val FormatSize = R.drawable.symbol_format_size_rounded
     val Fullscreen = R.drawable.symbol_fullscreen_rounded
+    val FullscreenExit = R.drawable.symbol_fullscreen_exit_rounded
     val Gradient = R.drawable.symbol_gradient
     val GraphicEq = R.drawable.symbol_graphic_eq_rounded
     /** Dolby's double D, on the quality badge of Dolby audio. */

@@ -3555,5 +3555,19 @@
 "…and {0} more": "…a další ({0})",
 "Lyrics line stays": "Řádek textu zůstává",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Když Canvas převezme obrazovku, aktuální řádek textu zůstává pod názvem, místo aby odjel spolu s ovládáním.",
-"Only with Canvas takes the screen on": "Pouze se zapnutou funkcí 'Canvas takes the screen'"
+"Only with Canvas takes the screen on": "Pouze se zapnutou funkcí 'Canvas takes the screen'",
+"Exit full screen": "Ukončit celou obrazovku",
+"Video quality": "Kvalita videa",
+"Playing at {0}": "Přehrává se v {0}",
+"{0} s": "{0} s",
+"Fit": "Přizpůsobit",
+"Fill": "Vyplnit",
+"Fit the whole picture": "Zobrazit celý obraz",
+"Fill the screen": "Vyplnit obrazovku",
+"Video quality on Wi-Fi": "Kvalita videa na Wi-Fi",
+"Video quality on mobile data": "Kvalita videa na mobilních datech",
+"Auto · follows the connection": "Automaticky · podle připojení",
+"Auto": "Automaticky",
+"Seek": "Posunout",
+"The video couldn't play at {0}, so it's back on Auto": "Video nešlo přehrát v {0}, proto je zpět na automatické kvalitě"
 }

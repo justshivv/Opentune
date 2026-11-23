@@ -3603,5 +3603,19 @@
 "…and {0} more": "…還有 {0} 個",
 "Lyrics line stays": "歌詞行保持顯示",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "當 Canvas 佔滿螢幕時，目前歌詞行會保留在標題下方，而不是隨控制項一起滑走。",
-"Only with Canvas takes the screen on": "僅當「Canvas takes the screen」開啟時"
+"Only with Canvas takes the screen on": "僅當「Canvas takes the screen」開啟時",
+"Exit full screen": "結束全螢幕",
+"Video quality": "影片畫質",
+"Playing at {0}": "正以 {0} 播放",
+"{0} s": "{0} 秒",
+"Fit": "符合",
+"Fill": "填滿",
+"Fit the whole picture": "顯示完整畫面",
+"Fill the screen": "填滿螢幕",
+"Video quality on Wi-Fi": "使用 Wi-Fi 時的影片畫質",
+"Video quality on mobile data": "使用行動數據時的影片畫質",
+"Auto · follows the connection": "自動 · 依連線調整",
+"Auto": "自動",
+"Seek": "拖曳進度",
+"The video couldn't play at {0}, so it's back on Auto": "影片無法以 {0} 播放，已改回自動"
 }

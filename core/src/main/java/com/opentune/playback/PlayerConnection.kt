@@ -2,6 +2,7 @@ package com.opentune.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.view.Surface
 import android.view.TextureView
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -13,6 +14,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.opentune.data.innertube.StreamResolver
+import com.opentune.data.innertube.VideoQuality
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.model.QueueTier
 import com.opentune.data.model.Song
@@ -266,7 +268,10 @@ class PlayerConnection(private val context: Context) {
         }
         newController.addListener(listener)
         controller = newController
-        videoView?.let(newController::setVideoTextureView)
+        when (val out = videoView) {
+            is TextureView -> newController.setVideoTextureView(out)
+            is Surface -> newController.setVideoSurface(out)
+        }
         refresh(newController)
         listener.onTracksChanged(newController.currentTracks)
         _connected.value = true
@@ -509,11 +514,37 @@ class PlayerConnection(private val context: Context) {
     }
 
     /**
-     * The view the picture should be drawn into, kept so a controller that
-     * connects (or reconnects) after the view appeared is handed it too;
+     * Gives the player a surface to draw the picture into. The player screen keeps one
+     * surface for as long as it shows video, wherever the picture moves (the player, full
+     * screen and back), so the decoder never has to be told of a new one.
+     */
+    fun setVideoSurface(surface: Surface) {
+        videoView = surface
+        controller?.setVideoSurface(surface)
+    }
+
+    /** Takes [surface] back from the player, if it is still the one drawn into. */
+    fun clearVideoSurface(surface: Surface) {
+        if (videoView === surface) videoView = null
+        controller?.clearVideoSurface(surface)
+    }
+
+    /**
+     * The view or surface the picture should be drawn into, kept so a controller
+     * that connects (or reconnects) after it appeared is handed it too;
      * otherwise the picture stayed blank until the player was reopened.
      */
-    private var videoView: TextureView? = null
+    private var videoView: Any? = null
+
+    /** The sizes the playing song's video can be chosen at: Auto first, then what it's offered at and this phone decodes. */
+    fun videoChoices(): List<Int> = _currentSong.value?.videoId?.let(StreamResolver::videoChoices) ?: listOf(VideoQuality.AUTO)
+
+    /** Chooses the video size for the network in use, and moves the playing video onto it where it stands. */
+    fun setVideoQuality(rung: Int) {
+        VideoQuality.chooseNow(rung)
+        val id = controller?.currentMediaItem?.mediaId ?: return
+        PlaybackRequests.setVideoQuality(id)
+    }
 
     fun toggleShuffle() {
         val controller = controller ?: return

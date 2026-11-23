@@ -3555,5 +3555,19 @@
 "…and {0} more": "…এবং আরও {0}টি",
 "Lyrics line stays": "লিরিক্স লাইন থেকে যায়",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas যখন স্ক্রিন দখল করে, বর্তমান লিরিক্স লাইনটি কন্ট্রোলের সঙ্গে সরে না গিয়ে শিরোনামের নিচে থেকে যায়।",
-"Only with Canvas takes the screen on": "শুধুমাত্র 'Canvas takes the screen' চালু থাকলেই"
+"Only with Canvas takes the screen on": "শুধুমাত্র 'Canvas takes the screen' চালু থাকলেই",
+"Exit full screen": "ফুল স্ক্রিন থেকে বেরোন",
+"Video quality": "ভিডিও কোয়ালিটি",
+"Playing at {0}": "{0}-এ চলছে",
+"{0} s": "{0} সে",
+"Fit": "ফিট",
+"Fill": "ফিল",
+"Fit the whole picture": "পুরো ছবি দেখান",
+"Fill the screen": "স্ক্রিন ভরে দিন",
+"Video quality on Wi-Fi": "Wi-Fi-তে ভিডিও কোয়ালিটি",
+"Video quality on mobile data": "মোবাইল ডেটায় ভিডিও কোয়ালিটি",
+"Auto · follows the connection": "অটো · কানেকশন অনুযায়ী",
+"Auto": "অটো",
+"Seek": "সিক",
+"The video couldn't play at {0}, so it's back on Auto": "ভিডিওটি {0}-এ চলেনি, তাই আবার অটোতে ফিরেছে"
 }

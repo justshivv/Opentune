@@ -1,25 +1,29 @@
 package com.opentune.ui.player
 
 import android.graphics.Matrix
+import android.graphics.SurfaceTexture
+import android.os.Handler
+import android.os.Looper
+import android.view.Surface
 import android.view.TextureView
 import android.view.View
+import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -33,52 +37,121 @@ import com.opentune.playback.PlayerConnection
 import com.opentune.ui.theme.Text
 
 /**
- * The playing song's music-video picture, drawn by the playback player itself
- * into a texture view filling its box, the whole frame fitted inside it.
+ * The player screen's one picture output: a single texture view, moved
+ * between the player and full screen, whose SurfaceTexture is kept across
+ * each move. The player draws into the same Surface the whole time, so the
+ * decoder is never handed a new one: no black frame, no rebuffer, the
+ * stream untouched. A view that leaves and isn't placed again within
+ * [KEEP_MS] gives its surface up.
  */
-@OptIn(UnstableApi::class)
-@Composable
-internal fun VideoSurface(connection: PlayerConnection, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
+internal class VideoOutput(
+    context: android.content.Context,
+    private val attach: (Surface) -> Unit,
+    private val detach: (Surface) -> Unit,
+) {
     // Not opaque, and no background of its own below: the scheme's
     // background is pure black in this theme, so anything the surface
     // paints around the picture reads as black bars. Left clear, whatever
     // the player itself shows behind the surface shows around the picture.
-    val view = remember { TextureView(context).apply { isOpaque = false } }
-    val size by connection.videoSize.collectAsState()
-    DisposableEffect(connection, view) {
-        connection.setVideoTextureView(view)
+    val view: TextureView = TextureView(context).apply { isOpaque = false }
+
+    private var texture: SurfaceTexture? = null
+    private var surface: Surface? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val drop = Runnable { release() }
+
+    /** The surface the player is drawing into, if any; the same one through every move. */
+    val current: Surface? get() = surface
+
+    init {
+        view.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(st: SurfaceTexture, width: Int, height: Int) = adopt(st)
+            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, width: Int, height: Int) = Unit
+            override fun onSurfaceTextureUpdated(st: SurfaceTexture) = Unit
+
+            // Taken off the window: kept for a moment, in case it's only moving.
+            override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+                if (st !== texture) return true
+                handler.removeCallbacks(drop)
+                handler.postDelayed(drop, KEEP_MS)
+                return false
+            }
+        }
+        view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            // Put back before it draws, so it shows the kept texture instead of making a new one.
+            override fun onViewAttachedToWindow(v: View) {
+                handler.removeCallbacks(drop)
+                val kept = texture ?: return
+                if (view.surfaceTexture !== kept && !kept.isReleased) runCatching { view.setSurfaceTexture(kept) }
+            }
+
+            override fun onViewDetachedFromWindow(v: View) = Unit
+        })
+    }
+
+    /** A texture the view made for itself: the first one, or after a kept one was given up. */
+    internal fun adopt(st: SurfaceTexture) {
+        handler.removeCallbacks(drop)
+        if (st === texture) return
+        release()
+        texture = st
+        surface = Surface(st).also(attach)
+    }
+
+    /** Takes the surface back from the player and frees it. */
+    fun release() {
+        handler.removeCallbacks(drop)
+        surface?.let { detach(it); it.release() }
+        surface = null
+        if (texture !== view.surfaceTexture) texture?.release()
+        texture = null
+    }
+
+    companion object {
+        /** How long a view taken off screen keeps its surface for a move to finish. */
+        const val KEEP_MS = 1_000L
+    }
+}
+
+/** The player's [VideoOutput], drawing into [connection], given up when the player leaves. */
+@Composable
+internal fun rememberVideoOutput(connection: PlayerConnection): VideoOutput {
+    val context = LocalContext.current
+    val output = remember(connection) { VideoOutput(context, connection::setVideoSurface, connection::clearVideoSurface) }
+    DisposableEffect(output) { onDispose { output.release() } }
+    return output
+}
+
+/**
+ * The playing song's music-video picture, drawn by the playback player
+ * into [output]'s view: the whole frame fitted inside the box, or with
+ * [crop] filling it, the overflow cut off. Only one place shows it at a time.
+ */
+@OptIn(UnstableApi::class)
+@Composable
+internal fun VideoSurface(output: VideoOutput, size: VideoSize?, modifier: Modifier = Modifier, crop: Boolean = false) {
+    val view = output.view
+    val latest = androidx.compose.runtime.rememberUpdatedState(size)
+    DisposableEffect(view) {
         val layout = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            fitVideo(view, connection.videoSize.value)
+            latest.value?.let { fitVideo(view, it) }
         }
         view.addOnLayoutChangeListener(layout)
-        onDispose {
-            view.removeOnLayoutChangeListener(layout)
-            connection.clearVideoTextureView(view)
-        }
+        onDispose { view.removeOnLayoutChangeListener(layout) }
     }
     BoxWithConstraints(
-        modifier,
+        modifier.clipToBounds(),
         contentAlignment = Alignment.Center,
     ) {
         // The view is sized to the picture's own shape. A surface stretched
         // past the frame paints black around it inside the view itself, so
         // no colour behind the view ever shows; a view the frame's exact
         // size leaves only what's behind the surface around the picture.
-        val ratio =
-            size?.let {
-                if (it.width <= 0 || it.height <= 0) {
-                    0f
-                } else {
-                    val swapped = it.unappliedRotationDegrees % 180 != 0
-                    val w = if (swapped) it.height else it.width
-                    val h = if (swapped) it.width else it.height
-                    (w.toFloat() / h) * if (swapped) 1f else it.pixelWidthHeightRatio
-                }
-            } ?: 0f
+        val ratio = size?.let(::videoAspect) ?: 0f
         val fit =
             if (ratio > 0f) {
-                if (ratio > maxWidth / maxHeight) {
+                // Fitted, a picture wider than the box takes its width; cropped, its height.
+                if ((ratio > maxWidth / maxHeight) != crop) {
                     maxWidth to (maxWidth / ratio)
                 } else {
                     (maxHeight * ratio) to maxHeight
@@ -87,11 +160,22 @@ internal fun VideoSurface(connection: PlayerConnection, modifier: Modifier = Mod
                 maxWidth to maxHeight
             }
         AndroidView(
-            factory = { view },
-            modifier = Modifier.size(fit.first, fit.second),
-            update = { fitVideo(it, size) },
+            // The one view, taken from wherever it was last shown.
+            factory = { (view.parent as? ViewGroup)?.removeView(view); view },
+            modifier = Modifier.requiredSize(fit.first, fit.second),
+            update = { v -> size?.let { fitVideo(v, it) } },
         )
     }
+}
+
+/** A picture's shape, width over height as it is shown, or 0 while unknown. */
+@OptIn(UnstableApi::class)
+internal fun videoAspect(size: VideoSize): Float {
+    if (size.width <= 0 || size.height <= 0) return 0f
+    val swapped = size.unappliedRotationDegrees % 180 != 0
+    val w = if (swapped) size.height else size.width
+    val h = if (swapped) size.width else size.height
+    return (w.toFloat() / h) * if (swapped) 1f else size.pixelWidthHeightRatio
 }
 
 /** Fits the whole video frame inside the view, centred, with the theme's colour around it. */

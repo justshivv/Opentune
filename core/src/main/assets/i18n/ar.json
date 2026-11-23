@@ -3626,5 +3626,19 @@
 "…and {0} more": "…و{0} أخرى",
 "Lyrics line stays": "يبقى سطر الكلمات",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "بينما يستحوذ Canvas على الشاشة، يبقى سطر الكلمات الحالي تحت العنوان بدلاً من أن ينزلق بعيدًا مع عناصر التحكم.",
-"Only with Canvas takes the screen on": "فقط مع تشغيل «Canvas takes the screen»"
+"Only with Canvas takes the screen on": "فقط مع تشغيل «Canvas takes the screen»",
+"Exit full screen": "الخروج من ملء الشاشة",
+"Video quality": "جودة الفيديو",
+"Playing at {0}": "يُعرض بدقة {0}",
+"{0} s": "{0} ث",
+"Fit": "ملاءمة",
+"Fill": "ملء",
+"Fit the whole picture": "إظهار الصورة كاملة",
+"Fill the screen": "ملء الشاشة",
+"Video quality on Wi-Fi": "جودة الفيديو عبر Wi-Fi",
+"Video quality on mobile data": "جودة الفيديو عبر بيانات الجوّال",
+"Auto · follows the connection": "تلقائي · حسب الاتصال",
+"Auto": "تلقائي",
+"Seek": "انتقال",
+"The video couldn't play at {0}, so it's back on Auto": "تعذّر تشغيل الفيديو بدقة {0}، فعاد إلى التلقائي"
 }

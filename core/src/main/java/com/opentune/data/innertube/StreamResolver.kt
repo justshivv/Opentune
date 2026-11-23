@@ -346,35 +346,50 @@ object StreamResolver {
      * when the player opens it. The walk is the same one [resolve] makes,
      * so an age gate or a burned visitor id costs a video switch no more
      * than a song start.
+     *
+     * [cap] is a size the listener chose (see [VideoQuality]): the best
+     * picture at or under it plays, whatever the connection's estimate says.
+     * [VideoQuality.AUTO] leaves the choice to the connection, as before.
      */
-    suspend fun resolveVideo(videoId: String): String? {
+    suspend fun resolveVideo(videoId: String, cap: Int = VideoQuality.AUTO): String? {
         init
         unplayableReason(videoId)?.let { return null }
         // The picture is picked for the connection asking: a stream this
         // network cannot feed only stalls, so the best format here is the
         // heaviest the connection can sustain, not the tallest one going.
-        val ceiling = minOf(AppSettings.videoCeilingKbps(), videoStepCaps[videoId] ?: Int.MAX_VALUE)
+        val ceiling = if (cap > VideoQuality.AUTO) Int.MAX_VALUE
+        else minOf(AppSettings.videoCeilingKbps(), videoStepCaps[videoId] ?: Int.MAX_VALUE)
         videoUrls[videoId]?.let { url ->
             val kbps = videoKbps[videoId]
-            if (kbps == null || kbps <= ceiling) return url
-            // The held picture is heavier than this connection: forget it
-            // and resolve again under the ceiling.
-            videoUrls.remove(videoId)
-            videoKbps.remove(videoId)
+            if ((videoCaps[videoId] ?: VideoQuality.AUTO) == cap && (kbps == null || kbps <= ceiling)) return url
+            // The held picture is heavier than this connection, or another
+            // size was chosen: forget it and resolve again.
+            forgetVideo(videoId)
         }
         // Off the caller's thread, for the same reason as [videoAvailable]:
         // the walk's probes are raw network calls, and a main-thread caller
         // would have every one of them killed and conclude nothing is usable.
         val picked = withContext(Dispatchers.IO) {
-            val x = innerTubeXVideo(videoId, ceiling)
+            val x = innerTubeXVideo(videoId, ceiling, cap)
             if (x != null) x.url to x.kbps
-            else playerStream(videoId, select = { response -> rankVideoForPlayback(response, ceiling) })?.let { it.url to it.kbps }
+            else playerStream(videoId, select = { response ->
+                rememberVideo(response)
+                rankVideoForPlayback(response, ceiling, cap)
+            })?.let { it.url to it.kbps }
         } ?: return null
         videoUrls[videoId] = picked.first
         videoKbps[videoId] = picked.second
+        videoCaps[videoId] = cap
         VideoAvailability.remember(videoId, true)
         return picked.first
     }
+
+    /**
+     * The sizes [videoId]'s picture can be chosen at: Auto first, then each
+     * size it is offered at that this phone can decode, tallest first. Only
+     * Auto until a response or an extraction has said what it offers.
+     */
+    fun videoChoices(videoId: String): List<Int> = VideoQuality.choices(videoOffers[videoId].orEmpty())
 
     /**
      * Forgets [videoId]'s held picture after it failed to play, so the next
@@ -384,6 +399,7 @@ object StreamResolver {
     fun forgetVideo(videoId: String) {
         videoUrls.remove(videoId)
         videoKbps.remove(videoId)
+        videoCaps.remove(videoId)
     }
 
     /**
@@ -398,8 +414,7 @@ object StreamResolver {
         val servedKbps = videoKbps[videoId] ?: return false
         if (servedKbps <= VIDEO_STEP_FLOOR_KBPS) return false
         videoStepCaps[videoId] = (servedKbps * 55 / 100).coerceAtLeast(VIDEO_STEP_FLOOR_KBPS)
-        videoUrls.remove(videoId)
-        videoKbps.remove(videoId)
+        forgetVideo(videoId)
         return true
     }
 
@@ -410,11 +425,17 @@ object StreamResolver {
      * is asked first and the walk only when it finds nothing. Probed and
      * excluded exactly like its audio streams.
      */
-    private suspend fun innerTubeXVideo(videoId: String, maxKbps: Int = Int.MAX_VALUE): InnerTubeXResolver.Extracted? {
+    private suspend fun innerTubeXVideo(
+        videoId: String,
+        maxKbps: Int = Int.MAX_VALUE,
+        cap: Int = VideoQuality.AUTO,
+    ): InnerTubeXResolver.Extracted? {
         val skip = mutableSetOf<String>()
+        // The engine filters by literal height: an upright clip's 720p is 1280 tall.
+        val maxHeight = if (cap > VideoQuality.AUTO) VideoQuality.heightCap(videoOffers[videoId].orEmpty(), cap) else null
         repeat(INNERTUBEX_ATTEMPTS) {
             val found = try {
-                withTimeoutOrNull(INNERTUBEX_TIMEOUT_MS) { InnerTubeXResolver.extractVideo(videoId, skip) }
+                withTimeoutOrNull(INNERTUBEX_TIMEOUT_MS) { InnerTubeXResolver.extractVideo(videoId, skip, maxHeight) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -423,10 +444,17 @@ object StreamResolver {
                 TrackLog.w(TAG, "InnerTubeX video failed for $videoId: ${e.javaClass.simpleName}: ${e.message}")
                 return null
             } ?: return null
-            if (!VideoDecoders.canPlay(found.mimeType)) {
+            rememberOffers(videoId, found)
+            if (!VideoDecoders.canPlay(found.mimeType, found.width, found.height)) {
                 // A picture this phone has no decoder for: the walk below ranks the formats
                 // itself and keeps to the ones it can show.
-                TrackLog.w(TAG, "InnerTubeX video for $videoId is ${found.mimeType}, which this phone can't decode")
+                TrackLog.w(TAG, "InnerTubeX video for $videoId is ${found.mimeType} at ${found.width}x${found.height}, which this phone can't decode")
+                return null
+            }
+            val rung = VideoQuality.rungOf(found.width, found.height)
+            if (cap > VideoQuality.AUTO && rung > cap && videoOffers[videoId].orEmpty().any { VideoQuality.rungOf(it.width, it.height) in 1..cap }) {
+                // Taller than the size chosen, though a smaller one is offered: the walk picks by size.
+                TrackLog.d(TAG, "InnerTubeX video for $videoId is ${rung}p, over the ${cap}p chosen; the walk picks instead")
                 return null
             }
             if (probe(found.url, expectVideo = true) == Probe.OK) {
@@ -438,9 +466,10 @@ object StreamResolver {
                     TrackLog.d(TAG, "InnerTubeX video for $videoId at ${found.kbps} kbps is over the ${maxKbps} kbps ceiling; the walk picks instead")
                     return null
                 }
-                TrackLog.d(TAG, "InnerTubeX served video for $videoId via ${found.clientName} at ${found.kbps} kbps")
+                TrackLog.d(TAG, "InnerTubeX served video for $videoId via ${found.clientName} at ${found.kbps} kbps, ${rung}p")
                 videoUrls[videoId] = found.url
                 videoKbps[videoId] = found.kbps
+                videoCaps[videoId] = cap
                 return found
             }
             InnerTubeXResolver.exclude(videoId, found.profileId)
@@ -1362,6 +1391,12 @@ object StreamResolver {
     /** Per-song picture ceilings set by a stall step-down (see [stepDownVideo]): a song that kept stopping keeps its lighter picture for the session, whatever the connection's own ceiling says. */
     private val videoStepCaps = ConcurrentHashMap<String, Int>()
 
+    /** The size each held video URL was resolved for ([VideoQuality.AUTO] when absent), so a newly chosen size resolves again. */
+    private val videoCaps = ConcurrentHashMap<String, Int>()
+
+    /** The video-only formats each song's picture is offered in, for the quality list. */
+    private val videoOffers = ConcurrentHashMap<String, List<VideoOffer>>()
+
     /** The lightest picture rung worth showing, in kbps: at or under it a stall step-down has nowhere left to go. */
     private const val VIDEO_STEP_FLOOR_KBPS = 450
 
@@ -1405,6 +1440,7 @@ object StreamResolver {
         if (stream != null) {
             videoUrls[videoId] = stream.url
             videoKbps[videoId] = stream.kbps
+            videoCaps[videoId] = VideoQuality.AUTO
             return true
         }
         if (answered && !offered) noVideo += videoId
@@ -1416,8 +1452,25 @@ object StreamResolver {
 
     private fun rememberVideo(response: JsonObject) {
         val id = response["videoDetails"]?.jsonObject?.str("videoId") ?: return
+        val pictures = videoFormatList(response).filter { !it.muxed }
+        if (pictures.isNotEmpty()) videoOffers[id] = pictures.map { VideoOffer(it.mimeType, it.width, it.height, it.kbps) }
         val best = rankVideoFormats(response).firstOrNull { !it.muxed } ?: return
         videos[id] = best
+    }
+
+    /**
+     * The sizes an InnerTubeX extraction says [videoId] is offered at, kept
+     * for the quality list when no client response has listed its formats.
+     * Only heights come back, so each is taken to share the served picture's
+     * codec and shape.
+     */
+    private fun rememberOffers(videoId: String, found: InnerTubeXResolver.Extracted) {
+        if (videoOffers[videoId].orEmpty().isNotEmpty()) return
+        val heights = (found.availableHeights + found.height).filter { it > 0 }.distinct()
+        if (heights.isEmpty()) return
+        videoOffers[videoId] = heights.map { h ->
+            VideoOffer(found.mimeType, if (found.height > 0) found.width * h / found.height else 0, h)
+        }
     }
 
     private fun rememberLoudness(response: JsonObject) {
@@ -1498,13 +1551,18 @@ object StreamResolver {
      * first — a rung over budget still beats no picture, and the cheapest
      * such rung is the least wrong. [rankByQuality]'s ladder, for pictures.
      */
-    private fun rankVideoForPlayback(response: JsonObject, maxKbps: Int): List<Video> {
+    private fun rankVideoForPlayback(response: JsonObject, maxKbps: Int, cap: Int = VideoQuality.AUTO): List<Video> {
         val pictures = videoFormatList(response).filter { !it.muxed }
         // Only formats this phone can decode at their size; all of them if it seems to decode none,
         // since then the codec list is what's wrong.
         val playable = pictures.filter { VideoDecoders.canPlay(it.mimeType, it.width, it.height) }.ifEmpty { pictures }
-        val (within, over) = playable.partition { it.kbps <= maxKbps }
         val order = compareByDescending<Video> { it.url != null }
+        // A size the listener chose: by size, not bitrate. Sorted unciphered-first beforehand,
+        // so a tie keeps that order.
+        if (cap > VideoQuality.AUTO) {
+            return VideoQuality.rankForCap(playable.sortedWith(order), cap, { VideoQuality.rungOf(it.width, it.height) }, { it.kbps })
+        }
+        val (within, over) = playable.partition { it.kbps <= maxKbps }
         return within.sortedWith(compareByDescending<Video> { it.kbps }.then(order)) +
                 over.sortedWith(compareBy<Video> { it.kbps }.then(order))
     }
@@ -2008,7 +2066,7 @@ object StreamResolver {
         if (url.toHttpUrlOrNull()?.host?.endsWith("googlevideo.com") != true) return
         // A refused video URL is dropped too, so the next play re-resolves it
         // instead of failing on the same dead address.
-        videoUrls.filterValues { it == url }.keys.forEach { videoKbps.remove(it) }
+        videoUrls.filterValues { it == url }.keys.forEach { videoKbps.remove(it); videoCaps.remove(it) }
         videoUrls.entries.removeAll { it.value == url }
         // A URL InnerTubeX minted is its refusal, not one of [CLIENTS]': it
         // excludes that client variant, and the next track starts on our walk.

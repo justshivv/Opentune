@@ -103,4 +103,13 @@ object PlaybackRequests {
     fun setVideoMode(videoId: String, on: Boolean) {
         _videoMode.tryEmit(videoId to on)
     }
+
+    private val _videoQuality = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 1)
+    /** Songs whose music video should move onto the picture size now chosen. */
+    val videoQuality: kotlinx.coroutines.flow.SharedFlow<String> = _videoQuality
+
+    /** The chosen video size changed: if [videoId] is playing its video, it moves to that size where it stands. */
+    fun setVideoQuality(videoId: String) {
+        _videoQuality.tryEmit(videoId)
+    }
 }

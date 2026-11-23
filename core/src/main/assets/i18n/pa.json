@@ -3626,5 +3626,19 @@
 "…and {0} more": "…ਅਤੇ {0} ਹੋਰ",
 "Lyrics line stays": "ਗੀਤ ਦੀ ਲਾਈਨ ਬਣੀ ਰਹਿੰਦੀ ਹੈ",
 "While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "ਜਦੋਂ Canvas ਸਕ੍ਰੀਨ ਉੱਤੇ ਛਾ ਜਾਂਦਾ ਹੈ, ਤਾਂ ਮੌਜੂਦਾ ਗੀਤ ਦੀ ਲਾਈਨ ਕੰਟਰੋਲਾਂ ਨਾਲ ਸਰਕਣ ਦੀ ਬਜਾਏ ਸਿਰਲੇਖ ਦੇ ਹੇਠਾਂ ਬਣੀ ਰਹਿੰਦੀ ਹੈ।",
-"Only with Canvas takes the screen on": "ਸਿਰਫ਼ 'Canvas takes the screen' ਚਾਲੂ ਹੋਣ 'ਤੇ"
+"Only with Canvas takes the screen on": "ਸਿਰਫ਼ 'Canvas takes the screen' ਚਾਲੂ ਹੋਣ 'ਤੇ",
+"Exit full screen": "ਪੂਰੀ ਸਕ੍ਰੀਨ ਤੋਂ ਬਾਹਰ ਨਿਕਲੋ",
+"Video quality": "ਵੀਡੀਓ ਕੁਆਲਿਟੀ",
+"Playing at {0}": "{0} ਵਿੱਚ ਚੱਲ ਰਿਹਾ ਹੈ",
+"{0} s": "{0} ਸ",
+"Fit": "ਫ਼ਿੱਟ",
+"Fill": "ਭਰੋ",
+"Fit the whole picture": "ਪੂਰੀ ਤਸਵੀਰ ਦਿਖਾਓ",
+"Fill the screen": "ਸਕ੍ਰੀਨ ਭਰੋ",
+"Video quality on Wi-Fi": "Wi-Fi 'ਤੇ ਵੀਡੀਓ ਕੁਆਲਿਟੀ",
+"Video quality on mobile data": "ਮੋਬਾਈਲ ਡਾਟਾ 'ਤੇ ਵੀਡੀਓ ਕੁਆਲਿਟੀ",
+"Auto · follows the connection": "ਆਟੋ · ਕਨੈਕਸ਼ਨ ਮੁਤਾਬਕ",
+"Auto": "ਆਟੋ",
+"Seek": "ਅੱਗੇ-ਪਿੱਛੇ",
+"The video couldn't play at {0}, so it's back on Auto": "ਵੀਡੀਓ {0} ਵਿੱਚ ਨਹੀਂ ਚੱਲਿਆ, ਇਸ ਲਈ ਵਾਪਸ ਆਟੋ 'ਤੇ ਹੈ"
 }
