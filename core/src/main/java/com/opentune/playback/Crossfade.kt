@@ -95,8 +95,8 @@ internal class Crossfade(
     @Volatile private var phase = Phase.IDLE
     /** The playing song went silent while the next one loaded: start now rather than at the mix point. */
     @Volatile private var urgent = false
-    /** The plan of the blend under way, for the transition view's clock. */
-    @Volatile private var blendPlan: MixPlan? = null
+    /** The transition view's clock through the blend under way, once the next song is heard. */
+    @Volatile private var blendClock: com.opentune.playback.mix.BlendClock? = null
 
     // The plan for the playing song, worked out once it's near its end.
     private var plan: MixPlan? = null
@@ -160,9 +160,9 @@ internal class Crossfade(
         // The playing song's time for the transition view; through a blend, the song coming in
         // carries it on, as it's what's heard.
         MixState.clock = {
-            val bp = blendPlan
+            val c = blendClock
             val t = tail?.player
-            if (bp != null && t != null && phase != Phase.LOADING) bp.mixAtMs + ((t.currentPosition - bp.inFromMs) * bp.outSpeed).toLong()
+            if (c != null && t != null && phase != Phase.LOADING) c.at(t.currentPosition)
             else main.currentPosition
         }
         ticker = scope.launch {
@@ -381,7 +381,6 @@ internal class Crossfade(
                 // 2. In, silent, on the beat, at its own loudness gain.
                 runCatching { t.level() }.onFailure { Log.w(TAG, "Couldn't set the next song's level", it) }
                 phase = Phase.BLENDING
-                blendPlan = p
                 MixState.start(label())
                 // From here on the player shows the song coming in, with its own time.
                 MixState.show(MixState.Showing(next, nextIndex,
@@ -393,6 +392,9 @@ internal class Crossfade(
                     return@launch
                 }
                 started = true
+                // The view's clock goes on from where the playing song is now, not the planned mix point.
+                val outNow = if (main.currentMediaItemIndex == playing) main.currentPosition else p.outEndMs
+                blendClock = com.opentune.playback.mix.BlendClock(outNow, tp.currentPosition, p.outSpeed)
                 if (p.beatMs != null && !urgent) putOnBeat(tp, p)
                 // 3. The blend, over what's left of the playing song.
                 val left = (p.outEndMs - main.currentPosition).coerceAtLeast(MIN_LEFT_MS)
@@ -445,7 +447,7 @@ internal class Crossfade(
                 MixState.end()
                 // That transition is over: the view waits for the next one to be planned.
                 if (started) MixState.picture(null)
-                blendPlan = null
+                blendClock = null
                 phase = Phase.IDLE
                 urgent = false
                 // However it ended, the main player is left at full level. A bail has taken the second player already.

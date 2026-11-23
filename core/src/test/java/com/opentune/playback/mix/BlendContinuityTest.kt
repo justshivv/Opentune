@@ -39,4 +39,33 @@ class BlendContinuityTest {
             assertEquals(expected.second, actual.second, 0.0001f)
         }
     }
+
+    @Test fun aLateBlendCarriesOnFromWhereThePlayingSongWas() {
+        // Planned to meet at 180 s with the next song from 2 s; it started sounding at 182.5 s instead.
+        val clock = BlendClock(outMs = 182_500, inMs = 2_000, outSpeed = 1f)
+        assertEquals(182_500L, clock.at(2_000))
+        assertEquals(183_000L, clock.at(2_500))
+        assertEquals(184_000L, clock.at(3_500))
+    }
+
+    @Test fun aBeatSeekNeverSendsTheClockBack() {
+        val clock = BlendClock(outMs = 100_000, inMs = 0, outSpeed = 1f)
+        var last = clock.at(0)
+        val shown = mutableListOf<Long>()
+        // The next song is moved back 180 ms onto the beat after 300 ms, then plays on.
+        for (r in listOf(100L, 200L, 300L, 120L, 220L, 320L, 700L, 800L)) {
+            val t = clock.at(r)
+            assertTrue("$t after $last", t >= last)
+            last = t
+            shown += t
+        }
+        // Held at the seek, then on at the song's pace from there.
+        assertEquals(listOf(100_100L, 100_200L, 100_300L, 100_300L, 100_400L, 100_500L, 100_880L, 100_980L), shown)
+    }
+
+    @Test fun theClockRunsAtThePlayingSongsTempo() {
+        // The next song runs at the playing one's tempo: a second of it is 1.05 s of the playing song.
+        val clock = BlendClock(outMs = 50_000, inMs = 1_000, outSpeed = 1.05f)
+        assertEquals(51_050L, clock.at(2_000))
+    }
 }

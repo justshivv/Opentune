@@ -25,3 +25,26 @@ internal class BlendLevels(outgoing: Float = 1f, incoming: Float = 0f) {
         return outgoing to incoming
     }
 }
+
+/**
+ * The transition view's clock through a blend, on the playing song's time line. It starts
+ * where the playing song really was when the next song started sounding ([outMs]), and
+ * moves on as the next song plays from where it really was then ([inMs]), so a blend that
+ * started late doesn't send it back to the planned mix point. It never goes back: a seek
+ * that puts the next song on the beat moves it on from where it was, never back.
+ */
+internal class BlendClock(private val outMs: Long, private val inMs: Long, private val outSpeed: Float) {
+    private var shown = outMs
+    private var lift = 0L
+
+    /** The time to show while the next song is at [inNowMs]. */
+    fun at(inNowMs: Long): Long {
+        val t = outMs + ((inNowMs - inMs) * outSpeed).toLong() + lift
+        if (t < shown) {
+            lift += shown - t
+            return shown
+        }
+        shown = t
+        return t
+    }
+}
