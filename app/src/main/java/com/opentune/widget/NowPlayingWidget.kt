@@ -29,7 +29,12 @@ import com.opentune.R
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.model.Song
 import com.opentune.data.model.artworkAt
+import com.opentune.data.lyrics.LyricLine
+import com.opentune.data.lyrics.readsRightToLeft
+import com.opentune.data.settings.AppSettings
 import com.opentune.data.subsonic.Subsonic
+import com.opentune.lyrics.LyricsNow
+import com.opentune.lyrics.LyricsOutlet
 import com.opentune.playback.PlaybackService
 import com.opentune.playback.toSong
 import java.io.File
@@ -52,6 +57,10 @@ import kotlinx.coroutines.withContext
  * every key but play, so Previous and Next did nothing. The heart goes
  * straight to the library. The last song shown is kept, cover included, so
  * the widget isn't blank after a restart.
+ *
+ * With Lyrics on widgets, the larger ones (Album artwork, Studio, and Now
+ * playing two rows tall) show the sung line and the next under the title,
+ * from the lyrics the player already has; see [WidgetLyrics].
  */
 @OptIn(UnstableApi::class)
 open class NowPlayingWidget : AppWidgetProvider() {
@@ -106,6 +115,10 @@ open class NowPlayingWidget : AppWidgetProvider() {
         private var last: State? = null
         private var coverFor: String? = null
         private var coverJob: Job? = null
+        /** The lines shown under the title; only for the song they're from. */
+        private var lyrics: LyricsNow? = null
+        /** The saved cover, decoded once rather than at every line of lyrics. */
+        private var decodedCover: Pair<String, Bitmap>? = null
 
         /** Brings every placed widget up to date with [player]; cheap when nothing changed. */
         fun refresh(context: Context, player: Player?) {
@@ -165,12 +178,16 @@ open class NowPlayingWidget : AppWidgetProvider() {
             }
         }
 
-        private fun render(context: Context, state: State) {
+        private fun render(context: Context, state: State, only: Class<out NowPlayingWidget>? = null) {
             val manager = AppWidgetManager.getInstance(context)
             val cover = coverFile(context).takeIf {
                 state.videoId != null && it.exists() && state.thumbnailUrl != null &&
                     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("cover-thumbnail", null) == state.thumbnailUrl
-            }?.let { BitmapFactory.decodeFile(it.path) }
+            }?.let { file ->
+                val key = "${state.thumbnailUrl}@${file.lastModified()}"
+                decodedCover?.takeIf { it.first == key }?.second
+                    ?: BitmapFactory.decodeFile(file.path)?.also { decodedCover = key to it }
+            }
             val empty = state.videoId == null
             val designs = listOf(
                 NowPlayingWidget::class.java to R.layout.widget_now_playing,
@@ -178,6 +195,7 @@ open class NowPlayingWidget : AppWidgetProvider() {
                 StudioWidget::class.java to R.layout.widget_studio,
             )
             for ((provider, layout) in designs) {
+                if (only != null && provider != only) continue
                 val ids = manager.getAppWidgetIds(ComponentName(context, provider))
                 if (ids.isEmpty()) continue
                 for (id in ids) {
@@ -194,6 +212,7 @@ open class NowPlayingWidget : AppWidgetProvider() {
                         val tall = RemoteViews(context.packageName, R.layout.widget_now_playing_tall)
                         applyState(tall, context, state, cover, empty,
                             showLike = !empty, showPrevious = true)
+                        applyLyrics(tall, state, titleLines = 1)
                         RemoteViews(mapOf(
                             SizeF(180f, 40f) to compact,
                             SizeF(180f, 145f) to tall,
@@ -208,6 +227,7 @@ open class NowPlayingWidget : AppWidgetProvider() {
                             // Keep real space for the song title on narrow launcher cells.
                             showLike = !empty && (!isNowPlaying || useTall || width >= 420),
                             showPrevious = !isNowPlaying || useTall || width >= 360)
+                        if (!isNowPlaying || useTall) applyLyrics(v, state, titleLines = if (isNowPlaying) 1 else 2)
                         v
                     }
                     manager.updateAppWidget(id, views)
@@ -257,6 +277,70 @@ open class NowPlayingWidget : AppWidgetProvider() {
         }
 
         /**
+         * The sung line and the next under the title, or neither: with the setting off, no synced
+         * lyrics, or lines from another song than [state]'s. The title keeps to one line while
+         * they show, so they fit; [titleLines] is what it takes otherwise.
+         */
+        private fun applyLyrics(views: RemoteViews, state: State, titleLines: Int) {
+            val shown = lyrics?.takeIf {
+                AppSettings.lyrics.value.onWidgets && state.videoId != null && it.videoId == state.videoId &&
+                    (it.current != null || it.next != null)
+            }
+            val now = shown?.current
+            val next = shown?.next
+            views.setTextViewText(R.id.widget_lyric_now, now?.let(::lyricText).orEmpty())
+            views.setTextViewText(R.id.widget_lyric_next, next?.let(::lyricText).orEmpty())
+            // Through a break nothing is sung: the next line waits on its own row.
+            views.setViewVisibility(R.id.widget_lyric_now, if (shown != null) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.widget_lyric_next, if (next != null) View.VISIBLE else View.GONE)
+            views.setInt(R.id.widget_title, "setMaxLines", if (shown != null) 1 else titleLines)
+        }
+
+        /** A right-to-left line gets a right-to-left mark in front, so it starts at the right even when it opens with a Latin word. */
+        internal fun lyricText(line: LyricLine): String = if (readsRightToLeft(line)) "\u200F" + line.text else line.text
+
+        private fun tall(manager: AppWidgetManager, id: Int): Boolean {
+            val options = manager.getAppWidgetOptions(id)
+            return maxOf(options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0), options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)) >= TALL_DP
+        }
+
+        /** Whether any placed widget has room for lyrics: Album artwork, Studio, or Now playing two rows tall. */
+        internal fun hasLyricRoom(context: Context): Boolean {
+            val manager = AppWidgetManager.getInstance(context) ?: return false
+            fun ids(provider: Class<*>) = manager.getAppWidgetIds(ComponentName(context, provider))
+            return ids(AlbumArtWidget::class.java).isNotEmpty() || ids(StudioWidget::class.java).isNotEmpty() ||
+                ids(NowPlayingWidget::class.java).any { tall(manager, it) }
+        }
+
+        /**
+         * Shows [now] under the title, changing only the two lines where the widget allows it.
+         * From Android 12 the Now playing widget hands the launcher a layout per size, which a
+         * partial update can't reach, so that one is sent whole, cover and all.
+         */
+        internal fun showLyrics(context: Context, now: LyricsNow?) {
+            if (now == lyrics) return
+            lyrics = now
+            val state = last ?: load(context)
+            val manager = AppWidgetManager.getInstance(context) ?: return
+            for ((provider, layout) in listOf(AlbumArtWidget::class.java to R.layout.widget_album_art, StudioWidget::class.java to R.layout.widget_studio)) {
+                val ids = manager.getAppWidgetIds(ComponentName(context, provider))
+                if (ids.isEmpty()) continue
+                val views = RemoteViews(context.packageName, layout)
+                applyLyrics(views, state, titleLines = 2)
+                manager.partiallyUpdateAppWidget(ids, views)
+            }
+            val tallOnes = manager.getAppWidgetIds(ComponentName(context, NowPlayingWidget::class.java)).filter { tall(manager, it) }
+            if (tallOnes.isEmpty()) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                render(context, state, only = NowPlayingWidget::class.java)
+            } else {
+                val views = RemoteViews(context.packageName, R.layout.widget_now_playing_tall)
+                applyLyrics(views, state, titleLines = 1)
+                manager.partiallyUpdateAppWidget(tallOnes.toIntArray(), views)
+            }
+        }
+
+        /**
          * A media key for the player service. Play is a foreground start, since it may have to
          * start the service and Media3 puts it in the foreground as soon as play is asked for.
          * The others go to a service that is already running; a foreground start for them would
@@ -294,6 +378,8 @@ open class NowPlayingWidget : AppWidgetProvider() {
         }
 
         private const val COVER_PX = 384
+        /** From this height (dp) the Now playing widget is two rows, with room for lyrics. */
+        private const val TALL_DP = 145
         private const val LIKE_SAVE_MS = 2_000L
     }
 }
@@ -301,3 +387,16 @@ open class NowPlayingWidget : AppWidgetProvider() {
 /** Artwork-first and spacious transport variants, sharing playback and durable state. */
 class AlbumArtWidget : NowPlayingWidget()
 class StudioWidget : NowPlayingWidget()
+
+/**
+ * Lyrics on widgets: the sung line and the next, at most one change a second, since a
+ * launcher can't take widget updates any faster; nothing between lines.
+ */
+internal object WidgetLyrics : LyricsOutlet {
+    override val minIntervalMs = 1_000L
+
+    override fun wanted(context: Context, playing: Boolean): Boolean =
+        AppSettings.lyrics.value.onWidgets && NowPlayingWidget.hasLyricRoom(context)
+
+    override fun show(context: Context, now: LyricsNow?) = NowPlayingWidget.showLyrics(context, now)
+}

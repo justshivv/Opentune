@@ -62,6 +62,15 @@
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:text="@string/widget_open" />
+
+                <!-- The sung line and the next (Lyrics on widgets); hidden otherwise. -->
+                <TextView
+                    android:id="@+id/widget_lyric_now"
+                    style="@style/WidgetLyricNow" />
+
+                <TextView
+                    android:id="@+id/widget_lyric_next"
+                    style="@style/WidgetLyricNext" />
             </LinearLayout>
 
             <ImageButton

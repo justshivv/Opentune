@@ -1001,6 +1001,10 @@ data class LyricsSettings(
     val translateTarget: String = "",
     /** Per-song source picked from the player's "Lyrics source"; the others aren't asked first. */
     val chosen: Map<String, LyricsSource> = emptyMap(),
+    /** The sung line and the next on the larger home-screen widgets. */
+    val onWidgets: Boolean = false,
+    /** A small pill over other apps with the sung line, while music plays and the app is in the background. */
+    val floating: Boolean = false,
 ) {
     /**
      * The saved order, with any source added since appended at the end; lrc.red

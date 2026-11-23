@@ -259,9 +259,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             // A station has no fixed song to look lyrics up for.
             if (com.opentune.data.radio.Radio.isRadio(song.videoId)) {
                 _lyrics.value = LyricsState.NotFound
+                com.opentune.lyrics.NowPlayingLyrics.set(song.videoId, null)
                 return@collectLatest
             }
             _lyrics.value = LyricsState.Loading
+            com.opentune.lyrics.NowPlayingLyrics.set(song.videoId, null)
             // LRCLIB matches on duration, and the player's figure is exact
             // where the row's "3:45" is rounded. Without it any version's
             // lyrics can match, so wait for it while the stream starts. It
@@ -285,6 +287,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             // repository asks again a little later and sends better lyrics on.
             LyricsRepository.lyricsUpdates(song.videoId, song.title, song.artist, duration).collect { found ->
                 _lyrics.value = found?.let(LyricsState::Found) ?: LyricsState.NotFound
+                // The widgets and floating lyrics show these too, rather than looking them up again.
+                com.opentune.lyrics.NowPlayingLyrics.set(song.videoId, found)
             }
         }
     }
