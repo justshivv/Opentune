@@ -377,6 +377,16 @@ object StreamResolver {
     }
 
     /**
+     * Forgets [videoId]'s held picture after it failed to play, so the next
+     * switch to the video resolves a fresh one. The step-down cap stays: the
+     * connection that needed it hasn't changed.
+     */
+    fun forgetVideo(videoId: String) {
+        videoUrls.remove(videoId)
+        videoKbps.remove(videoId)
+    }
+
+    /**
      * Steps [videoId]'s picture down after a stall: the held stream is
      * forgotten and the next resolve is capped near the rung under the one
      * that stalled, for the rest of the session. False when there is no
@@ -413,6 +423,12 @@ object StreamResolver {
                 TrackLog.w(TAG, "InnerTubeX video failed for $videoId: ${e.javaClass.simpleName}: ${e.message}")
                 return null
             } ?: return null
+            if (!VideoDecoders.canPlay(found.mimeType)) {
+                // A picture this phone has no decoder for: the walk below ranks the formats
+                // itself and keeps to the ones it can show.
+                TrackLog.w(TAG, "InnerTubeX video for $videoId is ${found.mimeType}, which this phone can't decode")
+                return null
+            }
             if (probe(found.url, expectVideo = true) == Probe.OK) {
                 if (found.kbps > maxKbps) {
                     // Playable, but heavier than the asking connection can
@@ -1483,7 +1499,11 @@ object StreamResolver {
      * such rung is the least wrong. [rankByQuality]'s ladder, for pictures.
      */
     private fun rankVideoForPlayback(response: JsonObject, maxKbps: Int): List<Video> {
-        val (within, over) = videoFormatList(response).filter { !it.muxed }.partition { it.kbps <= maxKbps }
+        val pictures = videoFormatList(response).filter { !it.muxed }
+        // Only formats this phone can decode at their size; all of them if it seems to decode none,
+        // since then the codec list is what's wrong.
+        val playable = pictures.filter { VideoDecoders.canPlay(it.mimeType, it.width, it.height) }.ifEmpty { pictures }
+        val (within, over) = playable.partition { it.kbps <= maxKbps }
         val order = compareByDescending<Video> { it.url != null }
         return within.sortedWith(compareByDescending<Video> { it.kbps }.then(order)) +
                 over.sortedWith(compareBy<Video> { it.kbps }.then(order))

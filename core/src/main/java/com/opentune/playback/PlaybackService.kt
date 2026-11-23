@@ -3140,7 +3140,8 @@ class PlaybackService : MediaLibraryService() {
         val player = mediaSession?.player as? ExoPlayer ?: return
         val item = player.currentMediaItem ?: return
         val uri = item.localConfiguration?.uri ?: return
-        if (!isVideoUri(uri)) return
+        // Once prepared, the item reads as its picture side (the merged source's lead).
+        if (!isVideoUri(uri) && !isVideoOnlyUri(uri)) return
         if (videoStepOf(uri) >= MAX_VIDEO_STEPS) return
         // Only mid-song: the start and a seek buffer by design.
         if (player.currentPosition < STALL_MIN_POSITION_MS) return
@@ -3258,6 +3259,37 @@ class PlaybackService : MediaLibraryService() {
                     }
                 }
             }
+            return
+        }
+        val raw = item.localConfiguration?.uri
+        if (raw != null && (isVideoUri(raw) || isVideoOnlyUri(raw))) {
+            // The music video wouldn't play (no stream unlocked, the link was refused, or
+            // this phone can't decode it). The song itself is fine: back to its audio at the
+            // same place, out of video mode, rather than the retry and skip below, which
+            // took the listener to the next song for tapping Video. The held picture is
+            // forgotten, so the next tap resolves afresh.
+            Log.w(TAG, "Music video for $mediaId failed (${error.errorCodeName}); back to the song")
+            StreamResolver.forgetVideo(mediaId)
+            // The video's cache key doesn't say which format filled it: a half-cached
+            // picture from one format, finished from another, never parses. Cleared, so
+            // the next try starts clean.
+            val cache = AudioCache.get(this)
+            scope.launch(Dispatchers.IO) {
+                (0..MAX_VIDEO_STEPS).forEach { step ->
+                    runCatching { cacheKeyOf(videoOnlyUri(mediaId, step))?.let(cache::removeResource) }
+                }
+            }
+            if (videoModeSongId == mediaId) videoModeSongId = null
+            val back = audioUriFor(mediaId)
+            if (videoAudioStash?.first == mediaId) videoAudioStash = null
+            val index = player.currentMediaItemIndex
+            val position = player.currentPosition
+            swappingTo = mediaId
+            player.replaceMediaItem(index, item.buildUpon().setUri(back).setMimeType(null).build())
+            updateExternalStats()
+            applyLoudness()
+            player.seekTo(index, position)
+            player.prepare()
             return
         }
         if (uri != null && (isUpgradedUri(uri) || externalStreamKeyOf(uri) != null)) {

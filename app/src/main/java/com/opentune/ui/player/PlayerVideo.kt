@@ -54,7 +54,7 @@ internal fun VideoSurface(connection: PlayerConnection, modifier: Modifier = Mod
         view.addOnLayoutChangeListener(layout)
         onDispose {
             view.removeOnLayoutChangeListener(layout)
-            connection.setVideoTextureView(null)
+            connection.clearVideoTextureView(view)
         }
     }
     BoxWithConstraints(

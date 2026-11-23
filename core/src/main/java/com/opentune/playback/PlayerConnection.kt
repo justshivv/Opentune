@@ -262,6 +262,7 @@ class PlayerConnection(private val context: Context) {
         }
         newController.addListener(listener)
         controller = newController
+        videoView?.let(newController::setVideoTextureView)
         refresh(newController)
         listener.onTracksChanged(newController.currentTracks)
         _connected.value = true
@@ -481,11 +482,28 @@ class PlayerConnection(private val context: Context) {
         _videoMode.value = on
     }
 
-    /** Gives the player a view to draw the playing song's video picture into, or takes it back. */
-    fun setVideoTextureView(view: TextureView?) {
-        val controller = controller ?: return
-        if (view == null) controller.clearVideoTextureView(null) else controller.setVideoTextureView(view)
+    /** Gives the player a view to draw the playing song's video picture into. */
+    fun setVideoTextureView(view: TextureView) {
+        videoView = view
+        controller?.setVideoTextureView(view)
     }
+
+    /**
+     * Takes [view] back from the player, if it is still the one drawn into. Media3 ignores a
+     * clear with no view named, so the view leaving has to say which it is; and a newer view
+     * already set is left alone.
+     */
+    fun clearVideoTextureView(view: TextureView) {
+        if (videoView === view) videoView = null
+        controller?.clearVideoTextureView(view)
+    }
+
+    /**
+     * The view the picture should be drawn into, kept so a controller that
+     * connects (or reconnects) after the view appeared is handed it too;
+     * otherwise the picture stayed blank until the player was reopened.
+     */
+    private var videoView: TextureView? = null
 
     fun toggleShuffle() {
         val controller = controller ?: return

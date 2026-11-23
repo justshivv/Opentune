@@ -194,14 +194,13 @@ fun PlayerBackdrop(
     // With the setting on, the full-screen cover's own colour is the backdrop:
     // the cover fades into itself and the player reads as one surface.
     val matched = if (ui.coverColorBackground && fullCover) seed else null
-    if (style == PlayerBackground.AMOLED) {
-        Box(modifier.background(Color.Black))
-        return
-    }
+    // Pure black: no colours, no Canvas and no full cover, but a music video still
+    // shows in the cover's place (it did before the video took that place).
+    val amoled = style == PlayerBackground.AMOLED
     // The cover's own colours, not the scheme's turned ones, so each background looks like the cover.
     val tones = rememberCoverTones(artworkUrl)
-    Box(modifier.background(matched ?: tones.base)) {
-        if (matched == null) {
+    Box(modifier.background(if (amoled) Color.Black else matched ?: tones.base)) {
+        if (matched == null && !amoled) {
             when (style) {
                 PlayerBackground.AMOLED -> Unit
                 PlayerBackground.ECHO_GLOW -> EchoGlowBackground(animate && playing, Modifier.matchParentSize(), tones.lights, tones.base)
@@ -246,7 +245,7 @@ fun PlayerBackdrop(
                 }
             }
         }
-        if (canvas != null) {
+        if (canvas != null && !amoled) {
             CanvasBackdrop(canvas, canvasPlaying, titleTop, canvasBehindText, Modifier.matchParentSize())
         } else if (fullCover && musicVideo) {
             // The music video in the full cover's place: the same span from the top
@@ -276,7 +275,7 @@ fun PlayerBackdrop(
                     Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = com.opentune.ui.components.FULL_COVER_TOP_SHADE), 0.2f to Color.Transparent)))
                 }
             }
-        } else if (fullCover) {
+        } else if (fullCover && !amoled) {
             CoverSwap(CoverShown(artworkUrl, index, songId), change) { url, motion ->
                 // The cover runs from the top down to just behind the title and
                 // fades out there into whatever backdrop is below it, with a light
