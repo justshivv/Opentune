@@ -149,6 +149,7 @@ class PageShots {
         preloadMoods()
         Library.useFile(java.nio.file.Files.createTempDirectory("pageshots").resolve("desktop.json").toFile())
         songs(16).forEach { Library.played(it) }
+        Library.settle()
         shoot("page-home", 1660, 1800, 14_000) { Page { HomePage(onOpen = {}, onOpenAny = {}) } }
         shoot("page-home-narrow", 800, 1400, 12_000) { Page { HomePage(onOpen = {}, onOpenAny = {}) } }
     }
@@ -169,6 +170,7 @@ class PageShots {
         list.drop(5).forEach { Library.addToPlaylist(id, it) }
         Library.createPlaylist("Gym").also { g -> list.take(3).forEach { Library.addToPlaylist(g, it) } }
         list.forEach { Library.played(it) }
+        Library.settle()
         listOf("songs", "artists", "albums", "playlists", "overview").forEachIndexed { i, name ->
             shoot("page-library-$name", 1660, 1100, 4_000) { Page { LibraryHome({}, {}, {}, startTab = i) } }
         }
@@ -205,6 +207,7 @@ class PageShots {
         list.take(3).forEach { Library.setLiked(it, true) }
         Library.createPlaylist("Late night drive").also { id -> list.drop(4).take(5).forEach { Library.addToPlaylist(id, it) } }
         list.forEach { Library.played(it) }
+        Library.settle()
         AccountLibrary.preload(signedInLibrary())
         try {
             listOf("songs", "artists", "albums", "playlists", "overview").forEachIndexed { i, name ->

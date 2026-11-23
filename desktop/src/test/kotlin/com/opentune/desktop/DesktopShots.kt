@@ -98,6 +98,7 @@ class DesktopShots {
             "fRh_vgS2dFE" to ("Sorry" to "Justin Bieber"), "kJQP7kiw5Fk" to ("Despacito" to "Luis Fonsi"),
         ).map { (id, t) -> com.opentune.data.model.Song(id, t.first, t.second, "https://i.ytimg.com/vi/$id/hqdefault.jpg", "3:30") }
         listened.forEachIndexed { i, s -> repeat(listened.size - i) { Library.played(s) } }
+        Library.settle()
         listened.take(5).forEach { Library.setLiked(it, true) }
         Library.createPlaylist("Late night drive").also { id -> listened.take(6).forEach { Library.addToPlaylist(id, it) } }
         Library.createPlaylist("Gym").also { id -> listened.drop(4).forEach { Library.addToPlaylist(id, it) } }

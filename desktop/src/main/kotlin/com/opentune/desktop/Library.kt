@@ -67,12 +67,22 @@ object Library {
     init { publish() }
 
     /** For tests: keeps the library beside [at] (the old JSON file's place) instead. */
-    @Synchronized
     internal fun useFile(at: File) {
-        runCatching { db.close() }
-        legacy = at
-        db = open(at)
-        publish()
+        settle()
+        synchronized(this) {
+            runCatching { db.close() }
+            legacy = at
+            db = open(at)
+            publish()
+        }
+    }
+
+    /** Plays being saved, one at a time and in order, off the window's thread. */
+    private val plays = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "library-plays").apply { isDaemon = true } }
+
+    /** Waits for the plays already recorded to be saved. Not from [plays]' own thread. */
+    internal fun settle() {
+        runCatching { plays.submit {}.get() }
     }
 
     fun isLiked(id: String) = _liked.value.any { it.videoId == id }
@@ -91,9 +101,41 @@ object Library {
         AccountLibrary.sendLike(song, liked)
     }
 
-    fun played(song: Song) = write {
-        keep(song.saved())
-        exec("INSERT INTO plays(id, at) VALUES (?, ?)", song.videoId, System.currentTimeMillis())
+    /**
+     * Records a play: saved in the background, then the song moved to the front of [recent]. Each
+     * song start did this on the window's thread and read the whole library back, liked songs,
+     * playlists and the recent list from every play; with a big library that was a stall each time.
+     */
+    fun played(song: Song) {
+        val at = System.currentTimeMillis()
+        plays.execute { record(song, at) }
+    }
+
+    @Synchronized
+    private fun record(song: Song, at: Long) {
+        runCatching {
+            db.autoCommit = false
+            try {
+                db.keep(song.saved())
+                db.exec("INSERT INTO plays(id, at) VALUES (?, ?)", song.videoId, at)
+                db.commit()
+            } catch (e: Exception) {
+                db.rollback()
+                throw e
+            } finally {
+                db.autoCommit = true
+            }
+            // Only what changed: the song as saved now (details it lacked kept from before), at the front.
+            val now = db.query("SELECT $SONG FROM songs s WHERE s.id = ?", song.videoId, row = ::song).firstOrNull() ?: return
+            _recent.value = (listOf(now) + _recent.value.filter { it.videoId != now.videoId }).take(RECENT)
+            if (_liked.value.any { it.videoId == now.videoId && it != now }) {
+                _liked.value = _liked.value.map { if (it.videoId == now.videoId) now else it }
+            }
+            val saved = now.saved()
+            if (_playlists.value.any { p -> p.songs.any { it.id == saved.id && it != saved } }) {
+                _playlists.value = _playlists.value.map { p -> if (p.songs.none { it.id == saved.id }) p else p.copy(songs = p.songs.map { if (it.id == saved.id) saved else it }) }
+            }
+        }.onFailure { System.err.println("Library: couldn't save a play: $it") }
     }
 
     /** A new, empty playlist; its id is returned. */
@@ -135,8 +177,13 @@ object Library {
      * stats, mixes and speed dial the shared code makes from it. At most
      * [limit], read fresh each time.
      */
-    @Synchronized
-    fun history(limit: Int = 10_000): List<com.opentune.data.history.PlayRecord> = runCatching {
+    fun history(limit: Int = 10_000): List<com.opentune.data.history.PlayRecord> {
+        // The plays just recorded included.
+        settle()
+        return synchronized(this) { readHistory(limit) }
+    }
+
+    private fun readHistory(limit: Int): List<com.opentune.data.history.PlayRecord> = runCatching {
         db.query(
             "SELECT s.id, s.title, s.artist, s.cover, s.length, p.at FROM plays p JOIN songs s ON s.id = p.id ORDER BY p.at DESC, p.rowid DESC LIMIT ?",
             limit,

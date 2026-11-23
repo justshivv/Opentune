@@ -132,6 +132,24 @@ class DesktopTest {
         assertFalse(Library.isLiked(song.videoId))
     }
 
+    @Test fun aPlayIsSavedInTheBackgroundAndShownFirstInRecent() {
+        val file = Files.createTempDirectory("opentune").resolve("desktop.json").toFile()
+        Library.useFile(file)
+        Library.setLiked(Song("ccccccccccc", "Lanterns", "River Choir", "https://example.com/c.jpg", "3:30"), true)
+        Library.played(Song("ddddddddddd", "Paper Boats", "River Choir", null))
+        // Played from somewhere that knows less: the cover saved before stays.
+        Library.played(Song("ccccccccccc", "Lanterns", "River Choir", null))
+        Library.settle()
+        assertEquals(listOf("ccccccccccc", "ddddddddddd"), Library.recent.value.map { it.videoId })
+        assertEquals("https://example.com/c.jpg", Library.recent.value.first().thumbnailUrl)
+        assertEquals("https://example.com/c.jpg", Library.liked.value.single().thumbnailUrl)
+        assertEquals(listOf("ccccccccccc", "ddddddddddd"), Library.history().map { it.videoId })
+        // What the in-memory list shows is what the database reads back.
+        val shown = Library.recent.value
+        Library.useFile(file)
+        assertEquals(shown, Library.recent.value)
+    }
+
     @Test fun playlistsKeepTheirSongsInOrderBetweenRuns() {
         val file = Files.createTempDirectory("opentune").resolve("desktop.json").toFile()
         Library.useFile(file)
