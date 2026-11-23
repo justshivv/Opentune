@@ -1072,6 +1072,7 @@ fun PlayerLayout(
                         onLyrics = { toggle(Pane.LYRICS) },
                         onQueue = { toggle(Pane.QUEUE) },
                         showLines = state.ui.lyricsPreview && pane != Pane.LYRICS,
+                        videoSurface = videoSurface,
                         side = when (pane) {
                             Pane.COVER -> null
                             Pane.LYRICS -> { ->

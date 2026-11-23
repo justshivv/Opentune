@@ -95,6 +95,8 @@ internal fun LandscapePlayer(
     side: (@Composable () -> Unit)? = null,
     /** Off while the full lyrics are on the left, so the lines aren't shown twice. */
     showLines: Boolean = true,
+    /** The playback player's video picture, shown in the cover's place in video mode. */
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val song = state.song
     val scheme = MaterialTheme.colorScheme
@@ -114,6 +116,14 @@ internal fun LandscapePlayer(
     ) {
         if (side != null) {
             Box(Modifier.weight(1.1f).fillMaxHeight()) { side() }
+        } else if (state.videoMode) {
+            // The music video in the cover's place, as wide as it needs: turned on its side in
+            // video mode, the player used to show the still cover and no picture at all.
+            ArtworkSwipeArea(
+                onSwipeNext = actions.next,
+                onSwipePrevious = actions.previous,
+                modifier = Modifier.weight(1.1f).fillMaxHeight().clip(RoundedCornerShape(16.dp)),
+            ) { videoSurface() }
         } else {
             ArtworkSwipeArea(
                 onSwipeNext = actions.next,
@@ -160,7 +170,19 @@ internal fun LandscapePlayer(
                     RoundIcon(ImageVector.vectorResource(AppIcons.KeyboardArrowDown), "Close player", actions.collapse)
                 }
                 TimeBar(position, state.durationMs, actions.seekTo)
-                if (state.ui.sourcePill) SourceQualityBadge(song.videoId, state.audioFormat, onClick = onSignal, modifier = Modifier.align(Alignment.CenterHorizontally))
+                // The Song | Video switch, as on the upright player, beside the quality.
+                if (state.ui.sourcePill || state.videoAvailable) Row(
+                    Modifier.align(Alignment.CenterHorizontally),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (state.videoAvailable) SongVideoToggle(
+                        state.videoMode, actions.setVideoMode,
+                        isEpisode = com.opentune.data.podcasts.Podcasts.isEpisode(song.videoId) ||
+                            com.opentune.data.audiobooks.Audiobooks.isChapter(song.videoId),
+                    )
+                    if (state.ui.sourcePill) SourceQualityBadge(song.videoId, state.audioFormat, onClick = onSignal)
+                }
                 // The line being sung and the next, together above the controls, in the lyrics' own type.
                 val lines = if (showLines) rememberLyricLines(state.lyrics, lyricsPosition) else null
                 if (lines != null) LyricsPeek(lines, next = roomy, animate = animate, onClick = onLyrics)
