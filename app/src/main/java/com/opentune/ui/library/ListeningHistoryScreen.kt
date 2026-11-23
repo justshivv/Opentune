@@ -33,11 +33,14 @@ fun ListeningHistoryScreen(contentPadding: PaddingValues, actions: SongActions, 
     }
     val ordered = sorted.orEmpty()
     val songs = remember(ordered) { ordered.map { it.toSong() } }
+    // One formatter for the page, not a new one for each row as it scrolls into view.
+    val date = remember { java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item { PageHeader("Listening history", onBack = onBack) }
         if (sorted != null && songs.isEmpty()) item { Text("Your listening history will appear here.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge) }
-        itemsIndexed(ordered, key = { i, record -> "$i:${record.playedAt}:${record.videoId}" }) { i, record ->
-            val date = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM)
+        // Each song is listed once, so it is its own key: with the row's place in it, every key
+        // changed when a new listen came in at the top, and the list lost its rows' places.
+        itemsIndexed(ordered, key = { _, record -> record.videoId }) { i, record ->
             val day = date.format(java.util.Date(record.playedAt))
             if (i == 0 || day != date.format(java.util.Date(ordered[i - 1].playedAt))) {
                 Text(day, Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.titleSmall)
