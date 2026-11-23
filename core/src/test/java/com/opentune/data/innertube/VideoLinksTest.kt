@@ -55,6 +55,15 @@ class VideoLinksTest {
     @Test fun aVideoWithNothingLeftOutIsOnePiece() {
         val link = VideoLinks.check(204_000, "x", 205_000, emptyList())!!
         assertEquals(listOf(0L to 205_000L), link.pieces())
+        assertTrue(link.inOnePiece())
+    }
+
+    @Test fun aStretchLeftOutPartwayTakesTwoPiecesButAnIntroOne() {
+        // Believer's scene at 2:49: the picture would be in two pieces.
+        assertFalse(VideoLinks.check(204_000, "7wtfhZwyrcc", 217_000, segments)!!.inOnePiece())
+        // Cradles' second and a bit before the song starts: still one piece.
+        val intro = listOf(SponsorBlock.Segment(0, 1_125, "music_offtopic", "intro", 218_661))
+        assertTrue(VideoLinks.check(217_000, "KBtk5FUeJbk", 218_661, intro)!!.inOnePiece())
     }
 
     // Titles as YouTube gives them, not as YouTube Music's rows tidy them.

@@ -31,6 +31,13 @@ data class VideoLink(val videoId: String, val videoMs: Long, val gaps: List<Lyri
         return out
     }
 
+    /**
+     * Whether the picture runs in one piece: at most its start and its end left out.
+     * A stretch left out partway would take two pieces, and the player can't lay a
+     * picture in pieces over a song in one: refused, or stuck before loading anything.
+     */
+    fun inOnePiece(): Boolean = pieces().size <= 1
+
     /** How long the picture runs: the video without the stretches [pieces] leaves out. */
     fun pictureMs(): Long = pieces().sumOf { it.second - it.first }
 

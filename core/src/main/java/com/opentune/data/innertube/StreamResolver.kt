@@ -1437,6 +1437,10 @@ object StreamResolver {
                 TrackLog.d(TAG, "${video.videoId} isn't ${song.title}'s music video at its length")
                 continue
             }
+            if (!link.inOnePiece()) {
+                TrackLog.d(TAG, "${video.videoId} leaves out a stretch partway through, which the player can't play over ${song.title}")
+                continue
+            }
             // Its own title says what it is: a lyric video, a fan edit, a subtitled copy
             // aren't the song's music video. Watch queues pair a song with those too.
             val (title, channel) = aboutVideo(video.videoId) ?: continue
