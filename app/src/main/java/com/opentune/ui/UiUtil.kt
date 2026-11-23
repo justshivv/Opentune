@@ -45,6 +45,9 @@ fun ShelfItem.toSong(): Song? = videoId?.let {
 
 fun ShelfItem.type(): BrowseType? = browseId?.let(MusicRepository::typeOf)
 
+/** The album or playlist page this card opens, which can grow out of its cover; null for anything else. */
+fun ShelfItem.opens(): String? = browseId?.takeIf { type().let { it == BrowseType.ALBUM || it == BrowseType.PLAYLIST } }
+
 /** What a long press on this card opens: an album's or playlist's menu, or a song's. Artists have none. */
 fun ShelfItem.cardMenu(): com.opentune.ui.components.CardMenu? {
     val type = type()

@@ -476,14 +476,16 @@ private fun ColumnScope.ItemCardBody(
     explicit: Boolean,
     imageModifier: Modifier,
     onArtLoaded: ((Boolean) -> Unit)?,
+    /** On the cover itself, outside its frame (see [coverMorphCard]). */
+    coverModifier: Modifier = Modifier,
 ) {
     val round = type == BrowseType.ARTIST
     // The Poster layout's cards: rounder covers resting on a soft shadow, the name a size up.
     val poster = posterLayout()
-    val frame = if (round) CircleShape else if (poster) RoundedCornerShape(16.dp) else MaterialTheme.shapes.medium
+    val frame = cardFrame(type)
     Artwork(
         thumbnailUrl.artworkAt(CARD_ART_PX),
-        Modifier.fillMaxWidth().aspectRatio(1f)
+        Modifier.fillMaxWidth().aspectRatio(1f).then(coverModifier)
             .then(if (poster) Modifier.shadow(10.dp, frame, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f)) else Modifier),
         shape = frame,
         placeholder = when (type) {
@@ -515,6 +517,11 @@ private fun ColumnScope.ItemCardBody(
     }
 }
 
+/** The frame of a shelf card's cover: round for an artist, rounder in the Poster layout. */
+@Composable
+private fun cardFrame(type: BrowseType?): Shape =
+    if (type == BrowseType.ARTIST) CircleShape else if (posterLayout()) RoundedCornerShape(16.dp) else MaterialTheme.shapes.medium
+
 /** A card in a horizontal shelf: square art (round for artists), title, subtitle. */
 @Composable
 fun ItemCard(
@@ -532,7 +539,11 @@ fun ItemCard(
     onArtLoaded: ((Boolean) -> Unit)? = null,
     /** What a long press opens; nothing when null. */
     menu: CardMenu? = null,
+    /** The id of the album or playlist page this card opens, for the page to grow out of its cover (see [CoverMorph]). */
+    opens: String? = null,
 ) {
+    val morph = rememberCoverMorph(opens, cardFrame(type))
+    val open = if (morph == null) onClick else ({ morph.tap(); onClick() })
     val anchor = remember { MenuAnchor() }
     val view = androidx.compose.ui.platform.LocalView.current
     val haptics = rememberHaptics()
@@ -551,12 +562,12 @@ fun ItemCard(
             .menuAnchor(anchor, view)
             .clip(MaterialTheme.shapes.medium)
             .then(
-                if (menu == null) Modifier.clickable(onClick = onClick)
-                else Modifier.menuClickable(onClick = onClick, onLongClick = { haptics.press(); contextOpen = true }),
+                if (menu == null) Modifier.clickable(onClick = open)
+                else Modifier.menuClickable(onClick = open, onLongClick = { haptics.press(); contextOpen = true }),
             )
             .padding(CARD_INSET),
     ) {
-        ItemCardBody(title, subtitle, thumbnailUrl, type, explicit, imageModifier, onArtLoaded)
+        ItemCardBody(title, subtitle, thumbnailUrl, type, explicit, imageModifier, onArtLoaded, Modifier.coverMorphCard(morph))
     }
 }
 

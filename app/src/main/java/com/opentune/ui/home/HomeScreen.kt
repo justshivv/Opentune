@@ -83,6 +83,7 @@ import com.opentune.ui.components.Shelf
 import com.opentune.ui.components.ShelfPlaceholder
 import com.opentune.ui.components.SongListItem
 import com.opentune.ui.rememberLoader
+import com.opentune.ui.opens
 import com.opentune.ui.toSong
 import com.opentune.ui.type
 import com.opentune.ui.cardMenu
@@ -646,7 +647,7 @@ fun HomeShelfView(
         } else {
             if (covers == null) {
                 Shelf(title = shelf.title, subtitle = shelf.subtitle, items = shelf.items, action = action) { item ->
-                    ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) }, explicit = item.explicit, menu = item.cardMenu())
+                    ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) }, explicit = item.explicit, menu = item.cardMenu(), opens = item.opens())
                 }
             } else {
                 // By place in the shelf, since a shelf can hold the same item twice.
@@ -667,6 +668,7 @@ fun HomeShelfView(
                         imageModifier = motion.art,
                         onArtLoaded = motion.onArtLoaded,
                         menu = item.cardMenu(),
+                        opens = item.opens(),
                     )
                 }
             }

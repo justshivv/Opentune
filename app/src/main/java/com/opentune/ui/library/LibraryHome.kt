@@ -94,6 +94,7 @@ import com.opentune.ui.ScreenCache
 import com.opentune.ui.browse.SongActions
 import com.opentune.ui.components.AccountCopyOptions
 import com.opentune.ui.components.Artwork
+import com.opentune.ui.components.coverMorphCard
 import com.opentune.ui.components.FloatingDialog
 import com.opentune.ui.components.GlassIconButton
 import com.opentune.ui.components.MessageState
@@ -1048,10 +1049,13 @@ private const val LIST_FOLD = 5
 @Composable
 private fun PlaylistTile(row: LibraryPlaylistRow, modifier: Modifier = Modifier) {
     PinnableRow(row.pin, modifier) { onLongClick ->
-        Column(Modifier.clip(MaterialTheme.shapes.medium).then(Modifier.menuClickable(onClick = row.onClick, onLongClick = onLongClick)).padding(6.dp)) {
+        // The playlist's page grows out of its cover (see CoverMorph).
+        val morph = com.opentune.ui.components.rememberCoverMorph(row.pin, MaterialTheme.shapes.medium)
+        val cover = Modifier.fillMaxWidth().aspectRatio(1f).coverMorphCard(morph)
+        Column(Modifier.clip(MaterialTheme.shapes.medium).then(Modifier.menuClickable(onClick = { morph?.tap(); row.onClick() }, onLongClick = onLongClick)).padding(6.dp)) {
             if (row.local != null && row.url == null) com.opentune.ui.components.PlaylistCover(row.title,
-                row.local.songs.map { it.thumbnailUrl }, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.medium, named = false)
-            else Artwork(row.url.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.medium)
+                row.local.songs.map { it.thumbnailUrl }, cover, MaterialTheme.shapes.medium, named = false)
+            else Artwork(row.url.artworkAt(CARD_ART_PX), cover, MaterialTheme.shapes.medium)
             TileText(row.title, if (row.local != null) "${row.source} · ${row.subtitle}" else row.subtitle)
         }
     }

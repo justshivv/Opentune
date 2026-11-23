@@ -112,6 +112,7 @@ import com.opentune.ui.rememberLoader
 import com.opentune.ui.share.ListShare
 import com.opentune.ui.theme.animated
 import com.opentune.ui.theme.rememberArtworkSeed
+import com.opentune.ui.opens
 import com.opentune.ui.type
 import com.opentune.ui.cardMenu
 import androidx.compose.ui.res.vectorResource
@@ -643,7 +644,7 @@ private fun ArtistShelf(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, onSh
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(shelf.items) { item ->
-                ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) }, width = SHELF_CARD_WIDTH, explicit = item.explicit, menu = item.cardMenu())
+                ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) }, width = SHELF_CARD_WIDTH, explicit = item.explicit, menu = item.cardMenu(), opens = item.opens())
             }
         }
     }
@@ -751,6 +752,7 @@ fun ArtistItemsScreen(
                                 width = Dp.Unspecified,
                                 explicit = item.explicit,
                                 menu = item.cardMenu(),
+                                opens = item.opens(),
                             )
                         }
                     }
