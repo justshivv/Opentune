@@ -71,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import kotlin.math.roundToInt
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.Layout
@@ -204,6 +205,7 @@ fun FloatingCard(
         val themed = ui.sheetStyle != SheetStyle.BLUR
         val plain = ui.sheetStyle == SheetStyle.SOLID
         var frost by remember { mutableStateOf(if (ui.reduceBlur || themed) Frost.FAILED else Frost.PENDING) }
+        TransparentSheetNavBar()
         val windowFrost = FrostBehind(enabled = !ui.reduceBlur && !themed, standIn = frost != Frost.FAILED)
         val frosted = windowFrost || frost == Frost.READY
         val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
@@ -514,8 +516,10 @@ fun FloatingCard(
                             // the page, instead of stacking on top of it, so the handle
                             // sits right under the bar. The bottom room is the
                             // navigation bar's exactly, no more: the sheet's fill runs
-                            // under the bar, and its content stops at the bar's own
-                            // top edge, with no dead band of fill above it.
+                            // under the bar and the room is kept below the body for
+                            // the sheet's static ends and its actions row — the
+                            // body's scroller is measured past it and runs on under
+                            // the bar (see SheetBody's bottom bleed).
                             InsetsPx(10.dp.roundToPx(), ((10.dp * (1f - insideF)) + (barsTop * insideF)).roundToPx(), 10.dp.roundToPx(), barsBottom.roundToPx())
                         },
                 ) {
@@ -599,6 +603,7 @@ fun FloatingCard(
                             translationY = (1f - rise) * 16.dp.toPx()
                         },
                         measure = bodyMeasure,
+                        bottomBleed = if (actions == null) with(density) { barsBottom.roundToPx() } else 0,
                         content = content,
                     )
                     if (actions != null) {
@@ -676,9 +681,19 @@ private object SheetBodyScope : ColumnScope {
  * scroller answers with its whole content, and one that never disturbs the measure
  * already running. A child that can't answer (a lazy list) reports nothing, and the
  * card takes the height it was asked for, as it always has.
+ *
+ * The last child is measured with [bottomBleed] of extra height past the body's
+ * own, and the body still reports its own height without it: a child that fills
+ * the space it is given — a scroller — runs on under the navigation bar, whose
+ * background the sheet's window clears (see TransparentSheetNavBar), while a
+ * child that takes only its own height is measured exactly as before and never
+ * notices the offer. The card keeps the bar's room below the body (the inner
+ * insets in [FloatingCard]) for the sheet's static ends and its actions row;
+ * the bleed is passed as 0 when the sheet has actions, keeping that row's
+ * ground clear.
  */
 @Composable
-private fun SheetBody(modifier: Modifier = Modifier, measure: SheetBodyMeasure, content: @Composable ColumnScope.() -> Unit) {
+private fun SheetBody(modifier: Modifier = Modifier, measure: SheetBodyMeasure, bottomBleed: Int = 0, content: @Composable ColumnScope.() -> Unit) {
     Layout(content = { with(SheetBodyScope) { content() } }, modifier = modifier) { measurables, constraints ->
         val width = constraints.maxWidth
         val offered = constraints.maxHeight
@@ -702,10 +717,11 @@ private fun SheetBody(modifier: Modifier = Modifier, measure: SheetBodyMeasure, 
         val datas = measurables.map { it.parentData as? SheetChildData }
         val totalWeight = datas.fold(0f) { acc, data -> acc + (data?.weight ?: 0f) }
         val placeables = arrayOfNulls<Placeable>(measurables.size)
+        val last = measurables.lastIndex
         var unweighted = 0
         measurables.forEachIndexed { index, measurable ->
             if ((datas[index]?.weight ?: 0f) <= 0f) {
-                val laid = measurable.measure(Constraints(maxWidth = width, maxHeight = offered))
+                val laid = measurable.measure(Constraints(maxWidth = width, maxHeight = offered + if (index == last) bottomBleed else 0))
                 placeables[index] = laid
                 unweighted += laid.height
             }
@@ -716,7 +732,7 @@ private fun SheetBody(modifier: Modifier = Modifier, measure: SheetBodyMeasure, 
             if (weight > 0f) {
                 val share = if (totalWeight > 0f) (remaining * weight / totalWeight).roundToInt() else 0
                 placeables[index] = measurable.measure(
-                    Constraints(maxWidth = width, minHeight = if (datas[index]?.fill == true) share else 0, maxHeight = share),
+                    Constraints(maxWidth = width, minHeight = if (datas[index]?.fill == true) share else 0, maxHeight = share + if (index == last) bottomBleed else 0),
                 )
             }
         }
@@ -862,6 +878,34 @@ fun SheetButton(
  * either way. Returns whether the blur is on right now: the system can turn
  * cross-window blur off (battery saver, some animations off) and back on.
  */
+/**
+ * The phone's navigation bar shows through the sheet while one is open: the
+ * sheet runs edge to edge under the bar, so the bar's own background — the
+ * dialog window's, which nothing else sets — is cleared to transparent, and
+ * the system's contrast scrim behind the bar's controls with it. The sheet
+ * itself shows behind the bar's gesture line, the way the page behind the
+ * app shows behind it everywhere else (see SystemBars, which does the same
+ * for the activity's window). The window's own values are put back when the
+ * sheet goes away.
+ */
+@Suppress("DEPRECATION")
+@Composable
+private fun TransparentSheetNavBar() {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = (view.parent as? DialogWindowProvider)?.window
+        if (window == null) return@DisposableEffect onDispose { }
+        val oldColor = window.navigationBarColor
+        val oldContrast = if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced else false
+        window.navigationBarColor = Color.Transparent.toArgb()
+        if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
+        onDispose {
+            window.navigationBarColor = oldColor
+            if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = oldContrast
+        }
+    }
+}
+
 @Composable
 internal fun FrostBehind(
     enabled: Boolean,
