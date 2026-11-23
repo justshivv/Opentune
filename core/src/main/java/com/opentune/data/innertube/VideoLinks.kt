@@ -53,7 +53,12 @@ object VideoLinks {
         // "Official Audio" is a still of the cover, like the art track itself.
         "audio", "lyric", "lyrics", "cover", "live", "remix", "karaoke", "instrumental", "slowed", "sped", "reverb",
         "8d", "nightcore", "acoustic", "visualizer", "visualiser", "reaction", "tutorial", "edit",
+        // Fan-made pictures and subtitled copies.
+        "amv", "unofficial", "fanmade", "sub", "subs", "subbed", "subtitles", "letra", "traducida", "legendado",
     )
+
+    /** Words a channel's name adds to its artist's: "ImagineDragonsVEVO", "chandol - Topic". */
+    private val CHANNEL_SUFFIXES = listOf("vevo", "topic", "official", "music", "tv")
 
     /** How many search results are looked at for the song's video. */
     const val CANDIDATES = 3
@@ -64,13 +69,36 @@ object VideoLinks {
         val title = words(song.title)
         if (title.isBlank()) return false
         // A lyric video, a cover, a live take: not the song's own music video, though as long.
-        val other = words(video.title).split(' ').toSet()
-        if (NOT_THE_VIDEO.any { it in other && it !in title.split(' ') }) return false
+        if (notTheVideo(song.title, video.title)) return false
         val videoTitle = words(stripped(video.title))
         if (videoTitle != title && !videoTitle.endsWith(" $title") && !videoTitle.startsWith("$title ")) return false
         val artist = words(song.artist.split(',', '&').first())
         return artist.isBlank() || words(video.artist).contains(artist) || words(video.title).contains(artist)
     }
+
+    /** Whether a video titled [videoTitle] is something other than [songTitle]'s own music video: a lyric video, a cover, a fan edit. */
+    fun notTheVideo(songTitle: String, videoTitle: String): Boolean {
+        val own = words(songTitle).split(' ').toSet()
+        val other = words(videoTitle).split(' ').toSet()
+        return NOT_THE_VIDEO.any { it in other && it !in own }
+    }
+
+    /**
+     * Whether [channel], the one a video is on, is one of [song]'s artists' own:
+     * "chandol" for chandol, "ImagineDragonsVEVO" for Imagine Dragons. A fan's
+     * channel named after the artist ("ChandolCentral") is not.
+     */
+    fun byTheArtist(song: Song, channel: String): Boolean {
+        var name = squashed(channel)
+        CHANNEL_SUFFIXES.forEach { name = name.removeSuffix(it) }
+        if (name.isBlank()) return false
+        return song.artist.split(Regex("""\s*(?:,|&|\bfeat\.?|\bft\.?|\bx\b|\band\b)\s*""", RegexOption.IGNORE_CASE))
+            .map(::squashed)
+            .any { it.isNotBlank() && it == name }
+    }
+
+    /** [text] as [words] gives it, with no spaces at all. */
+    private fun squashed(text: String): String = words(text).replace(" ", "")
 
     /**
      * [videoId]'s link to a song [songMs] long, or null when the video without its

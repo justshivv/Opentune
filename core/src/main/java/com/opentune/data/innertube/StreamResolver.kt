@@ -1390,7 +1390,7 @@ object StreamResolver {
 
     /** Whether the video question has a settled answer for [videoId], either way. */
     fun videoKnown(videoId: String): Boolean =
-        VideoAvailability.known(videoId) != null || videoId in noVideo || links.containsKey(videoId) ||
+        VideoAvailability.known(videoId) != null || VideoAvailability.knownNoLink(videoId) || videoId in noVideo || links.containsKey(videoId) ||
             (videoUrls.containsKey(videoId) && artTracks[videoId] == false)
 
     /** The music video linked to [videoId], an art track, when one was found (see [VideoLinks]). */
@@ -1437,13 +1437,29 @@ object StreamResolver {
                 TrackLog.d(TAG, "${video.videoId} isn't ${song.title}'s music video at its length")
                 continue
             }
-            // Only an official music video: a fan upload at the song's length is mostly
-            // its title over a still picture, and another art track is no video at all.
-            if (isArtTrack(video.videoId) == null || videoTypes[video.videoId] != OFFICIAL_VIDEO) {
-                TrackLog.d(TAG, "${video.videoId} isn't ${song.title}'s official music video (${videoTypes[video.videoId]})")
+            // Its own title says what it is: a lyric video, a fan edit, a subtitled copy
+            // aren't the song's music video. Watch queues pair a song with those too.
+            val (title, channel) = aboutVideo(video.videoId) ?: continue
+            if (VideoLinks.notTheVideo(song.title, title)) {
+                TrackLog.d(TAG, "${video.videoId} isn't ${song.title}'s music video: \"$title\"")
+                continue
+            }
+            // The official music video, or one on the artist's own channel (YouTube Music
+            // files an artist's own upload as anyone's): a fan's upload at the song's length
+            // is mostly its title over a still picture, and another art track no video at all.
+            if (isArtTrack(video.videoId) == null) continue
+            val type = videoTypes[video.videoId]
+            if (type == ART_TRACK || (type != OFFICIAL_VIDEO && !VideoLinks.byTheArtist(song, channel))) {
+                TrackLog.d(TAG, "${video.videoId} isn't ${song.title}'s music video: $type on $channel")
                 continue
             }
             if (!videoAvailable(video.videoId)) continue
+            // A still picture streams at a trickle: 80 kbps for a whole song's 1080p.
+            val kbps = videoKbps[video.videoId]
+            if (kbps != null && kbps < STILL_PICTURE_KBPS) {
+                TrackLog.d(TAG, "${video.videoId} is a still picture at $kbps kbps, not ${song.title}'s music video")
+                continue
+            }
             TrackLog.d(TAG, "${song.title} ($videoId) plays over its music video ${video.videoId}, ${link.gaps.size} stretch(es) left out")
             links[videoId] = link
             return true
@@ -1488,6 +1504,32 @@ object StreamResolver {
     private const val ART_TRACK = "MUSIC_VIDEO_TYPE_ATV"
     private const val OFFICIAL_VIDEO = "MUSIC_VIDEO_TYPE_OMV"
 
+    /** Under this, a picture is a still: a moving one, even at 480p, takes several times more. */
+    private const val STILL_PICTURE_KBPS = 200
+
+    /**
+     * [videoId]'s own title and the channel it's on, as YouTube gives them to anyone who
+     * embeds it. YouTube Music's rows tidy the title ("hideaway" for "hideaway (Official
+     * Lyric Video)") and credit the artist whoever uploaded it. Null when it couldn't be asked.
+     */
+    private suspend fun aboutVideo(videoId: String): Pair<String, String>? = try {
+        withContext(Dispatchers.IO) {
+            val url = "https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=$videoId"
+            com.opentune.data.Http.client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val o = kotlinx.serialization.json.Json.parseToJsonElement(response.body?.string().orEmpty()) as? kotlinx.serialization.json.JsonObject
+                    ?: return@use null
+                fun text(key: String) = (o[key] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                (text("title") ?: return@use null) to text("author_name").orEmpty()
+            }
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        TrackLog.w(TAG, "Couldn't look up video $videoId: ${e.javaClass.simpleName}: ${e.message}")
+        null
+    }
+
     /** Tracks a client walk answered for, none of which offered a playable video. */
     private val noVideo = ConcurrentHashMap.newKeySet<String>()
 
@@ -1530,6 +1572,7 @@ object StreamResolver {
         if (videoId in noVideo) return false
         // Settled once, settled for good: the kept answer needs no network.
         VideoAvailability.known(videoId)?.let { return it }
+        if (VideoAvailability.knownNoLink(videoId)) return false
         if (!com.opentune.data.isYouTubeId(videoId)) return false
         // An art track's picture is a still of the cover: switching to it showed the
         // cover again, as if the video never loaded. Unasked (offline), nothing is settled.
@@ -1539,7 +1582,7 @@ object StreamResolver {
                 true -> return true
                 false -> {
                     noVideo += videoId
-                    VideoAvailability.remember(videoId, false)
+                    VideoAvailability.rememberNoLink(videoId)
                     return false
                 }
                 null -> return false

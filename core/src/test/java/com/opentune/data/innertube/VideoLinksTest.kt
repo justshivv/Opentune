@@ -56,4 +56,24 @@ class VideoLinksTest {
         val link = VideoLinks.check(204_000, "x", 205_000, emptyList())!!
         assertEquals(listOf(0L to 205_000L), link.pieces())
     }
+
+    // Titles as YouTube gives them, not as YouTube Music's rows tidy them.
+    @Test fun aLyricVideoAFanEditOrASubtitledCopyIsNotTheMusicVideo() {
+        assertTrue(VideoLinks.notTheVideo("hideaway", "Marino - hideaway (Official Lyric Video)"))
+        assertTrue(VideoLinks.notTheVideo("Worst Enemy", "Marino - Worst Enemy [Lyrics x AMV]"))
+        assertTrue(VideoLinks.notTheVideo("What's the Rush?", "Chandol - What's the Rush? (Thai Sub)"))
+        assertTrue(VideoLinks.notTheVideo("Check Up", "chandol-Check Up (music video unofficial)"))
+        assertFalse(VideoLinks.notTheVideo("Check Up", "chandol - CHECK UP"))
+        assertFalse(VideoLinks.notTheVideo("Believer", "Imagine Dragons - Believer (Official Music Video)"))
+    }
+
+    @Test fun theArtistsOwnChannelIsTheirsAndAFansIsNot() {
+        val checkUp = Song(videoId = "ck8iEAXyHDc", title = "Check Up", artist = "chandol", durationText = "3:00", thumbnailUrl = null)
+        assertTrue(VideoLinks.byTheArtist(checkUp, "chandol"))
+        assertTrue(VideoLinks.byTheArtist(track, "ImagineDragonsVEVO"))
+        assertTrue(VideoLinks.byTheArtist(track.copy(artist = "Imagine Dragons, Lil Wayne"), "Lil Wayne"))
+        assertFalse(VideoLinks.byTheArtist(checkUp, "ChandolCentral"))
+        assertFalse(VideoLinks.byTheArtist(checkUp, "Ryder Goodman"))
+        assertFalse(VideoLinks.byTheArtist(checkUp, "VEVO"))
+    }
 }
