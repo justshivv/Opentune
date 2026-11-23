@@ -24,8 +24,20 @@ object VideoAvailability {
     /** The most answers kept, newest first; a music library's probed songs fit easily. */
     private const val MAX = 2000
 
+    /**
+     * The rules [StreamResolver] picks an art track's music video by. An art track found
+     * to have none under older rules is asked again: they may have turned one down.
+     */
+    private const val LINK_RULES = 1
+
     @Serializable
-    private data class Saved(val has: List<String> = emptyList(), val none: List<String> = emptyList())
+    private data class Saved(
+        val has: List<String> = emptyList(),
+        val none: List<String> = emptyList(),
+        /** Art tracks no music video was found for, under [linkRules]. */
+        val noLink: List<String> = emptyList(),
+        val linkRules: Int = 0,
+    )
 
     private val json = Json { ignoreUnknownKeys = true }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -46,6 +58,20 @@ object VideoAvailability {
             if (!f.exists()) runCatching { json.decodeFromString<Saved>(old.readText()) }.getOrNull()?.let { saved = Saved(none = it.none) }
             old.delete()
         }
+        if (saved.linkRules != LINK_RULES) saved = saved.copy(noLink = emptyList(), linkRules = LINK_RULES)
+    }
+
+    /** Whether [videoId], an art track, was found to have no music video under the current rules. */
+    fun knownNoLink(videoId: String): Boolean = videoId in saved.noLink
+
+    /** Keeps that no music video was found for [videoId], an art track, under the current rules. */
+    fun rememberNoLink(videoId: String) {
+        synchronized(gate) {
+            val before = saved
+            if (videoId in before.noLink) return
+            saved = before.copy(noLink = (listOf(videoId) + before.noLink).take(MAX))
+        }
+        write()
     }
 
     /** The settled answer for [videoId]: true or false, or null when it was never settled. */
