@@ -1429,7 +1429,11 @@ fun PlayerLayout(
                                     onMore = { showMenu = true },
                                     Modifier
                                         .onGloballyPositioned {
-                                            if (!hidden && !flight.active && coverLift == 0f && dragOffset == 0f) bigTitle =
+                                            // During a return flight the title keeps reporting where it
+                                            // lives now: the layout can have changed while a list was up
+                                            // (the Canvas-away strip coming back, say), and a target
+                                            // captured before the visit would fly it to the old place.
+                                            if (!hidden && (!flight.active || (!flight.toSmall && !flight.following)) && coverLift == 0f && dragOffset == 0f) bigTitle =
                                                 it.boundsInRoot()
                                         }
                                         .graphicsLayer {
