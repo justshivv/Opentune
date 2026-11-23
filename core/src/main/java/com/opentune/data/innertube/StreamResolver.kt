@@ -434,12 +434,13 @@ object StreamResolver {
     ): InnerTubeXResolver.Extracted? {
         val skip = mutableSetOf<String>()
         // A size chosen is asked for as it is, by literal height: an upright clip's 720p is
-        // 1280 tall. Auto follows the connection, and a picture over its ceiling is asked for
-        // again, shorter: 4K at 13 Mbps went to the walk instead, whose clients googlevideo
-        // then refused, and no picture came at all.
+        // 1280 tall. Auto is never taller than 1080p: a phone shows no more of it, and a 4K
+        // picture (13 Mbps) stalled with nothing more arriving. One over the connection's
+        // ceiling is asked for again, shorter: it went to the walk instead, whose clients
+        // googlevideo then refused, and no picture came at all.
+        val offers = videoOffers[videoId].orEmpty()
         val heights = ArrayDeque<Int?>(
-            if (cap > VideoQuality.AUTO) listOf(VideoQuality.heightCap(videoOffers[videoId].orEmpty(), cap))
-            else listOf<Int?>(null) + VIDEO_HEIGHTS,
+            (if (cap > VideoQuality.AUTO) listOf(cap) else VIDEO_HEIGHTS).map { VideoQuality.heightCap(offers, it) },
         )
         var height = heights.removeFirst()
         repeat(INNERTUBEX_ATTEMPTS + VIDEO_HEIGHTS.size) {
@@ -1514,6 +1515,7 @@ object StreamResolver {
     /** The picture heights asked of InnerTubeX in turn when its best is over the connection's ceiling. */
     private val VIDEO_HEIGHTS = listOf(1080, 720, 480)
 
+
     /** The lightest picture rung worth showing, in kbps: at or under it a stall step-down has nowhere left to go. */
     private const val VIDEO_STEP_FLOOR_KBPS = 450
 
@@ -1698,7 +1700,9 @@ object StreamResolver {
         if (cap > VideoQuality.AUTO) {
             return VideoQuality.rankForCap(playable.sortedWith(order), cap, { VideoQuality.rungOf(it.width, it.height) }, { it.kbps })
         }
-        val (within, over) = playable.partition { it.kbps <= maxKbps }
+        // Auto: no taller than 1080p, as InnerTubeX is asked.
+        val auto = playable.filter { VideoQuality.rungOf(it.width, it.height) <= VIDEO_HEIGHTS.first() }.ifEmpty { playable }
+        val (within, over) = auto.partition { it.kbps <= maxKbps }
         return within.sortedWith(compareByDescending<Video> { it.kbps }.then(order)) +
                 over.sortedWith(compareBy<Video> { it.kbps }.then(order))
     }
