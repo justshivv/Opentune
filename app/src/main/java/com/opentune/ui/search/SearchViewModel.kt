@@ -195,9 +195,11 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
 
     /** Liked songs, your playlists, downloads and the Local Music folder, every word of [q] in the title, artist or album. */
     private suspend fun searchLibrary(q: String): List<com.opentune.data.model.Song> = kotlinx.coroutines.withContext(Dispatchers.Default) {
-        val local = localSongs ?: runCatching {
+        // Kept only once read: a read cut short by the next letter typed, or one that failed, isn't
+        // kept as "no local songs", which hid the phone's own files from every later search.
+        val local = localSongs ?: readOrNull {
             com.opentune.data.local.LocalMusic.tracks(getApplication(), AppSettings.library.value)
-        }.getOrDefault(emptyList()).also { localSongs = it }
+        }?.also { localSongs = it }.orEmpty()
         val store = com.opentune.data.library.LibraryStore
         val all = store.liked.value.map { it.toSong() } +
             store.playlists.value.flatMap { p -> p.songs.map { it.toSong() } } +
@@ -447,6 +449,15 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
     private val recentSearches = object : LinkedHashMap<String, List<SearchResult>>(32, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<SearchResult>>?) = size > 60
     }
+}
+
+/** What [read] gives, or null when it fails. Being called off isn't a failure: that is passed on. */
+internal suspend fun <T> readOrNull(read: suspend () -> T): T? = try {
+    read()
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Exception) {
+    null
 }
 
 /** Whether there are more of a search's results to show: none, more, on their way, or a page that didn't load. */
