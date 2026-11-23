@@ -2252,7 +2252,7 @@ private fun LocalListMoreSheet(
         onDismiss = onDismiss,
         contentPadding = PaddingValues(0.dp),
         expandable = true,
-        startExpanded = false,
+        startExpanded = true,
         fullFraction = 1f,
         header = {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
