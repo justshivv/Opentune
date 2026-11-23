@@ -85,6 +85,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.opentune.data.lyrics.LyricGap
 import com.opentune.data.lyrics.LyricLine
 import com.opentune.data.lyrics.LyricWord
@@ -374,12 +375,18 @@ private fun PlainLyrics(text: String, source: String, note: String? = "These lyr
                     }
                     translated.getOrNull(i)?.let { t ->
                         append("\n")
-                        withStyle(SpanStyle(color = dimmed, fontSize = style.fontSize * 0.55f)) { append(t) }
+                        val spacing = if (tightTrackingFits(t)) style.letterSpacing * 0.55f else 0.sp
+                        withStyle(SpanStyle(color = dimmed, fontSize = style.fontSize * 0.55f, letterSpacing = spacing)) { append(t) }
                     }
                 }
             }
         }
-        Text(shown, Modifier.fillMaxWidth(), style = style.copy(fontSize = style.fontSize * 0.8f, lineHeight = style.lineHeight * 0.85f))
+        Text(
+            shown,
+            Modifier.fillMaxWidth(),
+            style = style.copy(fontSize = style.fontSize * 0.8f, lineHeight = style.lineHeight * 0.85f)
+                .let { if (tightTrackingFits(text)) it else it.copy(letterSpacing = 0.sp) },
+        )
         Credit(source)
     }
 }
@@ -894,6 +901,7 @@ internal fun LyricLineView(
     val rtl = remember(line) { com.opentune.data.lyrics.readsRightToLeft(line) }
     val origin = when (align) { TextAlign.Center -> 0.5f; TextAlign.End -> if (rtl) 0f else 1f; else -> if (rtl) 1f else 0f }
     val base = lyricsStyle().copy(textAlign = align, textDirection = if (rtl) TextDirection.Rtl else TextDirection.Ltr)
+        .let { if (tightTrackingFits(line.text)) it else it.copy(letterSpacing = 0.sp) }
     val style = if ((motion.glow || ui.lyricsGlow) && isActive) base.copy(shadow = Shadow(bright.copy(alpha = 0.55f), blurRadius = 24f)) else base
     val text = remember(line) { if (line.words.isEmpty()) line.text else line.words.joinToString("") { it.text } }
     val layout = remember(text) { mutableStateOf<TextLayoutResult?>(null) }
@@ -1017,11 +1025,37 @@ internal fun LyricLineView(
         translated?.let {
             Text(
                 it,
-                style = base.copy(fontSize = base.fontSize * 0.55f, lineHeight = base.lineHeight * 0.6f),
+                // The translation reads in its own direction (an Urdu one under an English line
+                // runs right to left) but keeps to the line's side, and only Latin, Greek and
+                // Cyrillic keep the lyrics' tight tracking, scaled with the smaller size.
+                style = base.copy(
+                    fontSize = base.fontSize * 0.55f,
+                    lineHeight = base.lineHeight * 0.6f,
+                    letterSpacing = if (tightTrackingFits(it)) LyricsTextStyle.letterSpacing * 0.55f else 0.sp,
+                    textDirection = TextDirection.Content,
+                    textAlign = when (align) {
+                        TextAlign.Center -> TextAlign.Center
+                        TextAlign.End -> if (rtl) TextAlign.Left else TextAlign.Right
+                        else -> if (rtl) TextAlign.Right else TextAlign.Left
+                    },
+                ),
                 color = (if (isActive) bright else dim).copy(alpha = if (isActive) 0.85f else 0.4f),
                 modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
             )
         }
+    }
+}
+
+/**
+ * Whether [text] can take the lyrics' tight tracking: only when its letters are Latin, Greek
+ * or Cyrillic. Arabic and Urdu letters join each other and have narrow spaces, so negative
+ * letter spacing pulls the joins apart and closes the gaps between words; Indic vowel signs
+ * and other scripts suffer the same. Those are drawn with the font's own spacing.
+ */
+internal fun tightTrackingFits(text: String): Boolean = text.all { c ->
+    !c.isLetter() || when (Character.UnicodeScript.of(c.code)) {
+        Character.UnicodeScript.LATIN, Character.UnicodeScript.GREEK, Character.UnicodeScript.CYRILLIC, Character.UnicodeScript.COMMON -> true
+        else -> false
     }
 }
 
@@ -1089,7 +1123,8 @@ internal fun SungLine(line: LyricLine, position: () -> Long, style: androidx.com
     val rtl = remember(line) { com.opentune.data.lyrics.readsRightToLeft(line) }
     Text(
         text,
-        style = style.copy(textDirection = if (rtl) TextDirection.Rtl else TextDirection.Ltr),
+        style = style.copy(textDirection = if (rtl) TextDirection.Rtl else TextDirection.Ltr)
+            .let { if (tightTrackingFits(line.text)) it else it.copy(letterSpacing = 0.sp) },
         color = bright,
         maxLines = 1,
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,

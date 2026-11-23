@@ -134,16 +134,35 @@ object LyricsTranslator {
             val body = r.body?.string() ?: return@runCatching null
             val root = json.parseToJsonElement(body) as? JsonArray ?: return@runCatching null
             val segments = root.getOrNull(0) as? JsonArray ?: return@runCatching null
-            segments.joinToString("") { seg ->
-                ((seg as? JsonArray)?.getOrNull(0) as? JsonPrimitive)?.contentOrNull.orEmpty()
-            }
+            joinSegments(segments.map { seg -> ((seg as? JsonArray)?.getOrNull(0) as? JsonPrimitive)?.contentOrNull.orEmpty() }, target)
         }
     }.getOrNull()
+
+    /**
+     * The translated sentences of one request, put back together. Google sends a line of
+     * several sentences as one piece per sentence, each usually ending in its own space; where
+     * one doesn't (seen with Arabic and Urdu), the last word of one sentence ran into the first
+     * of the next. A space goes between them then, except in languages written without spaces.
+     */
+    internal fun joinSegments(parts: List<String>, target: String): String {
+        val spaced = target.substringBefore('-').lowercase() !in WITHOUT_SPACES
+        val out = StringBuilder()
+        for (part in parts) {
+            if (spaced && out.isNotEmpty() && part.isNotEmpty() && !out.last().isWhitespace() && !part.first().isWhitespace() &&
+                part.first().isLetterOrDigit()) out.append(' ')
+            out.append(part)
+        }
+        return out.toString()
+    }
+
+    /** Languages whose sentences follow each other with no space between. */
+    private val WITHOUT_SPACES = setOf("zh", "ja", "th", "lo", "km", "my", "bo")
 
     private fun key(lines: List<String>, target: String): String {
         val digest = MessageDigest.getInstance("SHA-1")
             .digest((target + "\n" + lines.joinToString("\n")).toByteArray(Charsets.UTF_8))
-        return target + "-" + digest.joinToString("") { "%02x".format(it) }
+        // "v2": translations saved before sentences were spaced (see joinSegments) are fetched again.
+        return "v2-" + target + "-" + digest.joinToString("") { "%02x".format(it) }
     }
 
     private fun readDisk(key: String): List<String?>? {
