@@ -196,6 +196,10 @@ class PlayerConnection(private val context: Context) {
             _audioFormat.value = null
         }
 
+        override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+            if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED && beforeShuffle != null) controller?.let(::shuffleArrivals)
+        }
+
         override fun onEvents(player: Player, events: Player.Events) {
             refresh(player)
             if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) || events.contains(Player.EVENT_TRACKS_CHANGED)) onTracksChanged(player.currentTracks)
@@ -521,6 +525,15 @@ class PlayerConnection(private val context: Context) {
     private var shuffled: (MediaItem) -> Boolean = { it.queueTier == QueueTier.CONTEXT }
 
     /**
+     * The songs [beforeShuffle] holds and turning shuffle off puts back: those shuffle moved,
+     * and AutoPlay's, which it mixes in as they arrive (see [shuffleArrivals]).
+     */
+    private fun restorable(item: MediaItem) = shuffled(item) || item.queueTier == QueueTier.AUTOPLAY
+
+    /** The queue's songs while shuffle is on, so the ones AutoPlay adds after can be told apart. */
+    private val shuffleKnown = HashSet<String>()
+
+    /**
      * Shuffle, as a new order for the songs still to come rather than the player's shuffle
      * mode: the song playing is never touched, and the queue's order is the play order, so
      * rows can still be dragged. Songs queued by hand stay first and AutoPlay's stay last;
@@ -531,9 +544,40 @@ class PlayerConnection(private val context: Context) {
         val from = controller.currentMediaItemIndex + 1
         val items = (from until controller.mediaItemCount).map(controller::getMediaItemAt)
         shuffled = QueueShuffle.movable(items) { it.queueTier }
-        val (mixed, before) = QueueShuffle.mix(items, shuffled)
-        beforeShuffle = before
+        val (mixed, _) = QueueShuffle.mix(items, shuffled)
+        beforeShuffle = items.filter(::restorable)
+        shuffleKnown.clear()
+        (0 until controller.mediaItemCount).mapTo(shuffleKnown) { controller.getMediaItemAt(it).mediaId }
         if (mixed != items) replaceAfter(controller, from, mixed)
+    }
+
+    /**
+     * Songs AutoPlay adds while shuffle is on are shuffled in too, rather than all played
+     * last in the order they came: each goes to a random place among AutoPlay's songs still
+     * to come (or, with no list left to shuffle, among all the songs shuffle mixed), never
+     * ahead of the next song or of songs queued by hand. Turning shuffle off puts them back
+     * in the order they came.
+     */
+    private fun shuffleArrivals(controller: MediaController) {
+        val before = beforeShuffle ?: return
+        val count = controller.mediaItemCount
+        val queue = (0 until count).map(controller::getMediaItemAt)
+        val arrived = QueueShuffle.arrivals(queue, shuffleKnown, { it.queueTier == QueueTier.AUTOPLAY }) { it.mediaId }
+        if (arrived == 0) return
+        val added = queue.takeLast(arrived)
+        added.mapTo(shuffleKnown) { it.mediaId }
+        beforeShuffle = before + added
+        val from = controller.currentMediaItemIndex + 1
+        // Only those still to come move: one already playing (the queue had run out) stays put.
+        val movable = minOf(arrived, count - from)
+        if (movable < 1) return
+        val upcoming = queue.subList(from, count)
+        val mixesWithAll = shuffled(added.first())
+        val placed = QueueShuffle.placeAdded(upcoming, movable,
+            staysAhead = { if (mixesWithAll) !shuffled(it) else it.queueTier != QueueTier.AUTOPLAY })
+        val firstMoved = placed.indices.firstOrNull { placed[it] !== upcoming[it] } ?: return
+        controller.removeMediaItems(from + firstMoved, count)
+        placed.drop(firstMoved).chunked(QUEUE_CHUNK).forEach { controller.addMediaItems(it) }
     }
 
     /** Puts the list's songs still to come back in their order; songs added since keep their places. */
@@ -541,9 +585,10 @@ class PlayerConnection(private val context: Context) {
         controller.shuffleModeEnabled = false
         val before = beforeShuffle ?: return
         beforeShuffle = null
+        shuffleKnown.clear()
         val from = controller.currentMediaItemIndex + 1
         val items = (from until controller.mediaItemCount).map(controller::getMediaItemAt)
-        val restored = QueueShuffle.restore(items, shuffled, before) { it.mediaId }
+        val restored = QueueShuffle.restore(items, ::restorable, before) { it.mediaId }
         if (restored != items) replaceAfter(controller, from, restored)
     }
 
