@@ -24,6 +24,8 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Taps and buzzes at the strength set in Settings. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Floating lyrics, over other apps; asked for only when that setting is turned on. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Reverb runs as an auxiliary effect on the output mix. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Local music. -->
