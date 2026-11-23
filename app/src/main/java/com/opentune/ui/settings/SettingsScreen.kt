@@ -1219,10 +1219,7 @@ private fun settingsSections(
                     ToggleRow("Color from artwork", theme.colorFromArtwork, { v -> AppSettings.updateTheme { it.copy(colorFromArtwork = v) } }, summary = "Tint the app with the playing song's cover", icon = ImageVector.vectorResource(AppIcons.AutoAwesome))
                 },
                 Entry("Mini player takes the cover's colour", "mini player pill tint colour artwork plain") {
-                    // The Poster mini player is smoked glass under light ink (posterSmoke), which a cover's
-                    // colour would wash out, so the tint is the Classic layout's alone.
-                    ToggleRow("Mini player takes the cover's colour", ui.miniPlayerTint, { v -> AppSettings.updateUi { it.copy(miniPlayerTint = v) } }, summary = "Off keeps the small player's glass plain, whatever is playing", icon = ImageVector.vectorResource(AppIcons.AutoAwesome),
-                        enabled = !poster, disabledReason = "Only with the Classic page layout. The Poster mini player is smoked glass")
+                    ToggleRow("Mini player takes the cover's colour", ui.miniPlayerTint, { v -> AppSettings.updateUi { it.copy(miniPlayerTint = v) } }, summary = "Off keeps the small player's glass plain, whatever is playing", icon = ImageVector.vectorResource(AppIcons.AutoAwesome))
                 },
                 Entry("Artist pages take the photo's colour", "artist page tint colour photo background") {
                     ToggleRow("Artist pages take the photo's colour", ui.artistPageTint, { v -> AppSettings.updateUi { it.copy(artistPageTint = v) } }, summary = "Off keeps artist pages in the app's own colours", icon = ImageVector.vectorResource(AppIcons.AutoAwesome))
@@ -1320,17 +1317,15 @@ private fun settingsSections(
                     )
                 },
                 Entry("Dock animation", "navigation bar dock fold hide scroll animation motion squash pop") {
-                    // The side rail has no dock to fold. The Poster dock folds each way in its own shape (PosterChrome).
+                    // The side rail has no dock to fold.
                     NavRow("Dock animation", { dockMotionDialog = true }, summary = ui.dockMotion.summary, icon = ImageVector.vectorResource(AppIcons.Dock), value = ui.dockMotion.label,
                         enabled = !railShown,
                         disabledReason = "Not with the side rail this wide window uses")
                 },
                 Entry("Dock lens", "navigation bar dock tab highlight selection pill indicator jelly stretch glide jump hop poster") {
-                    // Reduced motion always glides. The Poster dock's pill takes Jelly and Glide as the
-                    // Classic lens does; its Stretch is the hop it has always made (PosterLens).
-                    val posterStretch = poster && !railShown && ui.dockLens == com.opentune.data.settings.DockLens.STRETCH
+                    // Reduced motion always glides.
                     NavRow("Dock lens", { dockLensDialog = true },
-                        summary = if (posterStretch) "In the Poster dock the pill hops over: it lifts off and swells, flies across and lands with a small squash" else ui.dockLens.summary,
+                        summary = ui.dockLens.summary,
                         icon = ImageVector.vectorResource(AppIcons.Lens), value = ui.dockLens.label,
                         enabled = !reduced,
                         disabledReason = "Glides while Reduce animation is on")

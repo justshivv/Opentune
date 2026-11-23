@@ -148,7 +148,6 @@ import coil3.request.allowHardware
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
-import com.opentune.ui.components.posterSmoke
 
 /**
  * The full player's backdrop, in the style chosen in settings. With
@@ -180,7 +179,13 @@ fun PlayerBackdrop(
     titleTop: Dp? = null,
     /** Lyrics or the queue are open over the Canvas: it's frosted and darkened all the way up. */
     canvasBehindText: Boolean = false,
-    fullCoverVisible: Boolean = true,
+    /**
+     * Whether the full cover shows, read while drawing: it turns off and on as the cover flies
+     * between the lists' header and its full place, and passed as a plain value it rebuilt the
+     * whole backdrop (its blur or mesh, the cover art) in the frame the cover set off and again
+     * in the frame it landed, which is where the fold stuttered.
+     */
+    fullCoverVisible: () -> Boolean = { true },
     artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
     /** Apple's animated cover for the playing song, looped over the full-screen still. */
     video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
@@ -255,7 +260,7 @@ fun PlayerBackdrop(
             // picture's bottom falls in this span. A colour scrim here instead
             // painted the backdrop's near-black base over the empty stretch
             // under the picture, which read as a black band.
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible) 1f else 0f }) {
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible()) 1f else 0f }) {
                 val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
                 val pictureBottom = height / 2 + (maxWidth / (16f / 9f)) / 2
                 val fadeStart = ((pictureBottom - FULL_COVER_FADE * 0.6f) / height).coerceIn(0f, 1f)
@@ -282,7 +287,7 @@ fun PlayerBackdrop(
                 // fades out there into whatever backdrop is below it, with a light
                 // scrim at the top so the status line stays readable. It's never
                 // shorter than it is wide; taller, it's cropped at the sides.
-                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible) 1f else 0f }) {
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible()) 1f else 0f }) {
                     val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
                     val solid = (1f - FULL_COVER_FADE / height).coerceIn(0.4f, 0.8f)
                     Box(
@@ -1394,9 +1399,8 @@ fun MiniPlayer(
         return
     }
 
-    // The Poster layout's card: rounder, in smoked glass, its cover and words larger.
-    val poster = com.opentune.ui.components.posterLayout()
-    val shape = RoundedCornerShape(if (poster) 30.dp else 22.dp)
+    // One card in every page layout, like the one dock it sits on.
+    val shape = RoundedCornerShape(22.dp)
     if (replica) {
         // No buttons that take a touch: the replica lies over the open player, at its full size and
         // invisible once the card is up, and its play and next buttons, centred on the screen,
@@ -1415,9 +1419,8 @@ fun MiniPlayer(
                 translationY = offsetY.value
                 alpha = 1f - (offsetY.value / (dismissThreshold * 2.2f)).coerceIn(0f, 0.8f)
             }
-            .then(if (poster) Modifier.posterSmoke(shape) else Modifier.glass(shape, tint, swell = false))
-            // The Poster card's cover is round, so the flight to the player starts from a circle.
-            .pullToOpen(round = poster, onOpen = onClick)
+            .glass(shape, tint, swell = false)
+            .pullToOpen(round = false, onOpen = onClick)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
@@ -1490,7 +1493,7 @@ fun MiniPlayer(
                 }
             },
     ) {
-        MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, onTogglePlay, onNext, landing, poster)
+        MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, onTogglePlay, onNext, landing)
     }
 }
 
@@ -1499,43 +1502,7 @@ fun MiniPlayer(
 private fun MiniRow(
     song: Song, isPlaying: Boolean, isBuffering: Boolean, hasNext: Boolean, progress: () -> Float,
     accent: Color, track: Color, onTogglePlay: (() -> Unit)?, onNext: (() -> Unit)?, landing: Modifier,
-    poster: Boolean = false,
 ) {
-    if (poster) {
-        // On smoked glass, drawn light: a larger cover, the title over the artist, then play
-        // and next as plain glyphs, as the Poster layout's reference has them.
-        val ink = com.opentune.ui.components.PosterInk
-        // The cover is round, folded by a scroll or not; folding only moves it over.
-        val fold = com.opentune.ui.components.LocalPosterFold.current
-        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides ink.on) {
-            Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini",
-                    // Folded, the card is as tall as the round cover plus 3 dp each side: the cover moves
-                    // left to the same 3 dp, so it sits evenly in the card's round end.
-                    modifier = Modifier.weight(1f).graphicsLayer { translationX = -5.dp.toPx() * fold().coerceIn(0f, 1f) }) { s ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(
-                            s.thumbnailUrl.artworkAt(ROW_ART_PX),
-                            Modifier.size(50.dp).then(landing).clip(CircleShape),
-                            CircleShape,
-                        )
-                        Column(Modifier.padding(start = 14.dp)) {
-                            Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = ink.on)
-                            Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = ink.off)
-                        }
-                    }
-                }
-                Box(Modifier.size(48.dp).clip(CircleShape).then(if (onTogglePlay != null) Modifier.clickable(onClick = onTogglePlay) else Modifier), contentAlignment = Alignment.Center) {
-                    if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize().padding(4.dp), strokeWidth = 2.dp, color = ink.on)
-                    Icon(if (isPlaying) ImageVector.vectorResource(AppIcons.Pause) else ImageVector.vectorResource(AppIcons.PlayArrow), if (isPlaying) "Pause" else "Play", Modifier.size(32.dp), tint = ink.on)
-                }
-                MiniNext(onNext, hasNext) {
-                    Icon(ImageVector.vectorResource(AppIcons.SkipNext), "Next", Modifier.size(32.dp), tint = if (hasNext) ink.on else ink.off)
-                }
-            }
-        }
-        return
-    }
     Row(Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
             Row(verticalAlignment = Alignment.CenterVertically) {

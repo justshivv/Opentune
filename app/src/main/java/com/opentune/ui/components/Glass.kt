@@ -382,7 +382,7 @@ private fun lensDepth(wanted: Float, shortSide: Float): Float = minOf(wanted, sh
  * glass rather than frost), its colours lifted (saturation 1.8, a touch brighter), under a thin
  * [film] with a soft light across the top, and lit along the rim brightest at the top left.
  * It's the Liquid Glass glass style: [glass] draws it while that style is chosen, and so do the
- * Poster layout's [posterGlass] and [posterSmoke]. Where the phone can't bend the backdrop it
+ * Poster layout's [posterGlass]. Where the phone can't bend the backdrop it
  * falls back to the app's own [glass], frosted, under the same [film].
  */
 @Composable

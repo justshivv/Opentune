@@ -105,46 +105,5 @@ internal fun PosterRound(icon: ImageVector, label: String, enabled: Boolean = tr
 
 internal val POSTER_ROUND = 52.dp
 
-/** The smoke the Poster layout's dock and mini player are made of. */
+/** A dark smoke, under the web player's barely blurred dock glass so white names read on it. */
 internal val POSTER_SMOKE = Color(0xFF2A2D32)
-
-/**
- * The Poster layout's smoked glass, for the dock and the mini player: the glass Settings › Glass
- * style asks for, as its buttons have it, under a dark film whatever the theme. What's on it is
- * drawn light (see [PosterInk]), so the film is as dark as the style needs for that to read.
- */
-@Composable
-internal fun Modifier.posterSmoke(shape: androidx.compose.ui.graphics.Shape): Modifier {
-    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
-    val smoke = posterSmokeFilm(ui.glassStyle)
-    // With nothing blurred behind, the glass is the theme's surface under this film; on a light
-    // theme a thin one left it mid-grey under white ink, so then it's nearly the smoke itself.
-    val solid = ui.reduceBlur || (LocalBackdrop.current == null && LocalHazeState.current == null)
-    val film = if (solid) smoke.copy(alpha = maxOf(smoke.alpha, 0.88f)) else smoke
-    // Liquid Glass is the web player's, about half strength as its dock has.
-    if (ui.glassStyle == com.opentune.data.settings.GlassStyle.WEB) return this.webLiquidGlass(shape, film).clip(shape)
-    // The card is dragged about, so the glass doesn't swell under a finger (as the Classic one doesn't).
-    return this.glass(shape, tint = film, swell = false).clip(shape)
-}
-
-/**
- * The dark film over [posterSmoke] for each [GlassStyle]: Liquid Glass's own, and a little more
- * for Frosted, whose frost blurs what's behind into a paler field of its colours, so light ink
- * on it reads as well as on Liquid Glass.
- */
-internal fun posterSmokeFilm(style: com.opentune.data.settings.GlassStyle): Color = when (style) {
-    com.opentune.data.settings.GlassStyle.WEB -> POSTER_SMOKE.copy(alpha = 0.42f)
-    com.opentune.data.settings.GlassStyle.LIQUID -> POSTER_SMOKE.copy(alpha = 0.5f)
-}
-
-/** What's drawn on [posterSmoke]: white, and a softer white for what's not picked. */
-internal object PosterInk {
-    val on = Color.White
-    val off = Color.White.copy(alpha = 0.62f)
-}
-
-/**
- * How far the Poster chrome is folded by a scroll, 0 open to 1 folded, read by the mini player
- * under it: folded, its cover turns round.
- */
-internal val LocalPosterFold = androidx.compose.runtime.staticCompositionLocalOf<() -> Float> { { 0f } }
