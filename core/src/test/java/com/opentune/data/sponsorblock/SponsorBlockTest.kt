@@ -43,4 +43,20 @@ class SponsorBlockTest {
         assertFalse(SponsorBlock.fits(s, 200_000))
         assertTrue(SponsorBlock.fits(s.copy(videoDurationMs = 0), 200_000))
     }
+
+    private val gap = SponsorBlock.Segment(169_060, 179_149, "music_offtopic", "gap", 216_561)
+    private val end = SponsorBlock.Segment(212_900, 216_561, "music_offtopic", "end", 216_561)
+
+    @Test fun aSegmentIsSkippedAgainWhenTheSongPlaysFromTheTop() {
+        assertEquals(emptySet<String>(), SponsorBlock.stillSkipped(setOf("gap", "end"), listOf(gap, end), atMs = 1_000))
+    }
+
+    @Test fun seekingIntoASkippedSegmentPlaysIt() {
+        assertEquals(setOf("gap"), SponsorBlock.stillSkipped(setOf("gap"), listOf(gap, end), atMs = 172_000))
+        assertEquals(setOf("gap"), SponsorBlock.stillSkipped(setOf("gap"), listOf(gap, end), atMs = 190_000))
+    }
+
+    @Test fun onlyTheSegmentsAheadAreSkippedAgain() {
+        assertEquals(setOf("gap"), SponsorBlock.stillSkipped(setOf("gap", "end"), listOf(gap, end), atMs = 200_000))
+    }
 }
