@@ -47,12 +47,21 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         // Android Auto or the widget and the activity (which sets it again) never opens.
         com.opentune.data.innertube.Innertube.regionOverride = com.opentune.data.UserCountry.quick(this)
         // The home-screen widget follows the shared player service.
-        com.opentune.data.AppHooks.onPlayerChanged = { context, player -> com.opentune.widget.NowPlayingWidget.refresh(context, player) }
-        com.opentune.data.AppHooks.onPlayerStopped = { context -> com.opentune.widget.NowPlayingWidget.stopped(context) }
+        com.opentune.data.AppHooks.onPlayerChanged = { context, player ->
+            com.opentune.widget.NowPlayingWidget.refresh(context, player)
+            com.opentune.lyrics.LyricsOutside.onPlayer(player)
+        }
+        com.opentune.data.AppHooks.onPlayerStopped = { context ->
+            com.opentune.widget.NowPlayingWidget.stopped(context)
+            com.opentune.lyrics.LyricsOutside.onPlayer(null)
+        }
         java.util.Locale.setDefault(com.opentune.ui.theme.AppLanguages.wrap(this).resources.configuration.locales[0])
         // The words on every screen, in the chosen language (the phone's own when none is chosen).
         com.opentune.i18n.Tr.use(this, com.opentune.ui.theme.AppLanguages.selected(this).tag)
         com.opentune.data.Core.init(this)
+        // Lyrics on widgets and floating over other apps; each does nothing until turned on.
+        com.opentune.lyrics.FloatingLyrics.install(this)
+        com.opentune.lyrics.LyricsOutside.install(this, com.opentune.widget.WidgetLyrics, com.opentune.lyrics.FloatingLyrics)
         // Spotify's personal song radio, when Spotify is connected; the cookie stays with the WebView.
         com.opentune.data.spotify.SpotifyWebPlayer.account = {
             if (com.opentune.ui.spotify.SpotifyConnection.connected.value) com.opentune.ui.spotify.SpotifyConnection.cookie() else null

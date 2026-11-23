@@ -1721,6 +1721,24 @@ private fun settingsSections(
                 Entry("Lyrics take the screen", "hide controls idle focus fullscreen lyrics auto") {
                     ToggleRow("Lyrics take the screen", ui.lyricsFocus, { v -> AppSettings.updateUi { it.copy(lyricsFocus = v) } }, summary = "Hides the lyrics controls after a few seconds", icon = ImageVector.vectorResource(AppIcons.Lyrics))
                 },
+                Entry("Lyrics on widgets", "widget home screen lyrics line next") {
+                    ToggleRow("Lyrics on widgets", lyricsSettings.onWidgets, { v -> AppSettings.updateLyrics { it.copy(onWidgets = v) } },
+                        summary = "The sung line and the next on the larger home-screen widgets", icon = ImageVector.vectorResource(AppIcons.Lyrics))
+                },
+                Entry("Floating lyrics", "overlay bubble pill float over other apps display") {
+                    // Shown on only while the app may still draw over others; turning it on asks first.
+                    var allowed by remember { mutableStateOf(com.opentune.lyrics.FloatingLyrics.allowed(context)) }
+                    var asking by remember { mutableStateOf(false) }
+                    LifecycleResumeEffect(Unit) {
+                        allowed = com.opentune.lyrics.FloatingLyrics.allowed(context)
+                        onPauseOrDispose { }
+                    }
+                    if (asking) FloatingLyricsDialog(onDismiss = { asking = false; allowed = com.opentune.lyrics.FloatingLyrics.allowed(context) })
+                    ToggleRow("Floating lyrics", lyricsSettings.floating && allowed, { v ->
+                        if (v && !com.opentune.lyrics.FloatingLyrics.allowed(context)) asking = true
+                        else AppSettings.updateLyrics { it.copy(floating = v) }
+                    }, summary = "The sung line in a small pill over other apps while music plays", icon = ImageVector.vectorResource(AppIcons.Subtitles))
+                },
                 Entry("Lyrics sources", "lrclib youtube order provider") {
                     NavRow(
                         "Lyrics sources",

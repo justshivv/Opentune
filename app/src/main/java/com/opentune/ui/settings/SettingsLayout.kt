@@ -76,6 +76,7 @@ internal val SETTINGS_CATEGORIES = listOf(
             "Display" to listOf("Synced lyrics", "Lyrics text size", "Lyrics alignment"),
             "Effects" to listOf("Lyrics animation", "Glow on the sung line", "Blur unfocused lyrics"),
             "Lyrics page" to listOf("Lyrics take the screen", "Keep the screen on for lyrics", "Hide the navigation bar on the lyrics page", "Hide the status bar on the lyrics page"),
+            "Outside the app" to listOf("Lyrics on widgets", "Floating lyrics"),
             "Sources" to listOf("Lyrics sources"),
         ),
     ),
