@@ -1078,7 +1078,9 @@ private fun UpNextPanel(queue: List<Song>, index: Int) {
                 size = 30.dp, iconSize = 17.dp, shape = RoundedCornerShape(8.dp),
             ) { AppSettings.setAutoplay(!playback.autoplay) }
         }
-        if (upcoming.isEmpty()) {
+        // The songs before this one, the latest first, to play again (issue 50).
+        val played = remember(queue, index) { playedIndices(index, queue.size) }
+        if (upcoming.isEmpty() && played.isEmpty()) {
             Column(
                 Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(bottom = 80.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
@@ -1113,9 +1115,27 @@ private fun UpNextPanel(queue: List<Song>, index: Int) {
                     lifted = lifted,
                 )
             }
+            if (upcoming.isEmpty()) item(key = "nothing next") {
+                Text(
+                    "Nothing in Up next", style = ChromeType.body(12, 16), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+            }
+            if (played.isNotEmpty()) {
+                item(key = "played label") {
+                    Text(
+                        "Played", style = ChromeType.body(12, 16, FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 12.dp, top = 14.dp, bottom = 4.dp),
+                    )
+                }
+                items(played, key = { "$it:${queue[it].videoId}" }) { i -> UpNextRow(queue[i], i, Modifier, lifted = false) }
+            }
         }
     }
 }
+
+/** The queue's places before [index], the latest first: the songs already played, to go back to. */
+internal fun playedIndices(index: Int, size: Int): List<Int> = (minOf(index, size) - 1 downTo 0).toList()
 
 private val UP_NEXT_ROW = 55.dp
 

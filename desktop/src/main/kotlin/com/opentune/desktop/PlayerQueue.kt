@@ -190,6 +190,17 @@ internal fun PlayerQueuePanel(queue: List<Song>, index: Int, modifier: Modifier 
                 )
             }
         }
+        // The songs before this one, the latest first, to play again (issue 50).
+        val played = playedIndices(index, queue.size)
+        if (played.isNotEmpty()) {
+            item(key = "played label") { PlayerQueueLabel("Played") }
+            items(played, key = { keys[it] }) { i ->
+                PlayerQueueRow(
+                    queue[i], onClick = { Player.playAt(i) }, handle = false, queueIndex = i,
+                    trailing = { PlayerRowCross("Remove ${queue[i].title}") { Player.removeAt(i) } },
+                )
+            }
+        }
     }
 }
 

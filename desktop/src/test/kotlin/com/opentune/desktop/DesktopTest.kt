@@ -19,6 +19,14 @@ class DesktopTest {
         assertNull(Ranges.parse("bytes=1000-", 1000))
     }
 
+    @Test fun theQueueListsWhatWasPlayedLatestFirst() {
+        assertEquals(listOf(2, 1, 0), playedIndices(3, 6))
+        assertEquals(emptyList<Int>(), playedIndices(0, 6))
+        assertEquals(emptyList<Int>(), playedIndices(-1, 0))
+        // A queue shorter than the index (cleared under it) lists only what's there.
+        assertEquals(listOf(1, 0), playedIndices(5, 2))
+    }
+
     @Test fun theArtistIsFoundInACardsGreyLine() {
         assertEquals("River Choir", Pages.artistIn("Song • River Choir • 2.1M plays"))
         assertEquals("River Choir", Pages.artistIn("River Choir • 1.2M views"))
