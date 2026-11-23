@@ -619,6 +619,17 @@ private fun settingsSections(
         }
     }
 
+    var videoQualityDialog by remember { mutableStateOf<Boolean?>(null) } // true = Wi-Fi, false = mobile
+    videoQualityDialog?.let { wifi ->
+        ChoiceSheet(
+            title = if (wifi) "Video quality on Wi-Fi" else "Video quality on mobile data",
+            options = com.opentune.data.innertube.VideoQuality.CHOICES,
+            selected = if (wifi) pb.wifiVideoQuality else pb.mobileVideoQuality,
+            label = { if (it == com.opentune.data.innertube.VideoQuality.AUTO) "Auto · follows the connection" else com.opentune.data.innertube.VideoQuality.label(it) },
+            onSelect = { q -> AppSettings.updatePlayback { com.opentune.data.innertube.VideoQuality.withChoice(it, metered = !wifi, rung = q) } },
+            onDismiss = { videoQualityDialog = null },
+        )
+    }
     qualityDialog?.let { wifi ->
         ChoiceSheet(
             title = if (wifi) "Quality on Wi-Fi" else "Quality on mobile data",
@@ -1099,6 +1110,12 @@ private fun settingsSections(
                 Entry("Video mode", "video music video watch song video switch player") {
                     ToggleRow("Video mode", pb.videoModeEnabled, { v -> AppSettings.updatePlayback { it.copy(videoModeEnabled = v) } }, summary = "Adds a Song / Video switch to the player", icon = ImageVector.vectorResource(AppIcons.PlayCircle), beta = true)
                 },
+                if (pb.videoModeEnabled) Entry("Video quality on Wi-Fi", "music video resolution 1080p 720p hd size") {
+                    NavRow("Video quality on Wi-Fi", { videoQualityDialog = true }, summary = if (!metered) "In use now" else null, icon = ImageVector.vectorResource(AppIcons.Wifi), value = com.opentune.data.innertube.VideoQuality.label(pb.wifiVideoQuality))
+                } else null,
+                if (pb.videoModeEnabled) Entry("Video quality on mobile data", "music video resolution 480p 360p size cellular") {
+                    NavRow("Video quality on mobile data", { videoQualityDialog = false }, summary = if (metered) "In use now" else null, icon = ImageVector.vectorResource(AppIcons.NetworkCell), value = com.opentune.data.innertube.VideoQuality.label(pb.mobileVideoQuality))
+                } else null,
                 Entry("Automix", "auto mix dj blend beat transition seamless") {
                     ToggleRow(
                         "Automix",

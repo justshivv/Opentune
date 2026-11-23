@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -97,6 +98,8 @@ internal fun LandscapePlayer(
     showLines: Boolean = true,
     /** The playback player's video picture, shown in the cover's place in video mode. */
     videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
+    /** Opens the video on the whole screen; null hides the button. */
+    onFullScreen: (() -> Unit)? = null,
 ) {
     val song = state.song
     val scheme = MaterialTheme.colorScheme
@@ -123,7 +126,15 @@ internal fun LandscapePlayer(
                 onSwipeNext = actions.next,
                 onSwipePrevious = actions.previous,
                 modifier = Modifier.weight(1.1f).fillMaxHeight().clip(RoundedCornerShape(16.dp)),
-            ) { videoSurface() }
+            ) {
+                videoSurface()
+                if (onFullScreen != null) FullScreenButton(
+                    onFullScreen,
+                    Modifier.align(Alignment.BottomEnd).padding(8.dp)
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f), CircleShape),
+                    tint = androidx.compose.ui.graphics.Color.White,
+                )
+            }
         } else {
             ArtworkSwipeArea(
                 onSwipeNext = actions.next,

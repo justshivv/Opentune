@@ -275,6 +275,18 @@ fun PlayerScreen(
             setVideoMode = vm::setVideoMode,
         )
     }
+    // One output for the picture wherever it shows, the player or full screen; see VideoOutput.
+    val videoOutput = rememberVideoOutput(vm.player)
+    val videoSize by vm.player.videoSize.collectAsState()
+    val playback by AppSettings.playback.collectAsState()
+    val videoPage = VideoPage(
+        picture = { crop -> VideoSurface(videoOutput, videoSize, Modifier.matchParentSize(), crop) },
+        aspect = videoAspect(videoSize),
+        playing = com.opentune.data.innertube.VideoQuality.rungOf(videoSize.width, videoSize.height),
+        chosen = com.opentune.data.innertube.VideoQuality.chosen(playback, AppSettings.onMeteredNetwork()),
+        choices = vm.player::videoChoices,
+        choose = vm.player::setVideoQuality,
+    )
     PlayerLayout(
         PlayerUiState(
             shown, isPlaying, isSounding, isBuffering, hasNext, shuffle, repeat, duration,
@@ -287,7 +299,8 @@ fun PlayerScreen(
         actions = actions,
         seeks = rememberSeekCount(vm),
         onCovering = onCovering,
-        videoSurface = { VideoSurface(vm.player, Modifier.matchParentSize()) },
+        videoSurface = { VideoSurface(videoOutput, videoSize, Modifier.matchParentSize()) },
+        videoPage = videoPage,
         docked = docked,
     )
 }
@@ -323,7 +336,7 @@ internal fun chorusWatch(buttonOn: Boolean, hasChoruses: Boolean, controlsHidden
 
 /** Puts one of the system's bars away while [hidden] holds, and brings it back the moment it stops holding. */
 @Composable
-private fun SystemBarHider(hidden: Boolean, type: Int) {
+internal fun SystemBarHider(hidden: Boolean, type: Int) {
     val view = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.DisposableEffect(hidden) {
         var ctx: android.content.Context? = view.context
@@ -358,6 +371,8 @@ fun PlayerLayout(
     docked: Boolean = false,
     /** The playback player's video picture, for the cover to show in video mode. */
     videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
+    /** The full-screen video page's hooks into the player; null offers no full screen. */
+    videoPage: VideoPage? = null,
 ) {
     val current = state.song
     val theme = state.theme
@@ -568,6 +583,20 @@ fun PlayerLayout(
     // and the pane leaves its place to it, the way the full style already does.
     // Sideways keeps the designs' own frames: the takeover is a portrait layout.
     val videoTakeover = state.videoMode && !landscape
+    // The music video on the whole screen: opened by its button, or by turning the phone on
+    // its side while the video shows. Opened by turning, it closes when the phone is turned
+    // upright again; closed sideways, the landscape player shows the video until the next turn.
+    val fullScreenOffered = videoPage != null && !docked && state.videoMode
+    var videoFullName by rememberSaveable { mutableStateOf<String?>(null) }
+    val videoFull = videoFullName?.let(FullScreenEntry::valueOf)?.takeIf { fullScreenOffered }
+    LaunchedEffect(fullScreenOffered) { if (!fullScreenOffered) videoFullName = null }
+    LaunchedEffect(landscape) {
+        if (landscape && fullScreenOffered && videoFullName == null) videoFullName = FullScreenEntry.ROTATION.name
+        if (!landscape && videoFullName == FullScreenEntry.ROTATION.name) videoFullName = null
+    }
+    val openFullScreen: (() -> Unit)? = if (fullScreenOffered) ({ videoFullName = FullScreenEntry.BUTTON.name }) else null
+    // The picture shows in one place at a time: while full screen has it, the player's own place stays empty.
+    val inlineVideo: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = if (videoFull != null) ({}) else videoSurface
     val flies = !state.ui.reduceAnimation && !docked && !landscape &&
             style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
             style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST
@@ -1039,7 +1068,7 @@ fun PlayerLayout(
                     songId = current.videoId,
                     canvas = state.canvasVideo.takeIf { !state.videoMode },
                     musicVideo = state.videoMode,
-                    videoSurface = videoSurface,
+                    videoSurface = inlineVideo,
                     video = state.coverVideo,
                     titleTop = with(LocalDensity.current) {
                         bigTitle?.top?.takeIf { it > 0f }?.toDp()
@@ -1093,7 +1122,8 @@ fun PlayerLayout(
                         onLyrics = { toggle(Pane.LYRICS) },
                         onQueue = { toggle(Pane.QUEUE) },
                         showLines = state.ui.lyricsPreview && pane != Pane.LYRICS,
-                        videoSurface = videoSurface,
+                        videoSurface = inlineVideo,
+                        onFullScreen = openFullScreen,
                         side = when (pane) {
                             Pane.COVER -> null
                             Pane.LYRICS -> { ->
@@ -1357,7 +1387,7 @@ fun PlayerLayout(
                                                     onSwipePrevious = actions.previous,
                                                     animate = !state.ui.reduceAnimation,
                                                     musicVideo = state.videoMode,
-                                                    videoSurface = videoSurface
+                                                    videoSurface = inlineVideo
                                                 )
 
                                             style == PlayerStyle.CASSETTE ->
@@ -1369,7 +1399,7 @@ fun PlayerLayout(
                                                     onSwipePrevious = actions.previous,
                                                     animate = !state.ui.reduceAnimation,
                                                     musicVideo = state.videoMode,
-                                                    videoSurface = videoSurface,
+                                                    videoSurface = inlineVideo,
                                                 )
 
                                             style == PlayerStyle.HALO ->
@@ -1380,7 +1410,7 @@ fun PlayerLayout(
                                                     onSwipePrevious = actions.previous,
                                                     animate = !state.ui.reduceAnimation,
                                                     musicVideo = state.videoMode,
-                                                    videoSurface = videoSurface
+                                                    videoSurface = inlineVideo
                                                 )
 
                                             style == PlayerStyle.POLAROID ->
@@ -1391,7 +1421,7 @@ fun PlayerLayout(
                                                     onSwipePrevious = actions.previous,
                                                     animate = !state.ui.reduceAnimation,
                                                     musicVideo = state.videoMode,
-                                                    videoSurface = videoSurface
+                                                    videoSurface = inlineVideo
                                                 )
 
                                             else ->
@@ -1408,7 +1438,7 @@ fun PlayerLayout(
                                                     glow = state.ui.coverGlow && !state.ui.reduceAnimation && !amoled && !apple,
                                                     video = state.coverVideo,
                                                     musicVideo = state.videoMode,
-                                                    videoSurface = videoSurface,
+                                                    videoSurface = inlineVideo,
                                                     canvasShowing = state.canvasVideo != null && !state.videoMode,
                                                     corner = state.ui.coverCornerDp.dp,
                                                 )
@@ -1422,22 +1452,31 @@ fun PlayerLayout(
                                 }
                                 if (state.videoAvailable) {
                                     Spacer(Modifier.height(14.dp))
-                                    SongVideoToggle(
-                                        state.videoMode,
-                                        actions.setVideoMode,
-                                        Modifier.align(Alignment.CenterHorizontally)
-                                            .onGloballyPositioned {
-                                                // Its place at rest, for the flight overlay to draw
-                                                // it over the flying cover: captured only while it
-                                                // sits at home, like the title's.
-                                                if (!hidden && !flight.active && coverLift == 0f && dragOffset == 0f) toggleHome =
-                                                    it.boundsInRoot()
-                                            }
-                                            .graphicsLayer {
-                                                alpha = if (flight.active && toggleHome != null) 0f else 1f
+                                    Box(Modifier.fillMaxWidth()) {
+                                        SongVideoToggle(
+                                            state.videoMode,
+                                            actions.setVideoMode,
+                                            Modifier.align(Alignment.Center)
+                                                .onGloballyPositioned {
+                                                    // Its place at rest, for the flight overlay to draw
+                                                    // it over the flying cover: captured only while it
+                                                    // sits at home, like the title's.
+                                                    if (!hidden && !flight.active && coverLift == 0f && dragOffset == 0f) toggleHome =
+                                                        it.boundsInRoot()
+                                                }
+                                                .graphicsLayer {
+                                                    alpha = if (flight.active && toggleHome != null) 0f else 1f
+                                                },
+                                            isEpisode = isEpisode
+                                        )
+                                        // Beside the switch while the video shows: the video on the whole screen.
+                                        if (openFullScreen != null) FullScreenButton(
+                                            openFullScreen,
+                                            Modifier.align(Alignment.CenterEnd).graphicsLayer {
+                                                alpha = if (flight.active) 0f else 1f
                                             },
-                                        isEpisode = isEpisode
-                                    )
+                                        )
+                                    }
                                 }
                                 Spacer(Modifier.height(16.dp))
                                 TitleRow(
@@ -2223,6 +2262,14 @@ fun PlayerLayout(
                     }
                 }
             }
+        }
+
+        if (videoFull != null && videoPage != null) {
+            FullScreenVideo(
+                state, position, buffered, actions, videoPage,
+                entry = videoFull,
+                onExit = { videoFullName = null },
+            )
         }
 
         // Winding down for the night: the whole player dims with the music.
