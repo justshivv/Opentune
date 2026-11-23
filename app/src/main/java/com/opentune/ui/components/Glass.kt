@@ -530,3 +530,43 @@ fun PageHeader(title: String, onBack: (() -> Unit)? = null, actions: (@Composabl
         )
     }
 }
+
+/**
+ * What a raised lens over a control bends: the control itself, recorded, over the page's own
+ * recording. Made by [rememberLensSource], recorded by [lensSource] and drawn by [raisedLens].
+ */
+class LensSource internal constructor(internal val layer: com.kyant.backdrop.backdrops.LayerBackdrop, internal val bent: com.kyant.backdrop.Backdrop)
+
+/** A [LensSource], or null where a lens can't bend what's behind (before Android 13, blur off, Lite). */
+@Composable
+fun rememberLensSource(): LensSource? {
+    val page = LocalBackdrop.current
+    val layer = rememberLayerBackdrop()
+    if (page == null || !liquidGlassOn() || GlassPerformance.lite) return null
+    val bent = com.kyant.backdrop.backdrops.rememberCombinedBackdrop(page, layer)
+    return remember(layer, bent) { LensSource(layer, bent) }
+}
+
+/** Records this control for a raised lens over it; nothing without a [source]. */
+fun Modifier.lensSource(source: LensSource?): Modifier = if (source == null) this else this.layerBackdrop(source.layer)
+
+/**
+ * A raised piece of clear glass in [shape]: with a [source], what's under it swells and bends at
+ * its rim with a colour fringe; without one, a clear face with a light sheen.
+ */
+fun Modifier.raisedLens(source: LensSource?, shape: Shape, dark: Boolean): Modifier =
+    if (source != null) this.drawBackdrop(
+        backdrop = source.bent,
+        shape = { shape },
+        effects = {
+            val d = size.minDimension
+            lens(d * 0.24f, d * 0.55f, depthEffect = true, chromaticAberration = true)
+        },
+        highlight = { Highlight.Default },
+        onDrawSurface = {
+            drawRect(Color.White.copy(alpha = if (dark) 0.03f else 0.10f))
+            drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.10f else 0.18f), 0.45f to Color.Transparent))
+        },
+    ) else this.clip(shape).background(
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.02f), Color.White.copy(alpha = 0.06f)))
+    )

@@ -36,11 +36,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.collectAsState
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.GlassStyle
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.highlight.Highlight
 import com.opentune.ui.components.LocalBackdrop
+import com.opentune.ui.components.lensSource
+import com.opentune.ui.components.raisedLens
 import com.opentune.ui.components.liquidGlassOn
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -771,10 +769,7 @@ private fun DockPill(
     // The raised lens is real glass where the phone can bend what's behind (Android 13+, blur on,
     // not Lite): the dock itself is recorded, over the page's own recording, so the tabs it
     // passes over swell and bend at its rim with a colour fringe.
-    val pageBackdrop = LocalBackdrop.current
-    val bends = hops && pageBackdrop != null && liquidGlassOn() && !com.opentune.ui.components.GlassPerformance.lite
-    val dockLayer = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
-    val lensBackdrop = if (bends) com.kyant.backdrop.backdrops.rememberCombinedBackdrop(pageBackdrop!!, dockLayer) else null
+    val lensSource = if (hops) com.opentune.ui.components.rememberLensSource() else null
     // The lens fades where it last was while Search is open.
     val lensAlpha by animateFloatAsState(
         if (shown != null) 1f else 0f,
@@ -786,7 +781,7 @@ private fun DockPill(
         Modifier
             .fillMaxSize()
             .dockShadow(pill)
-            .then(if (bends) Modifier.layerBackdrop(dockLayer) else Modifier)
+            .lensSource(lensSource)
             .glass(pill, tint = ink.film ?: MaterialTheme.colorScheme.surfaceContainerHigh)
             .dockHighlight(pill)
             .clip(pill)
@@ -1003,23 +998,7 @@ private fun DockPill(
                     // Fully there for most of the hop, fading only in the last moment of landing.
                     alpha = (motion.hop / 0.3f).coerceIn(0f, 1f) * lensAlpha * (1f - fold()).coerceIn(0f, 1f)
                 }
-                .then(
-                    if (lensBackdrop != null) Modifier.drawBackdrop(
-                        backdrop = lensBackdrop,
-                        shape = { pill },
-                        effects = {
-                            val d = size.minDimension
-                            lens(d * 0.24f, d * 0.55f, depthEffect = true, chromaticAberration = true)
-                        },
-                        highlight = { Highlight.Default },
-                        onDrawSurface = {
-                            drawRect(Color.White.copy(alpha = if (dark) 0.03f else 0.10f))
-                            drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.10f else 0.18f), 0.45f to Color.Transparent))
-                        },
-                    ) else Modifier
-                        .clip(pill)
-                        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.02f), Color.White.copy(alpha = 0.06f))))
-                )
+                .raisedLens(lensSource, pill, dark)
                 .border(
                     1.dp,
                     Brush.linearGradient(

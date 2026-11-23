@@ -109,3 +109,17 @@ internal object PosterInk {
 
 /** How far the Poster chrome is folded by a scroll; never on the desktop. */
 internal val LocalPosterFold = staticCompositionLocalOf<() -> Float> { { 0f } }
+
+/** The phone's recording for a raised lens to bend; the desktop has no lens shaders, so none. */
+class LensSource private constructor()
+
+@Composable
+fun rememberLensSource(): LensSource? = null
+
+fun Modifier.lensSource(source: LensSource?): Modifier = this
+
+/** A raised piece of clear glass: on the desktop, a clear face with a light sheen. */
+fun Modifier.raisedLens(source: LensSource?, shape: Shape, dark: Boolean): Modifier =
+    this.clip(shape).background(
+        androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.02f), Color.White.copy(alpha = 0.06f)))
+    )

@@ -36,6 +36,8 @@ val sharedFromCore = listOf(
     "com/opentune/data/TrackIds.kt",
     "com/opentune/data/UnmeteredNetwork.kt",
     "com/opentune/data/settings/AppSettings.kt",
+    // Output kinds, for the setting that keeps FLAC off a phone's speaker (never true on a desktop).
+    "com/opentune/playback/AudioOutputs.kt",
     "com/opentune/data/history/ListeningHistoryTarget.kt",
     // The phone's listening stats, daily mixes and speed dial, fed from the desktop's own plays.
     "com/opentune/data/history/History.kt",
