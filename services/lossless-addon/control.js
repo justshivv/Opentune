@@ -82,11 +82,19 @@ function renderSources() {
     card.append(actions); $('sources').append(card);
   });
 }
+const REQUIRED = ['github', 'discord', 'web', 'tv'];
+const LINK_LABELS = {
+  github: 'GitHub', discord: 'Discord', web: 'Web player', tv: 'TV information', website: 'Website', privacy: 'Privacy policy',
+  donate: 'Donate (Ko-fi, Buy Me a Coffee, PayPal, GitHub Sponsors, Liberapay, Patreon, Open Collective)',
+  x: 'X (Twitter)', instagram: 'Instagram', youtube: 'YouTube', telegram: 'Telegram', reddit: 'Reddit',
+};
 function render() {
   $('revision').textContent = revision ? 'Published revision ' + revision : 'No configuration published';
   renderSections(); $('links').replaceChildren();
-  for (const [key, value] of Object.entries(data.links)) {
-    const label = node('label', key === 'tv' ? 'TV information' : key); const input = node('input'); input.type = 'url'; input.value = value;
+  // Every link the apps read, set or not, so an older configuration still shows the new fields.
+  for (const [key, name] of Object.entries(LINK_LABELS)) {
+    const label = node('label', name); const input = node('input'); input.type = 'url'; input.value = data.links[key] || '';
+    if (!REQUIRED.includes(key)) input.placeholder = 'Not shown when empty';
     input.oninput = () => data.links[key] = input.value; label.append(input); $('links').append(label);
   }
   renderSources();

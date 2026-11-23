@@ -26,7 +26,7 @@ The server accepts only these templates:
 | `banners` | Announcements with an HTTPS action | Up to 3; target `android`, `tv`, `web`. No HTML/scripts. |
 | `playlists` | Featured YouTube Music playlist cards | Up to 12; browse ID starts with `VL`. Empty artwork is allowed. |
 | `sources` | Admin add-on catalog, including owner pauses | Up to 20. `null` uses the existing usage-dashboard catalog; `[]` removes admin entries. |
-| `links` | GitHub, Discord, web player and TV information | HTTPS. GitHub and Discord domains are restricted. |
+| `links` | GitHub, Discord, web player and TV information (required); website, privacy policy, donate, X, Instagram, YouTube, Telegram and Reddit (optional, shown only when set) | HTTPS. GitHub must be on github.com and Discord on discord.gg or discord.com. Each social link must be on its own site (x.com or twitter.com, instagram.com, youtube.com or youtu.be, t.me or telegram.me, reddit.com); donate on Ko-fi, Buy Me a Coffee, PayPal, GitHub Sponsors, Liberapay, Patreon or Open Collective. The Android, desktop and web apps open every one of these from the configuration, so a change is followed without an update. An optional link that fails these checks is left out on the device, not the whole configuration. |
 | `network` | Future add-on metadata request timeout | 4–20 seconds overall; existing per-read limits still apply. `retries` controls Android's short 429 retries, 0–2. Web retains its existing cooldown behavior. |
 | `communityPrompts` | Existing monthly invitations | Does not erase the listener's dismissal history. |
 

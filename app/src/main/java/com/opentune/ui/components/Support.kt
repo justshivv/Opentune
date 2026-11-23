@@ -2,6 +2,7 @@ package com.opentune.ui.components
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -137,6 +138,14 @@ fun SupportDialog(onDismiss: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                // Outside India, or without a UPI app: the donation page the dashboard set, if any.
+                com.opentune.data.config.RemoteConfig.state.collectAsState().value
+                com.opentune.data.config.RemoteConfig.current.donate?.let { page ->
+                    androidx.compose.material3.TextButton(
+                        onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, page.toUri())) }; onDismiss() },
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) { Text("Give another way") }
+                }
             }
         },
         confirmButton = {

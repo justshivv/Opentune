@@ -29,12 +29,46 @@ data class AppConfig(
     val github: String = "https://github.com/justshivv/Opentune", val discord: String = "https://discord.gg/aqGA9ekG2H",
     val web: String = "https://justshivv.github.io/Opentune/player/", val tv: String = "https://justshivv.github.io/Opentune/",
     val timeoutMs: Long = 8000, val retries: Int = 2, val communityPrompts: Boolean = true,
+    /** The optional links the dashboard set (website, privacy, donate and social accounts), by key; unset ones are absent. */
+    val extra: Map<String, String> = emptyMap(),
 ) {
+    val website: String? get() = extra["website"]
+    val privacy: String? get() = extra["privacy"]
+    val donate: String? get() = extra["donate"]
+
+    /** The project's social accounts the dashboard set, in a fixed order, as (key, url). */
+    val socials: List<Pair<String, String>> get() = RemoteConfigProtocol.socialKeys.mapNotNull { k -> extra[k]?.let { k to it } }
+
+    /** A page in the GitHub repository ([path] such as "releases/latest"), so it follows the repository link. */
+    fun repo(path: String): String = github.trimEnd('/') + "/" + path.trimStart('/')
+
     fun title(id: String, fallback: String) = sections.firstOrNull { it.id == id }?.title?.ifBlank { fallback } ?: fallback
 }
 
 object RemoteConfigProtocol {
     val sectionIds = listOf("speed-dial", "quick-picks", "mixes", "spotify-mixes", "featured-playlists", "recommendations")
+
+    /**
+     * Links shown only when set, each on the sites it may point to (null: any public HTTPS
+     * page). The same table as the dashboard's, so a social link can't lead off its own site.
+     */
+    val optionalLinks: Map<String, Set<String>?> = linkedMapOf(
+        "website" to null, "privacy" to null,
+        "donate" to setOf("ko-fi.com", "buymeacoffee.com", "paypal.me", "paypal.com", "github.com", "liberapay.com", "patreon.com", "opencollective.com"),
+        "x" to setOf("x.com", "twitter.com"), "instagram" to setOf("instagram.com"), "youtube" to setOf("youtube.com", "youtu.be"),
+        "telegram" to setOf("t.me", "telegram.me"), "reddit" to setOf("reddit.com"),
+    )
+    val socialKeys = listOf("x", "instagram", "youtube", "telegram", "reddit")
+
+    /** [links]' optional entries that are set and on their allowed sites; a bad one is dropped, not the whole configuration. */
+    internal fun optional(links: JSONObject, url: (String) -> String, host: (String) -> String): Map<String, String> =
+        optionalLinks.mapNotNull { (key, hosts) ->
+            val raw = links.optString(key).trim().takeIf { it.isNotEmpty() && it.length <= 2048 } ?: return@mapNotNull null
+            val clean = runCatching { url(raw) }.getOrNull()?.takeIf { it.startsWith("https://") } ?: return@mapNotNull null
+            val h = runCatching { host(clean) }.getOrNull() ?: return@mapNotNull null
+            if (hosts != null && hosts.none { h == it || h == "www.$it" }) return@mapNotNull null
+            key to clean
+        }.toMap()
     private fun decode(value: String) = Base64.decode(value, Base64.URL_SAFE or Base64.NO_WRAP)
     private fun url(value: String): String = com.opentune.data.addons.AddonProtocol.url(value).toString()
     private fun string(r: JSONObject, key: String, max: Int, blank: Boolean = false): String = r.getString(key).also { require(it.length <= max && (blank || it.isNotBlank())) }
@@ -89,7 +123,8 @@ object RemoteConfigProtocol {
         val github = url(links.getString("github")); val discord = url(links.getString("discord"))
         require(com.opentune.data.addons.AddonProtocol.url(github).host == "github.com")
         require(com.opentune.data.addons.AddonProtocol.url(discord).host in setOf("discord.gg", "discord.com"))
-        return AppConfig(revision, expires, sections, banners, playlists, sources, github, discord, url(links.getString("web")), url(links.getString("tv")), timeout, retries, data.getBoolean("communityPrompts"))
+        val extra = optional(links, ::url) { com.opentune.data.addons.AddonProtocol.url(it).host }
+        return AppConfig(revision, expires, sections, banners, playlists, sources, github, discord, url(links.getString("web")), url(links.getString("tv")), timeout, retries, data.getBoolean("communityPrompts"), extra)
     }
 }
 

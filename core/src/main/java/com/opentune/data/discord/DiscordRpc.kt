@@ -68,7 +68,8 @@ object DiscordRpc {
 
     private const val GATEWAY = "wss://gateway.discord.gg/?v=10&encoding=json"
     private const val API = "https://discord.com/api/v10"
-    private const val PROJECT_URL = "https://github.com/justshivv/Opentune"
+    /** The "Get OpenTune" button's page: the repository link the dashboard last set. */
+    private val PROJECT_URL get() = com.opentune.data.config.RemoteConfig.current.github
     private const val APP_NAME = "OpenTune"
     /** The logo's key among the Discord application's Rich Presence assets. */
     private const val LOGO_ASSET = "logo"

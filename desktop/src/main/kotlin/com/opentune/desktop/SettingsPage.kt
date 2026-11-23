@@ -54,6 +54,8 @@ import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material.icons.rounded.Tv
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -737,6 +739,8 @@ private fun ConnectedRows() {
 @Composable
 private fun AboutSection() {
     val links = androidx.compose.ui.platform.LocalUriHandler.current
+    // Read so a configuration pushed from the dashboard redraws these links.
+    com.opentune.data.config.RemoteConfig.state.collectAsState().value
     val config = com.opentune.data.config.RemoteConfig.current
     Section("About", footer = "OpenTune is free and open source. Report bugs, suggest features and share the add-ons you build.") {
         SettingRow(
@@ -752,7 +756,15 @@ private fun AboutSection() {
             Triple("OpenTune for Android", "Download", "${config.github.trimEnd('/')}/releases/latest") to (Icons.Rounded.Smartphone to Color(0xFF2FA84F)),
             Triple("OpenTune on TV", null, config.tv) to (Icons.Rounded.Tv to Color(0xFF3478F6)),
             Triple("Web player", null, config.web) to (Icons.Rounded.Language to Color(0xFF8E5BD8)),
-            Triple("Build an add-on", null, "https://bitchord.kushagrasingh.in/docs") to (Icons.Rounded.Build to Color(0xFFE5483A)),
+            Triple("Build an add-on", null, "https://justshivv.github.io/Opentune/addons/") to (Icons.Rounded.Build to Color(0xFFE5483A)),
+        ).plus(
+            // The website, social accounts, donation page and privacy policy, each only when the dashboard sets it.
+            listOfNotNull(config.website?.let { Triple("Website", null, it) to (Icons.Rounded.Language to Color(0xFF2F7D6D)) }) +
+                config.socials.map { (key, url) -> Triple(SOCIAL_NAMES[key] ?: key, null, url) to (Icons.Rounded.ArrowOutward to Color(0xFF55575E)) } +
+                listOfNotNull(
+                    config.donate?.let { Triple("Donate", null, it) to (Icons.Rounded.Favorite to Color(0xFFE0457B)) },
+                    config.privacy?.let { Triple("Privacy policy", null, it) to (Icons.Rounded.Lock to Color(0xFF55575E)) },
+                ),
         ).forEach { (link, look) ->
             val (title, value, url) = link
             val (icon, colour) = look
@@ -802,3 +814,5 @@ private fun OutputDeviceRow() {
         onOpen = { devices = AudioDevices.available() },
     ) { AudioDevices.select(it) }
 }
+
+private val SOCIAL_NAMES = mapOf("x" to "X", "instagram" to "Instagram", "youtube" to "YouTube", "telegram" to "Telegram", "reddit" to "Reddit")

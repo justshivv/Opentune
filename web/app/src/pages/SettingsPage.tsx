@@ -1,4 +1,5 @@
-import { ArrowUpRight, AudioLines, ChevronRight, Info, Mic2, MonitorSmartphone, Palette, Play, Plug, Smartphone, Tv, Users, Wrench, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, AudioLines, ChevronRight, Globe, Heart, Info, Lock, Mic2, MonitorSmartphone, Palette, Play, Plug, Smartphone, Tv, Users, Wrench, type LucideIcon } from 'lucide-react';
+import { socialLinks } from '@/config/protocol';
 import { Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { lazyRecovering } from '@/lib/staleBuild';
 import { MdOutlineExtension } from 'react-icons/md';
@@ -347,6 +348,13 @@ export default function SettingsPage() {
               <ExternalRow href="https://justshivv.github.io/Opentune/addons/" icon={<Glyph Icon={Wrench} color="#e5483a" />} title="Build an add-on" />
               <ExternalRow href={links.github} icon={<Glyph Icon={SiGithub} color="#24292f" />} title="Source code" value="GitHub" />
               <ExternalRow href={links.discord} icon={<Glyph Icon={SiDiscord} color="#5865f2" />} title="Community" value="Discord" />
+              {/* The website, social accounts, donation page and privacy policy, each only when the dashboard sets it. */}
+              {links.website && <ExternalRow href={links.website} icon={<Glyph Icon={Globe} color="#2f7d6d" />} title="Website" />}
+              {socialLinks.map((key) => links[key] && (
+                <ExternalRow key={key} href={links[key]!} icon={<Glyph Icon={ArrowUpRight} color="#55575e" />} title={SOCIAL_NAMES[key]} />
+              ))}
+              {links.donate && <ExternalRow href={links.donate} icon={<Glyph Icon={Heart} color="#e0457b" />} title="Donate" />}
+              {links.privacy && <ExternalRow href={links.privacy} icon={<Glyph Icon={Lock} color="#55575e" />} title="Privacy policy" />}
             </section>
             <p className={settingsUi.footer}>OpenTune is free and open source. Report bugs, suggest features and share the add-ons you build.</p>
           </Section>
@@ -361,3 +369,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+const SOCIAL_NAMES: Record<(typeof socialLinks)[number], string> = { x: 'X', instagram: 'Instagram', youtube: 'YouTube', telegram: 'Telegram', reddit: 'Reddit' };

@@ -6,8 +6,7 @@
  */
 export type Invitation = 'star' | 'discord';
 
-export const GITHUB_URL = 'https://github.com/justshivv/Opentune';
-export const DISCORD_URL = 'https://discord.gg/aqGA9ekG2H';
+// The links themselves come from the dashboard's configuration (runtime.links), so a change there is followed.
 
 const KEY = 'opentune:invitations';
 const DAY = 86_400_000;

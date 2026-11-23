@@ -19,6 +19,19 @@ test('only supported, bounded settings can be published', () => {
     assert.throws(() => validateConfig({ ...defaults(), ...change }));
   }
 });
+test('optional links are kept when set, empty when not, and social links stay on their own site', () => {
+  const base = defaults();
+  const set = validateConfig({ ...base, links: { ...base.links, website: 'https://opentune.example.org/', x: 'https://x.com/opentune', instagram: 'https://www.instagram.com/opentune/', donate: 'https://ko-fi.com/opentune' } });
+  assert.equal(set.links.x, 'https://x.com/opentune');
+  assert.equal(set.links.instagram, 'https://www.instagram.com/opentune/');
+  assert.equal(set.links.telegram, '');
+  // An older configuration without the new keys reads as unset.
+  const old = validateConfig({ ...base, links: { github: base.links.github, discord: base.links.discord, web: base.links.web, tv: base.links.tv } });
+  assert.equal(old.links.website, ''); assert.equal(old.links.reddit, '');
+  for (const links of [{ x: 'https://evil.example/x' }, { instagram: 'http://instagram.com/opentune' }, { telegram: 'https://t.me.evil.example/' }, { facebook: 'https://facebook.com/x' }]) {
+    assert.throws(() => validateConfig({ ...base, links: { ...base.links, ...links } }));
+  }
+});
 test('publish, conflict, rollback, signature and restart retain a monotonic history', () => {
   const f = fixture();
   try {

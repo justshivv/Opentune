@@ -7,9 +7,24 @@ export const SECTION_IDS = ['speed-dial', 'quick-picks', 'mixes', 'spotify-mixes
 export const defaults = () => ({
   sections: SECTION_IDS.map(id => ({ id, enabled: true, title: '' })),
   banners: [], playlists: [], sources: null,
-  links: { github: 'https://github.com/justshivv/Opentune', discord: 'https://discord.gg/aqGA9ekG2H', web: 'https://justshivv.github.io/Opentune/player/', tv: 'https://justshivv.github.io/Opentune/' },
+  links: { github: 'https://github.com/justshivv/Opentune', discord: 'https://discord.gg/aqGA9ekG2H', web: 'https://justshivv.github.io/Opentune/player/', tv: 'https://justshivv.github.io/Opentune/',
+    ...Object.fromEntries(Object.keys(OPTIONAL_LINKS).map(k => [k, ''])) },
   network: { timeoutMs: 8000, retries: 2 }, communityPrompts: true,
 });
+/**
+ * Links the apps show only when set: the website, the privacy policy, a donation page
+ * and the project's social accounts. Each social link must be on its own site, so a
+ * mistyped or swapped value can't send people somewhere else under that name. Older
+ * apps ignore these keys; older configurations without them read as unset.
+ */
+export const OPTIONAL_LINKS = {
+  website: null, privacy: null,
+  donate: ['ko-fi.com', 'buymeacoffee.com', 'paypal.me', 'paypal.com', 'github.com', 'liberapay.com', 'patreon.com', 'opencollective.com'],
+  x: ['x.com', 'twitter.com'], instagram: ['instagram.com'], youtube: ['youtube.com', 'youtu.be'],
+  telegram: ['t.me', 'telegram.me'], reddit: ['reddit.com'],
+};
+const REQUIRED_LINKS = ['github', 'discord', 'web', 'tv'];
+const onSite = (href, hosts) => { const host = new URL(href).hostname; return hosts.some(h => host === h || host === 'www.' + h); };
 function requireValue(ok, message) { if (!ok) throw new Error(message); }
 const text = (value, max, name, empty = false) => {
   requireValue(typeof value === 'string' && value.length <= max && (empty || value.trim().length > 0), `Invalid ${name}`);
@@ -46,9 +61,16 @@ export function validateConfig(input) {
   const sources = input.sources === null ? null : unique(array(input.sources, 20, 'sources').map(x => ({
     id: id(x.id), name: text(x.name, 80, 'source name'), url: https(x.url), enabled: enabled(x.enabled),
   })));
-  const links = Object.fromEntries(['github', 'discord', 'web', 'tv'].map(k => [k, https(input.links?.[k])]));
+  requireValue(input.links && typeof input.links === 'object' && Object.keys(input.links).every(k => REQUIRED_LINKS.includes(k) || k in OPTIONAL_LINKS), 'Unknown link');
+  const links = Object.fromEntries(REQUIRED_LINKS.map(k => [k, https(input.links[k])]));
   requireValue(new URL(links.github).hostname === 'github.com', 'GitHub link must use github.com');
   requireValue(['discord.gg', 'discord.com'].includes(new URL(links.discord).hostname), 'Discord link must use discord.gg or discord.com');
+  for (const [k, hosts] of Object.entries(OPTIONAL_LINKS)) {
+    const value = input.links[k];
+    if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) { links[k] = ''; continue; }
+    links[k] = https(value);
+    requireValue(!hosts || onSite(links[k], hosts), `The ${k} link must be on ${hosts?.join(' or ')}`);
+  }
   const network = input.network;
   requireValue(Number.isInteger(network?.timeoutMs) && network.timeoutMs >= 4000 && network.timeoutMs <= 20000, 'Timeout must be 4000–20000 ms');
   requireValue(Number.isInteger(network.retries) && network.retries >= 0 && network.retries <= 2, 'Retries must be 0–2');

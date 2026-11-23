@@ -495,6 +495,9 @@ private fun settingsSections(
     onOpenDevices: () -> Unit,
     onOpenDiscord: () -> Unit,
 ): List<Section> {
+    // Read so a configuration pushed from the dashboard redraws the links below.
+    com.opentune.data.config.RemoteConfig.state.collectAsState().value
+    val links = com.opentune.data.config.RemoteConfig.current
     val discord by com.opentune.data.discord.DiscordRpc.account.collectAsState()
     val discordOn by com.opentune.data.discord.DiscordRpc.enabled.collectAsState()
     val discordStatus by com.opentune.data.discord.DiscordRpc.status.collectAsState()
@@ -2089,9 +2092,10 @@ private fun settingsSections(
                 },
                 Entry("Source code", "github open source license gpl") {
                     NavRow("Source code", {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/justshivv/Opentune".toUri())) }
-                    }, summary = "github.com/justshivv/Opentune · GPL v3", icon = ImageVector.vectorResource(AppIcons.Code))
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, links.github.toUri())) }
+                    }, summary = links.github.removePrefix("https://").trimEnd('/') + " · GPL v3", icon = ImageVector.vectorResource(AppIcons.Code))
                 },
+            ) + followEntries(links, context) + listOf(
                 Entry("justshivv", "github developer creator justshivv") {
                     DeveloperCard("justshivv", "https://avatars.githubusercontent.com/u/78946189?v=4", "https://github.com/justshivv")
                 },
@@ -2116,6 +2120,29 @@ private fun settingsSections(
         ),
     )
 }
+
+/**
+ * The website, the project's social accounts, a donation page and the privacy policy, as
+ * the dashboard last set them: a row for each one that's set, none for the rest, so a link
+ * added, changed or removed there shows here without an update.
+ */
+private fun followEntries(links: com.opentune.data.config.AppConfig, context: Context): List<Entry> {
+    fun open(url: String) = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+    fun shown(url: String) = url.removePrefix("https://").removePrefix("www.").trimEnd('/')
+    val named = listOfNotNull(
+        links.website?.let { Triple("Website", it, AppIcons.Public) },
+    ) + links.socials.map { (key, url) -> Triple(SOCIAL_NAMES[key] ?: key, url, AppIcons.OpenInNew) } + listOfNotNull(
+        links.donate?.let { Triple("Donate", it, AppIcons.Favorite) },
+        links.privacy?.let { Triple("Privacy policy", it, AppIcons.Lock) },
+    )
+    return named.map { (name, url, icon) ->
+        Entry(name, "follow social link $name website community") {
+            NavRow(name, { open(url) }, summary = shown(url), icon = ImageVector.vectorResource(icon))
+        }
+    }
+}
+
+private val SOCIAL_NAMES = mapOf("x" to "X", "instagram" to "Instagram", "youtube" to "YouTube", "telegram" to "Telegram", "reddit" to "Reddit")
 
 private fun outputSummary(context: Context, float: Boolean): String {
     val am = context.getSystemService(AudioManager::class.java)
