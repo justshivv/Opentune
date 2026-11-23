@@ -32,6 +32,9 @@ class NativeOutputProvider(delegate: AudioOutputProvider) : ForwardingAudioOutpu
         if (config.isOffload || config.isTunneling || config.encoding !in CARRIERS || !NativeAudio.loaded) return super.getAudioOutput(config)
         val channels = Integer.bitCount(config.channelMask)
         val bits = BitPerfectUsb.bitsOf(BitPerfectUsb.sourceEncoding).coerceIn(16, 32)
+        // The phone's own DAC or jack, opened exclusively through AAudio, only from Android 10:
+        // a crash in there can't be caught and takes the whole app down. Android's own output instead.
+        if (mode != BitPerfectOutput.USB_DIRECT && !AAudioGuard.usable) return super.getAudioOutput(config).also { BitPerfectUsb.reportNative(null) }
         if (mode == BitPerfectOutput.HEADPHONE_JACK) {
             // No headphones in the jack: Android's own output, wherever it plays.
             val jack = BitPerfectUsb.wiredJack() ?: return super.getAudioOutput(config).also { BitPerfectUsb.reportNative(BitPerfectUsb.Status.NoDac) }
@@ -215,12 +218,15 @@ internal class AAudioExclusiveOutput private constructor(
     target: Int,
     private val bufferFrames: Long,
 ) : NativeOutput(config, channels, target) {
-    override fun framesPlayed(): Long = NativeAudio.aaudioFramesPlayed(handle)
+    override fun framesPlayed(): Long = NativeAudio.aaudioFramesPlayed(handle).also {
+        // A few seconds played on it: this phone takes the stream, and the mark comes off.
+        if (it >= config.sampleRate.toLong() * AAudioGuard.TRUSTED_SECONDS) AAudioGuard.settled()
+    }
     override fun take(buffer: ByteBuffer, offset: Int, frames: Int): Int = NativeAudio.aaudioWrite(handle, buffer, offset, frames, 0)
     override fun start() { NativeAudio.aaudioStart(handle) }
     override fun hold() { NativeAudio.aaudioPause(handle) }
     override fun drop() { NativeAudio.aaudioPause(handle); NativeAudio.aaudioFlush(handle) }
-    override fun close() { NativeAudio.aaudioStop(handle); NativeAudio.aaudioClose(handle) }
+    override fun close() { NativeAudio.aaudioStop(handle); NativeAudio.aaudioClose(handle); AAudioGuard.settled() }
     override fun getBufferSizeInFrames(): Long = bufferFrames
 
     companion object {
@@ -243,6 +249,9 @@ internal class AAudioExclusiveOutput private constructor(
                 if (modern && bits <= 24) add(NativeAudio.FORMAT_I24_PACKED to C.ENCODING_PCM_24BIT)
                 if (modern) add(NativeAudio.FORMAT_I32 to C.ENCODING_PCM_32BIT)
             }
+            // Marked as opening until the stream has played a few seconds: if the app dies in
+            // there, the next start finds the mark and turns the exclusive output off.
+            AAudioGuard.opening()
             for ((format, encoding) in tries) {
                 val handle = NativeAudio.aaudioOpen(config.sampleRate, channels, format, deviceId, true)
                 if (handle == 0L) continue
@@ -255,9 +264,54 @@ internal class AAudioExclusiveOutput private constructor(
                 BitPerfectUsb.reportNative(BitPerfectUsb.Status.Active(name, config.sampleRate, BitPerfectUsb.bitsOf(encoding), "exclusive"))
                 return AAudioExclusiveOutput(handle, config, channels, encoding, info[4].toLong())
             }
+            AAudioGuard.settled()
             Log.w("NativeOutput", "The phone's DAC wouldn't open exclusively at ${config.sampleRate} Hz")
             BitPerfectUsb.reportNative(BitPerfectUsb.Status.NoMatch(config.sampleRate, bits))
             return null
         }
     }
+}
+
+/**
+ * Keeps the exclusive AAudio outputs (the built-in DAC, the headphone jack) from taking the app
+ * down again and again. A crash inside AAudio can't be caught, and on some phones (an EMUI one,
+ * #72) the app closed as soon as music started. So a mark is left on disk while such a stream
+ * opens and plays its first seconds; finding it at the next start means the app died there,
+ * and the output goes back to Android's own. They're never tried before Android 10.
+ */
+internal object AAudioGuard {
+    /** Seconds a stream plays before it counts as safe on this phone. */
+    const val TRUSTED_SECONDS = 3L
+
+    @Volatile private var mark: java.io.File? = null
+    @Volatile private var marked = false
+
+    /** Whether the exclusive AAudio outputs may be tried on this phone. */
+    val usable: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+
+    /** At the service's start: a mark left from last time means the app died in AAudio; [onCrashFound] then runs. */
+    fun start(dir: java.io.File, onCrashFound: () -> Unit) {
+        val file = java.io.File(dir, MARK)
+        mark = file
+        if (marked) return
+        if (runCatching { file.exists() }.getOrDefault(false)) {
+            Log.w("NativeOutput", "The app closed while an exclusive output was opening; back to Android's output")
+            runCatching { file.delete() }
+            onCrashFound()
+        }
+    }
+
+    fun opening() {
+        if (marked) return
+        marked = true
+        runCatching { mark?.createNewFile() }
+    }
+
+    fun settled() {
+        if (!marked) return
+        marked = false
+        runCatching { mark?.delete() }
+    }
+
+    private const val MARK = "aaudio-exclusive-opening"
 }

@@ -2167,8 +2167,13 @@ private fun BitPerfectSheet(mode: com.opentune.data.settings.BitPerfectOutput, o
         o == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT &&
                 com.opentune.playback.nativeout.UsbDirect.status.value is com.opentune.playback.nativeout.UsbDirect.Status.NeedsPermission
     }
+    // The phone's own DAC and jack open through AAudio, which isn't safe before Android 10 (#72).
+    val aaudio = { o: com.opentune.data.settings.BitPerfectOutput ->
+        o == com.opentune.data.settings.BitPerfectOutput.BUILT_IN || o == com.opentune.data.settings.BitPerfectOutput.HEADPHONE_JACK
+    }
     val available = { o: com.opentune.data.settings.BitPerfectOutput ->
-        o != com.opentune.data.settings.BitPerfectOutput.USB_ANDROID || BitPerfectUsb.supported
+        (o != com.opentune.data.settings.BitPerfectOutput.USB_ANDROID || BitPerfectUsb.supported) &&
+                (!aaudio(o) || android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q)
     }
     com.opentune.ui.components.ChoiceSheet(
         title = "Bit-perfect output",
@@ -2176,7 +2181,7 @@ private fun BitPerfectSheet(mode: com.opentune.data.settings.BitPerfectOutput, o
         selected = mode,
         label = { o ->
             com.opentune.i18n.Tr.t(o.label) + " · " +
-                    com.opentune.i18n.Tr.t(if (available(o)) o.summary else "Needs Android 14 or newer")
+                    com.opentune.i18n.Tr.t(if (available(o)) o.summary else if (aaudio(o)) "Needs Android 10 or newer" else "Needs Android 14 or newer")
         },
         onSelect = { option ->
             AppSettings.updatePlayback {

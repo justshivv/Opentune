@@ -274,6 +274,16 @@ class PlaybackService : MediaLibraryService() {
         com.opentune.data.AppInUse.started.value = true
         super.onCreate()
         val context: Context = this
+        // The app died last time while the phone's DAC or jack was being opened exclusively
+        // (a crash in AAudio can't be caught): that output goes back to Android's own, so the
+        // app doesn't close again each time music starts.
+        com.opentune.playback.nativeout.AAudioGuard.start(noBackupFilesDir) {
+            AppSettings.updatePlayback {
+                if (it.bitPerfectOutput == com.opentune.data.settings.BitPerfectOutput.BUILT_IN ||
+                    it.bitPerfectOutput == com.opentune.data.settings.BitPerfectOutput.HEADPHONE_JACK
+                ) it.copy(bitPerfectOutput = com.opentune.data.settings.BitPerfectOutput.OFF) else it
+            }
+        }
         // Android 12 and later refuse a media notification's foreground start from the
         // background: a song another device hands this phone with the app closed played
         // with no notification at all. Then a plain one says so and opens the player.
