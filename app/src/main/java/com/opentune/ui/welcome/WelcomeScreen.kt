@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -120,21 +119,40 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
+import com.opentune.ui.theme.AppLanguage
+import com.opentune.ui.theme.AppLanguages
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.Dp
 
 /** The welcome's steps, in order. */
-internal enum class WelcomeStep { ARTISTS, LOOK, SIGN_IN }
+internal enum class WelcomeStep {
+    LANGUAGE, ARTISTS, LOOK, SIGN_IN, COMMUNITY;
+
+    val previous: WelcomeStep? get() = entries.getOrNull(ordinal - 1)
+}
 
 /** Done needs this many picks; with none, the step can only be skipped. */
 internal const val MIN_PICKS = 1
 
 /**
  * The first-run welcome, shown once before Home on a fresh install (see
- * [Welcome]): artists to follow, where each pick brings in more like it (see
- * [ArtistChain]), which seed Home's first picks and mixes;
- * the theme and glass, with a live preview of the dock and mini player; and
- * an optional YouTube Music sign-in. Back goes a step back. Every choice
- * goes through the app's own settings, follows and sign-in, so the same
- * things can be changed later in Settings.
+ * [Welcome]): the app's language, tried out as it's chosen (see
+ * [WelcomeLanguage]); artists to follow, where each pick brings in more like it
+ * (see [ArtistChain]), which seed Home's first picks and mixes; the theme and
+ * glass, with a live preview of the dock and mini player; an optional YouTube
+ * Music sign-in; and an invitation to star the project or join its Discord.
+ * Back goes a step back. Every choice goes through the app's own settings,
+ * follows and sign-in, so the same things can be changed later in Settings.
  */
 @Composable
 fun WelcomeScreen(
@@ -146,7 +164,14 @@ fun WelcomeScreen(
 ) {
     val ui by AppSettings.ui.collectAsState()
     val context = LocalContext.current
-    var step by rememberSaveable { mutableStateOf(WelcomeStep.ARTISTS) }
+    var step by rememberSaveable { mutableStateOf(WelcomeStep.LANGUAGE) }
+    // The language as the app has it now, and the one being tried out on the first step.
+    val phone = remember { WelcomeLanguage.phoneLocale() }
+    val kept = remember { AppLanguages.selected(context) }
+    var chosen by rememberSaveable { mutableStateOf(kept) }
+    val languageGrid = rememberLazyGridState(
+        initialFirstVisibleItemIndex = WelcomeLanguage.options(phone).indexOf(chosen).let { if (it < 6) 0 else it - 1 },
+    )
     val picks = rememberSaveable(saver = ArtistListSaver) { mutableStateListOf() }
     // The artists on offer, grown by the picks; kept here so going back to the step finds it as it was.
     val grid = rememberSaveable(saver = ArtistListSaver) { mutableStateListOf() }
@@ -161,8 +186,8 @@ fun WelcomeScreen(
     var signingIn by rememberSaveable { mutableStateOf(false) }
     val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     // The suggestions start from the charts where the listener is, so approximate location is
-    // asked for first; whatever the answer, the artists load after it (from the network's country
-    // when it's declined). A device without location (a TV) isn't asked.
+    // asked for as the artists come up; whatever the answer, the artists load after it (from the
+    // network's country when it's declined). A device without location (a TV) isn't asked.
     var locationAnswered by rememberSaveable {
         mutableStateOf(
             com.opentune.data.radio.ApproxLocation.granted(context) ||
@@ -171,16 +196,19 @@ fun WelcomeScreen(
     }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { locationAnswered = true }
     var asked by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!locationAnswered && !asked) {
-            asked = true
-            runCatching { askLocation.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION) }.onFailure { locationAnswered = true }
-        }
+    LaunchedEffect(step == WelcomeStep.ARTISTS) {
+        if (step != WelcomeStep.ARTISTS || locationAnswered || asked) return@LaunchedEffect
+        // After the step has slid in, and after any redraw a new language brings, so the
+        // question lands on the page it's about rather than on one going away.
+        delay(450)
+        asked = true
+        runCatching { askLocation.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION) }.onFailure { locationAnswered = true }
     }
     var country by rememberSaveable { mutableStateOf<String?>(null) }
     val popular: suspend () -> List<ExploreFeed.Artist> = loadPopular ?: {
         val where = com.opentune.data.UserCountry.locate(context)
         // The country the artists really came from: one without charts of its own borrows another's.
+        // Asked in the language chosen on the first step, which Innertube reads off the default locale.
         MusicRepository.popularArtists(where.country, where.state).also { country = it.country }.artists
     }
 
@@ -204,12 +232,56 @@ fun WelcomeScreen(
             }
         }
         if (picks.isNotEmpty() && AppSettings.library.value.releaseAlerts && !NewReleases.canNotify(context)) {
-            askNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            runCatching { askNotify.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
         }
     }
 
-    BackHandler(enabled = signingIn || step != WelcomeStep.ARTISTS) {
-        if (signingIn) signingIn = false else step = WelcomeStep.entries[step.ordinal - 1]
+    fun choose(language: AppLanguage) {
+        if (language == chosen) return
+        chosen = language
+        WelcomeLanguage.preview(context, language, phone)
+        // Artists already fetched in the old language are fetched again in the new one; the picks stay.
+        grid.clear()
+        grown.clear()
+        broughtBy.clear()
+    }
+
+    fun back() {
+        if (signingIn) signingIn = false else step.previous?.let { step = it }
+    }
+
+    fun next() {
+        when (step) {
+            WelcomeStep.LANGUAGE -> {
+                // Moved on first, so the step is saved if Android redraws the activity in the new language.
+                step = WelcomeStep.ARTISTS
+                WelcomeLanguage.keep(context, chosen)
+            }
+            WelcomeStep.ARTISTS -> { follow(); step = WelcomeStep.LOOK }
+            WelcomeStep.LOOK -> step = WelcomeStep.SIGN_IN
+            WelcomeStep.SIGN_IN -> if (AccountStore.signedIn.value) step = WelcomeStep.COMMUNITY else signingIn = true
+            WelcomeStep.COMMUNITY -> finish()
+        }
+    }
+
+    fun skip() {
+        when (step) {
+            WelcomeStep.LANGUAGE -> next()
+            WelcomeStep.ARTISTS -> step = WelcomeStep.LOOK
+            WelcomeStep.LOOK -> step = WelcomeStep.SIGN_IN
+            WelcomeStep.SIGN_IN -> step = WelcomeStep.COMMUNITY
+            WelcomeStep.COMMUNITY -> finish()
+        }
+    }
+
+    BackHandler(enabled = signingIn || step.previous != null) { back() }
+
+    // Turning the screen sets the app's words and locale back to the kept language (the
+    // Application follows its configuration); a language only tried out is put back and drawn again.
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    var redraws by remember { mutableIntStateOf(0) }
+    LaunchedEffect(configuration) {
+        if (chosen != AppLanguages.selected(context) && WelcomeLanguage.preview(context, chosen, phone)) redraws++
     }
 
     // The opening animation dives into the welcome, as it would into Home.
@@ -217,87 +289,94 @@ fun WelcomeScreen(
     var dive by remember { mutableFloatStateOf(if (opening) 0f else 1f) }
     LaunchedEffect(Unit) { com.opentune.ui.components.Opening.played = true }
 
-    Box(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).graphicsLayer {
-            if (dive < 1f) {
-                val s = 1.14f - 0.14f * (1f - (1f - dive) * (1f - dive))
-                scaleX = s
-                scaleY = s
-            }
-        },
-    ) {
-        GlassPage(
-            Modifier.fillMaxSize(),
-            overlay = {
-                WelcomeTopBar(
-                    step = step,
-                    onBack = { step = WelcomeStep.entries[step.ordinal - 1] },
-                    onSkip = { step = WelcomeStep.LOOK },
-                    reduceMotion = ui.reduceAnimation,
-                )
-                WelcomeBottomBar(
-                    step = step,
-                    picks = picks,
-                    onContinue = {
-                        when (step) {
-                            WelcomeStep.ARTISTS -> { follow(); step = WelcomeStep.LOOK }
-                            WelcomeStep.LOOK -> step = WelcomeStep.SIGN_IN
-                            WelcomeStep.SIGN_IN -> if (AccountStore.signedIn.value) finish() else signingIn = true
-                        }
-                    },
-                    onNotNow = ::finish,
-                )
+    // A language tried out but not yet kept is laid out its own way round (Arabic from the right).
+    val direction = if (chosen == kept) LocalLayoutDirection.current else WelcomeLanguage.direction(WelcomeLanguage.locale(chosen, phone))
+    CompositionLocalProvider(LocalLayoutDirection provides direction) {
+        Box(
+            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).graphicsLayer {
+                if (dive < 1f) {
+                    val s = 1.14f - 0.14f * (1f - (1f - dive) * (1f - dive))
+                    scaleX = s
+                    scaleY = s
+                }
             },
         ) {
-            AnimatedContent(
-                step,
-                transitionSpec = {
-                    val forward = targetState.ordinal > initialState.ordinal
-                    if (forward) PageMotion.enter(ui.pageTransition, ui.reduceAnimation) togetherWith PageMotion.exit(ui.pageTransition, ui.reduceAnimation)
-                    else PageMotion.popEnter(ui.pageTransition, ui.reduceAnimation) togetherWith PageMotion.popExit(ui.pageTransition, ui.reduceAnimation)
+            GlassPage(
+                Modifier.fillMaxSize(),
+                overlay = {
+                    // Drawn afresh when the language changes: the app's Text translates as it's composed.
+                    key(chosen, redraws) {
+                        WelcomeTopBar(
+                            step = step,
+                            onBack = ::back,
+                            onSkip = ::skip,
+                            reduceMotion = ui.reduceAnimation,
+                        )
+                        WelcomeBottomBar(
+                            step = step,
+                            picks = picks,
+                            onContinue = ::next,
+                            onNotNow = { step = WelcomeStep.COMMUNITY },
+                        )
+                    }
                 },
-                label = "welcomeStep",
-            ) { s ->
-                when (s) {
-                    WelcomeStep.ARTISTS -> ArtistsStep(
-                        picks = picks,
-                        grid = grid,
-                        growing = growing,
-                        broughtBy = broughtBy,
-                        reduceMotion = ui.reduceAnimation,
-                        loadPopular = popular,
-                        ready = locationAnswered,
-                        country = country,
-                        onPicked = { artist ->
-                            if (artist.browseId !in grown) {
-                                grown += artist.browseId
-                                growing += artist.browseId
-                                scope.launch {
-                                    val found = runCatching { loadSimilar(artist.browseId) }.getOrDefault(emptyList())
-                                    val next = ArtistChain.grow(grid.toList(), artist.browseId, found)
-                                    if (next.size != grid.size) {
-                                        val had = grid.mapTo(HashSet()) { it.browseId }
-                                        next.filter { it.browseId !in had }.forEach { broughtBy[it.browseId] = artist.name }
-                                        grid.clear()
-                                        grid.addAll(next)
-                                    }
-                                    growing -= artist.browseId
-                                }
-                            }
+            ) {
+                key(chosen, redraws) {
+                    AnimatedContent(
+                        step,
+                        transitionSpec = {
+                            val forward = targetState.ordinal > initialState.ordinal
+                            if (forward) PageMotion.enter(ui.pageTransition, ui.reduceAnimation) togetherWith PageMotion.exit(ui.pageTransition, ui.reduceAnimation)
+                            else PageMotion.popEnter(ui.pageTransition, ui.reduceAnimation) togetherWith PageMotion.popExit(ui.pageTransition, ui.reduceAnimation)
                         },
-                    )
-                    WelcomeStep.LOOK -> LookStep(picks)
-                    WelcomeStep.SIGN_IN -> SignInStep()
+                        // Clear of a landscape phone's side navigation bar and camera cut-out.
+                        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
+                        label = "welcomeStep",
+                    ) { s ->
+                        when (s) {
+                            WelcomeStep.LANGUAGE -> LanguageStep(chosen, phone, languageGrid, ui.reduceAnimation, ::choose)
+                            WelcomeStep.ARTISTS -> ArtistsStep(
+                                picks = picks,
+                                grid = grid,
+                                growing = growing,
+                                broughtBy = broughtBy,
+                                reduceMotion = ui.reduceAnimation,
+                                loadPopular = popular,
+                                ready = locationAnswered,
+                                country = country,
+                                onPicked = { artist ->
+                                    if (artist.browseId !in grown) {
+                                        grown += artist.browseId
+                                        growing += artist.browseId
+                                        scope.launch {
+                                            val found = runCatching { loadSimilar(artist.browseId) }.getOrDefault(emptyList())
+                                            val next = ArtistChain.grow(grid.toList(), artist.browseId, found)
+                                            if (next.size != grid.size) {
+                                                val had = grid.mapTo(HashSet()) { it.browseId }
+                                                next.filter { it.browseId !in had }.forEach { broughtBy[it.browseId] = artist.name }
+                                                grid.clear()
+                                                grid.addAll(next)
+                                            }
+                                            growing -= artist.browseId
+                                        }
+                                    }
+                                },
+                            )
+                            WelcomeStep.LOOK -> LookStep(picks)
+                            WelcomeStep.SIGN_IN -> SignInStep()
+                            WelcomeStep.COMMUNITY -> CommunityStep(ui.reduceAnimation)
+                        }
+                    }
                 }
             }
-        }
-        if (signingIn) {
-            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                // The app's own sign-in page. Its back arrow lands here too; a session means done.
-                LoginScreen(onDone = {
-                    signingIn = false
-                    if (AccountStore.signedIn.value) finish()
-                })
+            if (signingIn) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    // The app's own sign-in page. Its back arrow lands here too; a session moves on.
+                    LoginScreen(onDone = {
+                        signingIn = false
+                        if (AccountStore.signedIn.value) step = WelcomeStep.COMMUNITY
+                    })
+                }
             }
         }
     }
@@ -314,15 +393,17 @@ private val BOTTOM_BAR = 112.dp
 private fun BoxScope.WelcomeTopBar(step: WelcomeStep, onBack: () -> Unit, onSkip: () -> Unit, reduceMotion: Boolean) {
     Box(
         Modifier.align(Alignment.TopCenter).fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.statusBars)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .height(56.dp),
     ) {
-        AnimatedVisibility(step != WelcomeStep.ARTISTS, Modifier.align(Alignment.CenterStart), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(step.previous != null, Modifier.align(Alignment.CenterStart), enter = fadeIn(), exit = fadeOut()) {
             GlassBackButton(onBack)
         }
         StepDots(step, reduceMotion, Modifier.align(Alignment.Center))
-        AnimatedVisibility(step == WelcomeStep.ARTISTS, Modifier.align(Alignment.CenterEnd), enter = fadeIn(), exit = fadeOut()) {
+        // The look and the sign-in have their own way on in the bar below.
+        val skippable = step == WelcomeStep.LANGUAGE || step == WelcomeStep.ARTISTS || step == WelcomeStep.COMMUNITY
+        AnimatedVisibility(skippable, Modifier.align(Alignment.CenterEnd), enter = fadeIn(), exit = fadeOut()) {
             Surface(
                 onClick = onSkip,
                 shape = CircleShape,
@@ -338,13 +419,12 @@ private fun BoxScope.WelcomeTopBar(step: WelcomeStep, onBack: () -> Unit, onSkip
     }
 }
 
-/** Three dots, the current step's drawn out into a short bar. */
+/** A dot a step, the current step's drawn out into a short bar. */
 @Composable
 private fun StepDots(step: WelcomeStep, reduceMotion: Boolean, modifier: Modifier = Modifier) {
+    val said = com.opentune.i18n.Tr.f("Step {0} of {1}", step.ordinal + 1, WelcomeStep.entries.size)
     Row(
-        modifier.semantics(mergeDescendants = true) {
-            contentDescription = com.opentune.i18n.Tr.f("Step {0} of {1}", step.ordinal + 1, WelcomeStep.entries.size)
-        },
+        modifier.clearAndSetSemantics { contentDescription = said },
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -353,6 +433,7 @@ private fun StepDots(step: WelcomeStep, reduceMotion: Boolean, modifier: Modifie
             val width by animateDpAsState(if (current) 22.dp else 7.dp, if (reduceMotion) snap() else spring(dampingRatio = 0.7f, stiffness = 500f), label = "dot")
             val colour by animateColorAsState(
                 if (s.ordinal <= step.ordinal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f),
+                if (reduceMotion) snap() else spring(),
                 label = "dotColour",
             )
             Box(Modifier.size(width = width, height = 7.dp).clip(CircleShape).background(colour))
@@ -369,27 +450,29 @@ private fun BoxScope.WelcomeBottomBar(step: WelcomeStep, picks: List<ExploreFeed
         Modifier.align(Alignment.BottomCenter).fillMaxWidth()
             // The step's content fades out under the buttons rather than stopping at a line.
             .background(Brush.verticalGradient(0f to page.copy(alpha = 0f), 0.35f to page.copy(alpha = 0.88f), 1f to page))
-            .navigationBarsPadding()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal).exclude(WindowInsets.ime))
             .padding(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val label = when (step) {
+            WelcomeStep.LANGUAGE -> "Continue"
             WelcomeStep.ARTISTS -> when {
                 picked < MIN_PICKS -> "Pick an artist to start"
                 picked == 1 -> "Done · 1 artist"
                 else -> com.opentune.i18n.Tr.f("Done · {0} artists", picked)
             }
             WelcomeStep.LOOK -> "Continue"
-            WelcomeStep.SIGN_IN -> if (signedIn) "Start listening" else "Sign in to YouTube Music"
+            WelcomeStep.SIGN_IN -> if (signedIn) "Continue" else "Sign in to YouTube Music"
+            WelcomeStep.COMMUNITY -> "Start listening"
         }
         Button(
             onClick = onContinue,
             enabled = step != WelcomeStep.ARTISTS || picked >= MIN_PICKS,
             shape = RoundedCornerShape(28.dp),
-            modifier = Modifier.fillMaxWidth().height(56.dp),
+            modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().height(56.dp),
         ) {
             if (step == WelcomeStep.ARTISTS && picked > 0) PickedFaces(picks.takeLast(3).asReversed())
-            Text(label, style = MaterialTheme.typography.titleMedium)
+            Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (step == WelcomeStep.SIGN_IN && !signedIn) {
             TextButton(onClick = onNotNow, modifier = Modifier.padding(top = 4.dp).height(48.dp)) {
@@ -401,18 +484,18 @@ private fun BoxScope.WelcomeBottomBar(step: WelcomeStep, picks: List<ExploreFeed
 
 /** A step's heading, under the top bar. */
 @Composable
-private fun StepTitle(title: String, line: String) {
-    Column(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 16.dp)) {
+internal fun StepTitle(title: String, line: String, horizontal: Dp = 24.dp) {
+    Column(Modifier.padding(start = horizontal, end = horizontal, bottom = 16.dp)) {
         Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         Text(line, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
     }
 }
 
 @Composable
-private fun topInset() = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + TOP_BAR + 8.dp
+internal fun topInset() = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + TOP_BAR + 8.dp
 
 @Composable
-private fun bottomInset() = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + BOTTOM_BAR
+internal fun bottomInset() = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + BOTTOM_BAR
 
 // ---- Step 1: artists ------------------------------------------------------
 

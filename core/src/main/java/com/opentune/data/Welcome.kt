@@ -10,7 +10,7 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.WelcomeState
 
 /**
- * Whether the first-run welcome (pick artists, choose a look, sign in) is
+ * Whether the first-run welcome (language, artists, look, sign-in, community) is
  * shown. Only on a fresh install: someone who already uses the app, which
  * every phone updating from an older version does, never sees it unless
  * they ask for it again in Settings.
