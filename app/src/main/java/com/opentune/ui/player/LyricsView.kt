@@ -1156,7 +1156,13 @@ private fun DrawScope.sweepDim(line: LyricLine, boxes: List<List<Rect>>, positio
     line.words.forEachIndexed { i, word ->
         val pieces = boxes.getOrNull(i) ?: return@forEachIndexed
         if (pieces.isEmpty()) return@forEachIndexed
-        val span = (word.endMs - word.startMs).coerceAtLeast(1)
+        // A word's own end can run past the next word's start (the sources
+        // time each word by its sound, overlaps included), and left as it is
+        // the sweep moves on with this word's tail still dim — for good, when
+        // the line ends first. A word ends where the next one begins, and
+        // the last word where the line ends.
+        val cap = line.words.getOrNull(i + 1)?.startMs ?: line.endMs.takeIf { it > word.startMs } ?: word.endMs
+        val span = (minOf(word.endMs, cap) - word.startMs).coerceAtLeast(1)
         // Even through the word: an eased fill rushed the start and lagged the end, off the singing.
         val t = ((positionMs - word.startMs).toFloat() / span).coerceIn(0f, 1f)
         if (t >= 1f) return@forEachIndexed
