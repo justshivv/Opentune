@@ -153,7 +153,42 @@ fun QueuePane(
     val list = rememberLazyListState()
     val canDrag = !shuffle
 
+    // The songs already played (before the current one in the queue, and not still to come),
+    // folded away under one row: open it to see them, tap one to play it again.
+    val played = remember(queue.size, currentIndex, upNext) {
+        val ahead = upNext.toHashSet()
+        (0 until currentIndex.coerceAtMost(queue.size)).filter { it !in ahead }
+    }
+    var playedOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+
     LazyColumn(modifier, state = list, contentPadding = PaddingValues(bottom = 12.dp)) {
+        if (played.isNotEmpty()) {
+            item(key = "played-label") {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        .clickable(onClickLabel = if (playedOpen) "Hide played songs" else "Show played songs") { playedOpen = !playedOpen }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        com.opentune.i18n.Tr.f("Played · {0}", played.size),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        ImageVector.vectorResource(if (playedOpen) AppIcons.KeyboardArrowUp else AppIcons.KeyboardArrowDown),
+                        null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (playedOpen) itemsIndexed(played, key = { _, index -> "p$index:${queue.getOrNull(index)?.videoId}" }) { _, index ->
+                val song = queue.getOrNull(index) ?: return@itemsIndexed
+                Box(Modifier.animateItem().graphicsLayer { alpha = 0.7f }) {
+                    QueueRow(song, isCurrent = false, isPlaying = false, handle = false, onClick = { onPlayIndex(index) }, onRemove = { onRemoveIndex(index) })
+                }
+            }
+        }
         queue.getOrNull(currentIndex)?.let { current ->
             item(key = "now-label") { PaneLabel("Now playing") }
             item(key = "now") {
