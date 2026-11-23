@@ -34,7 +34,7 @@ object ExploreFeed {
     suspend fun load(): Canvas = coroutineScope {
         val moods = async { runCatching { MusicRepository.moodsAndGenres() }.getOrDefault(emptyList()) }
         val releases = async { runCatching { MusicRepository.shelves("FEmusic_new_releases", null) }.getOrDefault(emptyList()) }
-        val charts = async { runCatching { MusicRepository.shelves("FEmusic_charts", null) }.getOrDefault(emptyList()) }
+        val charts = async { runCatching { MusicRepository.chartShelves() }.getOrDefault(emptyList()) }
 
         val chartShelves = charts.await()
         val chartArtists = artistsOf(chartShelves)

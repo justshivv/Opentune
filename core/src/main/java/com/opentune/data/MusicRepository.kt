@@ -275,7 +275,7 @@ object MusicRepository {
                 HomeSource.LISTENBRAINZ -> listenBrainzShelf()
                 HomeSource.ARTISTS -> artistShelves()
                 HomeSource.NEW_RELEASES -> shelvesOf("FEmusic_new_releases")
-                HomeSource.CHARTS -> shelvesOf("FEmusic_charts")
+                HomeSource.CHARTS -> chartShelves()
                 HomeSource.EXPLORE -> shelvesOf("FEmusic_explore")
                 HomeSource.MOODS -> moodShelves()
             }
@@ -493,17 +493,94 @@ object MusicRepository {
     private const val RECENT_SEEDS = 6
     private const val MAX_PICKS = 16
 
+    /** A charts page and the country it is for, as a two-letter code. */
+    class Charts(val country: String?, val page: kotlinx.serialization.json.JsonObject)
+
     /**
-     * Popular artists for [country] (an ISO code, or null), from the
-     * charts' "Top artists"; the default charts' when that country's have none.
+     * The charts a listener in [country] should see: that country's own, else
+     * those of a big market of the phone's [language]. Never the global charts,
+     * which YouTube answers a country without charts of its own with, and whose
+     * top artists are nearly all Indian film singers (see [ChartRegion]).
      */
-    suspend fun chartArtists(country: String?): List<ExploreFeed.Artist> = io {
-        suspend fun of(c: String?) = ExploreFeed.artistsOf(InnertubeParser.parseHome(Innertube.charts(c)))
-        val local = country?.let {
-            try { of(it) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
-        }.orEmpty()
-        local.ifEmpty { of(null) }
+    suspend fun localCharts(
+        country: String? = Innertube.currentRegion,
+        language: String = Innertube.currentLanguage,
+    ): Charts = io {
+        val asked = country?.uppercase(java.util.Locale.ROOT)?.takeIf { it.length == 2 && it != ChartRegion.GLOBAL }
+        if (asked != null) {
+            val page = try { Innertube.charts(asked) } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+            if (page != null) {
+                // A page without the country menu can't say it fell back: taken at its word.
+                val shown = InnertubeParser.chartCountry(page)
+                if (shown == null || shown == asked) return@io Charts(asked, page)
+            }
+        }
+        val instead = ChartRegion.fallback(language).takeIf { it != asked } ?: "US"
+        val page = Innertube.charts(instead)
+        Charts(InnertubeParser.chartCountry(page)?.takeIf { it != ChartRegion.GLOBAL } ?: instead, page)
     }
+
+    /** The local charts as shelves, for Home and Explore. */
+    suspend fun chartShelves(): List<HomeShelf> = io {
+        val page = localCharts().page
+        ContentFilter.shelves(
+            InnertubeParser.parseHome(page).ifEmpty { InnertubeParser.parseHomeContinuation(page) }
+                .filter { it.items.isNotEmpty() },
+        )
+    }
+
+    /** Artists to start a new listener from, and the country whose charts they came from. */
+    data class PopularArtists(val country: String?, val artists: List<ExploreFeed.Artist>)
+
+    /**
+     * Popular artists for a listener in [country] (an ISO code, or null): its
+     * charts' "Top artists", or those of a country of the phone's language when
+     * it has no charts. In India, the artists of the listener's own language
+     * come first, by the phone's language or else the [state] they're in.
+     */
+    suspend fun popularArtists(
+        country: String?,
+        state: String? = null,
+        language: String = Innertube.currentLanguage,
+    ): PopularArtists = io {
+        val charts = localCharts(country, language)
+        val national = ExploreFeed.artistsOf(InnertubeParser.parseHome(charts.page))
+        val own = if (charts.country == "IN") {
+            ChartRegion.indianLanguage(language, state)?.let { lang ->
+                try { languageArtists(lang) } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                    DebugLog.w("MusicRepository", "${lang.name.lowercase()} artists failed", e)
+                    emptyList()
+                }
+            }.orEmpty()
+        } else emptyList()
+        PopularArtists(charts.country, (own + national).distinctBy { it.browseId })
+    }
+
+    /**
+     * The artists most often on an Indian language's weekly top list, with
+     * their photos off their pages; a page that's slow or fails leaves its
+     * artist without one rather than holding the rest up.
+     */
+    private suspend fun languageArtists(language: ChartRegion.IndianLanguage): List<ExploreFeed.Artist> = coroutineScope {
+        val songs = InnertubeParser.parsePlaylistShelf(Innertube.browse("VL${language.playlistId}"))?.songs.orEmpty()
+        // Grouping keeps the order of first appearance, and the sort is stable: ties keep the list's order.
+        songs.filter { it.artistId?.startsWith("UC") == true }
+            .groupBy { it.artistId!! }
+            .entries.sortedByDescending { it.value.size }
+            .take(LANGUAGE_ARTISTS)
+            .map { (id, rows) ->
+                async {
+                    val page = try {
+                        kotlinx.coroutines.withTimeoutOrNull(ARTIST_PAGE_WAIT_MS) { artist(id) }
+                    } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+                    val credited = rows.first().artist.split(", ", " & ").first().trim()
+                    ExploreFeed.Artist(id, page?.name?.takeIf(String::isNotBlank) ?: credited, page?.thumbnailUrl)
+                }
+            }.awaitAll()
+    }
+
+    private const val LANGUAGE_ARTISTS = 16
+    private const val ARTIST_PAGE_WAIT_MS = 8_000L
 
     suspend fun moodsAndGenres(): List<MoodGenreSection> = io {
         InnertubeParser.parseMoodAndGenres(Innertube.browse("FEmusic_moods_and_genres"))

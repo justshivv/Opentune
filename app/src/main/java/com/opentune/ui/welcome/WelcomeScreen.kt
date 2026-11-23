@@ -179,9 +179,9 @@ fun WelcomeScreen(
     }
     var country by rememberSaveable { mutableStateOf<String?>(null) }
     val popular: suspend () -> List<ExploreFeed.Artist> = loadPopular ?: {
-        val found = com.opentune.data.UserCountry.detect(context)
-        country = found
-        MusicRepository.chartArtists(found)
+        val where = com.opentune.data.UserCountry.locate(context)
+        // The country the artists really came from: one without charts of its own borrows another's.
+        MusicRepository.popularArtists(where.country, where.state).also { country = it.country }.artists
     }
 
     fun finish() {

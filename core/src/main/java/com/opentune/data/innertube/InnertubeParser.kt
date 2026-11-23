@@ -199,8 +199,57 @@ object InnertubeParser {
         return sections.mapNotNull { section ->
             section.o("musicCarouselShelfRenderer")?.let(::carouselShelf)
                 ?: section.o("musicShelfRenderer")?.let(::plainShelf)
+                ?: section.o("gridRenderer")?.let(::gridShelf)
         }
     }
+
+    /**
+     * A grid of cards under one heading. A mood or genre with only a few
+     * playlists (Haryanvi, a holiday) comes as one such grid instead of
+     * carousels, and its page read as empty while only carousels were taken.
+     */
+    private fun gridShelf(grid: JsonObject): HomeShelf? {
+        val title = grid.o("header").o("gridHeaderRenderer").o("title").runs()
+        if (VIDEO_WORD.containsMatchIn(title)) return null
+        val items = grid.a("items").orEmpty().mapNotNull { parseTwoRowItem(it.o("musicTwoRowItemRenderer")) }
+        return if (items.isEmpty()) null else HomeShelf(title, items)
+    }
+
+    /**
+     * The country a charts page is for, as a two-letter code, or "ZZ" for the
+     * global charts. YouTube answers a country it has no charts for with the
+     * global ones and says so only in the country menu, whose button carries
+     * the chosen country's name. Each menu entry's key holds its code, so the
+     * entry named like the button gives the code in any UI language.
+     * Null when the page has no country menu.
+     */
+    fun chartCountry(response: JsonObject): String? {
+        val button = response.o("contents")
+            .o("singleColumnBrowseResultsRenderer").a("tabs")?.firstOrNull()
+            .o("tabRenderer").o("content").o("sectionListRenderer").a("contents")
+            ?.firstNotNullOfOrNull { section ->
+                section.o("musicShelfRenderer").a("subheaders")?.firstOrNull()
+                    .o("musicSideAlignedItemRenderer").a("startItems")?.firstOrNull()
+                    .o("musicSortFilterButtonRenderer")
+            } ?: return null
+        val chosen = button.o("title").runs().ifBlank { return null }
+        val options = button.o("menu").o("musicMultiSelectMenuRenderer").a("options").orEmpty()
+        val key = options.firstNotNullOfOrNull { option ->
+            option.o("musicMultiSelectMenuItemRenderer")?.takeIf { it.o("title").runs() == chosen }?.s("formItemEntityKey")
+        } ?: return null
+        return chartCountryOfKey(key)
+    }
+
+    /** The country code inside a charts menu entry's key: URL-safe base64 of a small message naming it. */
+    internal fun chartCountryOfKey(key: String): String? {
+        val raw = runCatching { java.net.URLDecoder.decode(key, "UTF-8") }.getOrNull() ?: return null
+        val bytes = runCatching { java.util.Base64.getDecoder().decode(raw) }
+            .recoverCatching { java.util.Base64.getUrlDecoder().decode(raw) }
+            .getOrNull() ?: return null
+        return CHART_COUNTRY_KEY.find(String(bytes, Charsets.ISO_8859_1))?.groupValues?.get(1)
+    }
+
+    private val CHART_COUNTRY_KEY = Regex("""charts_country_menu_\d+([A-Z]{2})""")
 
     /**
      * YouTube Music's "Mixed for you" page: the account's Supermix, My Mix 1 and on, Discover,

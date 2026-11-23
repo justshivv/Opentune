@@ -43,6 +43,9 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         // First, so a crash anywhere after this is kept for Export diagnostics.
         com.opentune.data.CrashLog.install(this)
+        // The listener's country for YouTube's suggestions, also when the app starts from
+        // Android Auto or the widget and the activity (which sets it again) never opens.
+        com.opentune.data.innertube.Innertube.regionOverride = com.opentune.data.UserCountry.quick(this)
         // The home-screen widget follows the shared player service.
         com.opentune.data.AppHooks.onPlayerChanged = { context, player -> com.opentune.widget.NowPlayingWidget.refresh(context, player) }
         com.opentune.data.AppHooks.onPlayerStopped = { context -> com.opentune.widget.NowPlayingWidget.stopped(context) }

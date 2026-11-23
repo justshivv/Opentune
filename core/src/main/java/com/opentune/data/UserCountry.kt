@@ -16,17 +16,29 @@ object UserCountry {
     /** How long the position may take before the network's country is used instead. */
     private const val LOCATION_WAIT_MS = 6_000L
 
+    /** A country, and the state or province within it when the phone's position names one. */
+    data class Where(val country: String?, val state: String?)
+
     /** Two-letter country code, upper case, or null when nothing names one. */
-    suspend fun detect(context: Context): String? {
-        val located = if (ApproxLocation.granted(context) && ApproxLocation.enabled(context)) {
+    suspend fun detect(context: Context): String? = locate(context).country
+
+    /** The country as [detect] finds it, with the state when it came from the phone's position. */
+    suspend fun locate(context: Context): Where {
+        val place = if (ApproxLocation.granted(context) && ApproxLocation.enabled(context)) {
             withTimeoutOrNull(LOCATION_WAIT_MS) {
                 runCatching {
-                    ApproxLocation.get(context)?.let { ApproxLocation.place(context, it.latitude, it.longitude)?.countryCode }
+                    ApproxLocation.get(context)?.let { ApproxLocation.place(context, it.latitude, it.longitude) }
                 }.getOrNull()
             }
         } else null
-        return pick(located, network(context), Locale.getDefault().country)
+        val country = pick(place?.countryCode, network(context), Locale.getDefault().country)
+        // A state only means something in the country it was read with.
+        val state = place?.state?.takeIf { pick(place.countryCode) == country }
+        return Where(country, state)
     }
+
+    /** The country without asking for the phone's position: its mobile network or SIM, else its language's region. */
+    fun quick(context: Context): String? = pick(network(context), Locale.getDefault().country)
 
     /** The first of these that is a country code. */
     internal fun pick(vararg candidates: String?): String? =
