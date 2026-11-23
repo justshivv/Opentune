@@ -34,6 +34,7 @@ private const val EXTRA_SMART_SHUFFLE = "smartShuffle"
 private const val EXTRA_TIER = "tier"
 private const val EXTRA_ALBUM_ID = "albumId"
 private const val EXTRA_LIST_POSITION = "listPosition"
+private const val EXTRA_VIDEO = "video"
 
 /**
  * Local files play straight from MediaStore and downloads from their file;
@@ -146,6 +147,8 @@ fun Song.toMediaItem(): MediaItem =
                         // Kept so "Don't play [artist]" from the player knows the artist by id too.
                         artistId?.let { putString(EXTRA_ARTIST_ID, it) }
                         if (smartShuffle) putBoolean(EXTRA_SMART_SHUFFLE, true)
+                        // A music video's runtime vouches for less than a track's: lossless matching needs to know.
+                        if (isVideo) putBoolean(EXTRA_VIDEO, true)
                         if (queueTier != QueueTier.CONTEXT) putString(EXTRA_TIER, queueTier.name)
                     },
                 )
@@ -165,6 +168,7 @@ fun MediaItem.toSong(): Song =
         isExplicit = mediaMetadata.extras?.takeIf { it.containsKey(EXTRA_EXPLICIT) }?.getBoolean(EXTRA_EXPLICIT),
         artistId = mediaMetadata.extras?.getString(EXTRA_ARTIST_ID),
         smartShuffle = mediaMetadata.extras?.getBoolean(EXTRA_SMART_SHUFFLE) == true,
+        isVideo = mediaMetadata.extras?.getBoolean(EXTRA_VIDEO) == true,
         queueTier = mediaMetadata.extras?.getString(EXTRA_TIER)?.let { t -> QueueTier.entries.firstOrNull { it.name == t } } ?: QueueTier.CONTEXT,
     )
 

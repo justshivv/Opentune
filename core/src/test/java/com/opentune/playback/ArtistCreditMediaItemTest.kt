@@ -30,4 +30,10 @@ class ArtistCreditMediaItemTest {
         assertSame(item, item.withTrackArtistCredit(credit.copy(artist = "Various Artists")))
         assertSame(corrected, corrected.withTrackArtistCredit(credit.copy(artist = "Someone Else")))
     }
+
+    /** Lossless matching gives a music video's runtime less weight, so the player's copy of a song must still say it is one. */
+    @Test fun aMusicVideoIsStillOneInThePlayer() {
+        assertTrue(credit.copy(isVideo = true).toMediaItem().toSong().isVideo)
+        assertFalse(credit.toMediaItem().toSong().isVideo)
+    }
 }
