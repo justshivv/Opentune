@@ -178,7 +178,7 @@ internal fun LandscapePlayer(
                 ) {
                     if (state.videoAvailable) SongVideoToggle(
                         state.videoMode, actions.setVideoMode,
-                        isEpisode = com.opentune.data.podcasts.Podcasts.isEpisode(song.videoId) ||
+                        isEpisode = com.opentune.data.podcasts.Podcasts.isEpisode(song.videoId) || com.opentune.data.podcasts.PodcastFeeds.isFeedEpisode(song.videoId) ||
                             com.opentune.data.audiobooks.Audiobooks.isChapter(song.videoId),
                     )
                     if (state.ui.sourcePill) SourceQualityBadge(song.videoId, state.audioFormat, onClick = onSignal)

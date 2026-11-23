@@ -192,6 +192,8 @@ object Podcasts {
 
     /** What YouTube Music lists beside [videoId] (its Related tab): similar episodes, and suggested shows. */
     suspend fun related(videoId: String): Pair<List<PodcastEpisode>, List<PodcastShow>> = withContext(Dispatchers.IO) {
+        // An episode from a feed has no YouTube Music page to ask.
+        if (PodcastFeeds.isFeedEpisode(videoId)) return@withContext emptyList<PodcastEpisode>() to emptyList()
         val r = Innertube.browse("MPPR$videoId")
         PodcastParser.episodesIn(r) to PodcastParser.showsIn(r)
     }
@@ -250,8 +252,26 @@ object Podcasts {
     internal fun topicPicks(day: Int, count: Int): List<String> =
         (0 until count.coerceAtMost(TOPICS.size)).map { TOPICS[Math.floorMod(day + it * 7, TOPICS.size)] }
 
+    /**
+     * Shows for [query]: YouTube Music's first, then those from Apple's podcast directory that
+     * YouTube Music doesn't have (most smaller shows), played from their own feeds. Either
+     * source failing leaves the other's.
+     */
     suspend fun searchShows(query: String): List<PodcastShow> = withContext(Dispatchers.IO) {
-        PodcastParser.parseShowSearch(Innertube.search(query, SEARCH_SHOWS))
+        coroutineScope {
+            val youtube = async { runCatching { PodcastParser.parseShowSearch(Innertube.search(query, SEARCH_SHOWS)) } }
+            val directory = async { runCatching { PodcastFeeds.search(query) }.onFailure { Log.w(TAG, "directory search failed", it) } }
+            mergeShows(youtube.await(), directory.await())
+        }
+    }
+
+    /** YouTube Music's shows, then the directory's not already among them by name; fails only when both did. */
+    internal fun mergeShows(youtube: Result<List<PodcastShow>>, directory: Result<List<PodcastShow>>): List<PodcastShow> {
+        if (youtube.isFailure && directory.isFailure) throw youtube.exceptionOrNull()!!
+        val first = youtube.getOrDefault(emptyList())
+        fun key(s: PodcastShow) = s.title.lowercase().filter(Char::isLetterOrDigit)
+        val have = first.map(::key).toHashSet()
+        return first + directory.getOrDefault(emptyList()).filter { have.add(key(it)) }
     }
 
     suspend fun searchEpisodes(query: String): List<PodcastEpisode> = withContext(Dispatchers.IO) {
@@ -259,6 +279,8 @@ object Podcasts {
     }
 
     suspend fun show(browseId: String): PodcastShowPage = withContext(Dispatchers.IO) {
+        // A show from Apple's directory or a pasted feed: read from its own feed.
+        if (PodcastFeeds.isFeedShow(browseId)) return@withContext PodcastFeeds.load(browseId)
         PodcastParser.parseShow(browseId, Innertube.browse(browseId))
     }
 
@@ -266,9 +288,9 @@ object Podcasts {
         PodcastParser.parseMoreEpisodes(Innertube.browseContinuation(token), show)
     }
 
-    /** The newest few episodes of each subscribed show, show by show. */
-    suspend fun latestFromSubscriptions(perShow: Int = 2): List<PodcastEpisode> = coroutineScope {
-        _subscriptions.value.take(12).map { s ->
+    /** The newest few episodes of each subscribed show (the first [shows] of them), show by show. */
+    suspend fun latestFromSubscriptions(perShow: Int = 2, shows: Int = 12): List<PodcastEpisode> = coroutineScope {
+        _subscriptions.value.take(shows).map { s ->
             async {
                 runCatching { show(s.browseId).episodes.take(perShow) }
                     .onFailure { Log.w(TAG, "latest of ${s.title} failed", it) }

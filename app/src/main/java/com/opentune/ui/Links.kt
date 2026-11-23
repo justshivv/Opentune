@@ -106,7 +106,10 @@ object Links {
         com.opentune.data.together.RoomCode.find(text)?.let { return LinkTarget.Together(it.raw) }
         if (text != null && com.opentune.data.spotify.Spotify.looksLikeSpotify(text)) return LinkTarget.SpotifyImport(text)
         parse(text)?.let { return it }
-        return com.opentune.data.links.MusicLinks.linkIn(text)?.let(LinkTarget::Elsewhere)
+        com.opentune.data.links.MusicLinks.linkIn(text)?.let { return LinkTarget.Elsewhere(it) }
+        // A podcast's own feed address opens as the show.
+        val raw = text?.let { Regex("""https?://\S+""").find(it)?.value } ?: return null
+        return if (com.opentune.data.podcasts.PodcastFeeds.looksLikeFeed(raw)) LinkTarget.Browse(com.opentune.data.podcasts.PodcastFeeds.showId(raw)) else null
     }
 
     /** Opens what [text] links to, as a shared link would be; false when it isn't a link the app knows. */

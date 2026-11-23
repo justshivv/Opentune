@@ -2633,6 +2633,7 @@ class PlaybackService : MediaLibraryService() {
             uri?.let(::startupToken) != null -> "Loading audio…"
             LocalMusic.isLocal(item.mediaId) -> "Local file"
             Radio.isRadio(item.mediaId) -> "Internet radio"
+            com.opentune.data.podcasts.PodcastFeeds.isFeedEpisode(item.mediaId) -> "Podcast feed"
             Subsonic.isSubsonic(item.mediaId) -> "Your music server"
             uri?.scheme == "file" -> downloaded?.source?.let { "$it · downloaded" } ?: "Downloaded file"
             else -> StreamResolver.engineFor(item.mediaId, uri?.let(::isUpgradedUri) == true)?.let { "YouTube · $it" } ?: "YouTube · cached stream or resolving"
@@ -2969,7 +2970,8 @@ class PlaybackService : MediaLibraryService() {
         val seed = seedItem.mediaId
         // Radio is a YouTube feature; a local file has none. A song on your own
         // server carries on with more of the server's songs, picked at random.
-        if (LocalMusic.isLocal(seed) || Radio.isRadio(seed) || com.opentune.data.audiobooks.Audiobooks.isChapter(seed)) return
+        if (LocalMusic.isLocal(seed) || Radio.isRadio(seed) || com.opentune.data.audiobooks.Audiobooks.isChapter(seed) ||
+            com.opentune.data.podcasts.PodcastFeeds.isFeedEpisode(seed)) return
         if (seed in exhaustedSeeds) return
         if (radioJob?.isActive == true && radioSeed == seed) return
 

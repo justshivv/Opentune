@@ -133,6 +133,8 @@ class LibraryNav(
     val smart: (String) -> Unit = {},
     /** Making a new smart playlist. */
     val newSmart: () -> Unit = {},
+    /** The podcast library: shows subscribed to, new episodes, in progress and played. */
+    val podcasts: () -> Unit = {},
 )
 
 private data class LibraryPlaylistRow(
@@ -446,6 +448,14 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         "Listen together",
                         room?.let { if (it.hosting) com.opentune.i18n.Tr.f("Your room · {0} in", it.members.size) else com.opentune.i18n.Tr.f("In {0}'s room", it.hostName ?: com.opentune.i18n.Tr.t("a friend")) } ?: com.opentune.i18n.Tr.t("Rooms with friends, in sync"),
                         nav.together,
+                        Modifier.weight(1f),
+                    )
+                    val podcastShows by com.opentune.data.podcasts.Podcasts.subscriptions.collectAsState()
+                    Shortcut(
+                        ImageVector.vectorResource(AppIcons.Podcasts),
+                        "Podcasts",
+                        if (podcastShows.isEmpty()) com.opentune.i18n.Tr.t("Your shows and episodes") else com.opentune.i18n.Tr.f("{0} shows", podcastShows.size),
+                        nav.podcasts,
                         Modifier.weight(1f),
                     )
                 }

@@ -83,7 +83,7 @@ private enum class SearchKind(val label: String) { SHOWS("Shows"), EPISODES("Epi
  * try, from YouTube Music.
  */
 @Composable
-fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenShow: (String) -> Unit, onOpenSettings: (() -> Unit)? = null, onOpenAudiobooks: (() -> Unit)? = null) {
+fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenShow: (String) -> Unit, onOpenSettings: (() -> Unit)? = null, onOpenAudiobooks: (() -> Unit)? = null, onOpenLibrary: (() -> Unit)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
     var kind by rememberSaveable { mutableStateOf(SearchKind.SHOWS) }
     val subscriptions by Podcasts.subscriptions.collectAsState()
@@ -148,6 +148,7 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
     ) {
         LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
             item { PageHeader(com.opentune.ui.theme.tr("Podcasts"), actions = onOpenSettings?.let { open -> { com.opentune.ui.components.AccountButton(open) } }) }
+            if (onOpenLibrary != null) item(key = "library") { PodcastLibraryEntry(subscriptions.size, onOpenLibrary) }
             if (onOpenAudiobooks != null) item(key = "audiobooks") { AudiobooksEntry(onOpenAudiobooks) }
             item {
                 TextField(

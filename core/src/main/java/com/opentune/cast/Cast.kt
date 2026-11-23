@@ -173,6 +173,9 @@ object Cast {
         if (com.opentune.data.audiobooks.Audiobooks.isChapter(id)) {
             return@withContext media(com.opentune.data.audiobooks.Audiobooks.urlOf(id), "audio/mpeg")
         }
+        if (com.opentune.data.podcasts.PodcastFeeds.isFeedEpisode(id)) {
+            return@withContext media(com.opentune.data.podcasts.PodcastFeeds.urlOf(id), "audio/mpeg")
+        }
         if (LocalMusic.isLocal(id)) {
             val uri = trackUri(id)
             val type = context.contentResolver.getType(uri) ?: "audio/mpeg"

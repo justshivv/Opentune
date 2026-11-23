@@ -362,7 +362,7 @@ fun PlayerLayout(
     val theme = state.theme
     val sound = state.sound
     val isEpisode = remember(current.videoId) {
-        com.opentune.data.podcasts.Podcasts.isEpisode(current.videoId) ||
+        com.opentune.data.podcasts.Podcasts.isEpisode(current.videoId) || com.opentune.data.podcasts.PodcastFeeds.isFeedEpisode(current.videoId) ||
                 com.opentune.data.audiobooks.Audiobooks.isChapter(current.videoId)
     }
 

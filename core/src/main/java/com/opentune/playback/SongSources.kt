@@ -54,9 +54,15 @@ internal class SongSources(context: Context) {
         .setCacheKeyFactory { spec -> cacheKeyOf(spec.uri) ?: spec.key ?: spec.uri.toString() }
         .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
-    // Files, content:// and direct http (a song on your own server) go straight
-    // to the platform source, its http side on the app's one OkHttp client.
-    val direct: DataSource.Factory = DefaultDataSource.Factory(context, OkHttpDataSource.Factory(Http.client))
+    // Files, content:// and direct http (a song on your own server, a station, an audiobook,
+    // a podcast episode from its feed) go straight to the platform source, its http side on the
+    // app's one OkHttp client. Named as the app: some podcast hosts (Buzzsprout among them)
+    // refuse OkHttp's own "okhttp/…" agent, so their episodes wouldn't play. A request that
+    // brings its own User-Agent keeps it.
+    val direct: DataSource.Factory = DefaultDataSource.Factory(
+        context,
+        OkHttpDataSource.Factory(Http.client).setDefaultRequestProperties(mapOf("User-Agent" to DIRECT_AGENT)),
+    )
 
     val routing: DataSource.Factory = SchemeRoutingDataSource.Factory(streams = cached, local = direct)
 }
@@ -155,3 +161,6 @@ internal class SchemeRoutingDataSource(
             SchemeRoutingDataSource(streams.createDataSource(), local.createDataSource())
     }
 }
+
+/** The agent direct streams are fetched with: the app's name, as podcast and radio hosts expect. */
+internal const val DIRECT_AGENT = "OpenTune/1.0 (Android; podcast and radio player)"

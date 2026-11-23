@@ -398,6 +398,7 @@ fun AppRoot(vm: PlayerViewModel) {
         history = { pages.open("history") },
         smart = { id -> pages.open("smart/${Uri.encode(id)}") },
         newSmart = { pages.open("smart-edit") },
+        podcasts = { pages.open("podcasts/library") },
     ) }
     val serverNav = remember(nav) {
         ServerNav(
@@ -698,7 +699,10 @@ fun AppRoot(vm: PlayerViewModel) {
                         }
                         page(Tab.PODCASTS.route) {
                             com.opentune.ui.podcasts.PodcastsScreen(content, actions, onOpenShow = { id -> pages.open("podcast/${Uri.encode(id)}") }, onOpenSettings = { pages.open("settings") },
-                                onOpenAudiobooks = { pages.open("audiobooks") })
+                                onOpenAudiobooks = { pages.open("audiobooks") }, onOpenLibrary = { pages.open("podcasts/library") })
+                        }
+                        page("podcasts/library") {
+                            com.opentune.ui.podcasts.PodcastLibraryScreen(content, actions, onBack = { nav.popBackStack() }, onOpenShow = { id -> pages.open("podcast/${Uri.encode(id)}") })
                         }
                         page("audiobooks") {
                             com.opentune.ui.podcasts.AudiobooksScreen(content, onBack = { nav.popBackStack() }, onOpenBook = { id -> pages.open("audiobook/${Uri.encode(id)}") })
@@ -1125,8 +1129,8 @@ private fun NavHostController.openBrowse(browseId: String, type: BrowseType = Mu
         return
     }
     val route = when {
-        // A podcast show has its own page.
-        browseId.startsWith("MPSP") -> "podcast/{id}"
+        // A podcast show has its own page, from YouTube Music or from its own feed.
+        browseId.startsWith("MPSP") || com.opentune.data.podcasts.PodcastFeeds.isFeedShow(browseId) -> "podcast/{id}"
         type == BrowseType.ARTIST -> "artist/{id}"
         else -> "collection/{id}"
     }
