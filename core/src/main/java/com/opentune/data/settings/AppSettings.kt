@@ -630,6 +630,8 @@ data class InterfaceSettings(
     val podcasts: Boolean = true,
     /** Draw the played part of the seek bar as a moving wave. */
     val wavySeekbar: Boolean = false,
+    /** The song's own wave above the seek bar, read from the audio already on the phone. */
+    val seekbarWaveform: Boolean = false,
     /** How thick the seek bar's track is. */
     val seekbarThickness: SeekbarThickness = SeekbarThickness.REGULAR,
     /** What marks the place on the seek bar. */

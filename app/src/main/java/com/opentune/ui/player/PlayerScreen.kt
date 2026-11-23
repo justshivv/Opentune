@@ -1863,6 +1863,7 @@ fun PlayerLayout(
                                         playing = state.isPlaying,
                                         lyricAt = lyricAt,
                                         marks = marks,
+                                        visualizer = state.ui.seekbarWaveform && !state.ui.wavySeekbar && !apple,
                                         quality = {
                                             if (state.ui.sourcePill) SourceQualityBadge(
                                                 current.videoId,

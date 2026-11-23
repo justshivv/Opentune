@@ -1553,6 +1553,15 @@ private fun settingsSections(
                         icon = ImageVector.vectorResource(AppIcons.Waves), enabled = !appleStyle && !reduced,
                         disabledReason = if (appleStyle) "Not with the Apple Music inspired player, whose bar stays plain" else "Off while Reduce animation is on")
                 },
+                Entry("Seek bar waveform", "song wave shape above progress bar audio peaks") {
+                    // The plain bar only: the wavy bar draws its own wave, and the Apple Music
+                    // inspired player keeps its bar plain. Read from the audio already on the
+                    // phone, so a song shows its wave once it has played or downloaded.
+                    ToggleRow("Seek bar waveform", ui.seekbarWaveform, { v -> AppSettings.updateUi { it.copy(seekbarWaveform = v) } },
+                        summary = "Waves above the bar that dance with the beat",
+                        icon = ImageVector.vectorResource(AppIcons.Equalizer), enabled = !appleStyle && !ui.wavySeekbar,
+                        disabledReason = if (appleStyle) "Not with the Apple Music inspired player, whose bar stays plain" else "Not with the wavy seek bar, which draws its own wave")
+                },
                 Entry("Lyric preview while seeking", "scrub seek bar lyric line preview bubble drag") {
                     ToggleRow("Lyric preview while seeking", ui.lyricScrubPreview, { v -> AppSettings.updateUi { it.copy(lyricScrubPreview = v) } }, summary = "Shows the lyric at that point while you drag the seek bar", icon = ImageVector.vectorResource(AppIcons.Lyrics))
                 },

@@ -119,6 +119,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.ColorUtils
 import com.materialkolor.hct.Hct
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -1050,6 +1051,8 @@ fun SeekBar(
     lyricAt: ((Long) -> String?)? = null,
     /** Where the song's parts (verse, chorus) begin, in ms, marked as small gaps in the track. */
     marks: List<Long> = emptyList(),
+    /** Flowing wave lines on the track itself, moving with the beat. Only ever passed for the plain bar. */
+    visualizer: Boolean = false,
     quality: (@Composable () -> Unit)? = null,
 ) {
     var dragFraction by remember(durationMs) { mutableStateOf<Float?>(null) }
@@ -1111,6 +1114,75 @@ fun SeekBar(
 
     // The wave's path, made again in place each frame rather than a new one every frame.
     val wavePath = remember { Path() }
+    // The flowing lines over the played part, ported from LastWave's wavy
+    // progress track (WavySeekBar.kt): three rolling gradient waves. Their
+    // clock runs only while they are visible and moving; paused or dragging
+    // draws the static pose, and scrubbing flattens them so the thumb reads.
+    val waveClock = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    // How hard the music is hitting right now, smoothed from the same levels
+    // the cover glow breathes with: it drives the waves' flow and height, so
+    // they move with the beat instead of rolling on their own.
+    val waveLevel = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    androidx.compose.runtime.DisposableEffect(visualizer) {
+        if (visualizer) com.opentune.playback.AudioLevels.hold()
+        onDispose { if (visualizer) com.opentune.playback.AudioLevels.release() }
+    }
+    val wavesActive = visualizer && playing && dragFraction == null
+    LaunchedEffect(wavesActive) {
+        if (!wavesActive) return@LaunchedEffect
+        var shown = 0f
+        var last = 0L
+        while (true) {
+            androidx.compose.runtime.withFrameNanos { now ->
+                val lvl = com.opentune.playback.AudioLevels.at(System.nanoTime())
+                val target = if (lvl == null) 0f else (lvl.level * 0.6f + lvl.bass * 0.4f).coerceIn(0f, 1f)
+                // Quick to rise with a hit, slower to fall away: the beat's shape.
+                shown += (target - shown) * if (target > shown) 0.6f else 0.13f
+                waveLevel.floatValue = shown
+                if (last != 0L) {
+                    val dt = (now - last) / 1_000_000_000f
+                    waveClock.floatValue = (waveClock.floatValue + dt * (0.35f + shown * 2.2f)) % 93.6f
+                }
+                last = now
+            }
+            // Slow rolling waves look the same at 30 fps; every vsync kept the GPU busy.
+            kotlinx.coroutines.delay(33L)
+        }
+    }
+    val waveAmp1 by animateFloatAsState(if (dragFraction != null) 1.2f else 13f, tween(180), label = "waveAmp1")
+    val waveAmp2 by animateFloatAsState(if (dragFraction != null) 1.2f else 10f, tween(180), label = "waveAmp2")
+    val waveAmp3 by animateFloatAsState(if (dragFraction != null) 1.2f else 7.5f, tween(180), label = "waveAmp3")
+    val wavePrimary = remember(active) { active.ensureLuminousForDarkBackground(0.38f) }
+    val waveSecondaryBase = MaterialTheme.colorScheme.secondary
+    val waveSecondary = remember(waveSecondaryBase) { waveSecondaryBase.ensureLuminousForDarkBackground(0.32f) }
+    val waveTertiary = remember(gradientEnd) { gradientEnd.ensureLuminousForDarkBackground(0.28f) }
+    val waveLayer1 = remember(waveTertiary) {
+        listOf(
+            waveTertiary.shiftTonal(+0.18f, 0.85f).copy(alpha = 0.40f),
+            waveTertiary.shiftTonal(-0.06f, 1.15f).copy(alpha = 0.30f),
+        )
+    }
+    val waveLayer2 = remember(waveSecondary) {
+        listOf(
+            waveSecondary.shiftTonal(-0.08f, 1.15f).copy(alpha = 0.68f),
+            waveSecondary.shiftTonal(+0.18f, 0.85f).copy(alpha = 0.58f),
+        )
+    }
+    val waveBaseline = remember(wavePrimary) { listOf(wavePrimary.shiftTonal(+0.20f, 0.90f), wavePrimary.shiftTonal(-0.05f, 1.15f)) }
+    val waveLayer3 = remember(waveBaseline) {
+        listOf(
+            waveBaseline[0].copy(alpha = 0.95f),
+            waveBaseline[1].copy(alpha = 0.88f),
+        )
+    }
+    // The same layers dimmed, for the waves' stretch over the unplayed part.
+    val waveDim1 = remember(waveLayer1) { waveLayer1.map { it.copy(alpha = it.alpha * 0.38f) } }
+    val waveDim2 = remember(waveLayer2) { waveLayer2.map { it.copy(alpha = it.alpha * 0.38f) } }
+    val waveDim3 = remember(waveLayer3) { waveLayer3.map { it.copy(alpha = it.alpha * 0.38f) } }
+    // The flowing lines' paths, remade in place each frame like the wavy bar's.
+    val flowPathA = remember { Path() }
+    val flowPathB = remember { Path() }
+    val flowPathC = remember { Path() }
     // A remote or keyboard focuses the bar and moves through the song with left and right.
     var focused by remember { mutableStateOf(false) }
     val focusRing = MaterialTheme.colorScheme.primary
@@ -1175,6 +1247,90 @@ fun SeekBar(
                 val r = CornerRadius(h / 2)
                 val f = fraction()
                 if (focused) drawRoundRect(focusRing, Offset(-3.dp.toPx(), y - 3.dp.toPx()), Size(size.width + 6.dp.toPx(), h + 6.dp.toPx()), CornerRadius(h / 2 + 3.dp.toPx()), style = Stroke(2.dp.toPx()))
+                // The three rolling waves, drawn FIRST so the bar drawn over them
+                // covers their feet, and spanning the bar's WHOLE width: bright
+                // over the played part, the same lines dimmed over the rest, the
+                // thumb covering their junction. Each leaves the bar's left tip,
+                // swells above the track, and lands at the far tip — the line's
+                // baseline is the bar's own outline, so the ends are one piece
+                // with the bar. Plain bar only.
+                if (visualizer && amplitude == 0f) {
+                    val span = size.width
+                    val thumbX = (f * span).coerceIn(0f, span)
+                    val mid = size.height / 2
+                    val topY = mid - h / 2
+                    // One envelope only, and a short one, so the waves rise early
+                    // (no dead stretch at the left) and land close to the far tip.
+                    // The two companion lines use a sharper edge (edge > 1), so
+                    // they fade out sooner and only the main line makes the entry
+                    // and the landing: one clean thread.
+                    val transition = minOf(28.dp.toPx(), span * 0.35f)
+                    val invTransition = if (transition > 0f) 1f / transition else 0f
+                    val step = 1.5.dp.toPx()
+                    fun smootherstep(t: Float): Float {
+                        val c = t.coerceIn(0f, 1f)
+                        return c * c * c * (c * (c * 6f - 15f) + 10f)
+                    }
+                    fun wave(path: Path, wavelengthDp: Float, amplitudeDp: Float, phase: Float, edge: Float) {
+                        val amp = amplitudeDp.dp.toPx() * (0.45f + waveLevel.floatValue * 0.85f)
+                        val k = (2 * PI / wavelengthDp.dp.toPx()).toFloat()
+                        // The line's baseline IS the bar's own outline: it starts
+                        // at the bar's tip centre, hugs the rounded corner up to
+                        // the top edge, runs along it, and dives down the far
+                        // corner back to the tip centre — so at both ends the
+                        // line and the bar are one silhouette, nothing pokes out
+                        // and nothing floats. (r = the bar's corner radius.)
+                        val r = h / 2
+                        fun baseY(x: Float): Float {
+                            val d = minOf(x, span - x)
+                            return if (d >= r) topY else mid - kotlin.math.sqrt(r * r - (r - d) * (r - d))
+                        }
+                        path.reset()
+                        path.moveTo(0f, mid)
+                        var x = 0f
+                        while (x < span) {
+                            val envelope = if (invTransition > 0f) {
+                                smootherstep(x * invTransition * edge) * smootherstep((span - x) * invTransition * edge)
+                            } else {
+                                1f
+                            }
+                            path.lineTo(x, baseY(x) - (0.5f + 0.5f * sin(x * k - phase)) * amp * envelope)
+                            x += step
+                        }
+                        path.lineTo(span, mid)
+                    }
+                    val t = waveClock.floatValue
+                    wave(flowPathA, 160f, waveAmp1, wavePhase(t, 2.4f) + 2.2f, 1.8f)
+                    wave(flowPathB, 125f, waveAmp2, wavePhase(t, 1.8f) + 1.2f, 1.8f)
+                    wave(flowPathC, 95f, waveAmp3, wavePhase(t, 1.3f), 1f)
+                    val join = StrokeJoin.Round
+                    // A layer's brush over one stretch of the bar, dissolving at
+                    // the bar's tips (fadeIn/fadeOut) so no stroke end ever shows.
+                    fun layerBrush(colors: List<Color>, from: Float, to: Float, fadeIn: Boolean, fadeOut: Boolean): Brush =
+                        Brush.horizontalGradient(
+                            0f to colors[0].copy(alpha = if (fadeIn) 0f else colors[0].alpha),
+                            0.045f to colors[0],
+                            0.955f to colors[1],
+                            1f to colors[1].copy(alpha = if (fadeOut) 0f else colors[1].alpha),
+                            startX = from, endX = to,
+                        )
+                    fun drawLayer(path: Path, colors: List<Color>, dimmed: List<Color>, widthDp: Float) {
+                        val w = widthDp.dp.toPx()
+                        if (thumbX > 0f) {
+                            clipRect(left = 0f, right = thumbX, top = 0f, bottom = size.height) {
+                                drawPath(path, layerBrush(colors, 0f, thumbX.coerceAtLeast(1f), fadeIn = true, fadeOut = false), style = Stroke(w, cap = StrokeCap.Round, join = join))
+                            }
+                        }
+                        if (thumbX < span) {
+                            clipRect(left = thumbX, right = span, top = 0f, bottom = size.height) {
+                                drawPath(path, layerBrush(dimmed, thumbX, span, fadeIn = false, fadeOut = true), style = Stroke(w, cap = StrokeCap.Round, join = join))
+                            }
+                        }
+                    }
+                    drawLayer(flowPathA, waveLayer1, waveDim1, 1.0f)
+                    drawLayer(flowPathB, waveLayer2, waveDim2, 1.2f)
+                    drawLayer(flowPathC, waveLayer3, waveDim3, 1.6f)
+                }
                 val b = if (durationMs > 0) (buffered().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
                 // Under the wave, the straight track starts where the played part ends: drawn the
                 // whole way along, it showed as a flat line behind the wave.
@@ -1240,6 +1396,7 @@ fun SeekBar(
                         if (x > played + clear && x < size.width - h) drawCircle(markDot, h * 0.32f, Offset(x, size.height / 2))
                     }
                 }
+
                 if (thumbRadius > 0.dp) {
                     val at = Offset(size.width * f, size.height / 2)
                     val thumbColor = if (gradient) gradientEnd else active
@@ -1963,3 +2120,63 @@ internal fun seekStepMs(key: Key, durationMs: Long): Long? {
 private const val SEEK_HOLD_MS = 2_000L
 /** Close enough to the let-go point to count as there. */
 private const val SEEK_LANDED_MS = 700L
+
+// The flowing seek-bar waves' helpers, ported from LastWave's WavySeekBar.kt.
+
+private fun Color.shiftTonal(lightnessDelta: Float, saturationScale: Float): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.RGBToHSV(
+        (red * 255).toInt().coerceIn(0, 255),
+        (green * 255).toInt().coerceIn(0, 255),
+        (blue * 255).toInt().coerceIn(0, 255),
+        hsv,
+    )
+    val originalSaturation = hsv[1]
+    hsv[1] = (hsv[1] * saturationScale).coerceIn(if (originalSaturation > 0.05f) 0.15f else 0f, 1f)
+    hsv[2] = (hsv[2] + lightnessDelta).coerceIn(0.25f, 1f)
+    return Color(android.graphics.Color.HSVToColor(hsv))
+}
+
+/**
+ * Ensures a color has sufficient perceived luminance and saturation to stand out
+ * vibrantly on dark scrims and backgrounds without washing out or disappearing.
+ * Uses WCAG 2.1 relative luminance and HSL space to preserve the original hue.
+ */
+private fun Color.ensureLuminousForDarkBackground(minLuminance: Float = 0.38f): Color {
+    val argb = this.toArgb()
+    val currentLuminance = ColorUtils.calculateLuminance(argb).toFloat()
+    if (currentLuminance >= minLuminance) {
+        return this
+    }
+
+    val hsl = FloatArray(3)
+    ColorUtils.colorToHSL(argb, hsl)
+
+    // If nearly achromatic (dark gray/black cover art), bring to a clean, crisp off-white/silver
+    if (hsl[1] < 0.12f) {
+        hsl[2] = hsl[2].coerceAtLeast(0.82f)
+        return Color(ColorUtils.HSLToColor(hsl))
+    }
+
+    // Elevate lightness iteratively until target relative luminance is met
+    var step = 0
+    while (step < 20) {
+        hsl[2] = (hsl[2] + 0.04f).coerceAtMost(0.92f)
+        // Prevent high-saturation low-luminance hues (like deep blue) from staying too dark
+        if (hsl[1] > 0.85f && hsl[2] < 0.65f) {
+            hsl[1] = (hsl[1] * 0.96f).coerceAtLeast(0.60f)
+        }
+        val candidate = ColorUtils.HSLToColor(hsl)
+        if (ColorUtils.calculateLuminance(candidate).toFloat() >= minLuminance) {
+            return Color(candidate)
+        }
+        step++
+    }
+
+    return Color(ColorUtils.HSLToColor(hsl))
+}
+
+private fun wavePhase(seconds: Float, periodSeconds: Float): Float {
+    val cycles = seconds / periodSeconds
+    return (cycles - kotlin.math.floor(cycles)) * (2 * PI).toFloat()
+}
