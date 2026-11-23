@@ -434,7 +434,10 @@ class PlayerConnection(private val context: Context) {
         }
         controller.shuffleModeEnabled = false
         val startAt = if (shuffled) 0 else startIndex.coerceIn(songs.indices)
-        val landing = setQueue(controller, ordered, startAt, startPositionMs.coerceAtLeast(0L))
+        // Each song keeps its place in the list, so an album played in its order is told apart
+        // from one shuffled (see albumRunsOn).
+        val places = if (fromList) songs.withIndex().associate { it.value.videoId to it.index } else emptyMap()
+        val landing = setQueue(controller, ordered, startAt, startPositionMs.coerceAtLeast(0L), places)
         controller.prepare()
         controller.play()
         if (mixing) startSmartShuffle(origin, songs, seed, landing)
@@ -449,14 +452,15 @@ class PlayerConnection(private val context: Context) {
      * a long list to cross to the playback service, and the rest follows
      * behind it. However long the list, the first song starts the same.
      */
-    private fun setQueue(controller: MediaController, ordered: List<Song>, startIndex: Int, startPositionMs: Long): Job? {
+    private fun setQueue(controller: MediaController, ordered: List<Song>, startIndex: Int, startPositionMs: Long, places: Map<String, Int> = emptyMap()): Job? {
+        fun item(song: Song) = song.toMediaItem().let { m -> places[song.videoId]?.let(m::atListPosition) ?: m }
         val stamp = ++queueStamp
         // A new queue: a shuffle turned on for the last one has nothing to put back.
         beforeShuffle = null
         beforeSmart = null
         val headSize = maxOf(QUEUE_CHUNK, startIndex + 1)
         val head = ordered.take(headSize)
-        controller.setMediaItems(head.map { it.toMediaItem() }, startIndex.coerceIn(head.indices), startPositionMs)
+        controller.setMediaItems(head.map(::item), startIndex.coerceIn(head.indices), startPositionMs)
         if (ordered.size <= head.size) return null
         return scope.launch {
             var at = head.size
@@ -466,7 +470,7 @@ class PlayerConnection(private val context: Context) {
                 // radio): stop landing instead of refilling it.
                 if (controller.mediaItemCount < at) return@launch
                 val chunk = ordered.subList(at, minOf(at + QUEUE_CHUNK, ordered.size))
-                controller.addMediaItems(at, chunk.map { it.toMediaItem() })
+                controller.addMediaItems(at, chunk.map(::item))
                 at += chunk.size
                 kotlinx.coroutines.delay(QUEUE_CHUNK_MS)
             }
