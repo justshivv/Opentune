@@ -441,7 +441,10 @@ object Player {
             ++generation
         }
         val found = upgrades[song.videoId]?.takeIf { System.currentTimeMillis() - it.at < UPGRADE_KEEP_MS }
-        if (found != null) start(song, gen, found, takeover = false, atMs = atMs) else startBase(song, gen, atMs)
+        val begin = { if (found != null) start(song, gen, found, takeover = false, atMs = atMs) else startBase(song, gen, atMs) }
+        // Away from a bit-perfect FLAC, the next song waits for its device in the background, not on the window's thread.
+        if (closing.isEmpty()) begin()
+        else scope.launch(Dispatchers.IO) { awaitDevice(); if (synchronized(gate) { gen == generation }) begin() }
         followUp(song, i, gen)
     }
 
@@ -454,10 +457,33 @@ object Player {
         if (isYouTubeId(song.videoId)) scope.launch { applyLoudness(song.videoId, gen) }
     }
 
-    /** Stops an engine for good; a bit-perfect one gives the device back before the bus takes it. */
+    /** Bit-perfect engines stopped and still giving their device back, on their own threads. */
+    private val closing = java.util.concurrent.ConcurrentLinkedQueue<FlacEngine>()
+
+    /**
+     * Stops an engine for good, at once. A bit-perfect one gives its device back on its own thread,
+     * which can take up to a second; whatever opens an output next calls [awaitDevice] first. Waited
+     * for here, under [gate] and on the window's thread, a skip away from a FLAC froze the window.
+     */
     private fun release(e: Engine) {
         e.dispose()
-        if (e is FlacEngine) e.awaitClosed(1_000)
+        if (e is FlacEngine) closing += e
+    }
+
+    /** Waits, up to a second each, for stopped bit-perfect engines to give the device back. Never on the window's thread. */
+    private fun awaitDevice() {
+        while (true) {
+            val e = closing.peek() ?: return
+            e.awaitClosed(1_000)
+            closing.remove(e)
+        }
+    }
+
+    /** For tests: [e] takes over as a bit-perfect FLAC does, the bus giving up the device for it. */
+    internal fun takeOver(e: Engine) {
+        val old = synchronized(gate) { dropPrepared(); engine.also { engine = e } }
+        old?.let(::release)
+        AudioBus.release()
     }
 
     // ---- The song's first source -------------------------------------------------
@@ -758,7 +784,10 @@ object Player {
             release(old)
             old = null
         }
-        if (direct) AudioBus.release()
+        if (direct) {
+            AudioBus.release()
+            awaitDevice()
+        }
         val startAt: () -> Long = { old?.positionMs() ?: from }
         lateinit var e: Engine
         val onStarted: () -> Unit = {
@@ -790,7 +819,11 @@ object Player {
             }
             val at = runCatching { e.positionMs() }.getOrDefault(0L)
             release(e)
-            if (fallBack) { _quality.value = null; startBase(song, gen, at) }
+            if (fallBack) {
+                _quality.value = null
+                // Not on the failed engine's own thread: a bit-perfect one gives the device back only once this returns.
+                scope.launch(Dispatchers.IO) { awaitDevice(); startBase(song, gen, at) }
+            }
         }
         val onEnd: () -> Unit = { if (current(gen, e)) ended() }
         e = if (direct) {

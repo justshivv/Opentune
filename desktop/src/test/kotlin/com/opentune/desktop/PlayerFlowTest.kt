@@ -6,6 +6,7 @@ import java.nio.ShortBuffer
 import java.nio.file.Files
 import kotlin.math.PI
 import kotlin.math.sin
+import javax.sound.sampled.AudioFormat
 import kotlin.math.sqrt
 import org.bytedeco.ffmpeg.global.avcodec
 import org.bytedeco.javacv.FFmpegFrameRecorder
@@ -122,5 +123,47 @@ class PlayerFlowTest {
         waitFor(2_000, "the next song heard") { device.frames > before + 9_600 }
         assertTrue(Player.playing.value)
         assertTrue(Player.positionMs() < 1_500)
+    }
+
+    /** A bit-perfect output that plays in real time and takes [closing] ms to give the device back. */
+    private class SlowToClose(private val closing: Long) : PcmOut {
+        @Volatile var bytes = 0L
+        @Volatile var closedAt = 0L
+        override fun open(format: AudioFormat) = format
+        override fun write(bytes: ByteArray, off: Int, len: Int): Int {
+            Thread.sleep(len / 192L)
+            this.bytes += len
+            return len
+        }
+        override fun start() {}
+        override fun stop() {}
+        override fun flush() {}
+        override fun drain() {}
+        override fun close() { Thread.sleep(closing); closedAt = System.nanoTime() }
+        override val framePosition: Long get() = bytes / 4
+        override fun setGainDb(db: Float) = true
+    }
+
+    @Test fun skippingAwayFromABitPerfectSongDoesNotHoldUpTheWindow() {
+        val device = CaptureDevice.install(paced = true)
+        Player.playAll(listOf(song("bp-a", 440.0, 5.0), song("bp-b", 660.0, 5.0)), 0)
+        waitFor(3_000, "playing") { device.frames > 9_600 }
+        // A bit-perfect FLAC takes over; its device takes most of a second to close.
+        val out = SlowToClose(700)
+        val flac = FlacEngine(source = { java.io.File(files.getValue("bp-a")).inputStream() }, startAtMs = { 0 }, autoplay = true,
+            onStarted = {}, onEnd = {}, onError = {}, out = out)
+        waitFor(3_000, "the FLAC playing") { out.bytes > 0 }
+        Player.takeOver(flac)
+        var openedAt = 0L
+        AudioBus.deviceFactory = { openedAt = System.nanoTime(); device }
+        val before = device.frames
+        val began = System.nanoTime()
+        Player.next()
+        val took = (System.nanoTime() - began) / 1_000_000
+        assertTrue("the skip took $took ms", took < 300)
+        assertEquals(1, Player.index.value)
+        // The next song plays on the bus, opened only once the FLAC gave the device back.
+        waitFor(4_000, "the next song heard") { device.frames > before + 9_600 }
+        assertTrue("the bus opened before the FLAC's device closed", out.closedAt in 1..openedAt)
     }
 }
