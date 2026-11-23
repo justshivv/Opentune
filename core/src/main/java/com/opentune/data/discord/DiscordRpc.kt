@@ -71,8 +71,12 @@ object DiscordRpc {
     /** The "Get OpenTune" button's page: the repository link the dashboard last set. */
     private val PROJECT_URL get() = com.opentune.data.config.RemoteConfig.current.github
     private const val APP_NAME = "OpenTune"
-    /** The logo's key among the Discord application's Rich Presence assets. */
-    private const val LOGO_ASSET = "logo"
+    /**
+     * The app's mark for the card's badge: a hosted copy of the logo. Discord
+     * resolves https URLs in the image slots, while Rich Presence asset keys
+     * are not resolved for a gateway presence and render as a broken badge.
+     */
+    private const val LOGO_URL = "https://raw.githubusercontent.com/justshivv/Opentune/main/site/icon-512.png"
     private const val LABEL_MAX = 32
     private const val TEXT_MAX = 128
     private const val MIN_RETRY_MS = 1_000L
@@ -250,7 +254,7 @@ object DiscordRpc {
                 if (image != null) {
                     put("large_image", image)
                     // The app's mark on the cover's bottom corner, where Discord badges a card.
-                    put("small_image", LOGO_ASSET)
+                    put("small_image", LOGO_URL)
                     put("small_text", APP_NAME)
                 }
                 now.album?.takeIf { it.isNotBlank() }?.let { put("large_text", fit(it, TEXT_MAX)) }
