@@ -327,6 +327,7 @@ class PlaybackService : MediaLibraryService() {
 
         val songSources = SongSources(context)
         val cached = songSources.cached
+        preloadCache = cached
         val direct = songSources.direct
         val sources = DefaultMediaSourceFactory(songSources.routing)
         val qualitySources = object : MediaSource.Factory by sources {
@@ -553,6 +554,7 @@ class PlaybackService : MediaLibraryService() {
             AppSettings.playback.map { it.skipSilence }.distinctUntilChanged().collect { player.skipSilenceEnabled = it }
         }
         networkWatch()
+        PreloadPlanner.attach(preloadHost)
         // Turning autoplay back on near the end of the queue should fetch now,
         // not at the next track change.
         scope.launch {
@@ -1091,6 +1093,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        PreloadPlanner.detach(preloadHost)
         PlayingHereNotice.cancel(this)
         ExternalStreams.playing(null, null)
         // As the queue is saved while it plays, with shuffle, repeat and the songs queued by hand:
@@ -2088,18 +2091,106 @@ class PlaybackService : MediaLibraryService() {
     private fun prefetchAhead() {
         val player = mediaSession?.player as? ExoPlayer ?: return
         val preload = AppSettings.playback.value.preloadUpcoming
-        val upcoming = if (preload) player.upcomingPlayOrder().drop(1).take(maxOf(PREFETCH_AHEAD, PREFETCH_LOSSLESS_AHEAD))
-            .map { player.getMediaItemAt(it) } else emptyList()
-        val wanted = aheadWanted(
-            upcoming.map { it.toSong() }, preload,
+        val upcoming = upcomingItems(player)
+        val plan = planQueue(player, upcoming)
+        val songs = upcoming.map { it.toSong() }
+        val wanted = aheadPlanned(
+            songs, preload,
             saavn = ExternalStreams.allowed(false), lossless = ExternalStreams.allowed(true),
-            saavnAhead = PREFETCH_AHEAD, losslessAhead = PREFETCH_LOSSLESS_AHEAD,
+            saavnAt = plan.saavn, losslessAt = plan.lossless,
         ) { song ->
             val uri = upcoming.firstOrNull { it.mediaId == song.videoId }?.localConfiguration?.uri
             isYouTubeId(song.videoId) && !Podcasts.isEpisode(song.videoId) && uri?.scheme != "file"
         }
         losslessAhead = wanted.filter { it.lossless }.mapTo(HashSet()) { it.id }
         aheadLookups.update(wanted, keep = player.currentMediaItem?.mediaId)
+        if (preload) PreloadPlanner.queueLyrics(songs.filterIndexed { i, s -> i in plan.lyrics && isYouTubeId(s.videoId) })
+        PreloadPlanner.poke()
+    }
+
+    /** The songs after the one playing, as far as the queue's preload reaches; none with Preload upcoming songs off. */
+    private fun upcomingItems(player: ExoPlayer): List<MediaItem> =
+        if (!AppSettings.playback.value.preloadUpcoming) emptyList()
+        else player.upcomingPlayOrder().drop(1).take(maxOf(PREFETCH_AHEAD, PREFETCH_LOSSLESS_AHEAD)).map { player.getMediaItemAt(it) }
+
+    /** What's readied for the songs ahead now (see [planQueue]). */
+    @Volatile private var queuePlan = QueuePlan.NONE
+
+    /**
+     * Works out what's readied for the songs ahead, by how likely each is to be heard
+     * ([PlayChance]): their JioSaavn and FLAC lookups, their stream addresses, their lyrics, and
+     * how much of the next song ExoPlayer loads. Its buffer is set here when it changes.
+     */
+    private fun planQueue(player: ExoPlayer, upcoming: List<MediaItem> = upcomingItems(player)): QueuePlan {
+        val pb = AppSettings.playback.value
+        val plan = if (!pb.preloadUpcoming) QueuePlan.NONE else {
+            val liked = LibraryStore.liked.value
+            val history = PreloadHistory.of(History.records.value, liked) { liked.mapTo(HashSet()) { it.videoId } }
+            val chances = upcoming.mapIndexed { i, item ->
+                val song = item.toSong()
+                PlayChance.inQueue(i, item.queueTier, history.of(song.videoId, song.artist))
+            }
+            PreloadSteps.forQueue(chances, unmetered = !AppSettings.onMeteredNetwork(), boost = pb.preloadBoostOnWifi).also { plan ->
+                if (plan != queuePlan) com.opentune.data.DebugLog.d("Preload", "Queue ahead: chances " +
+                    chances.joinToString(" ") { "%.2f".format(it) } + "; JioSaavn at ${plan.saavn.sorted()}, FLAC at ${plan.lossless.sorted()}, " +
+                    "addresses at ${plan.warm.sorted()}, lyrics at ${plan.lyrics.sorted()}, next song's buffer ${plan.nextBufferUs / 1_000_000} s")
+            }
+        }
+        val bufferChanged = plan.nextBufferUs != queuePlan.nextBufferUs
+        queuePlan = plan
+        if (bufferChanged && plan.nextBufferUs > 0) player.preloadConfiguration = ExoPlayer.PreloadConfiguration(plan.nextBufferUs)
+        return plan
+    }
+
+    /** The song cache the player reads through, for [preloadHost] to fetch the start of a song into. */
+    private var preloadCache: androidx.media3.datasource.cache.CacheDataSource.Factory? = null
+
+    /** What [PreloadPlanner] needs of the player: whether the song playing needs the connection, and the song cache. */
+    private val preloadHost = object : PreloadPlanner.Host {
+        override suspend fun holds(): Boolean = withContext(Dispatchers.Main) {
+            val p = mediaSession?.player as? ExoPlayer ?: return@withContext false
+            val item = p.currentMediaItem ?: return@withContext false
+            val token = item.localConfiguration?.uri?.let(::startupToken)
+            val duration = p.duration
+            PreloadGate.holds(
+                choosing = token != null && startupSelections[token]?.selected == null,
+                buffering = p.playbackState == Player.STATE_BUFFERING && p.playWhenReady,
+                playing = p.isPlaying,
+                aheadMs = p.totalBufferedDuration,
+                remainingMs = if (duration == C.TIME_UNSET) Long.MAX_VALUE else duration - p.currentPosition,
+                slow = AppSettings.videoCeilingKbps() < PreloadGate.SLOW_KBPS * 7 / 10,
+            )
+        }
+
+        override suspend fun playing(): Boolean = withContext(Dispatchers.Main) {
+            (mediaSession?.player as? ExoPlayer)?.let { it.isPlaying || it.playWhenReady } == true
+        }
+
+        override suspend fun queued(): Set<String> = withContext(Dispatchers.Main) {
+            val p = mediaSession?.player ?: return@withContext emptySet()
+            (0 until p.mediaItemCount).mapTo(HashSet()) { p.getMediaItemAt(it).mediaId }
+        }
+
+        override suspend fun fetchStart(song: com.opentune.data.model.Song, bytes: Long): Long {
+            val factory = preloadCache ?: return 0L
+            val id = song.videoId
+            // The source the song would start on (see StartupSelection): JioSaavn found for it, or YouTube.
+            val saavn = AppSettings.effectiveAudioQuality == com.opentune.data.settings.AudioQuality.MAX || ExternalStreams.allowed(false)
+            val rendition = if (saavn) ExternalStreams.cached(id)?.takeIf { !it.lossless && it.mimeType == null } else null
+            val uri = rendition?.let { externalStreamUri(id, it.key) } ?: streamUri(id, false)
+            val spec = androidx.media3.datasource.DataSpec.Builder().setUri(uri).setPosition(0).setLength(bytes).build()
+            var got = 0L
+            val writer = androidx.media3.datasource.cache.CacheWriter(factory.createDataSource(), spec, null) { _, cachedBytes, _ -> got = cachedBytes }
+            return withContext(Dispatchers.IO) {
+                try {
+                    kotlinx.coroutines.runInterruptible { writer.cache() }
+                } catch (e: CancellationException) {
+                    writer.cancel()
+                    throw e
+                }
+                got
+            }
+        }
     }
 
     /** Preload upcoming songs turned off: the lookups for songs ahead are called off. */
@@ -2722,7 +2813,8 @@ class PlaybackService : MediaLibraryService() {
 
     private fun preloadDurationUs(): Long {
         if (!AppSettings.playback.value.preloadUpcoming) return 0L
-        return if (isWifiBoosted()) PRELOAD_WIFI_US else PRELOAD_STANDARD_US
+        // How likely the next song is to be heard decides it (see planQueue); the old rule until it's been worked out.
+        return queuePlan.nextBufferUs.takeIf { it > 0 } ?: if (isWifiBoosted()) PRELOAD_WIFI_US else PRELOAD_STANDARD_US
     }
 
     private fun warmAheadCount(): Int =
@@ -2742,10 +2834,13 @@ class PlaybackService : MediaLibraryService() {
             com.opentune.data.settings.LosslessPreload.ALWAYS -> true
         }
         val player = target ?: (mediaSession?.player as? ExoPlayer) ?: return
+        // The network may have changed with it: the next song's buffer depends on it.
+        planQueue(player)
         val durationUs = preloadDurationUs()
         player.preloadConfiguration =
             if (durationUs > 0) ExoPlayer.PreloadConfiguration(durationUs) else ExoPlayer.PreloadConfiguration.DEFAULT
         if (AppSettings.playback.value.preloadUpcoming) warmNeighbours()
+        PreloadPlanner.poke()
     }
 
     private fun warmNeighbours() {
@@ -2757,8 +2852,10 @@ class PlaybackService : MediaLibraryService() {
         if (timeline.isEmpty) return
         val current = player.currentMediaItemIndex
         val previous = timeline.getPreviousWindowIndex(current, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
-        val aheadCount = warmAheadCount()
-        val indices = player.upcomingPlayOrder().drop(1).take(aheadCount) +
+        // The songs ahead whose chance earns it (see planQueue), or as many as before until that's worked out.
+        val plan = queuePlan
+        val ahead = player.upcomingPlayOrder().drop(1)
+        val indices = (if (plan.warm.isEmpty()) ahead.take(warmAheadCount()) else ahead.filterIndexed { i, _ -> i in plan.warm }) +
                 listOfNotNull(previous.takeIf { it != C.INDEX_UNSET })
         val now = SystemClock.elapsedRealtime()
         val ids = indices.map { player.getMediaItemAt(it).mediaId }

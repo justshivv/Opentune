@@ -1089,6 +1089,7 @@ fun CollectionScreen(
             ListOrder.Z_TO_A -> found.sortedByDescending { it.title.lowercase() }
         }
     }
+    com.opentune.ui.components.PreloadCandidates("collection:$browseId", shown.take(3))
 
 
     // Songs picked together (long press, then Select): the bar over the top acts on them.
