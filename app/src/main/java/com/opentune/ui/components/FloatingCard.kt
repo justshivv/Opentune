@@ -259,23 +259,27 @@ fun FloatingCard(
                 // Full-screen treatment only for a card that can actually reach the full
                 // height: one capped by its content keeps its card shape at its top.
                 val fullscreen = expandable && fullFraction >= 1f && fullPx >= with(density) { maxCard.toPx() } - 1f
-                // How far the card's square-off has got: 1 at rest, 0 pulled up to the whole
-                // page. It runs only over the last of the pull — the status bar's own
-                // height of it, once the card's top edge reaches the bar — so the top
-                // keeps the sheet's own shape for the whole climb and reaches under the
-                // bar only at the very end; spread over the whole pull, the top stretched
-                // from the first move, long before it arrived. Read only from layout and
-                // draw code (the insets below, the layer and the rim), never while
-                // composing: a pull writes [extra] on every move, and a read here would
-                // rebuild the whole card — handle, title, content and all — on every one
+                // How far the card's square-off has got: 1 while the card's top edge
+                // is at or below the status bar's bottom edge, 0 once the edge
+                // reaches the top of the window. The edge is the one the pull asks
+                // for — the card's height as asked (halfPx + extra) measured down
+                // from the top of the page — and the treatment runs while that edge
+                // crosses the bar's own height: it starts at the very moment of
+                // arrival, never before, in either orientation, whatever the bar's
+                // height. The RENDERED top edge cannot drive it: the inset this
+                // value sets caps the card's height, so a card waiting on its own
+                // rendered top parks a bar's height short of the top and the
+                // treatment never starts. Read only from layout and draw code (the
+                // insets below, the layer and the rim), never while composing: a
+                // pull writes [extra] on every move, and a read here would rebuild
+                // the whole card — handle, title, content and all — on every one
                 // of them, which is what made dragging a sheet crawl.
                 val edgeNow = {
                     if (!fullscreen) 1f
-                    else if (range <= 0f) 0f
                     else {
-                        val stretch = minOf(with(density) { barsTop.toPx() }, range)
-                        if (stretch <= 0f) 1f - (extra / range).coerceIn(0f, 1f)
-                        else 1f - ((extra - (range - stretch)) / stretch).coerceIn(0f, 1f)
+                        val barPx = with(density) { barsTop.toPx() }
+                        if (barPx <= 0f) 0f
+                        else ((with(density) { maxCard.toPx() } - (halfPx + extra)) / barPx).coerceIn(0f, 1f)
                     }
                 }
                 // The same square-off, coarsened for the layout insets: the insets set the
@@ -384,8 +388,16 @@ fun FloatingCard(
                             // page. The navigation bar's room moves inside the sheet
                             // (the inner insets below), so its fill runs to the very
                             // bottom of the screen while its content never sits under
-                            // the bar.
-                            InsetsPx(0, (barsTop * bars).roundToPx() + (12.dp * e).roundToPx(), 0, 0)
+                            // the bar. For a card taking the page the room is the status
+                            // bar's share alone, with no margin of the sheet's own on
+                            // top of it: a margin here caps the card's height by that
+                            // margin through the whole crossing (see [edgeNow]), so
+                            // the rendered top edge trails the pull's ask by it and
+                            // the square-off runs ahead of the edge it belongs to.
+                            // With the bar's share alone the cap IS the ask, the
+                            // rendered edge tracks it exactly, and the treatment
+                            // moves with the edge itself.
+                            InsetsPx(0, (barsTop * bars + if (fullscreen) 0.dp else 12.dp * e).roundToPx(), 0, 0)
                         }
                         .imePadding()
                         .widthIn(max = SHEET_MAX_WIDTH)
