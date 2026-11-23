@@ -51,6 +51,9 @@ internal object AudioDevices {
         }.getOrDefault(emptyList())
     }
 
+    /** [available], read off the window's thread: listing the outputs asks the sound system, which can take a while. */
+    suspend fun read(): List<Device> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { available() }
+
     fun select(name: String) {
         if (name == _selected.value) return
         _selected.value = name

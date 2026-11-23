@@ -173,6 +173,7 @@ import com.opentune.ui.components.glass
 import dev.chrisbanes.haze.HazeState
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** How wide the sidebar is (folded to a rail of icons on a narrow window, or by hand), and the column on the right. */
 internal val SIDEBAR_WIDTH = 260.dp
@@ -758,8 +759,9 @@ private fun ChromeOutputButton() {
     var open by remember { mutableStateOf(false) }
     val selected by AudioDevices.selected.collectAsState()
     var devices by remember { mutableStateOf(emptyList<AudioDevices.Device>()) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     Box {
-        ChromeBarIcon(Icons.Outlined.Headphones, "Play on") { devices = AudioDevices.available(); open = true }
+        ChromeBarIcon(Icons.Outlined.Headphones, "Play on") { open = true; scope.launch { devices = AudioDevices.read() } }
         if (open) WebMenu(MenuAnchor.BelowEnd, { open = false }, "Play on") {
             WebMenuHeader("Play on")
             WebMenuItem("The system's default", checked = selected.isBlank()) { AudioDevices.select("") }

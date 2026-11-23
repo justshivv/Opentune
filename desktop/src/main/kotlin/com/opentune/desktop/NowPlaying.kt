@@ -804,8 +804,9 @@ private fun PlayerDevicesButton() {
     val selected by AudioDevices.selected.collectAsState()
     var open by remember { mutableStateOf(false) }
     var devices by remember { mutableStateOf(emptyList<AudioDevices.Device>()) }
+    val scope = rememberCoroutineScope()
     Box {
-        PlayerPillButton(Icons.Rounded.Headphones, "Output device", selected.isNotBlank()) { devices = AudioDevices.available(); open = true }
+        PlayerPillButton(Icons.Rounded.Headphones, "Output device", selected.isNotBlank()) { open = true; scope.launch { devices = AudioDevices.read() } }
         DropdownMenu(open, onDismissRequest = { open = false }, modifier = Modifier.widthIn(min = 240.dp, max = 360.dp)) {
             Text(
                 "Play on", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,

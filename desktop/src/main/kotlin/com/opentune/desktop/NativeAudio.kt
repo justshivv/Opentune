@@ -67,8 +67,11 @@ internal object NativeAudio {
 
     fun devices(): List<Device> {
         val l = lib ?: return emptyList()
-        val n = synchronized(this) { l.ot_refresh_devices() }
-        return (0 until n).map { Device(l.ot_device_name(it), l.ot_device_is_default(it) != 0) }
+        // Read under the same lock as the refresh: the names live in one native table another refresh rewrites.
+        return synchronized(this) {
+            val n = l.ot_refresh_devices()
+            (0 until n).map { Device(l.ot_device_name(it), l.ot_device_is_default(it) != 0) }
+        }
     }
 
     /**
@@ -78,7 +81,8 @@ internal object NativeAudio {
     fun open(device: String, format: Format?, rate: Int, channels: Int, exclusive: Boolean, ringMs: Int): NativeOutput {
         val l = lib ?: throw IllegalStateException("no native output")
         val error = ByteArray(256)
-        val handle = l.ot_open(device.ifBlank { null }, format?.code ?: 0, rate, channels, if (exclusive) 1 else 0, ringMs, error, error.size)
+        // Under the device list's lock: looking a device up by name can read the list afresh.
+        val handle = synchronized(this) { l.ot_open(device.ifBlank { null }, format?.code ?: 0, rate, channels, if (exclusive) 1 else 0, ringMs, error, error.size) }
             ?: throw java.io.IOException(String(error).substringBefore('\u0000').ifBlank { "the device won't open" })
         return NativeOutput(l, handle)
     }

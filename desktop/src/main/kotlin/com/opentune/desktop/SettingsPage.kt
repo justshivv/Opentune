@@ -803,7 +803,9 @@ private fun DiscordCardRows() {
 @Composable
 private fun OutputDeviceRow() {
     val selected by AudioDevices.selected.collectAsState()
-    var devices by remember { mutableStateOf(AudioDevices.available()) }
+    var devices by remember { mutableStateOf(emptyList<AudioDevices.Device>()) }
+    val scope = rememberCoroutineScope()
+    androidx.compose.runtime.LaunchedEffect(Unit) { devices = AudioDevices.read() }
     MenuRow(
         "Output device",
         choices = listOf("") + devices.map { it.name }.filter { it.isNotBlank() },
@@ -811,7 +813,7 @@ private fun OutputDeviceRow() {
         detail = AudioBus.description,
         label = { it.ifBlank { "The system's default" } },
         summary = { name -> devices.firstOrNull { it.name == name }?.description?.takeIf { it.isNotBlank() && it != name } },
-        onOpen = { devices = AudioDevices.available() },
+        onOpen = { scope.launch { devices = AudioDevices.read() } },
     ) { AudioDevices.select(it) }
 }
 
