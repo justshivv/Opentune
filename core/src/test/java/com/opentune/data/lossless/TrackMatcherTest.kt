@@ -17,6 +17,18 @@ class TrackMatcherTest {
         assertNotNull(TrackMatcher.score(row("Paniyon Sa", "Atif Aslam, Tulsi Kumar", 246), target))
     }
 
+    /** The Lil Wayne remix of Believer, 3:39 on NetEase, played for the 3:36 music video: his verse from 1:25. */
+    @Test fun anotherVersionWithAFeaturedArtistIsNotTheSong() {
+        val remix = row("Believer", "Imagine Dragons, Lil Wayne", 219)
+        assertNull(TrackMatcher.score(remix, Target("Believer", "Imagine Dragons", 216, isVideo = true)))
+        assertNull(TrackMatcher.score(remix, Target("Believer", "Imagine Dragons", 204)))
+    }
+
+    @Test fun aFeaturedArtistTheSongNamesIsNoStranger() {
+        assertNotNull(TrackMatcher.score(row("Believer", "Imagine Dragons, Lil Wayne", 219), Target("Believer (feat. Lil Wayne)", "Imagine Dragons", 219)))
+        assertNotNull(TrackMatcher.score(row("Believer", "Imagine Dragons, Lil Wayne", 219), Target("Believer", "Imagine Dragons & Lil Wayne", 216)))
+    }
+
     @Test fun featCreditsRemasterTagsAndOfficialAudioAreNotPartOfTheTitle() {
         assertNotNull(TrackMatcher.score(row("Blinding Lights", "The Weeknd", 200), Target("Blinding Lights (feat. Someone)", "The Weeknd", 200)))
         assertNotNull(TrackMatcher.score(row("Bohemian Rhapsody", "Queen", 355), Target("Bohemian Rhapsody - Remastered 2011", "Queen", 355)))

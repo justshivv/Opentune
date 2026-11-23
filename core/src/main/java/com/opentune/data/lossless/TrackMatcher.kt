@@ -240,6 +240,14 @@ internal object TrackMatcher {
             // the ordinary 30-second ceiling below.
             allowVideoDrift = creditedArtist != null,
         ) ?: return null
+        // Someone the request credits nowhere, not even in its title's "feat.", is often
+        // the other version's guest: NetEase's "Believer" with Lil Wayne, 3:39, passed for
+        // the 3:36 music video, and his verse played from 1:25. A store's fuller credit for
+        // the same recording ("Atif Aslam, Tulsi Kumar") runs within seconds of it, so only
+        // that lets one through, and never against a video, whose runtime vouches for nothing.
+        if (creditedArtist != null && creditsAnotherArtist(target, candidate) &&
+            (target.isVideo || !withinSeconds(candidate, target, FULLER_CREDIT_SEC))
+        ) return null
         val artist = creditedArtist
         // The credits don't merely differ in spelling, they name different
         // people — and sometimes that is because they are describing the
@@ -618,6 +626,12 @@ internal object TrackMatcher {
         return if (want == have) ARTIST_EXACT else ARTIST_SHARED
     }
 
+    /** Whether [candidate] credits an artist [target] names neither in its credit nor in its title. */
+    private fun creditsAnotherArtist(target: Target, candidate: Candidate): Boolean {
+        val known = wordsOf(normalize("${target.artist} ${target.title}"))
+        return artistNames(candidate.artist).any { !runOf(known, it) }
+    }
+
     /**
      * The credited artists, each as its own list of words.
      *
@@ -751,6 +765,9 @@ internal object TrackMatcher {
      * evidence there is in that case, so it has to be the strong kind.
      */
     private const val CREDIT_OVERRIDE_SEC = 2
+
+    /** How far a row crediting an artist the request doesn't may run from it and still be the same recording. */
+    private const val FULLER_CREDIT_SEC = 5
     private const val DURATION_TIGHT = 40
     private const val DURATION_LOOSE = 15
     private const val ALBUM_EXACT = 35
