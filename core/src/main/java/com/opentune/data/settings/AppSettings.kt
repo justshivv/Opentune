@@ -621,6 +621,8 @@ data class InterfaceSettings(
     val canvasLook: CanvasLook = CanvasLook.TINT,
     /** While a Canvas plays on the cover, the controls slide down after a few seconds, leaving the title. */
     val canvasFocus: Boolean = true,
+    /** While a Canvas takes the screen, the song's current lyric line stays under the title. */
+    val canvasLyricsLine: Boolean = true,
     /** With Spotify connected, songs liked here are saved to Spotify's Liked Songs too. */
     val spotifySaveLikes: Boolean = true,
     /** With Spotify connected, Home shows Spotify's mixes made for the listener. */

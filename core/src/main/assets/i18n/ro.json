@@ -3534,5 +3534,8 @@
 "{0}{1} episodes": "{0}{1} episoade",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…și încă {0}"
+"…and {0} more": "…și încă {0}",
+"Lyrics line stays": "Versul rămâne afișat",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Cât timp un Canvas ocupă ecranul, versul curent rămâne sub titlu în loc să dispară odată cu comenzile.",
+"Only with Canvas takes the screen on": "Numai cu „Canvas takes the screen” activat"
 }

@@ -3534,5 +3534,8 @@
 "{0}{1} episodes": "{0}{1} ตอน",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…และอีก {0}"
+"…and {0} more": "…และอีก {0}",
+"Lyrics line stays": "บรรทัดเนื้อเพลงยังคงแสดงอยู่",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "ขณะที่ Canvas แสดงเต็มหน้าจอ บรรทัดเนื้อเพลงปัจจุบันจะยังคงอยู่ใต้ชื่อเพลง แทนที่จะเลื่อนหายไปพร้อมกับปุ่มควบคุม",
+"Only with Canvas takes the screen on": "เฉพาะเมื่อเปิด 'Canvas takes the screen' เท่านั้น"
 }

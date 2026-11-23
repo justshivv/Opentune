@@ -3534,5 +3534,8 @@
 "{0}{1} episodes": "{0}{1} એપિસોડ",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…અને બીજા {0}"
+"…and {0} more": "…અને બીજા {0}",
+"Lyrics line stays": "ગીતની લાઇન રહે છે",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas સ્ક્રીન લે ત્યારે, વર્તમાન ગીતની લાઇન નિયંત્રણો સાથે સરકી જવાને બદલે શીર્ષક નીચે રહે છે.",
+"Only with Canvas takes the screen on": "ફક્ત 'Canvas takes the screen' ચાલુ હોય ત્યારે જ"
 }

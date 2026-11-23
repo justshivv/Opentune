@@ -1202,6 +1202,22 @@ fun PlayerLayout(
                     // settles, and fade up behind the cover as it reaches the header.
                     var listsBuilt by remember { mutableStateOf(outerPane != Pane.COVER) }
                     LaunchedEffect(Unit) { delay(LISTS_PREWARM_MS); listsBuilt = true }
+                    // Parked off-screen, the lists are composed but never laid out at their
+                    // real place or drawn, so a first opening pays for both inside its own
+                    // flight and the flight is gone before the cover moves. They therefore
+                    // spend their first moments after being built where they belong —
+                    // invisible under the cover, which sits above them and takes the
+                    // touches — long enough for both panes' own pre-build to finish and a
+                    // few frames to draw, and only then park. No opening is ever delayed:
+                    // an opening inside the warm-up finds them already in place.
+                    var listsWarmed by remember { mutableStateOf(false) }
+                    LaunchedEffect(listsBuilt) {
+                        if (listsBuilt && !listsWarmed) {
+                            delay(250)
+                            repeat(3) { androidx.compose.runtime.withFrameNanos { } }
+                            listsWarmed = true
+                        }
+                    }
                     // The flight's state is followed here, not read while composing: as keys it made this
                     // whole page (the cover page and the lists under it) compose again in the very frame
                     // the cover landed, and that frame's stall was the jolt at the end of every fold.
@@ -1420,7 +1436,11 @@ fun PlayerLayout(
                                     onMore = { showMenu = true },
                                     Modifier
                                         .onGloballyPositioned {
-                                            if (!hidden && !flight.active && coverLift == 0f && dragOffset == 0f) bigTitle =
+                                            // During a return flight the title keeps reporting where it
+                                            // lives now: the layout can have changed while a list was up
+                                            // (the Canvas-away strip coming back, say), and a target
+                                            // captured before the visit would fly it to the old place.
+                                            if (!hidden && (!flight.active || (!flight.toSmall && !flight.following)) && coverLift == 0f && dragOffset == 0f) bigTitle =
                                                 it.boundsInRoot()
                                         }
                                         .graphicsLayer {
@@ -1428,9 +1448,13 @@ fun PlayerLayout(
                                                 if (flight.active && bigTitle != null) 0f else 1f
                                         },
                                 )
-                                // With the controls away over a Canvas, the title sits a little up from the bottom edge.
+                                // With the controls away over a Canvas, the title sits a little up from the bottom edge —
+                                // unless the lyric line is staying behind under it (canvasLyricsLine): then the
+                                // line takes the foot's place, at the exact distance it had before the slide.
+                                val lyricLineStays = controlsAway && state.ui.canvasLyricsLine && state.ui.lyricsPreview &&
+                                        ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced || state.lyrics is LyricsState.Loading)
                                 val footRoom by androidx.compose.animation.core.animateDpAsState(
-                                    if (controlsHidden) CANVAS_TITLE_FOOT else 0.dp,
+                                    if (controlsHidden && !lyricLineStays) CANVAS_TITLE_FOOT else 0.dp,
                                     if (controlsHidden) tween(520, easing = FastOutSlowInEasing) else spring(dampingRatio = 0.9f, stiffness = 380f),
                                     label = "canvasFoot",
                                 )
@@ -1627,7 +1651,7 @@ fun PlayerLayout(
                         // The lists: built once, then parked far off to the side while the cover is up,
                         // so they never take its touches or cost a frame when they come in.
                         if (listsBuilt) {
-                            val parked = outerPane == Pane.COVER && !flight.following && listsGone
+                            val parked = listsWarmed && outerPane == Pane.COVER && !flight.following && listsGone
                             Box(
                                 Modifier.fillMaxSize()
                                     .zIndex(if (outerPane == Pane.COVER) 0f else 1f)
@@ -1668,6 +1692,41 @@ fun PlayerLayout(
                                 kotlinx.coroutines.delay(500)
                             }
                         }
+                    }
+                    // The song's lyric line. It is not one of the controls, so it does not
+                    // live inside their block: while a Canvas has taken the screen it can
+                    // stay behind under the title (canvasLyricsLine) as they slide away.
+                    // The queue and the lyrics page still take it away, as before.
+                    AnimatedVisibility(
+                        pane != Pane.LYRICS && pane != Pane.QUEUE && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST) && (!controlsHidden || (controlsAway && state.ui.canvasLyricsLine)),
+                        enter = expandVertically(
+                            spring(
+                                dampingRatio = 0.9f,
+                                stiffness = 380f
+                            ), expandFrom = Alignment.Bottom
+                        ) + slideInVertically(
+                            spring(
+                                dampingRatio = 0.9f,
+                                stiffness = 380f
+                            )
+                        ) { it / 2 } + fadeIn(tween(220)),
+                        exit = shrinkVertically(
+                            tween(520, easing = FastOutSlowInEasing),
+                            shrinkTowards = Alignment.Bottom
+                        ) + slideOutVertically(
+                            tween(
+                                520,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) { it / 2 } + fadeOut(tween(360)),
+                    ) {
+                        LyricPreview(
+                            state.lyrics,
+                            lyricsPosition,
+                            onOpen = { toggle(Pane.LYRICS) },
+                            Modifier.padding(top = 4.dp),
+                            plain = apple
+                        )
                     }
                     // Lyrics with nothing in the way: a few seconds untouched while they
                     // play, and the controls slide down out of sight.
@@ -1712,15 +1771,6 @@ fun PlayerLayout(
                                         }
                                     }
                                 }
-                            }
-                            if (pane != Pane.LYRICS && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
-                                LyricPreview(
-                                    state.lyrics,
-                                    lyricsPosition,
-                                    onOpen = { toggle(Pane.LYRICS) },
-                                    Modifier.padding(top = 4.dp),
-                                    plain = apple
-                                )
                             }
                             Spacer(Modifier.height(8.dp))
                             // The line at a point of the song, for the bubble shown while the bar is dragged.

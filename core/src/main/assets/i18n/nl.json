@@ -3605,5 +3605,8 @@
 "{0}{1} episodes": "{0}{1} afleveringen",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…en nog {0}"
+"…and {0} more": "…en nog {0}",
+"Lyrics line stays": "Songtekstregel blijft staan",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Terwijl een Canvas het scherm overneemt, blijft de huidige songtekstregel onder de titel staan in plaats van met de bediening weg te schuiven.",
+"Only with Canvas takes the screen on": "Alleen met 'Canvas takes the screen' ingeschakeld"
 }

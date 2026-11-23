@@ -3605,5 +3605,8 @@
 "{0}{1} episodes": "{0}{1} epizód",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…és még {0}"
+"…and {0} more": "…és még {0}",
+"Lyrics line stays": "A dalszövegsor megmarad",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Amikor a Canvas átveszi a képernyőt, az aktuális dalszövegsor a cím alatt marad, ahelyett hogy a vezérlőkkel együtt elcsúszna.",
+"Only with Canvas takes the screen on": "Csak bekapcsolt «Canvas takes the screen» esetén"
 }

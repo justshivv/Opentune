@@ -3605,5 +3605,8 @@
 "{0}{1} episodes": "{0}{1} ఎపిసోడ్‌లు",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…ఇంకా {0}"
+"…and {0} more": "…ఇంకా {0}",
+"Lyrics line stays": "పాట లైన్ అలాగే ఉంటుంది",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas స్క్రీన్‌ను ఆక్రమించినప్పుడు, ప్రస్తుత పాట లైన్ నియంత్రణలతో పాటు జారిపోకుండా శీర్షిక క్రింద అలాగే ఉంటుంది.",
+"Only with Canvas takes the screen on": "'Canvas takes the screen' ఆన్‌లో ఉన్నప్పుడు మాత్రమే"
 }

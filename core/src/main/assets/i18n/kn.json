@@ -3543,5 +3543,8 @@
 "{0}{1} episodes": "{0}{1} ಎಪಿಸೋಡ್‌ಗಳು",
 "álbum": "álbum",
 "Čeština": "Čeština",
-"…and {0} more": "…ಮತ್ತು ಇನ್ನೂ {0}"
+"…and {0} more": "…ಮತ್ತು ಇನ್ನೂ {0}",
+"Lyrics line stays": "ಸಾಹಿತ್ಯದ ಸಾಲು ಹಾಗೆಯೇ ಇರುತ್ತದೆ",
+"While a Canvas takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Canvas ಪರದೆಯನ್ನು ಆಕ್ರಮಿಸಿದಾಗ, ಪ್ರಸ್ತುತ ಸಾಹಿತ್ಯದ ಸಾಲು ನಿಯಂತ್ರಣಗಳೊಂದಿಗೆ ಜಾರಿ ಹೋಗದೆ ಶೀರ್ಷಿಕೆಯ ಕೆಳಗೆ ಉಳಿಯುತ್ತದೆ.",
+"Only with Canvas takes the screen on": "'Canvas takes the screen' ಆನ್ ಇದ್ದಾಗ ಮಾತ್ರ"
 }
