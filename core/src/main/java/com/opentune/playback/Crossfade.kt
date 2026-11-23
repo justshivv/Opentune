@@ -10,6 +10,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.settings.AppSettings
+import com.opentune.playback.mix.AutomixOptions
 import com.opentune.playback.mix.MixAnalyzer
 import com.opentune.playback.mix.MixPlan
 import com.opentune.playback.mix.automixPlan
@@ -37,8 +38,11 @@ import kotlinx.coroutines.withTimeoutOrNull
  * then keeps it audible until the main player is ready to take over the same
  * stream. Buffering and pauses do not advance the blend clock.
  *
- * A skip or seek cancels the blend; a pause or audio-focus loss pauses both
- * players. The second player is released when playback returns to the main one.
+ * A seek, or a skip once the blend is under way, cancels it; a pause or
+ * audio-focus loss pauses both players. With fades on pause, play and skip
+ * turned on, a skip by hand is itself a short blend (see [blendSkip]). Songs
+ * of one album played in its order are never blended (see [albumRunsOn]).
+ * The second player is released when playback returns to the main one.
  */
 @OptIn(UnstableApi::class)
 internal class Crossfade(
@@ -89,6 +93,8 @@ internal class Crossfade(
     private var lastMixed: Pair<Int, String>? = null
     /** Tries at a transition for the song in [triesFor]: a next song that didn't load gets another go. */
     private var tries = 0
+    /** A skip by hand that's waiting for its song to load: made the plain way if the blend can't be. */
+    private var skipFallback: (() -> Unit)? = null
     private var triesFor: Pair<Int, String>? = null
     /** True while this class moves the main player itself, so its own seeks aren't read as the listener's. */
     private var handingOver = false
@@ -125,7 +131,10 @@ internal class Crossfade(
                 main.volume = 0f
                 return
             }
+            // The song ran out while a skip's song was still loading: the skip is still made.
+            val skip = skipFallback.takeIf { reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO }
             bail()
+            skip?.invoke()
         }
 
         override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
@@ -193,7 +202,10 @@ internal class Crossfade(
             if (!enabled || BitPerfectUsb.active || main.repeatMode == Player.REPEAT_MODE_ONE ||
                 (phase == Phase.LOADING && main.pauseAtEndOfMediaItems) ||
                 (expected != null && (expected.first !in 0 until main.mediaItemCount || main.getMediaItemAt(expected.first).mediaId != expected.second))) {
+                // A skip still loading its song is made the plain way: it was asked for.
+                val skip = skipFallback
                 bail()
+                skip?.invoke()
                 return POLL_MS
             }
             // The next song is loading and the playing one's sound has ended for good: go now.
@@ -220,6 +232,8 @@ internal class Crossfade(
         if (left > analyzeAhead()) return POLL_MS
 
         val next = main.getMediaItemAt(main.nextMediaItemIndex)
+        // One album played in its order runs on as recorded.
+        if (albumGuarded(main.currentMediaItemIndex, main.nextMediaItemIndex)) return POLL_MS
         // Planned again if the next song changes (the queue was edited).
         val planKey = Triple(key.first, key.second, next.mediaId)
         if (planFor != planKey) {
@@ -255,10 +269,46 @@ internal class Crossfade(
         return POLL_MS
     }
 
-    private fun quickPlanLeft(): Long = PREP_MS + (if (settings.automix) MAX_QUICK_MS else settings.crossfadeSeconds * 1000L) + 1_000
+    private fun quickPlanLeft(): Long = PREP_MS + (if (settings.automix) maxOf(MAX_QUICK_MS, settings.automixSeconds * 1000L) else settings.crossfadeSeconds * 1000L) + 1_000
 
     private fun quickPlan(duration: Long): MixPlan =
-        if (settings.automix) automixPlan(duration, null, null) else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, null, null)
+        if (settings.automix) automixPlan(duration, null, null, automixOptions()) else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, null, null)
+
+    /** Automix as set in Settings: its length, how far it matches tempos, and whether it always mixes. */
+    private fun automixOptions() = AutomixOptions(
+        lengthMs = settings.automixSeconds.takeIf { it > 0 }?.times(1000L),
+        tempoStretch = settings.tempoMatch.maxStretch,
+        alwaysMix = settings.automixAlwaysMix,
+    )
+
+    /** Whether the entries at [from] and [to] are one album running on in its order, with the guard on. */
+    private fun albumGuarded(from: Int, to: Int): Boolean {
+        if (!settings.gaplessAlbums || from !in 0 until main.mediaItemCount || to !in 0 until main.mediaItemCount) return false
+        return albumRunsOn(main.getMediaItemAt(from).albumSpot, main.getMediaItemAt(to).albumSpot,
+            adjacent = to == from + 1 && !main.shuffleModeEnabled)
+    }
+
+    /**
+     * A skip by hand to entry [target], blended: the song picked comes in on the second player
+     * over [lengthMs], then the main player takes it over as at a song's end. False when it
+     * can't be (nothing to blend with, a blend already under way, songs not to be mixed, one
+     * album running on), and the skip is made the caller's way. Once true, the skip is made
+     * whatever happens: if the song can't be brought in, [fallback] makes it the plain way.
+     */
+    fun blendSkip(target: Int, lengthMs: Long, fallback: () -> Unit): Boolean {
+        if (!enabled || BitPerfectUsb.active || tail != null || mix?.isActive == true || busy()) return false
+        if (!main.isPlaying || main.repeatMode == Player.REPEAT_MODE_ONE || main.pauseAtEndOfMediaItems) return false
+        val from = main.currentMediaItemIndex
+        if (target == from || target !in 0 until main.mediaItemCount) return false
+        if (albumGuarded(from, target)) return false
+        val item = main.currentMediaItem ?: return false
+        val now = main.currentPosition
+        val length = lengthMs.coerceIn(MIN_SKIP_BLEND_MS, MAX_SKIP_BLEND_MS)
+        planning?.cancel()
+        lastMixed = from to item.mediaId
+        tries = MAX_TRIES
+        return begin(MixPlan(mixAtMs = now, outEndMs = now + length, inFromMs = 0L, blendMs = length), now = false, into = target, onSkipFailed = fallback)
+    }
 
     /**
      * Whether the quiet the playing song has gone into is its end, not a pause in it. Read
@@ -313,7 +363,7 @@ internal class Crossfade(
         val ending = endingRead.await()
         val opening = openingRead.await()
         soundEndsMs = ending?.endMs
-        val p = if (settings.automix) automixPlan(duration, ending, opening)
+        val p = if (settings.automix) automixPlan(duration, ending, opening, automixOptions())
             else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, ending, opening)
         Log.d(TAG, "Plan for ${item.mediaId} → ${next.mediaId}: $p")
         MixState.picture(MixState.Picture(
@@ -341,13 +391,18 @@ internal class Crossfade(
      *
      * If the next song can't load before the playing one ends, nothing is blended and the
      * songs play back to back as without a crossfade.
+     *
+     * For a skip by hand, [into] is the song picked and [onSkipFailed] makes the skip the
+     * plain way if it can't be brought in. False when nothing was started.
      */
-    private fun begin(p: MixPlan, now: Boolean) {
-        val nextIndex = main.nextMediaItemIndex
-        if (nextIndex == C.INDEX_UNSET) return
+    private fun begin(p: MixPlan, now: Boolean, into: Int = main.nextMediaItemIndex, onSkipFailed: (() -> Unit)? = null): Boolean {
+        val nextIndex = into
+        if (nextIndex == C.INDEX_UNSET) return false
         val next = main.getMediaItemAt(nextIndex)
+        val skip = onSkipFailed != null
         val t = runCatching { newTail() }.onFailure { Log.w(TAG, "Couldn't make the second player", it) }.getOrNull()
-        if (t == null) { if (tries < MAX_TRIES) lastMixed = null; return }
+        if (t == null) { if (tries < MAX_TRIES) lastMixed = null; return false }
+        skipFallback = onSkipFailed
         expectedNext = nextIndex to next.mediaId
         tail = t
         urgent = now
@@ -367,17 +422,22 @@ internal class Crossfade(
         val playingKey = main.currentMediaItemIndex to (main.currentMediaItem?.mediaId ?: "")
         // Set once the next song is heard; a transition that ends before then may be tried again.
         var started = false
+        // A skip whose song couldn't be brought in: it's made the plain way instead.
+        var failed = false
+        val loadingSince = SystemClock.elapsedRealtime()
         mix = scope.launch {
             try {
-                // 1. Loading, until it's due.
+                // 1. Loading, until it's due. A skip is due at once, and waits only so long.
                 while (true) {
-                    if (main.currentMediaItemIndex != playing) return@launch
+                    if (main.currentMediaItemIndex != playing) { failed = skip; return@launch }
                     val ready = tp.playbackState == Player.STATE_READY && (tp.bufferedPosition - tp.currentPosition >= READY_AHEAD_MS || tp.isLoading.not())
-                    val due = urgent || main.currentPosition >= p.mixAtMs
+                    val due = skip || urgent || main.currentPosition >= p.mixAtMs
                     if (ready && due) break
-                    tp.playerError?.let { Log.w(TAG, "The next song didn't load (try $tries)", it); return@launch }
+                    tp.playerError?.let { Log.w(TAG, "The next song didn't load (try $tries)", it); failed = skip; return@launch }
+                    if (skip && SystemClock.elapsedRealtime() - loadingSince > SKIP_READY_MS) { failed = true; return@launch }
                     delay(FRAME_MS * 2)
                 }
+                skipFallback = null
                 // 2. In, silent, on the beat, at its own loudness gain.
                 runCatching { t.level() }.onFailure { Log.w(TAG, "Couldn't set the next song's level", it) }
                 phase = Phase.BLENDING
@@ -389,6 +449,7 @@ internal class Crossfade(
                 tp.playWhenReady = main.playWhenReady && main.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
                 if (!sounding(tp, START_TIMEOUT_MS)) {
                     Log.w(TAG, "The next song didn't start sounding (try $tries)")
+                    failed = skip
                     return@launch
                 }
                 started = true
@@ -398,7 +459,7 @@ internal class Crossfade(
                 if (p.beatMs != null && !urgent) putOnBeat(tp, p)
                 // 3. The blend, over what's left of the playing song.
                 val left = (p.outEndMs - main.currentPosition).coerceAtLeast(MIN_LEFT_MS)
-                val length = ((if (urgent) minOf(p.blendMs, URGENT_BLEND_MS) else minOf(p.blendMs, left)) / baseSpeed).toLong().coerceAtLeast(1L)
+                val length = ((if (skip) p.blendMs else if (urgent) minOf(p.blendMs, URGENT_BLEND_MS) else minOf(p.blendMs, left)) / baseSpeed).toLong().coerceAtLeast(1L)
                 val levels = com.opentune.playback.mix.BlendLevels(main.volume, tp.volume)
                 var gainAt = SystemClock.elapsedRealtime()
                 fun setLevels(out: Float, into: Float) {
@@ -450,6 +511,7 @@ internal class Crossfade(
                 blendClock = null
                 phase = Phase.IDLE
                 urgent = false
+                if (skipFallback === onSkipFailed) skipFallback = null
                 // However it ended, the main player is left at full level. A bail has taken the second player already.
                 if (tail === t) {
                     mainLowCut(0f)
@@ -459,8 +521,11 @@ internal class Crossfade(
                     val stillOn = main.currentMediaItemIndex to (main.currentMediaItem?.mediaId ?: "")
                     if (!started && tries < MAX_TRIES && stillOn == playingKey) lastMixed = null
                 }
+                // The skip asked for is still made, the plain way.
+                if (failed && !started) onSkipFailed?.invoke()
             }
         }
+        return true
     }
 
     /**
@@ -595,6 +660,7 @@ internal class Crossfade(
 
     /** The listener moved on mid-transition: the second player's song fades out quickly. */
     private fun bail() {
+        skipFallback = null
         mix?.cancel()
         val t = tail ?: return
         // The tail is this fade's now; the cancelled mix leaves it alone.
@@ -678,6 +744,10 @@ internal class Crossfade(
         const val BAIL_MS = 150L
         /** A transition whose next song won't load is tried this many times in all. */
         const val MAX_TRIES = 2
+        /** A blended skip waits this long for its song to load before skipping the plain way. */
+        const val SKIP_READY_MS = 2_000L
+        const val MIN_SKIP_BLEND_MS = 300L
+        const val MAX_SKIP_BLEND_MS = 3_000L
     }
 }
 

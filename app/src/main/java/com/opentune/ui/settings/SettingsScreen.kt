@@ -1113,6 +1113,36 @@ private fun settingsSections(
                 if (pb.automix) Entry("Automix performance", "automix threads analysis speed battery heat efficient balanced performance") {
                     NavRow("Automix performance", { automixPerformanceDialog = true }, summary = pb.automixPerformance.summary, icon = ImageVector.vectorResource(AppIcons.Speed), value = pb.automixPerformance.label)
                 } else null,
+                if (pb.automix) Entry("Automix length", "automix blend length seconds long short auto duration") {
+                    SettingRow(
+                        "Automix length",
+                        summary = if (pb.automixSeconds == 0) "Auto: each blend lasts as long as suits the two songs"
+                        else com.opentune.i18n.Tr.f("Each blend lasts about {0} s, kept to whole bars", pb.automixSeconds),
+                        icon = ImageVector.vectorResource(AppIcons.Timer),
+                        below = {
+                            PillSegmented(
+                                com.opentune.data.settings.AUTOMIX_LENGTHS, pb.automixSeconds,
+                                { if (it == 0) "Auto" else com.opentune.i18n.Tr.f("{0} s", it) },
+                                { v -> AppSettings.updatePlayback { it.copy(automixSeconds = v) } },
+                            )
+                        },
+                    )
+                } else null,
+                if (pb.automix) Entry("Tempo match", "automix tempo bpm speed stretch beat match sync gentle full") {
+                    SettingRow("Tempo match", summary = pb.tempoMatch.summary, icon = ImageVector.vectorResource(AppIcons.Speed), below = {
+                        PillSegmented(com.opentune.data.settings.TempoMatch.entries, pb.tempoMatch, { it.label }, { v -> AppSettings.updatePlayback { it.copy(tempoMatch = v) } })
+                    })
+                } else null,
+                if (pb.automix) Entry("Always mix", "automix unsure analysis clash key beat force blend") {
+                    ToggleRow(
+                        "Always mix",
+                        pb.automixAlwaysMix,
+                        { v -> AppSettings.updatePlayback { it.copy(automixAlwaysMix = v) } },
+                        summary = if (pb.automixAlwaysMix) "Blends in full even when the keys clash or the beat isn't clear"
+                        else "Off: where Automix is unsure of the songs, it keeps the blend short",
+                        icon = ImageVector.vectorResource(AppIcons.AutoAwesome),
+                    )
+                } else null,
                 Entry("Crossfade", "fade blend transition overlap") {
                     SettingRow(
                         "Crossfade",
@@ -1133,6 +1163,46 @@ private fun settingsSections(
                         },
                     )
                 },
+                if (pb.automix || pb.crossfadeSeconds > 0) Entry("Keep albums gapless", "gapless album live continuous mix crossfade automix order") {
+                    ToggleRow(
+                        "Keep albums gapless",
+                        pb.gaplessAlbums,
+                        { v -> AppSettings.updatePlayback { it.copy(gaplessAlbums = v) } },
+                        summary = if (pb.gaplessAlbums) "An album played in its order runs on as recorded, never blended"
+                        else "Off: songs from one album blend like any others",
+                        icon = ImageVector.vectorResource(AppIcons.Album),
+                    )
+                } else null,
+                Entry("Fade on pause and skip", "fade pause play skip resume smooth volume ease") {
+                    ToggleRow(
+                        "Fade on pause and skip",
+                        pb.transportFade,
+                        { v -> AppSettings.updatePlayback { it.copy(transportFade = v) } },
+                        summary = when {
+                            !pb.transportFade -> "Off: pause, play and skips act at once"
+                            pb.automix || pb.crossfadeSeconds > 0 -> "Pause and play ease out and in; a skip blends into the next song"
+                            else -> "Pause, play and skips ease the sound out and in"
+                        },
+                        icon = ImageVector.vectorResource(AppIcons.VolumeUp),
+                    )
+                },
+                if (pb.transportFade) Entry("Fade length", "fade pause skip length seconds") {
+                    val ms = pb.transportFadeMs.coerceIn(com.opentune.data.settings.TRANSPORT_FADE_MIN_MS, com.opentune.data.settings.TRANSPORT_FADE_MAX_MS)
+                    SettingRow(
+                        "Fade length",
+                        summary = com.opentune.i18n.Tr.f("Each fade lasts {0} s", fadeSeconds(ms)),
+                        icon = ImageVector.vectorResource(AppIcons.Timer),
+                        below = {
+                            Slider(
+                                value = ms.toFloat(),
+                                onValueChange = { v -> AppSettings.updatePlayback { it.copy(transportFadeMs = (v / 100f).roundToInt() * 100) } },
+                                valueRange = com.opentune.data.settings.TRANSPORT_FADE_MIN_MS.toFloat()..com.opentune.data.settings.TRANSPORT_FADE_MAX_MS.toFloat(),
+                                // 0.1 s steps.
+                                steps = (com.opentune.data.settings.TRANSPORT_FADE_MAX_MS - com.opentune.data.settings.TRANSPORT_FADE_MIN_MS) / 100 - 1,
+                            )
+                        },
+                    )
+                } else null,
                 Entry("Skip silence", "gaps") {
                     ToggleRow("Skip silence", pb.skipSilence, { v -> AppSettings.updatePlayback { it.copy(skipSilence = v) } }, summary = "Trim gaps longer than a second", icon = ImageVector.vectorResource(AppIcons.SpaceBar))
                 },
@@ -2165,7 +2235,10 @@ private fun outputSummary(context: Context, float: Boolean): String {
     return "AudioTrack · ${Build.MODEL} · $khz · ${if (float) "32-bit float" else "16-bit PCM"}"
 }
 
-private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 1024f) else com.opentune.i18n.Tr.f("{0} MB", mb)
+/** A fade's length as seconds to a tenth: "0.3", "1.0", "2.5". */
+private fun fadeSeconds(ms: Int): String = "%.1f".format(ms / 1000f)
+
+private fun formatMb(mb: Int): String =if (mb >= 1024) "%.1f GB".format(mb / 1024f) else com.opentune.i18n.Tr.f("{0} MB", mb)
 
 /** Spotify's green disc, for its rows in Account. */
 /**

@@ -89,6 +89,25 @@ enum class AutomixPerformance(val label: String, val summary: String, val thread
 }
 
 /**
+ * How far Automix may bend the next song's tempo, through the blend, to keep the two
+ * songs' beats in step; [maxStretch] is the furthest apart two tempos may be. Off never
+ * changes a song's speed, so only songs already at the same tempo are kept in step.
+ */
+@Serializable
+enum class TempoMatch(val label: String, val summary: String, val maxStretch: Double) {
+    OFF("Off", "Songs keep their own speed; only songs already at one tempo are kept in step", 0.004),
+    GENTLE("Gentle", "Tempos up to 3% apart are brought together, too little to hear", 0.03),
+    FULL("Full", "Tempos up to 8% apart are brought together while the songs blend", 0.08),
+}
+
+/** Fixed Automix lengths offered beside Auto (0), in seconds. */
+val AUTOMIX_LENGTHS = listOf(0, 4, 6, 8, 12)
+
+/** The pause, play and skip fade's shortest and longest length, in ms. */
+const val TRANSPORT_FADE_MIN_MS = 300
+const val TRANSPORT_FADE_MAX_MS = 3_000
+
+/**
  * How much OpenTune spends on smoothness and moving extras, against battery. Choosing one
  * sets the switches behind it at once ([performanceApplied]); any of them can be changed after.
  */
@@ -488,6 +507,24 @@ data class PlaybackSettings(
     val automix: Boolean = false,
     /** How hard Automix works reading the songs ahead of each blend. */
     val automixPerformance: AutomixPerformance = AutomixPerformance.BALANCED,
+    /** How long Automix blends, in seconds: 0 lets it choose from the two songs. */
+    val automixSeconds: Int = 0,
+    /** How far Automix bends the next song's tempo to keep the two in step. */
+    val tempoMatch: TempoMatch = TempoMatch.FULL,
+    /**
+     * Automix blends in full even where its reading of the songs is unsure (keys that clash,
+     * a beat that isn't clear). Off, it plays safe there: a short blend, nothing kept in step.
+     */
+    val automixAlwaysMix: Boolean = false,
+    /**
+     * Songs of one album played in its order run into each other as recorded (a live album,
+     * a continuous mix): no crossfade or Automix between them.
+     */
+    val gaplessAlbums: Boolean = true,
+    /** Pause, play and a skip by hand fade the sound out and in instead of cutting it. */
+    val transportFade: Boolean = false,
+    /** How long those fades last, in ms ([TRANSPORT_FADE_MIN_MS] to [TRANSPORT_FADE_MAX_MS]). */
+    val transportFadeMs: Int = 1_000,
     /** Bit-perfect output to a USB DAC (Android 14+): no mixing, effects or resampling. */
     val bitPerfectUsb: Boolean = false,
     /** Which bit-perfect path, if any (see [BitPerfectOutput]); [bitPerfectUsb] is the Android 14 one. */

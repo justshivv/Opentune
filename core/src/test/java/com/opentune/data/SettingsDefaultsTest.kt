@@ -197,6 +197,44 @@ class SettingsDefaultsTest {
         assertTrue(settings.playback.losslessWifiOnly)
     }
 
+    @Test fun transitionControlsStartAsBeforeOnOldSettings() {
+        // Saved before these existed, with Automix and crossfade set up: those choices stay, and the new
+        // controls start where Automix already was. Fades on pause and skip are off; the album guard is on.
+        val old = loaded("""{"playback":{"automix":true,"crossfadeSeconds":6,"automixPerformance":"EFFICIENT","sleepWindDown":false}}""")
+        for (pb in listOf(old.playback, json.decodeFromString<SettingsState>("{}").playback)) {
+            assertFalse(pb.transportFade)
+            assertEquals(1_000, pb.transportFadeMs)
+            assertEquals(0, pb.automixSeconds)
+            assertEquals(com.opentune.data.settings.TempoMatch.FULL, pb.tempoMatch)
+            assertFalse(pb.automixAlwaysMix)
+            assertTrue(pb.gaplessAlbums)
+        }
+        assertTrue(old.playback.automix)
+        assertEquals(6, old.playback.crossfadeSeconds)
+        assertEquals(com.opentune.data.settings.AutomixPerformance.EFFICIENT, old.playback.automixPerformance)
+        assertFalse(old.playback.sleepWindDown)
+        // The default fade length sits inside the range offered, and the default Automix length is Auto.
+        assertTrue(1_000 in com.opentune.data.settings.TRANSPORT_FADE_MIN_MS..com.opentune.data.settings.TRANSPORT_FADE_MAX_MS)
+        assertEquals(0, com.opentune.data.settings.AUTOMIX_LENGTHS.first())
+    }
+
+    @Test fun transitionControlsSurviveABackupAndAnUnknownTempoMatchIsFull() {
+        val chosen = json.decodeFromString<SettingsState>(
+            """{"playback":{"transportFade":true,"transportFadeMs":2500,"automixSeconds":8,"tempoMatch":"GENTLE","automixAlwaysMix":true,"gaplessAlbums":false}}""",
+        )
+        val back = json.decodeFromString<SettingsState>(json.encodeToString(chosen)).playback
+        assertTrue(back.transportFade)
+        assertEquals(2_500, back.transportFadeMs)
+        assertEquals(8, back.automixSeconds)
+        assertEquals(com.opentune.data.settings.TempoMatch.GENTLE, back.tempoMatch)
+        assertTrue(back.automixAlwaysMix)
+        assertFalse(back.gaplessAlbums)
+        // A choice a later version added reads back as the default instead of failing the file.
+        val newer = json.decodeFromString<SettingsState>("""{"playback":{"tempoMatch":"WILD","gaplessAlbums":false}}""").playback
+        assertEquals(com.opentune.data.settings.TempoMatch.FULL, newer.tempoMatch)
+        assertFalse(newer.gaplessAlbums)
+    }
+
     @Test fun pageButtonsDefaultToGlassAndAccentSurvivesBackup() {
         assertEquals(com.opentune.data.settings.PageButtons.GLASS, json.decodeFromString<SettingsState>("{}").ui.pageButtons)
         // Settings saved before the choice existed, or by a newer version with a look this one lacks, read back as glass.

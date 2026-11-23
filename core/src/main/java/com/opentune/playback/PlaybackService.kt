@@ -646,6 +646,16 @@ class PlaybackService : MediaLibraryService() {
             },
             held = { castMirror?.active == true },
         ).also { it.start() }
+        // Fades on pause, play and skip: only where this app sets the volume itself.
+        val fades = TransportFades(
+            scope, player,
+            canFade = {
+                !BitPerfectUsb.active && castMirror?.active != true && crossfade?.blending != true &&
+                    !swapRamping && swappingTo == null
+            },
+            blend = { target, ms, fallback -> crossfade?.blendSkip(target, ms, fallback) == true },
+        )
+        transportFades = fades
         dsp.meter = true
         // Casting: the device follows this player while one is connected.
         castMirror = CastMirror(context, player, scope)
@@ -756,7 +766,7 @@ class PlaybackService : MediaLibraryService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
-        mediaSession = MediaLibrarySession.Builder(this, player, sessionCallback)
+        mediaSession = MediaLibrarySession.Builder(this, FadingSessionPlayer(player, fades) { mediaSession?.controllerForCurrentRequest != null }, sessionCallback)
             .setSessionActivity(sessionActivity)
             .build()
         // Another of the person's devices playing (Connect): the notification shows and controls that one.
@@ -1050,6 +1060,8 @@ class PlaybackService : MediaLibraryService() {
         // saved bare here, the last save before the app closed lost them all.
         (mediaSession?.player as? ExoPlayer)?.takeIf { it.mediaItemCount > 0 }?.let { p -> QueueStore.save(savedQueue(p)) }
         com.opentune.data.AppHooks.onPlayerStopped(this)
+        transportFades?.release()
+        transportFades = null
         crossfade?.release()
         crossfade = null
         castMirror?.detach(resume = false)
@@ -1341,7 +1353,7 @@ class PlaybackService : MediaLibraryService() {
             // Nothing but a blend or a swap turns the main player down; outside
             // one, a new song always starts at full level.
             (mediaSession?.player as? ExoPlayer)?.let { p ->
-                if (!swap && !swapRamping && crossfade?.blending != true && p.volume < 1f) {
+                if (!swap && !swapRamping && crossfade?.blending != true && transportFades?.active != true && p.volume < 1f) {
                     Log.w(TAG, "Player volume was left at ${p.volume}; back to full")
                     p.volume = 1f
                 }
@@ -1582,6 +1594,7 @@ class PlaybackService : MediaLibraryService() {
     // ---- Loudness ----------------------------------------------------------------
 
     private var crossfade: Crossfade? = null
+    private var transportFades: TransportFades? = null
 
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var loudnessSession = C.AUDIO_SESSION_ID_UNSET
