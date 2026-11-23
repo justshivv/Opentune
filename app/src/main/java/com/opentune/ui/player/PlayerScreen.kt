@@ -1201,6 +1201,22 @@ fun PlayerLayout(
                     // settles, and fade up behind the cover as it reaches the header.
                     var listsBuilt by remember { mutableStateOf(outerPane != Pane.COVER) }
                     LaunchedEffect(Unit) { delay(LISTS_PREWARM_MS); listsBuilt = true }
+                    // Parked off-screen, the lists are composed but never laid out at their
+                    // real place or drawn, so a first opening pays for both inside its own
+                    // flight and the flight is gone before the cover moves. They therefore
+                    // spend their first moments after being built where they belong —
+                    // invisible under the cover, which sits above them and takes the
+                    // touches — long enough for both panes' own pre-build to finish and a
+                    // few frames to draw, and only then park. No opening is ever delayed:
+                    // an opening inside the warm-up finds them already in place.
+                    var listsWarmed by remember { mutableStateOf(false) }
+                    LaunchedEffect(listsBuilt) {
+                        if (listsBuilt && !listsWarmed) {
+                            delay(250)
+                            repeat(3) { androidx.compose.runtime.withFrameNanos { } }
+                            listsWarmed = true
+                        }
+                    }
                     LaunchedEffect(outerPane, flight.following, flight.active) {
                         val target = if (outerPane == Pane.COVER) 0f else 1f
                         if (flight.following && outerPane == Pane.COVER) {
@@ -1620,7 +1636,7 @@ fun PlayerLayout(
                         // The lists: built once, then parked far off to the side while the cover is up,
                         // so they never take its touches or cost a frame when they come in.
                         if (listsBuilt) {
-                            val parked = outerPane == Pane.COVER && !flight.following && listsGone
+                            val parked = listsWarmed && outerPane == Pane.COVER && !flight.following && listsGone
                             Box(
                                 Modifier.fillMaxSize()
                                     .zIndex(if (outerPane == Pane.COVER) 0f else 1f)
