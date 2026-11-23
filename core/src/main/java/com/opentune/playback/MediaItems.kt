@@ -32,6 +32,8 @@ private const val EXTRA_EXPLICIT = "explicit"
 private const val EXTRA_ARTIST_ID = "artistId"
 private const val EXTRA_SMART_SHUFFLE = "smartShuffle"
 private const val EXTRA_TIER = "tier"
+private const val EXTRA_ALBUM_ID = "albumId"
+private const val EXTRA_LIST_POSITION = "listPosition"
 
 /**
  * Local files play straight from MediaStore and downloads from their file;
@@ -124,6 +126,8 @@ fun Song.toMediaItem(): MediaItem =
                     Bundle().apply {
                         putString(EXTRA_DURATION_TEXT, durationText)
                         putString(EXTRA_ALBUM, albumName)
+                        // Kept for the gapless-album guard (see albumRunsOn), and for the album's page.
+                        albumId?.let { putString(EXTRA_ALBUM_ID, it) }
                         // The cover as the song stores it: a server's carries no credentials.
                         putString(EXTRA_THUMB, thumbnailUrl)
                         isExplicit?.let { putBoolean(EXTRA_EXPLICIT, it) }
@@ -145,6 +149,7 @@ fun MediaItem.toSong(): Song =
         thumbnailUrl = mediaMetadata.extras?.getString(EXTRA_THUMB) ?: mediaMetadata.artworkUri?.toString(),
         durationText = mediaMetadata.extras?.getString(EXTRA_DURATION_TEXT),
         albumName = mediaMetadata.extras?.getString(EXTRA_ALBUM) ?: mediaMetadata.albumTitle?.toString(),
+        albumId = mediaMetadata.extras?.getString(EXTRA_ALBUM_ID),
         isExplicit = mediaMetadata.extras?.takeIf { it.containsKey(EXTRA_EXPLICIT) }?.getBoolean(EXTRA_EXPLICIT),
         artistId = mediaMetadata.extras?.getString(EXTRA_ARTIST_ID),
         smartShuffle = mediaMetadata.extras?.getBoolean(EXTRA_SMART_SHUFFLE) == true,
@@ -161,6 +166,26 @@ internal fun MediaItem.withTrackArtistCredit(credit: Song): MediaItem {
     }
     return buildUpon().setMediaMetadata(mediaMetadata.buildUpon().setArtist(credit.artist).setExtras(extras).build()).build()
 }
+
+/** This entry marked as the [position]th song of the list it was queued from. */
+fun MediaItem.atListPosition(position: Int): MediaItem {
+    val extras = Bundle(mediaMetadata.extras ?: Bundle()).apply { putInt(EXTRA_LIST_POSITION, position) }
+    return buildUpon().setMediaMetadata(mediaMetadata.buildUpon().setExtras(extras).build()).build()
+}
+
+/** Where this entry sits on its album, for the gapless-album guard. */
+val MediaItem.albumSpot: AlbumSpot
+    get() {
+        val extras = mediaMetadata.extras
+        return AlbumSpot(
+            albumId = extras?.getString(EXTRA_ALBUM_ID),
+            albumName = extras?.getString(EXTRA_ALBUM) ?: mediaMetadata.albumTitle?.toString(),
+            artist = mediaMetadata.albumArtist?.toString() ?: mediaMetadata.artist?.toString(),
+            trackNumber = mediaMetadata.trackNumber,
+            listPosition = extras?.takeIf { it.containsKey(EXTRA_LIST_POSITION) }?.getInt(EXTRA_LIST_POSITION),
+            tier = queueTier,
+        )
+    }
 
 /** Which part of the queue this entry is in. */
 val MediaItem.queueTier: QueueTier
