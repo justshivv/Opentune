@@ -172,6 +172,41 @@ class AudioBusTest {
         assertTrue("left in the temp folder", !e.savedFile.exists())
     }
 
+    @Test fun aLostDeviceWithNoneToTakeItsPlaceIsTriedAgain() {
+        // The only output unplugged: nothing opens at first, then a new one does.
+        val first = object : BusDevice by CaptureDevice() {
+            @Volatile var gone = false
+            override val lost get() = gone
+        }
+        val second = CaptureDevice()
+        var opens = 0
+        AudioBus.reset()
+        AudioBus.deviceFactory = {
+            opens++
+            when (opens) {
+                1 -> first
+                2 -> throw java.io.IOException("no sound card")
+                else -> second
+            }
+        }
+        val changed = CountDownLatch(1)
+        val before = AudioBus.onDeviceChanged
+        AudioBus.onDeviceChanged = { changed.countDown() }
+        try {
+            AudioBus.resume()
+            val v = AudioBus.voice()
+            first.gone = true
+            assertTrue("a new device should open", changed.await(5, TimeUnit.SECONDS))
+            // And the mixer still plays into it.
+            assertTrue(v.write(FloatArray(4_800 * 2) { 0.1f }, 0, 4_800))
+            val until = System.currentTimeMillis() + 3_000
+            while (second.frames == 0L && System.currentTimeMillis() < until) Thread.sleep(10)
+            assertTrue("mixed ${second.frames}", second.frames > 0)
+        } finally {
+            AudioBus.onDeviceChanged = before
+        }
+    }
+
     @Test fun twentyFourBitTriesExclusiveIn32BitWordsBeforeShared() {
         val f = NativeAudio.Format.entries
         assertEquals(listOf(f[2] to true, f[3] to true, f[2] to false, f[3] to false, f[1] to false), outputTries(24, exclusive = true))

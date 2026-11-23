@@ -199,6 +199,27 @@ internal object AudioBus {
     fun release() = synchronized(lock) {
         device?.let { runCatching { it.stop(); it.close() } }
         device = null
+        lostAt = 0L
+    }
+
+    /** When the device went away and no other would open yet (0: none lost), so the mixer tries again. */
+    @Volatile private var lostAt = 0L
+
+    /**
+     * Opens an output in place of one the system took away. With none to open (the only device
+     * unplugged, the sound server restarting), it tries again every second rather than letting
+     * the mixer's thread die, which left the app silent until it was restarted.
+     */
+    private fun reopen() {
+        runCatching { ensureOpen() }
+            .onSuccess {
+                lostAt = 0L
+                onDeviceChanged?.let { cb -> Thread(cb, "audio-reopen").start() }
+            }
+            .onFailure {
+                lostAt = System.currentTimeMillis()
+                System.err.println("[audio] no output to play to yet: ${it.message}")
+            }
     }
 
     internal fun remove(v: Voice) {
@@ -216,17 +237,18 @@ internal object AudioBus {
 
     private fun mix() {
         val buf = FloatArray(CHUNK * CHANNELS)
-        while (true) {
+        // Nothing that goes wrong in one chunk may end this thread: there is no other to mix.
+        while (true) try {
             val d = device
             if (d == null || paused) {
+                if (d == null && lostAt != 0L && System.currentTimeMillis() - lostAt >= 1_000) reopen()
                 synchronized(lock) { lock.wait(50) }
                 continue
             }
             if (d.lost) {
                 System.err.println("[audio] the device stopped; opening the output again")
                 release()
-                ensureOpen()
-                onDeviceChanged?.let { cb -> Thread(cb, "audio-reopen").start() }
+                reopen()
                 continue
             }
             buf.fill(0f)
@@ -259,6 +281,9 @@ internal object AudioBus {
                 }
             }
             cycle++
+        } catch (e: Exception) {
+            System.err.println("[audio] mixing: $e")
+            LockSupport.parkNanos(100_000_000)
         }
     }
 
