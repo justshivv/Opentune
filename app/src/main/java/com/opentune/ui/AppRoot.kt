@@ -486,7 +486,7 @@ fun AppRoot(vm: PlayerViewModel) {
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     // The pages' bottom room follows the chrome: with the dock away on a
     // destination page, only the mini player's share of it stays.
-    val contentBottom by androidx.compose.animation.core.animateDpAsState(
+    val contentBottom = androidx.compose.animation.core.animateDpAsState(
         when {
             layout.nav != NavChrome.DOCK -> navInset + 16.dp + if (layout.nowPlaying == NowPlaying.BAR) CHROME_MINI_HEIGHT + 12.dp else 0.dp
             dockAway -> navInset + 24.dp + if (song != null) CHROME_MINI_HEIGHT + 8.dp else 0.dp
@@ -495,7 +495,9 @@ fun AppRoot(vm: PlayerViewModel) {
         if (chromeUi.reduceAnimation) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(420, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)),
         label = "contentBottom",
     )
-    val content = PaddingValues(bottom = contentBottom)
+    // Read only where a page lays out or reads it, not here: read here, every frame of that
+    // easing (the first song starting, a page with the dock away) composed the whole app again.
+    val content = remember(contentBottom) { BottomRoom(contentBottom) }
     // Room the rail and the docked player take beside the pages, eased as
     // the pane folds and unfolds.
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
@@ -1123,6 +1125,14 @@ private fun NavHostController.openBrowse(browseId: String, type: BrowseType = Mu
     val here = currentBackStackEntry
     if (here?.destination?.route == route && here.arguments?.getString("id") == browseId) return
     navigate(route.replace("{id}", Uri.encode(browseId)))
+}
+
+/** Room at the foot of every page for the chrome, read from [bottom] when asked for. */
+internal class BottomRoom(private val bottom: androidx.compose.runtime.State<androidx.compose.ui.unit.Dp>) : PaddingValues {
+    override fun calculateLeftPadding(layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 0.dp
+    override fun calculateTopPadding() = 0.dp
+    override fun calculateRightPadding(layoutDirection: androidx.compose.ui.unit.LayoutDirection) = 0.dp
+    override fun calculateBottomPadding() = bottom.value
 }
 
 /** A destination of the NavHost. */
