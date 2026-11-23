@@ -1706,7 +1706,29 @@ fun PlayerLayout(
                                     }
                                 }
                             }
-                            if (pane != Pane.LYRICS && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
+                            AnimatedVisibility(
+                                pane != Pane.LYRICS && pane != Pane.QUEUE && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST),
+                                enter = expandVertically(
+                                    spring(
+                                        dampingRatio = 0.9f,
+                                        stiffness = 380f
+                                    ), expandFrom = Alignment.Bottom
+                                ) + slideInVertically(
+                                    spring(
+                                        dampingRatio = 0.9f,
+                                        stiffness = 380f
+                                    )
+                                ) { it / 2 } + fadeIn(tween(220)),
+                                exit = shrinkVertically(
+                                    tween(520, easing = FastOutSlowInEasing),
+                                    shrinkTowards = Alignment.Bottom
+                                ) + slideOutVertically(
+                                    tween(
+                                        520,
+                                        easing = FastOutSlowInEasing
+                                    )
+                                ) { it / 2 } + fadeOut(tween(360)),
+                            ) {
                                 LyricPreview(
                                     state.lyrics,
                                     lyricsPosition,
