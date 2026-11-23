@@ -806,7 +806,7 @@ enum class ChoiceMenuStyle(val label: String, val summary: String) {
 /** How the dock's highlight moves to the tab you pick. */
 @Serializable
 enum class DockLens(val label: String, val summary: String) {
-    STRETCH("Stretch", "The front edge leads and the back catches up, like a drop pulled along"),
+    STRETCH("Hop", "Lifts off as raised glass, flies to the tab and lands as a soft pill"),
     JELLY("Jelly", "Stretches, overshoots and wobbles into place"),
     GLIDE("Glide", "Slides across in one piece"),
 }

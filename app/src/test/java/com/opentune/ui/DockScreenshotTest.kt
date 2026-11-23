@@ -222,6 +222,37 @@ class DockScreenshotTest {
         }
     }
 
+    /** Picking another tab: the pill lifts off as raised glass, flies over and lands as a soft pill. */
+    @Test fun hop() {
+        var selected by mutableStateOf(1)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65))) { androidx.compose.material3.Surface(color = Color(0xFF0B0B0E)) {
+                Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF3A2A4A), Color(0xFF101014)))).padding(vertical = 24.dp)) {
+                    BottomChrome(
+                        inline = false,
+                        tabs = tabs(),
+                        selected = selected,
+                        onSelect = { selected = it },
+                        onExpand = {},
+                        searchSelected = false,
+                        onSearch = {},
+                        mini = null,
+                    )
+                }
+            } }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        save("dock-hop-rest", idle = false)
+        compose.runOnUiThread { selected = 3 }
+        listOf(64L, 96L, 160L, 240L).forEach { ms ->
+            compose.mainClock.advanceTimeBy(ms - (if (ms == 64L) 0L else listOf(64L, 96L, 160L, 240L).let { it[it.indexOf(ms) - 1] }))
+            save("dock-hop-$ms", idle = false)
+        }
+        compose.mainClock.advanceTimeBy(1200)
+        save("dock-hop-landed", idle = false)
+    }
+
     private fun save(name: String, idle: Boolean = true) {
         if (idle) compose.waitForIdle()
         val view = compose.activity.window.decorView
