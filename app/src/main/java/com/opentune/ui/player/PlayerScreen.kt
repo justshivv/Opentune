@@ -380,6 +380,7 @@ fun PlayerLayout(
     // Where the title row sits under the full cover, kept from when it was last at rest,
     // so it can travel with the cover into the header and back.
     var bigTitle by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var toggleHome by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val flight = remember { PaneFlight() }
     // The one clock of the cover <-> lists change, 0 on the cover and 1 on the lists: the
     // finger or the flight while the cover moves, else a short ease. The page, the status
@@ -1420,11 +1421,21 @@ fun PlayerLayout(
                                     ) { design() } else design()
                                 }
                                 if (state.videoAvailable) {
+                                    Spacer(Modifier.height(14.dp))
                                     SongVideoToggle(
                                         state.videoMode,
                                         actions.setVideoMode,
                                         Modifier.align(Alignment.CenterHorizontally)
-                                            .padding(top = 14.dp),
+                                            .onGloballyPositioned {
+                                                // Its place at rest, for the flight overlay to draw
+                                                // it over the flying cover: captured only while it
+                                                // sits at home, like the title's.
+                                                if (!hidden && !flight.active && coverLift == 0f && dragOffset == 0f) toggleHome =
+                                                    it.boundsInRoot()
+                                            }
+                                            .graphicsLayer {
+                                                alpha = if (flight.active && toggleHome != null) 0f else 1f
+                                            },
                                         isEpisode = isEpisode
                                     )
                                 }
@@ -2119,6 +2130,30 @@ fun PlayerLayout(
                             onMore = { showMenu = true },
                         )
                     } }
+                    // The Song | Video switch belongs to the cover page and fades out
+                    // with it, but the flying cover's dissolve must not cross it on the
+                    // way: like the title, it is drawn again here, over the flight, at
+                    // the place it holds at rest, on the cover page's own fade. (The
+                    // grab pill below is drawn over everything still.)
+                    if (flying && !landscape && state.videoAvailable) toggleHome?.let { home ->
+                        Box(
+                            Modifier
+                                .layout { measurable, _ ->
+                                    val placeable = measurable.measure(androidx.compose.ui.unit.Constraints())
+                                    layout(placeable.width, placeable.height) {
+                                        placeable.place(
+                                            (home.left - origin.x).toInt(),
+                                            (home.top - origin.y).toInt(),
+                                        )
+                                    }
+                                }
+                                .graphicsLayer {
+                                    alpha = (1f - paneProgress() * 1.6f).coerceIn(0f, 1f)
+                                },
+                        ) {
+                            SongVideoToggle(state.videoMode, actions.setVideoMode, isEpisode = isEpisode)
+                        }
+                    }
                 }
             }
             }
