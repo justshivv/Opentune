@@ -2158,6 +2158,16 @@ fun PlayerLayout(
                         ImageVector.vectorResource(AppIcons.Bedtime),
                         sleepLabel ?: "Sleep timer"
                     ) { close(); showSleep = true }
+                    // Repeat is otherwise only in the queue's pill: here too, so it's found
+                    // without opening the queue. Each tap moves it on: off, all, one, off.
+                    MenuRow(
+                        ImageVector.vectorResource(if (state.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) AppIcons.RepeatOne else AppIcons.Repeat),
+                        when (state.repeatMode) {
+                            androidx.media3.common.Player.REPEAT_MODE_OFF -> "Repeat all"
+                            androidx.media3.common.Player.REPEAT_MODE_ALL -> "Repeat this song"
+                            else -> "Turn repeat off"
+                        }
+                    ) { close(); actions.cycleRepeat() }
                     MenuRow(
                         ImageVector.vectorResource(AppIcons.Tune),
                         "Lyrics offset"
