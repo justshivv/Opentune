@@ -112,7 +112,8 @@ enum class QueueTier { CONTEXT, USER, AUTOPLAY }
  * advertised size costs an order of magnitude more bytes than the square it
  * fills — 84kB against 7.8kB, measured on the same cover.
  *
- * Video thumbnails carry no hint and are returned unchanged.
+ * Video thumbnails carry no hint; the smallest is swapped for a bigger one
+ * when a bigger size is asked for (see [videoThumbnailAt]).
  */
 fun Song.artworkAt(px: Int): String? = thumbnailUrl.artworkAt(px)
 
@@ -186,10 +187,13 @@ fun String?.durationMillis(): Long {
  * As [Song.artworkAt], for artwork that isn't a track's. Each image host
  * writes the size its own way: YouTube Music in a `w…-h…` suffix, Apple in
  * the last path part (masters up to 3000px), Deezer as `…x…-` (up to 1200px),
- * and the Cover Art Archive as a fixed 250, 500 or 1200.
+ * and the Cover Art Archive as a fixed 250, 500 or 1200. A YouTube video
+ * thumbnail comes in a few fixed sizes named in its address (see
+ * [videoThumbnailAt]).
  */
 fun String?.artworkAt(px: Int): String? = this?.let { url ->
     when {
+        ".ytimg.com/" in url && YOUTUBE_THUMBNAIL.matches(url) -> videoThumbnailAt(url, px)
         ".mzstatic.com/" in url -> url.replace(APPLE_SIZE, "/${px.coerceAtMost(3000)}x${px.coerceAtMost(3000)}bb.jpg")
         ".dzcdn.net/" in url -> url.replace(DEEZER_SIZE, "/${px.coerceAtMost(1200)}x${px.coerceAtMost(1200)}-")
         "coverartarchive.org/" in url && !url.endsWith("-500") -> url.replace(CAA_SIZE, "/front-${if (px <= 250) 250 else if (px <= 500) 500 else 1200}")
@@ -197,6 +201,25 @@ fun String?.artworkAt(px: Int): String? = this?.let { url ->
     }
 }
 
+/**
+ * A YouTube video thumbnail (`i.ytimg.com/vi/<id>/<name>.jpg`) at a size
+ * nearer [px]. Each size has its own name: default 120x90, mqdefault 320x180,
+ * hqdefault 480x360, sddefault 640x480, maxresdefault 1280x720. The 120px
+ * `default` looks blurred anywhere bigger than a list row (the notification,
+ * the player), so a bigger size asks for hqdefault instead: the same 4:3
+ * shape, and made for every video. sddefault and maxresdefault aren't (they
+ * 404 for many), so they're never asked for. Anything else, mqdefault
+ * included (16:9; hqdefault would put black bars on its cover), is left as it is.
+ */
+internal fun videoThumbnailAt(url: String, px: Int): String {
+    val m = YOUTUBE_THUMBNAIL.matchEntire(url) ?: return url
+    val (base, name, ext) = m.destructured
+    if (name != "default" || px <= 120) return url
+    // Any query on the address was signed for the old name, so it goes.
+    return "${base}hqdefault.$ext"
+}
+
+private val YOUTUBE_THUMBNAIL = Regex("""(https?://i\d?\.ytimg\.com/vi(?:_webp)?/[\w-]+/)(\w+)\.(jpg|webp)(?:\?.*)?""")
 private val SIZE_HINT = Regex("""w\d+-h\d+""")
 private val APPLE_SIZE = Regex("""/\d+x\d+[a-z]*\.(?:jpg|jpeg|png|webp)$""")
 private val DEEZER_SIZE = Regex("""/\d+x\d+-""")
