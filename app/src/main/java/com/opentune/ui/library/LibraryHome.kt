@@ -2248,6 +2248,12 @@ private fun LocalListMoreSheet(
     val context = LocalContext.current
     val spotify = playlist.spotifyId != null
     val pinned = AppSettings.ui.collectAsState().value.pinnedPlaylists.contains(playlist.id)
+    // Every song of the playlist into another playlist at once, from the same picker as one song.
+    var adding by remember { mutableStateOf(false) }
+    if (adding) {
+        com.opentune.ui.components.AddAllToPlaylistDialog(songs, onDismiss = { adding = false; onDismiss() }, onDone = { adding = false; onDismiss() })
+        return
+    }
     com.opentune.ui.components.FloatingCard(
         onDismiss = onDismiss,
         contentPadding = PaddingValues(0.dp),
@@ -2279,6 +2285,7 @@ private fun LocalListMoreSheet(
                 songs.forEach { Downloads.enqueue(context, it) }
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size), context)
             }
+            if (songs.isNotEmpty()) com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.PlaylistAdd), "Add all to playlist") { adding = true }
             if (!spotify) {
                 com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Add), "Add songs") { close(); onAddSongs() }
                 com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Edit), "Rename") { close(); onRename() }
