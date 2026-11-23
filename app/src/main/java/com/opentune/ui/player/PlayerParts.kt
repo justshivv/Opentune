@@ -59,6 +59,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import com.opentune.ui.theme.Text
@@ -1394,7 +1395,10 @@ fun MiniPlayer(
     val poster = com.opentune.ui.components.posterLayout()
     val shape = RoundedCornerShape(if (poster) 30.dp else 22.dp)
     if (replica) {
-        Box(modifier.background(replicaFace)) { MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, {}, {}, landing) }
+        // No buttons that take a touch: the replica lies over the open player, at its full size and
+        // invisible once the card is up, and its play and next buttons, centred on the screen,
+        // used to swallow taps meant for the player under them (its "…" and heart among them).
+        Box(modifier.background(replicaFace).clearAndSetSemantics { }) { MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, null, null, landing) }
         return
     }
     Surface(
@@ -1491,7 +1495,7 @@ fun MiniPlayer(
 @Composable
 private fun MiniRow(
     song: Song, isPlaying: Boolean, isBuffering: Boolean, hasNext: Boolean, progress: () -> Float,
-    accent: Color, track: Color, onTogglePlay: () -> Unit, onNext: () -> Unit, landing: Modifier,
+    accent: Color, track: Color, onTogglePlay: (() -> Unit)?, onNext: (() -> Unit)?, landing: Modifier,
     poster: Boolean = false,
 ) {
     if (poster) {
@@ -1518,11 +1522,11 @@ private fun MiniRow(
                         }
                     }
                 }
-                Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onTogglePlay), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(48.dp).clip(CircleShape).then(if (onTogglePlay != null) Modifier.clickable(onClick = onTogglePlay) else Modifier), contentAlignment = Alignment.Center) {
                     if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize().padding(4.dp), strokeWidth = 2.dp, color = ink.on)
                     Icon(if (isPlaying) ImageVector.vectorResource(AppIcons.Pause) else ImageVector.vectorResource(AppIcons.PlayArrow), if (isPlaying) "Pause" else "Play", Modifier.size(32.dp), tint = ink.on)
                 }
-                IconButton(onClick = onNext, enabled = hasNext) {
+                MiniNext(onNext, hasNext) {
                     Icon(ImageVector.vectorResource(AppIcons.SkipNext), "Next", Modifier.size(32.dp), tint = if (hasNext) ink.on else ink.off)
                 }
             }
@@ -1540,14 +1544,26 @@ private fun MiniRow(
             }
         }
         // Play inside the progress ring.
-        Box(Modifier.size(46.dp).clip(CircleShape).clickable(onClick = onTogglePlay), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(46.dp).clip(CircleShape).then(if (onTogglePlay != null) Modifier.clickable(onClick = onTogglePlay) else Modifier), contentAlignment = Alignment.Center) {
             ProgressRing(progress, accent, track, stroke = 2.5.dp, modifier = Modifier.matchParentSize().padding(3.dp))
             if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize().padding(3.dp), strokeWidth = 2.5.dp, color = accent)
             Icon(if (isPlaying) ImageVector.vectorResource(AppIcons.Pause) else ImageVector.vectorResource(AppIcons.PlayArrow), if (isPlaying) "Pause" else "Play", Modifier.size(24.dp))
         }
-        IconButton(onClick = onNext, enabled = hasNext) {
+        MiniNext(onNext, hasNext) {
             Icon(ImageVector.vectorResource(AppIcons.SkipNext), "Next", Modifier.size(26.dp))
         }
+    }
+}
+
+/** The mini player's next button; without [onNext] (the sheet's replica) only its look, taking no touches. */
+@Composable
+private fun MiniNext(onNext: (() -> Unit)?, hasNext: Boolean, icon: @Composable () -> Unit) {
+    if (onNext != null) IconButton(onClick = onNext, enabled = hasNext, content = icon)
+    else Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides androidx.compose.material3.LocalContentColor.current.copy(alpha = if (hasNext) 1f else 0.38f),
+            content = icon,
+        )
     }
 }
 
