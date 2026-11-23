@@ -727,7 +727,8 @@ object Player {
             flac == null -> AudioBus.rate.takeIf { it != f.rate }?.let { " · played at ${Addons.khz(it)}" }.orEmpty()
             flac.output?.sampleSizeInBits == 16 && f.bits > 16 -> " · sound card at 16-bit"
             flac.exclusive -> " · bit-perfect"
-            else -> ""
+            // The device wouldn't be held for this app alone: the system's mixer may still change the sound.
+            else -> " · shared mode"
         }
         Quality(f.provider, "FLAC ${f.bits}-bit / ${Addons.khz(f.rate)}$heard", lossless = true)
     } ?: Quality("JioSaavn", "AAC 320 kbps")

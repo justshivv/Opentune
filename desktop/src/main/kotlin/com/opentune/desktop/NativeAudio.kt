@@ -156,35 +156,38 @@ internal class NativeOutput(private val l: OtAudio, private var handle: Pointer?
  * [PcmOut] on the native output, for the bit-perfect FLAC path: the file's own rate and
  * depth, exclusive where the system allows it and the device takes the format. Volume is
  * the device's own, so full volume leaves the samples untouched.
+ *
+ * Many USB DACs take 24-bit only in a 32-bit word when held exclusively: packed 24-bit is
+ * tried first, then the same samples in 32-bit words (the low byte zero, so still bit for
+ * bit), and only then shared mode ([outputTries]).
  */
 internal class NativePcmOut(private val device: String, private val exclusive: Boolean) : PcmOut {
     @Volatile private var out: NativeOutput? = null
     @Volatile private var stopped = false
     @Volatile private var cut = false
+    /** The file's 24-bit samples go out as 32-bit words. */
+    private var widen = false
+    private var wide = ByteArray(0)
 
     /** Whether the device opened for this app alone. */
     val isExclusive: Boolean get() = out?.exclusive == true
 
     override fun open(format: javax.sound.sampled.AudioFormat): javax.sound.sampled.AudioFormat {
-        val wanted = when (format.sampleSizeInBits) {
-            16 -> NativeAudio.Format.S16
-            24 -> NativeAudio.Format.S24
-            else -> throw java.io.IOException("${format.sampleSizeInBits}-bit isn't supported")
-        }
         val rate = format.sampleRate.toInt()
-        val tries = buildList {
-            if (exclusive && NativeAudio.exclusiveSupported) add(Triple(wanted, true, "exclusive"))
-            add(Triple(wanted, false, "shared"))
-            if (wanted != NativeAudio.Format.S16) add(Triple(NativeAudio.Format.S16, false, "shared 16-bit"))
-        }
+        val tries = outputTries(format.sampleSizeInBits, exclusive && NativeAudio.exclusiveSupported)
+            ?: throw java.io.IOException("${format.sampleSizeInBits}-bit isn't supported")
         var last: Exception? = null
-        for ((f, ex, _) in tries) {
+        for ((f, ex) in tries) {
             try {
                 val o = NativeAudio.open(device, f, rate, format.channels, ex, 500)
                 // Shared mode converts to what's asked; a device that gives back another format is closed and passed over.
                 if (o.format != f || o.rate != rate || o.channels != format.channels) { o.close(); continue }
                 out = o
-                return javax.sound.sampled.AudioFormat(rate.toFloat(), f.bytes * 8, format.channels, true, false)
+                widen = format.sampleSizeInBits == 24 && f == NativeAudio.Format.S32
+                System.err.println("[audio] bit-perfect output: ${NativeAudio.backend}, ${if (o.exclusive) "exclusive" else "shared"}, ${f.name} at $rate Hz for a ${format.sampleSizeInBits}-bit file")
+                // What the engine is to write: the file's own samples when they're widened here.
+                val bits = if (widen) 24 else f.bytes * 8
+                return javax.sound.sampled.AudioFormat(rate.toFloat(), bits, format.channels, true, false)
             } catch (e: Exception) {
                 last = e
             }
@@ -194,10 +197,18 @@ internal class NativePcmOut(private val device: String, private val exclusive: B
 
     override fun write(bytes: ByteArray, off: Int, len: Int): Int {
         val o = out ?: return 0
-        val frames = len / o.frameBytes
         cut = false
-        val done = o.writeAll(frames, stop = { stopped || cut }) { from, count -> o.offer(bytes, off + from * o.frameBytes, count) }
-        return done * o.frameBytes
+        if (!widen) {
+            val frames = len / o.frameBytes
+            val done = o.writeAll(frames, stop = { stopped || cut }) { from, count -> o.offer(bytes, off + from * o.frameBytes, count) }
+            return done * o.frameBytes
+        }
+        val inFrame = 3 * o.channels
+        val frames = len / inFrame
+        if (wide.size < frames * o.frameBytes) wide = ByteArray(frames * o.frameBytes)
+        widen24(bytes, off, frames * o.channels, wide)
+        val done = o.writeAll(frames, stop = { stopped || cut }) { from, count -> o.offer(wide, from * o.frameBytes, count) }
+        return done * inFrame
     }
 
     override fun start() { stopped = false; out?.start() }
@@ -218,5 +229,36 @@ internal class NativePcmOut(private val device: String, private val exclusive: B
         val o = out ?: return false
         o.setVolume(if (db <= -80f) 0f else Math.pow(10.0, db / 20.0).toFloat())
         return true
+    }
+}
+
+/**
+ * What [NativePcmOut] asks the device for, in order, for a [bits]-bit file: the file's own
+ * format, held exclusively first when [exclusive]; 24-bit also as 32-bit words; then 16-bit
+ * shared as the last resort. Null for a depth it can't play.
+ */
+internal fun outputTries(bits: Int, exclusive: Boolean): List<Pair<NativeAudio.Format, Boolean>>? {
+    val own = when (bits) {
+        16 -> listOf(NativeAudio.Format.S16)
+        24 -> listOf(NativeAudio.Format.S24, NativeAudio.Format.S32)
+        32 -> listOf(NativeAudio.Format.S32)
+        else -> return null
+    }
+    return buildList {
+        if (exclusive) own.forEach { add(it to true) }
+        own.forEach { add(it to false) }
+        if (bits == 24) add(NativeAudio.Format.S16 to false)
+    }
+}
+
+/** [count] packed little-endian 24-bit samples from [off] as 32-bit words in [dst], the low byte zero: the same value, bit for bit. */
+internal fun widen24(src: ByteArray, off: Int, count: Int, dst: ByteArray) {
+    for (i in 0 until count) {
+        val p = off + i * 3
+        val q = i * 4
+        dst[q] = 0
+        dst[q + 1] = src[p]
+        dst[q + 2] = src[p + 1]
+        dst[q + 3] = src[p + 2]
     }
 }

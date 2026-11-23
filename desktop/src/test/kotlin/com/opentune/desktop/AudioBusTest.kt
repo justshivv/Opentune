@@ -156,6 +156,25 @@ class AudioBusTest {
         }
     }
 
+    @Test fun twentyFourBitTriesExclusiveIn32BitWordsBeforeShared() {
+        val f = NativeAudio.Format.entries
+        assertEquals(listOf(f[2] to true, f[3] to true, f[2] to false, f[3] to false, f[1] to false), outputTries(24, exclusive = true))
+        assertEquals(listOf(NativeAudio.Format.S16 to true, NativeAudio.Format.S16 to false), outputTries(16, exclusive = true))
+        assertEquals(listOf(NativeAudio.Format.S32 to false), outputTries(32, exclusive = false))
+        assertEquals(null, outputTries(8, exclusive = true))
+    }
+
+    @Test fun widening24BitKeepsEverySampleBitForBit() {
+        // -1, the largest and the smallest 24-bit samples, little-endian.
+        val packed = byteArrayOf(-1, -1, -1, -1, -1, 0x7f, 0, 0, -128)
+        val wide = ByteArray(12)
+        widen24(packed, 0, 3, wide)
+        val words = java.nio.ByteBuffer.wrap(wide).order(java.nio.ByteOrder.LITTLE_ENDIAN).asIntBuffer()
+        assertEquals(-1 shl 8, words[0])
+        assertEquals(8_388_607 shl 8, words[1])
+        assertEquals(-8_388_608 shl 8, words[2])
+    }
+
     @Test fun theNativeOutputPlaysInRealTime() {
         // miniaudio's silent backend in the test JVM (-Dopentune.audio=null): a clock, no sound card.
         org.junit.Assume.assumeTrue("otaudio wasn't built here", NativeAudio.available)
