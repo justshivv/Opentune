@@ -1,0 +1,660 @@
+{
+ "contents": {
+  "singleColumnBrowseResultsRenderer": {
+   "tabs": [
+    {
+     "tabRenderer": {
+      "content": {
+       "sectionListRenderer": {
+        "contents": [
+         {
+          "musicCarouselShelfRenderer": {
+           "header": {
+            "musicCarouselShelfBasicHeaderRenderer": {
+             "title": {
+              "runs": [
+               {
+                "text": "Albums for you"
+               }
+              ]
+             }
+            }
+           },
+           "contents": [
+            {
+             "musicTwoRowItemRenderer": {
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://lh3.googleusercontent.com/albumA=w226-h226-l90-rj",
+                   "width": 226,
+                   "height": 226
+                  },
+                  {
+                   "url": "https://lh3.googleusercontent.com/albumA=w544-h544-l90-rj",
+                   "width": 544,
+                   "height": 544
+                  }
+                 ]
+                }
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "text": "Hurry Up, We're Dreaming"
+                }
+               ]
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "Album"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "M83"
+                }
+               ]
+              },
+              "navigationEndpoint": {
+               "browseEndpoint": {
+                "browseId": "MPREb_albumAAAAA"
+               }
+              },
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_SQUARE"
+             }
+            },
+            {
+             "musicTwoRowItemRenderer": {
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://lh3.googleusercontent.com/albumB=w226-h226-l90-rj",
+                   "width": 226,
+                   "height": 226
+                  },
+                  {
+                   "url": "https://lh3.googleusercontent.com/albumB=w544-h544-l90-rj",
+                   "width": 544,
+                   "height": 544
+                  }
+                 ]
+                }
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "text": "Melodrama"
+                }
+               ]
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "Album"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "Lorde"
+                }
+               ]
+              },
+              "navigationEndpoint": {
+               "browseEndpoint": {
+                "browseId": "MPREb_albumBBBBB"
+               }
+              },
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_SQUARE"
+             }
+            }
+           ]
+          }
+         },
+         {
+          "musicCarouselShelfRenderer": {
+           "header": {
+            "musicCarouselShelfBasicHeaderRenderer": {
+             "title": {
+              "runs": [
+               {
+                "text": "New music videos",
+                "navigationEndpoint": {
+                 "browseEndpoint": {
+                  "browseId": "FEmusic_new_releases_videos"
+                 }
+                }
+               }
+              ]
+             },
+             "accessibilityData": {
+              "accessibilityData": {
+               "label": "New music videos"
+              }
+             },
+             "headerStyle": "MUSIC_CAROUSEL_SHELF_BASIC_HEADER_STYLE_DEFAULT"
+            }
+           },
+           "contents": [
+            {
+             "musicTwoRowItemRenderer": {
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/Wy5H0oeWtSE/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3mQHPahd8pbxisXj41cxP5ptydjmA",
+                   "width": 400,
+                   "height": 225
+                  },
+                  {
+                   "url": "https://i.ytimg.com/vi/Wy5H0oeWtSE/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3mpXz8XNyDOzyAqF-RbZZi4m3BhOA",
+                   "width": 800,
+                   "height": 450
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+               }
+              },
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_RECTANGLE_16_9",
+              "title": {
+               "runs": [
+                {
+                 "text": "Livin Slow (Official Music Video)"
+                }
+               ]
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "longleggss",
+                 "navigationEndpoint": {
+                  "browseEndpoint": {
+                   "browseId": "UCyOFWEW_nZlOSTcpms_LFRw",
+                   "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                     "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                    }
+                   }
+                  }
+                 }
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "14K views"
+                }
+               ]
+              },
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "videoId": "Wy5H0oeWtSE",
+                "watchEndpointMusicSupportedConfigs": {
+                 "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+                 }
+                }
+               }
+              }
+             }
+            },
+            {
+             "musicTwoRowItemRenderer": {
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/sBJz4CG9hWQ/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3ktKI7HuEoI3JSOP8H_VBHpC6fzJA",
+                   "width": 400,
+                   "height": 225
+                  },
+                  {
+                   "url": "https://i.ytimg.com/vi/sBJz4CG9hWQ/sddefault.jpg?sqp=-oaymwEWCIAFEOgCIAQqCggAEIAFGDwgpANIWg&rs=AMzJL3n1XrPan8H0zqNUveBkbbSkheJBDg",
+                   "width": 640,
+                   "height": 360
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+               }
+              },
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_RECTANGLE_16_9",
+              "title": {
+               "runs": [
+                {
+                 "text": "SUNRISE & SUNSETS"
+                }
+               ]
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "EJ Ross",
+                 "navigationEndpoint": {
+                  "browseEndpoint": {
+                   "browseId": "UChHM9Wr5Zw1OgXEBIAyZGww",
+                   "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                     "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                    }
+                   }
+                  }
+                 }
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "70K views"
+                }
+               ]
+              },
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "videoId": "sBJz4CG9hWQ",
+                "watchEndpointMusicSupportedConfigs": {
+                 "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+                 }
+                }
+               }
+              }
+             }
+            },
+            {
+             "musicTwoRowItemRenderer": {
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/ghV5GwC0nEM/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3nb7LlYqkZnrrPJvPU_o-Y9Uf3P7A",
+                   "width": 400,
+                   "height": 225
+                  },
+                  {
+                   "url": "https://i.ytimg.com/vi/ghV5GwC0nEM/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3nPaMViwKASqK8JO7L6xRxfzsvUgA",
+                   "width": 800,
+                   "height": 450
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+               }
+              },
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_RECTANGLE_16_9",
+              "title": {
+               "runs": [
+                {
+                 "text": "Money Man (feat. MAVI)"
+                }
+               ]
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "WHATMORE",
+                 "navigationEndpoint": {
+                  "browseEndpoint": {
+                   "browseId": "UCXz8APD-m6UOz0r4iikV5Jw",
+                   "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                     "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                    }
+                   }
+                  }
+                 }
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "24K views"
+                }
+               ]
+              },
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "videoId": "ghV5GwC0nEM",
+                "watchEndpointMusicSupportedConfigs": {
+                 "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+                 }
+                }
+               }
+              }
+             }
+            },
+            {
+             "musicTwoRowItemRenderer": {
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/K6QlrRsrMw8/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3mIdRJkc1uPWesszdPQOpLr0WBS5w",
+                   "width": 400,
+                   "height": 225
+                  },
+                  {
+                   "url": "https://i.ytimg.com/vi/K6QlrRsrMw8/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3nTakhso5AQdWI-4vL5YWKP-UouYQ",
+                   "width": 800,
+                   "height": 450
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+               }
+              },
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_RECTANGLE_16_9",
+              "title": {
+               "runs": [
+                {
+                 "text": "same room"
+                }
+               ]
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "longleggss",
+                 "navigationEndpoint": {
+                  "browseEndpoint": {
+                   "browseId": "UCyOFWEW_nZlOSTcpms_LFRw",
+                   "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                     "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                    }
+                   }
+                  }
+                 }
+                },
+                {
+                 "text": " & "
+                },
+                {
+                 "text": "redbull"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "37K views"
+                }
+               ]
+              },
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "videoId": "K6QlrRsrMw8",
+                "watchEndpointMusicSupportedConfigs": {
+                 "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+                 }
+                }
+               }
+              }
+             }
+            }
+           ],
+           "itemSize": "COLLECTION_STYLE_ITEM_SIZE_MEDIUM"
+          }
+         },
+         {
+          "musicCarouselShelfRenderer": {
+           "header": {
+            "musicCarouselShelfBasicHeaderRenderer": {
+             "title": {
+              "runs": [
+               {
+                "text": "Mehr wie das"
+               }
+              ]
+             }
+            }
+           },
+           "contents": [
+            {
+             "musicTwoRowItemRenderer": {
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://lh3.googleusercontent.com/songA=w226-h226-l90-rj",
+                   "width": 226,
+                   "height": 226
+                  },
+                  {
+                   "url": "https://lh3.googleusercontent.com/songA=w544-h544-l90-rj",
+                   "width": 544,
+                   "height": 544
+                  }
+                 ]
+                }
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "text": "Video Games"
+                }
+               ]
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "Song"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "Lana Del Rey"
+                }
+               ]
+              },
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "videoId": "songAAAAAAA",
+                "watchEndpointMusicSupportedConfigs": {
+                 "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                 }
+                }
+               }
+              },
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_SQUARE"
+             }
+            },
+            {
+             "musicTwoRowItemRenderer": {
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://lh3.googleusercontent.com/songB=w226-h226-l90-rj",
+                   "width": 226,
+                   "height": 226
+                  },
+                  {
+                   "url": "https://lh3.googleusercontent.com/songB=w544-h544-l90-rj",
+                   "width": 544,
+                   "height": 544
+                  }
+                 ]
+                }
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "text": "Video Killed the Radio Star"
+                }
+               ]
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "Song"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "The Buggles"
+                }
+               ]
+              },
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "videoId": "songBBBBBBB",
+                "watchEndpointMusicSupportedConfigs": {
+                 "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                 }
+                }
+               }
+              },
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_SQUARE"
+             }
+            }
+           ]
+          }
+         },
+         {
+          "musicCarouselShelfRenderer": {
+           "header": {
+            "musicCarouselShelfBasicHeaderRenderer": {
+             "title": {
+              "runs": [
+               {
+                "text": "Auftritte live"
+               }
+              ]
+             }
+            }
+           },
+           "contents": [
+            {
+             "musicTwoRowItemRenderer": {
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/liveAAAAAAA/hqdefault.jpg?sqp=abc",
+                   "width": 480,
+                   "height": 270
+                  }
+                 ]
+                }
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "text": "Midnight City (Live at Coachella)"
+                }
+               ]
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "M83"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "2.1M views"
+                }
+               ]
+              },
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "videoId": "liveAAAAAAA",
+                "watchEndpointMusicSupportedConfigs": {
+                 "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                 }
+                }
+               }
+              }
+             }
+            },
+            {
+             "musicTwoRowItemRenderer": {
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/liveBBBBBBB/mqdefault.jpg",
+                   "width": 320,
+                   "height": 180
+                  }
+                 ]
+                }
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "text": "Team (Live on the Late Show)"
+                }
+               ]
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "Lorde"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "880K views"
+                }
+               ]
+              },
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "videoId": "liveBBBBBBB",
+                "watchEndpointMusicSupportedConfigs": {
+                 "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                 }
+                }
+               }
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  }
+ }
+}

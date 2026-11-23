@@ -313,6 +313,8 @@ data class ShelfItem(
     val browseId: String?,
     /** YouTube Music's "E" badge on the card. */
     val explicit: Boolean = false,
+    /** A music video or live performance rather than the catalogue track; [thumbnailUrl] is a 16:9 frame. */
+    val video: Boolean = false,
 )
 
 /** The signed-in Google account, as YouTube Music reports it. */
@@ -366,6 +368,8 @@ data class HomeShelf(
      * in the phone's language.
      */
     val personal: Boolean = false,
+    /** Music videos or live performances, shown as wide cards. Known by its cards, not its title. */
+    val videos: Boolean = false,
 )
 
 /** A page of the Home feed, plus the token for the next one — null once exhausted. */

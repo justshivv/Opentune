@@ -358,6 +358,10 @@ object InnertubeParser {
         val header = carousel.o("header").o("musicCarouselShelfBasicHeaderRenderer")
         val title = header.o("title").runs()
         val strapline = header.o("strapline").runs()
+        // Music videos and live performances: kept, as a shelf of their own.
+        videoShelfItems(carousel.a("contents").orEmpty())?.let { videos ->
+            return HomeShelf(title.ifBlank { "For you" }, videos, strapline, videos = true)
+        }
         // Whole shelves like "Video charts" carry nothing but video
         // compilations — each card would fail its own video check on the
         // way to a dead-end page, so the shelf is dropped outright.
@@ -1634,6 +1638,49 @@ object InnertubeParser {
             )
         }
 
+    /**
+     * The cards of a shelf of music videos or live performances, or null if
+     * the shelf is something else. Known by its cards rather than its title,
+     * which comes in the listener's language: at least half of them are
+     * videos to play, with no page to open (see [videoCard]).
+     */
+    private fun videoShelfItems(contents: List<JsonElement>): List<ShelfItem>? {
+        if (contents.isEmpty()) return null
+        val videos = contents.mapNotNull { videoCard(it.o("musicTwoRowItemRenderer")) }
+        return videos.takeIf { it.isNotEmpty() && it.size * 2 >= contents.size }
+    }
+
+    /**
+     * A card that's a video: it plays (no page to open) and YouTube draws it
+     * wide, by the card's 16:9 hint or its widescreen frames, or calls it a
+     * music video or an upload ([VIDEO_KINDS]). A card YouTube asks to be
+     * drawn square is a song, whatever it is.
+     */
+    private fun videoCard(renderer: JsonObject?): ShelfItem? {
+        if (renderer == null) return null
+        val title = renderer.o("title").runs()
+        if (title.isBlank()) return null
+        val endpoint = renderer.o("navigationEndpoint")
+        val browseId = endpoint.o("browseEndpoint").s("browseId")
+        if (browseId != null && !browseId.startsWith("MPED")) return null
+        val watch = endpoint.o("watchEndpoint")
+        val videoId = watch.s("videoId") ?: browseId?.removePrefix("MPED") ?: return null
+        val aspect = renderer.s("aspectRatio").orEmpty()
+        if ("SQUARE" in aspect) return null
+        val thumbnails = renderer.o("thumbnailRenderer").o("musicThumbnailRenderer").o("thumbnail").a("thumbnails")
+        val kind = watch.o("watchEndpointMusicSupportedConfigs").o("watchEndpointMusicConfig").s("musicVideoType")
+        if ("16_9" !in aspect && !thumbnails.isNotSquare() && kind !in VIDEO_KINDS) return null
+        return ShelfItem(
+            title = title,
+            subtitle = renderer.o("subtitle").runs(),
+            thumbnailUrl = thumbnails.widest(),
+            videoId = videoId,
+            browseId = null,
+            explicit = renderer["subtitleBadges"].hasExplicitBadge() == true,
+            video = true,
+        )
+    }
+
     private fun parseTwoRowItem(renderer: JsonObject?): ShelfItem? {
         if (renderer == null) return null
         val title = renderer.o("title").runs()
@@ -1747,6 +1794,9 @@ object InnertubeParser {
      * "Daily Top Music Videos".
      */
     private val VIDEO_WORD = Regex("""\bvideos?\b""", RegexOption.IGNORE_CASE)
+
+    /** YouTube Music's kinds of video that aren't the catalogue track: an official music video, an upload. */
+    private val VIDEO_KINDS = setOf("MUSIC_VIDEO_TYPE_OMV", "MUSIC_VIDEO_TYPE_UGC")
 }
 
 // ---- Tiny JSON navigation helpers (null-safe, never throw) ------------------
@@ -1795,6 +1845,22 @@ private fun JsonElement?.firstRunText(): String? =
  * as it trades down, and is what the player calls.
  */
 private fun JsonArray?.best(): String? = this?.lastOrNull().s("url")
+
+/**
+ * A video card's frame: the biggest of its widescreen thumbnails, else [best].
+ * YouTube offers its 1280x720 `hq720` frame signed down to 800x450; without
+ * the signature the same address is the full frame.
+ */
+private fun JsonArray?.widest(): String? {
+    val wide = this.orEmpty().filter { t ->
+        val w = t.s("width")?.toDoubleOrNull() ?: return@filter false
+        val h = t.s("height")?.toDoubleOrNull() ?: return@filter false
+        h > 0 && w / h >= 1.3
+    }.maxByOrNull { it.s("width")?.toDoubleOrNull() ?: 0.0 }.s("url") ?: return best()
+    return if (HQ720.matches(wide)) wide.substringBefore('?') else wide
+}
+
+private val HQ720 = Regex("""https://i\d?\.ytimg\.com/vi/[\w-]+/hq720\.jpg(\?.*)?""")
 
 /**
  * Catalogue art is always square; a music-video upload's thumbnail is
