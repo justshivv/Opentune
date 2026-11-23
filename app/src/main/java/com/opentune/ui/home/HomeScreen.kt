@@ -115,21 +115,17 @@ fun HomeScreen(
     // New picks shown as soon as they're made, while the rest of the page reloads. They stay
     // until the next refresh: YouTube Music's own Quick picks, the same every time, showed
     // first and were swapped for these a few seconds later.
-    var freshPicks by remember { mutableStateOf<HomeShelf?>(null) }
-    var picksPending by remember { mutableStateOf(false) }
     val pickScope = androidx.compose.runtime.rememberCoroutineScope()
+    val fresh = remember(pickScope) { FreshPicks(pickScope) }
+    val freshPicks = fresh.shelf
+    val picksPending = fresh.pending
     // Pulling Home down also shuffles the rows below its top (see HomeLayout).
     var shuffleTurn by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
     // [reorder] for a refresh asked for (a pull, Home tapped again); the quiet one after a
     // listen keeps the rows where they are, so they don't move about under the finger.
     val reloadHome: (reorder: Boolean) -> Unit = { reorder ->
         if (reorder) shuffleTurn++
-        freshPicks = null
-        picksPending = true
-        val picks = MusicRepository.refreshPicks()
-        pickScope.launch {
-            try { picks.await().firstOrNull()?.let { freshPicks = it } } finally { picksPending = false }
-        }
+        fresh.refresh(MusicRepository.refreshPicks())
         loader.reload(keepContent = true)
     }
     val refreshHome: () -> Unit = { reloadHome(true) }
