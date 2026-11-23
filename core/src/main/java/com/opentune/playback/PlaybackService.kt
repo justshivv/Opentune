@@ -335,13 +335,21 @@ class PlaybackService : MediaLibraryService() {
                     // over it. One item to the queue and the seek bar; two
                     // streams underneath, started together.
                     val audioSide = this.createMediaSource(mediaItem.buildUpon().setUri(audioUriFor(id)).build())
-                    val videoSide = sources.createMediaSource(mediaItem.buildUpon().setUri(videoOnlyUri(id, videoStepOf(uri), videoHeightOf(uri))).build())
+                    val picture = mediaItem.buildUpon().setUri(videoOnlyUri(id, videoStepOf(uri), videoHeightOf(uri))).build()
+                    // An art track's picture is its linked music video, without the stretches of it
+                    // that aren't the song, so the two run in step; cut where the song ends.
+                    val link = StreamResolver.videoLinkOf(id)
+                    val videoSide = if (link == null) sources.createMediaSource(picture) else linkedPicture(sources, picture, link)
                     // The picture side leads: a merged source publishes its
                     // first source's item as the playing one, and the player
                     // reads video mode off that item's address — led by the
                     // audio side, the item would read as a plain song and the
                     // switch would settle straight back off.
-                    return androidx.media3.exoplayer.source.MergingMediaSource(videoSide, audioSide)
+                    return androidx.media3.exoplayer.source.MergingMediaSource(
+                        /* adjustPeriodTimeOffsets = */ false,
+                        /* clipDurations = */ link != null && link.pictureMs() >= link.songMs,
+                        videoSide, audioSide,
+                    )
                 }
                 if (!isYouTubeId(id) || Podcasts.isEpisode(id) || externalStreamKeyOf(uri) != null ||
                     uri.getQueryParameter("fallback") == "youtube") return sources.createMediaSource(mediaItem)
@@ -2779,6 +2787,29 @@ class PlaybackService : MediaLibraryService() {
                 }
             }
         }
+    }
+
+    /**
+     * The picture of [link]'s music video for [picture] (an art track's item): its
+     * pieces one after another, so what isn't the song (a scene with no music) is
+     * left out and the picture keeps in step with the song's own audio.
+     */
+    private fun linkedPicture(
+        sources: androidx.media3.exoplayer.source.MediaSource.Factory,
+        picture: MediaItem,
+        link: com.opentune.data.innertube.VideoLink,
+    ): androidx.media3.exoplayer.source.MediaSource {
+        val pieces = link.pieces()
+        if (pieces.size == 1 && pieces[0].first == 0L) return sources.createMediaSource(picture)
+        val all = androidx.media3.exoplayer.source.ConcatenatingMediaSource2.Builder().setMediaItem(picture)
+        for ((from, to) in pieces) {
+            val piece = androidx.media3.exoplayer.source.ClippingMediaSource.Builder(sources.createMediaSource(picture))
+                .setStartPositionMs(from)
+                .setEndPositionMs(to)
+                .build()
+            all.add(piece, to - from)
+        }
+        return all.build()
     }
 
     // ---- SponsorBlock ------------------------------------------------------------
