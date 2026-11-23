@@ -79,8 +79,16 @@ internal class FfmpegEngine(
             g.sampleRate = rate
             g.audioChannels = AudioBus.CHANNELS
             if (address.startsWith("http")) {
+                // A connection that goes quiet, before the reply or mid-song, fails after [stallUs] instead of
+                // leaving the song stuck for good. One that drops or stalls mid-song is opened again once, where
+                // it was, before giving up: each try can take the whole wait, so more would only keep it silent.
+                val stall = stallUs.toString()
+                g.setOption("rw_timeout", stall)
+                g.setOption("timeout", stall)
                 g.setOption("reconnect", "1")
                 g.setOption("reconnect_streamed", "1")
+                g.setOption("reconnect_delay_max", "2")
+                g.setOption("reconnect_max_retries", "1")
             }
             if (headers.isNotEmpty()) g.setOption("headers", headers.entries.joinToString("") { (k, v) -> "$k: $v\r\n" })
             g.start()
@@ -105,7 +113,14 @@ internal class FfmpegEngine(
                     at = msToFrame(request)
                     emitting = false
                 }
-                val frame: Frame = g.grabSamples() ?: break
+                val frame: Frame = g.grabSamples() ?: run {
+                    // The grabber ends on a read that failed (a stall timed out, the connection lost) just as at
+                    // the song's real end, which would skip the rest of it: it fails instead, and the player
+                    // takes it up as any other error: on from where it was by another source, or "Couldn't play".
+                    val failed = g.formatContext?.pb()?.error() ?: 0
+                    if (failed < 0 && !disposed) throw java.io.IOException("the stream stopped: ${errorText(failed)}")
+                    null
+                } ?: break
                 filterEach(filter, frame) { piece ->
                     val samples = piece.samples?.firstOrNull() as? FloatBuffer ?: return@filterEach true
                     val count = samples.remaining()
@@ -199,6 +214,19 @@ internal class FfmpegEngine(
     }
 
     internal companion object {
+        /**
+         * How long a network source may go quiet, connecting or mid-song, before it fails: microseconds,
+         * as FFmpeg takes it. The relay looks a song up on YouTube before it answers; a look-up slower
+         * than this isn't lost, as the AAC try after it finds it done or waits on the same one.
+         */
+        @Volatile internal var stallUs = 10_000_000L
+
+        private fun errorText(code: Int): String {
+            val buf = ByteArray(128)
+            avutil.av_strerror(code, buf, buf.size.toLong())
+            return String(buf, 0, buf.indexOf(0).takeIf { it >= 0 } ?: buf.size)
+        }
+
         /**
          * Pushes [frame] through [filter] (none: the frame as it is) and hands [use] each piece
          * that comes out, before pulling the next: the filter gives every piece in one and the
