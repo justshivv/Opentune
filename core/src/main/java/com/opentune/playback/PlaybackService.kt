@@ -572,6 +572,10 @@ class PlaybackService : MediaLibraryService() {
                         /* handleAudioFocus= */ false,
                     )
                     .build()
+                // Silence skipped as the main player skips it: otherwise the song coming in played
+                // its quiet intro as a gap the main player wouldn't have, and at the hand-over the
+                // two copies, one skipping and one not, drifted apart and a moment was heard twice.
+                tail.skipSilenceEnabled = AppSettings.playback.value.skipSilence
                 tailDsp.lowCutHz = 0f
                 // Its own audio session, with the loudness gain of the song it carries in: the
                 // same gain the main player gives that song, so the level holds at the hand-over.
