@@ -152,8 +152,10 @@ fun AppRoot(vm: PlayerViewModel) {
     val separateExplore = chromeUi.separateExplore
     // The Poster layout has a Radio tab of the account's mixes.
     val radioTab = chromeUi.pageLayout == com.opentune.data.settings.PageLayout.POSTER
-    val dockTabs = remember(separateExplore, radioTab) {
-        Tab.entries.filter { (it != Tab.EXPLORE || separateExplore) && (it != Tab.RADIO || radioTab) }
+    // Podcasts can be turned off in Settings › Appearance, their tab with them (issue 65).
+    val podcastsTab = chromeUi.podcasts
+    val dockTabs = remember(separateExplore, radioTab, podcastsTab) {
+        Tab.entries.filter { (it != Tab.EXPLORE || separateExplore) && (it != Tab.RADIO || radioTab) && (it != Tab.PODCASTS || podcastsTab) }
     }
     val chromeTabs = dockTabs.map { ChromeTab(it.label, ImageVector.vectorResource(it.iconRes), ImageVector.vectorResource(it.selectedIconRes)) }
     // A page opened from inside the player (the artist, from a tap on their
@@ -262,6 +264,13 @@ fun AppRoot(vm: PlayerViewModel) {
         if (!radioTab && tab == Tab.RADIO) {
             tab = Tab.HOME
             if (route == Tab.RADIO.route) nav.popBackStack(Tab.HOME.route, inclusive = false)
+        }
+    }
+    // Podcasts turned off while on their tab: back to Home.
+    LaunchedEffect(podcastsTab) {
+        if (!podcastsTab && tab == Tab.PODCASTS) {
+            tab = Tab.HOME
+            if (route == Tab.PODCASTS.route) nav.popBackStack(Tab.HOME.route, inclusive = false)
         }
     }
     LaunchedEffect(route) {

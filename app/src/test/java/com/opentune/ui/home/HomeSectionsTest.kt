@@ -40,4 +40,18 @@ class HomeSectionsTest {
         assertNull(result.quickPicks)
         assertEquals(listOf(playlist), result.cards)
     }
+
+    @Test fun podcastsTurnedOffLeaveHomeWithoutPodcastRowsOrShows() {
+        val music = songs("Quick picks")
+        val podcasts = collection("Podcasts for you", "MPSPPLabc")
+        val episodes = songs("New episodes")
+        val mixed = HomeShelf("Recommended", listOf(
+            ShelfItem("Album", "", null, null, "MPRE1"), ShelfItem("Show", "", null, null, "MPSPPLxyz")))
+        val input = listOf(music, podcasts, episodes, mixed)
+        // On (the default): nothing is taken away.
+        assertEquals(input, withoutPodcasts(input, drop = false))
+        val off = withoutPodcasts(input, drop = true)
+        assertEquals(listOf("Quick picks", "Recommended"), off.map { it.title })
+        assertEquals(listOf("MPRE1"), off.last().items.map { it.browseId })
+    }
 }

@@ -573,6 +573,10 @@ data class InterfaceSettings(
     val speedDial: Boolean = true,
     /** Listening streaks and small milestones under Home's greeting. */
     val homeStreaks: Boolean = true,
+    /** The daylist card near the top of Home. */
+    val homeDaylist: Boolean = true,
+    /** The Podcasts tab in the dock and podcast rows on Home; off, both are left out. */
+    val podcasts: Boolean = true,
     /** Draw the played part of the seek bar as a moving wave. */
     val wavySeekbar: Boolean = false,
     /** How thick the seek bar's track is. */

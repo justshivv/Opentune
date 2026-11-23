@@ -161,9 +161,12 @@ fun HomeScreen(
     val first = remember(state, hidden, hideExplicit) {
         (state as? UiState.Success<List<HomeShelf>>)?.data?.let { hidden.shelves(ContentFilter.shelves(it, hideExplicit)) }.orEmpty()
     }
-    val feed = remember(first, more) {
-        val all = arrangeHomeShelves(first + more)
-        all.copy(quickPicks = arrangeHomeShelves(first).quickPicks ?: all.quickPicks)
+    // Podcasts turned off in Settings: YouTube Music's podcast rows are left off Home too (issue 65).
+    val ui by AppSettings.ui.collectAsState()
+    val podcastsOn = ui.podcasts
+    val feed = remember(first, more, podcastsOn) {
+        val all = arrangeHomeShelves(withoutPodcasts(first + more, !podcastsOn))
+        all.copy(quickPicks = arrangeHomeShelves(withoutPodcasts(first, !podcastsOn)).quickPicks ?: all.quickPicks)
     }
     // YouTube Music's own Speed dial when it sends one (signed in), else the songs
     // played most on this phone, with what's hidden or filtered left out.
@@ -259,7 +262,6 @@ fun HomeScreen(
         discoverMixes.mapNotNull { m -> hidden.songs(m.songs).takeIf { it.size >= 6 }?.let { m.copy(songs = it) } }
     }
     val badges = rememberHomeDerived("badges", records, initial = emptyList()) { com.opentune.data.history.Streaks.badges(records) }
-    val ui by AppSettings.ui.collectAsState()
     // Spotify's own mixes for the listener, when Spotify is connected (see SpotifySync).
     val spotifyConnected by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
     val spotifyMixesAll by com.opentune.data.spotify.SpotifySync.mixes.collectAsState()
@@ -435,7 +437,7 @@ fun HomeScreen(
                     avatarUrl = account?.thumbnailUrl, onItemClick = onItemClick, onOpenAll = onOpenSpeedDial,
                     title = runtime.title("speed-dial", "Speed dial"))
             }
-            if ("mixes" in on && daylist != null) item(key = "daylist") {
+            if ("mixes" in on && ui.homeDaylist && daylist != null) item(key = "daylist") {
                 DaylistHero(daylist) {
                     com.opentune.data.reco.HomeEngagement.record("daylist")
                     actions.playAll(daylist.songs, 0, false, daylist.title)
@@ -562,6 +564,25 @@ private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, on
         }
     }
 }
+
+/**
+ * [shelves] without podcasts when [drop]: a row named for podcasts or episodes goes, and so do
+ * podcast shows (MPSP… pages) in any other row, a row left empty going with them.
+ */
+internal fun withoutPodcasts(shelves: List<HomeShelf>, drop: Boolean): List<HomeShelf> {
+    if (!drop) return shelves
+    return shelves.mapNotNull { shelf ->
+        if (PODCAST_WORDS.containsMatchIn(shelf.title)) return@mapNotNull null
+        val items = shelf.items.filterNot { it.browseId?.startsWith("MPSP") == true }
+        when {
+            items.size == shelf.items.size -> shelf
+            items.isEmpty() -> null
+            else -> shelf.copy(items = items)
+        }
+    }
+}
+
+private val PODCAST_WORDS = Regex("podcast|episode", RegexOption.IGNORE_CASE)
 
 /** Songs-only shelves of four or more are laid out as quick picks. */
 private fun HomeShelf.isQuickPicks(): Boolean =

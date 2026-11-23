@@ -115,7 +115,7 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "library", "Home and Library", "Tabs, Home, Library, new releases and what's hidden", AppIcons.LibraryMusic,
         listOf(
-            "Home and tabs" to listOf("Separate Explore tab", "Speed dial", "Streaks on Home", "Wide-screen layout"),
+            "Home and tabs" to listOf("Separate Explore tab", "Speed dial", "Streaks on Home", "Daylist on Home", "Podcasts", "Wide-screen layout"),
             "Library" to listOf("Playlists in Library", "Import a playlist", "Swipe songs to queue them"),
             "New releases" to listOf("New-release alerts", "Followed artists"),
             "What's hidden" to listOf("Hide explicit content", "Hidden songs and artists"),

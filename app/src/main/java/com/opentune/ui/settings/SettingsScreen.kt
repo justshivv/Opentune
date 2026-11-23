@@ -1582,6 +1582,14 @@ private fun settingsSections(
                 Entry("Speed dial", "home most played quick grid shortcuts favourites top") {
                     ToggleRow("Speed dial", ui.speedDial, { v -> AppSettings.updateUi { it.copy(speedDial = v) } }, summary = "Your most-played songs, albums and artists at the top of Home", icon = ImageVector.vectorResource(AppIcons.GridView))
                 },
+                Entry("Daylist on Home", "daylist home mix time of day morning evening card hide") {
+                    ToggleRow("Daylist on Home", ui.homeDaylist, { v -> AppSettings.updateUi { it.copy(homeDaylist = v) } },
+                        summary = "A mix that changes through the day, near the top of Home", icon = ImageVector.vectorResource(AppIcons.Schedule))
+                },
+                Entry("Podcasts", "podcasts episodes shows tab dock home hide") {
+                    ToggleRow("Podcasts", ui.podcasts, { v -> AppSettings.updateUi { it.copy(podcasts = v) } },
+                        summary = "The Podcasts tab and podcast rows on Home", icon = ImageVector.vectorResource(AppIcons.Podcasts))
+                },
                 Entry("Separate Explore tab", "explore tab dock search page navigation moods genres own") {
                     ToggleRow(
                         "Separate Explore tab",
