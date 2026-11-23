@@ -869,6 +869,7 @@ enum class PageTransition(val label: String, val summary: String) {
     FADE("Fade through", "The page fades out, then the next fades in and settles"),
     ZOOM("Depth", "Pages come forward from behind; going back, they sink away"),
     RISE("Rise", "Pages rise like cards over the one before, which sinks back a little"),
+    GROW("Grow from cover", "Albums and playlists open out of the cover you tapped; other pages push in"),
 }
 
 @Serializable

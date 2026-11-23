@@ -51,6 +51,7 @@ import com.opentune.data.model.BrowseType
 import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.artworkAt
+import com.opentune.ui.opens
 import com.opentune.ui.cardMenu
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.CardMenu
@@ -237,6 +238,7 @@ fun SpeedDialScreen(contentPadding: PaddingValues, onItemClick: (ShelfItem) -> U
                     width = width,
                     explicit = item.explicit,
                     menu = item.cardMenu(),
+                    opens = item.opens(),
                 )
             }
         }

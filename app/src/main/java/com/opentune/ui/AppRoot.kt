@@ -80,6 +80,7 @@ import com.opentune.ui.browse.ArtistScreen
 import com.opentune.ui.browse.CollectionScreen
 import com.opentune.ui.browse.SongActions
 import com.opentune.ui.components.LocalBackdrop
+import com.opentune.ui.components.coverMorphPage
 import com.opentune.ui.components.LocalHazeState
 import com.opentune.ui.components.LocalSongMenu
 import com.opentune.ui.components.SongMenuActions
@@ -148,6 +149,10 @@ fun AppRoot(vm: PlayerViewModel) {
     // Scrolling any page down folds the bottom bar into one row; scrolling up unfolds it.
     val chromeScroll = rememberChromeScroll()
     val chromeUi by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    // Grow from cover: an album or playlist page opened by a tap on its cover
+    // grows out of it (see CoverMorph). Whether this page did is settled as it
+    // opens, before its transition is picked.
+    com.opentune.ui.components.FollowCoverPages(nav, com.opentune.ui.components.CoverMorph.allowed(chromeUi), COVER_ROUTES)
     // Explore without a tab of its own lives on the Search page instead.
     val separateExplore = chromeUi.separateExplore
     // The Poster layout has a Radio tab of the account's mixes.
@@ -659,16 +664,44 @@ fun AppRoot(vm: PlayerViewModel) {
                     )
                 }
                 CompositionLocalProvider(LocalHazeState provides null, com.opentune.ui.components.LocalAccountMenu provides accountMenu) {
+                    // Round the pages, so an album or playlist page can grow out of its cover.
+                    androidx.compose.animation.SharedTransitionLayout(Modifier.align(Alignment.TopCenter).then(pageArea).fillMaxSize()) {
+                    CompositionLocalProvider(com.opentune.ui.components.LocalSharedPages provides this) {
+                    val covers = com.opentune.ui.components.CoverMorph
                     NavHost(
                         navController = nav,
                         startDestination = Tab.HOME.route,
-                        modifier = Modifier.align(Alignment.TopCenter).then(pageArea).fillMaxSize(),
+                        modifier = Modifier.fillMaxSize(),
                         // The first appearance is no navigation: the opening page is simply
                         // there, as if it had always been — it never flies in.
-                        enterTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.EnterTransition.None else PageMotion.enter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                        exitTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.ExitTransition.None else PageMotion.exit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                        popEnterTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.EnterTransition.None else PageMotion.popEnter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                        popExitTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.ExitTransition.None else PageMotion.popExit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                        enterTransition = {
+                            when {
+                                initialState.destination.route == targetState.destination.route -> androidx.compose.animation.EnterTransition.None
+                                covers.opens(targetState.id) -> PageMotion.growIn
+                                else -> PageMotion.enter(chromeUi.pageTransition, chromeUi.reduceAnimation)
+                            }
+                        },
+                        exitTransition = {
+                            when {
+                                initialState.destination.route == targetState.destination.route -> androidx.compose.animation.ExitTransition.None
+                                covers.opens(targetState.id) -> PageMotion.recede
+                                else -> PageMotion.exit(chromeUi.pageTransition, chromeUi.reduceAnimation)
+                            }
+                        },
+                        popEnterTransition = {
+                            when {
+                                initialState.destination.route == targetState.destination.route -> androidx.compose.animation.EnterTransition.None
+                                covers.closesInto(initialState.id, targetState.id) -> PageMotion.comeForward
+                                else -> PageMotion.popEnter(chromeUi.pageTransition, chromeUi.reduceAnimation)
+                            }
+                        },
+                        popExitTransition = {
+                            when {
+                                initialState.destination.route == targetState.destination.route -> androidx.compose.animation.ExitTransition.None
+                                covers.closesInto(initialState.id, targetState.id) -> PageMotion.growOut
+                                else -> PageMotion.popExit(chromeUi.pageTransition, chromeUi.reduceAnimation)
+                            }
+                        },
                     ) {
                         page(Tab.HOME.route) {
                             HomeScreen(
@@ -810,7 +843,9 @@ fun AppRoot(vm: PlayerViewModel) {
                             })
                         }
                         page("playlist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
-                            LocalPlaylistScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
+                            Box(Modifier.fillMaxSize().coverMorphPage(e.id)) {
+                                LocalPlaylistScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
+                            }
                         }
                         page("equalizer") { EqualizerScreen(content, onBack = { nav.popBackStack() }) }
                         page("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
@@ -855,7 +890,9 @@ fun AppRoot(vm: PlayerViewModel) {
                             ServerPlaylistScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                         }
                         page("collection/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
-                            CollectionScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
+                            Box(Modifier.fillMaxSize().coverMorphPage(e.id)) {
+                                CollectionScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
+                            }
                         }
                         page("artist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                             ArtistScreen(
@@ -905,6 +942,8 @@ fun AppRoot(vm: PlayerViewModel) {
                                 onItemClick = openItem,
                             )
                         }
+                    }
+                    }
                     }
                 }
             }
@@ -1154,4 +1193,9 @@ private fun androidx.navigation.NavGraphBuilder.page(
     route: String,
     arguments: List<androidx.navigation.NamedNavArgument> = emptyList(),
     content: @Composable androidx.compose.animation.AnimatedContentScope.(androidx.navigation.NavBackStackEntry) -> Unit,
-) = composable(route, arguments) { entry -> content(entry) }
+) = composable(route, arguments) { entry ->
+    CompositionLocalProvider(com.opentune.ui.components.LocalPageScope provides this) { content(entry) }
+}
+
+/** The pages that can grow out of the cover tapped to open them (see CoverMorph). */
+private val COVER_ROUTES = setOf("collection/{id}", "playlist/{id}")

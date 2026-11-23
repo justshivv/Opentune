@@ -1,5 +1,6 @@
 package com.opentune.ui.search
 
+import com.opentune.ui.components.coverMorphCard
 import com.opentune.ui.components.posterGlass
 
 import com.opentune.ui.components.menuClickable
@@ -560,6 +561,8 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit) {
     var menuOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
     val at = anchor.rect
     val round = item.type == BrowseType.ARTIST
+    // An album's or playlist's page grows out of its cover (see CoverMorph).
+    val morph = com.opentune.ui.components.rememberCoverMorph(list?.let { item.browseId }, MaterialTheme.shapes.small)
     if (menuOpen && list != null && at != null) {
         com.opentune.ui.components.CollectionContextMenu(list, at, onDismiss = { menuOpen = false }) {
             Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -575,13 +578,13 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth()
             .then(if (list != null) Modifier.menuAnchor(anchor, view) else Modifier)
-            .then(Modifier.menuClickable(onClick = onClick, onLongClick = list?.let { { haptics.press(); menuOpen = true } }))
+            .then(Modifier.menuClickable(onClick = { morph?.tap(); onClick() }, onLongClick = list?.let { { haptics.press(); menuOpen = true } }))
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Artwork(
             item.thumbnailUrl.artworkAt(ROW_ART_PX),
-            Modifier.size(52.dp),
+            Modifier.size(52.dp).coverMorphCard(morph),
             shape = if (round) CircleShape else MaterialTheme.shapes.small,
         )
         Spacer(Modifier.width(14.dp))

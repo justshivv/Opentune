@@ -40,10 +40,13 @@ fun formatTime(ms: Long): String {
 fun ShelfItem.toSong(): Song? = videoId?.let {
     // The credit, not the card's first word: "Song • Karan Aujla" played as by "Song", which then
     // looked its lyrics up under that name and found another song's.
-    Song(videoId = it, title = title, artist = com.opentune.data.innertube.InnertubeParser.artistFromSubtitle(subtitle), thumbnailUrl = thumbnailUrl, isExplicit = explicit.takeIf { e -> e })
+    Song(videoId = it, title = title, artist = com.opentune.data.innertube.InnertubeParser.artistFromSubtitle(subtitle), thumbnailUrl = thumbnailUrl, isVideo = video, isExplicit = explicit.takeIf { e -> e })
 }
 
 fun ShelfItem.type(): BrowseType? = browseId?.let(MusicRepository::typeOf)
+
+/** The album or playlist page this card opens, which can grow out of its cover; null for anything else. */
+fun ShelfItem.opens(): String? = browseId?.takeIf { type().let { it == BrowseType.ALBUM || it == BrowseType.PLAYLIST } }
 
 /** What a long press on this card opens: an album's or playlist's menu, or a song's. Artists have none. */
 fun ShelfItem.cardMenu(): com.opentune.ui.components.CardMenu? {
