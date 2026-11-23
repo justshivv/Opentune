@@ -25,6 +25,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import com.opentune.data.model.artworkAt
 
+/** How long lyrics wait for a music video's SponsorBlock stretches before going on without them. */
+private const val GAPS_WAIT_MS = 3_000L
+
 sealed interface LyricsState {
     data object Loading : LyricsState
     data class Found(val lyrics: Lyrics) : LyricsState
@@ -285,10 +288,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }.first { it > 0 }
             // Plain text often means a synced source was busy just then; the
             // repository asks again a little later and sends better lyrics on.
-            LyricsRepository.lyricsUpdates(song.videoId, song.title, song.artist, duration).collect { found ->
-                _lyrics.value = found?.let(LyricsState::Found) ?: LyricsState.NotFound
+            // A music video's stretches without the song (a scene with no music, say) aren't in
+            // the lyrics' timing: they're looked up for the song without them and moved past each.
+            val gaps = if (AppSettings.playback.value.sponsorBlock && com.opentune.data.isYouTubeId(song.videoId)) {
+                withTimeoutOrNull(GAPS_WAIT_MS) {
+                    com.opentune.data.sponsorblock.SponsorBlock.segments(song.videoId, setOf(com.opentune.data.lyrics.LyricsGaps.CATEGORY))
+                }?.let { com.opentune.data.lyrics.LyricsGaps.of(it, duration) }.orEmpty()
+            } else emptyList()
+            val songMs = com.opentune.data.lyrics.LyricsGaps.songMs(duration, gaps)
+            LyricsRepository.lyricsUpdates(song.videoId, song.title, song.artist, songMs).collect { found ->
+                val placed = found?.let { com.opentune.data.lyrics.LyricsGaps.onto(it, gaps) }
+                _lyrics.value = placed?.let(LyricsState::Found) ?: LyricsState.NotFound
                 // The widgets and floating lyrics show these too, rather than looking them up again.
-                com.opentune.lyrics.NowPlayingLyrics.set(song.videoId, found)
+                com.opentune.lyrics.NowPlayingLyrics.set(song.videoId, placed)
             }
         }
     }
