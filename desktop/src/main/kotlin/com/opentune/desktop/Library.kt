@@ -144,7 +144,13 @@ object Library {
     }.getOrDefault(emptyList())
 
     fun volume(): Double = volume
-    fun setVolume(v: Double) = write { exec("INSERT OR REPLACE INTO settings(key, value) VALUES ('volume', ?)", v.toString()) }
+    /** Keeps the volume. Nothing on the pages changes with it, so the library isn't read back afterwards. */
+    @Synchronized
+    fun setVolume(v: Double) {
+        volume = v
+        runCatching { db.exec("INSERT OR REPLACE INTO settings(key, value) VALUES ('volume', ?)", v.toString()) }
+            .onFailure { System.err.println("Library: couldn't save the volume: $it") }
+    }
 
     private fun Song.saved() = Saved(videoId, title, artist, thumbnailUrl, durationText, albumName?.takeIf { it.isNotBlank() }, albumId, artistId)
 

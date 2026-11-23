@@ -389,9 +389,17 @@ object Player {
 
     fun setVolume(v: Double) {
         _volume.value = v.coerceIn(0.0, 1.0)
-        Library.setVolume(_volume.value)
         applyVolume()
+        // Saved once it settles, off the window's thread: a slider dragged or a wheel turned sets it
+        // many times a second, and each save was a database write on the window's thread.
+        volumeSave?.cancel()
+        volumeSave = scope.launch(Dispatchers.IO) {
+            delay(400)
+            Library.setVolume(_volume.value)
+        }
     }
+
+    @Volatile private var volumeSave: Job? = null
 
     /** The volume before muting, to go back to. */
     private var unmuted = 0.6

@@ -207,6 +207,18 @@ class DesktopTest {
         assertEquals("pan=stereo|c0=1.000*c0|c1=0.500*c1", left)
     }
 
+    @Test fun theVolumeIsSavedOnceItSettles() {
+        val file = java.io.File(Files.createTempDirectory("opentune").toFile(), "desktop.json")
+        Library.useFile(file)
+        // A slider dragged: many changes, one save at the end, none of them reading the library back.
+        repeat(50) { Player.setVolume(it / 100.0) }
+        assertEquals(0.49, Player.volume.value, 0.0001)
+        val until = System.currentTimeMillis() + 3_000
+        while (Library.volume() != 0.49 && System.currentTimeMillis() < until) Thread.sleep(20)
+        Library.useFile(file)
+        assertEquals(0.49, Library.volume(), 0.0001)
+    }
+
     @Test fun theOldJsonLibraryIsReadInOnce() {
         val folder = Files.createTempDirectory("opentune").toFile()
         val file = java.io.File(folder, "desktop.json")
