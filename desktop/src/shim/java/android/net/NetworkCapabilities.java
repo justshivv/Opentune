@@ -12,4 +12,7 @@ public final class NetworkCapabilities {
     public boolean hasCapability(int capability) { return true; }
 
     public boolean hasTransport(int transport) { return false; }
+
+    /** No estimate on a computer, as on a phone that publishes none. */
+    public int getLinkDownstreamBandwidthKbps() { return 0; }
 }
