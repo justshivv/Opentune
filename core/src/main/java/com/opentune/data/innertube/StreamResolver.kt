@@ -433,11 +433,18 @@ object StreamResolver {
         cap: Int = VideoQuality.AUTO,
     ): InnerTubeXResolver.Extracted? {
         val skip = mutableSetOf<String>()
-        // The engine filters by literal height: an upright clip's 720p is 1280 tall.
-        val maxHeight = if (cap > VideoQuality.AUTO) VideoQuality.heightCap(videoOffers[videoId].orEmpty(), cap) else null
-        repeat(INNERTUBEX_ATTEMPTS) {
+        // A size chosen is asked for as it is, by literal height: an upright clip's 720p is
+        // 1280 tall. Auto follows the connection, and a picture over its ceiling is asked for
+        // again, shorter: 4K at 13 Mbps went to the walk instead, whose clients googlevideo
+        // then refused, and no picture came at all.
+        val heights = ArrayDeque<Int?>(
+            if (cap > VideoQuality.AUTO) listOf(VideoQuality.heightCap(videoOffers[videoId].orEmpty(), cap))
+            else listOf<Int?>(null) + VIDEO_HEIGHTS,
+        )
+        var height = heights.removeFirst()
+        repeat(INNERTUBEX_ATTEMPTS + VIDEO_HEIGHTS.size) {
             val found = try {
-                withTimeoutOrNull(INNERTUBEX_TIMEOUT_MS) { InnerTubeXResolver.extractVideo(videoId, skip, maxHeight) }
+                withTimeoutOrNull(INNERTUBEX_TIMEOUT_MS) { InnerTubeXResolver.extractVideo(videoId, skip, height) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -462,11 +469,17 @@ object StreamResolver {
             if (probe(found.url, expectVideo = true) == Probe.OK) {
                 if (found.kbps > maxKbps) {
                     // Playable, but heavier than the asking connection can
-                    // feed: not a refusal, so the client keeps its standing —
-                    // the caller falls back to the walk, whose ladder is
-                    // ranked under the same ceiling.
-                    TrackLog.d(TAG, "InnerTubeX video for $videoId at ${found.kbps} kbps is over the ${maxKbps} kbps ceiling; the walk picks instead")
-                    return null
+                    // feed: not a refusal, so the client keeps its standing.
+                    // The same engine is asked for a shorter picture; past the
+                    // shortest, the caller falls back to the walk, whose ladder
+                    // is ranked under the same ceiling.
+                    height = heights.removeFirstOrNull()
+                    if (height == null) {
+                        TrackLog.d(TAG, "InnerTubeX video for $videoId at ${found.kbps} kbps is over the ${maxKbps} kbps ceiling; the walk picks instead")
+                        return null
+                    }
+                    TrackLog.d(TAG, "InnerTubeX video for $videoId at ${found.kbps} kbps is over the ${maxKbps} kbps ceiling; asking for ${height}p")
+                    return@repeat
                 }
                 TrackLog.d(TAG, "InnerTubeX served video for $videoId via ${found.clientName} at ${found.kbps} kbps, ${rung}p")
                 videoUrls[videoId] = found.url
@@ -1486,6 +1499,9 @@ object StreamResolver {
 
     /** The video-only formats each song's picture is offered in, for the quality list. */
     private val videoOffers = ConcurrentHashMap<String, List<VideoOffer>>()
+
+    /** The picture heights asked of InnerTubeX in turn when its best is over the connection's ceiling. */
+    private val VIDEO_HEIGHTS = listOf(1080, 720, 480)
 
     /** The lightest picture rung worth showing, in kbps: at or under it a stall step-down has nowhere left to go. */
     private const val VIDEO_STEP_FLOOR_KBPS = 450
