@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,7 +79,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -95,6 +96,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -109,8 +111,12 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.opentune.data.settings.AppSettings
@@ -544,7 +550,14 @@ private fun Modifier.roomCard(inset: Dp = 16.dp): Modifier {
 private val GAP = 6.dp
 
 @Composable
-internal fun RoomView(r: Together.Room, onBack: () -> Unit, contentPadding: PaddingValues = PaddingValues(), openInvite: Boolean = false) {
+internal fun RoomView(
+    r: Together.Room,
+    onBack: () -> Unit,
+    contentPadding: PaddingValues = PaddingValues(),
+    openInvite: Boolean = false,
+    /** The keyboard's inset; a test hands in its own. */
+    keyboard: WindowInsets = WindowInsets.ime,
+) {
     val context = LocalContext.current
     val still = AppSettings.ui.collectAsState().value.reduceAnimation
     val density = LocalDensity.current
@@ -558,10 +571,18 @@ internal fun RoomView(r: Together.Room, onBack: () -> Unit, contentPadding: Padd
     KeepChromeOut()
     KeyboardResizes()
     val island = r.phase != Together.Phase.Ended
-    val keyboard = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-    val above = maxOf(contentPadding.calculateBottomPadding() - ISLAND_DROP, keyboard + 8.dp, 8.dp)
-    var islandHeight by remember { mutableStateOf(ISLAND_HEIGHT) }
-    val listBottom = if (island) above + islandHeight + 16.dp else contentPadding.calculateBottomPadding()
+    // The keyboard moves every frame as it slides, and the island every frame as it opens:
+    // both are read only while laying out and drawing, never here, so the room page isn't
+    // composed again on each of those frames; only the island, the list's padding and the fade move.
+    val page by rememberUpdatedState(contentPadding)
+    val islandHeight = remember { mutableStateOf(ISLAND_HEIGHT) }
+    val above: Density.() -> Dp = remember(keyboard) {
+        { maxOf(page.calculateBottomPadding() - ISLAND_DROP, keyboard.getBottom(this).toDp() + 8.dp, 8.dp) }
+    }
+    val listBottom: Density.() -> Dp = remember(island, above) {
+        { if (island) above() + islandHeight.value + 16.dp else page.calculateBottomPadding() }
+    }
+    val listPadding = remember(listBottom, density) { LazyBottomPadding { listBottom(density) } }
     val last = { (list.layoutInfo.totalItemsCount - 1).coerceAtLeast(0) }
     // New messages are followed only by someone already reading the end of
     // the chat, or writing in it, so a room always opens at its top: the
@@ -579,7 +600,9 @@ internal fun RoomView(r: Together.Room, onBack: () -> Unit, contentPadding: Padd
         if (added && (open || atEnd)) list.animateScrollToItem(last())
     }
     // Open, the newest messages stay in sight as the island and the keyboard rise.
-    LaunchedEffect(open, listBottom) { if (open) list.scrollToItem(last()) }
+    LaunchedEffect(open, listBottom) {
+        if (open) snapshotFlow { listBottom(density) }.collect { list.scrollToItem(last()) }
+    }
     val close = { open = false; focus.clearFocus() }
     androidx.activity.compose.BackHandler(enabled = open, onBack = close)
     // The room rises into place when it opens.
@@ -603,8 +626,8 @@ internal fun RoomView(r: Together.Room, onBack: () -> Unit, contentPadding: Padd
                     onSend = { Together.say(message); message = "" },
                     typing = typing,
                     still = still,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = above)
-                        .onSizeChanged { islandHeight = with(density) { it.height.toDp() } },
+                    modifier = Modifier.align(Alignment.BottomCenter).bottomPadding(above)
+                        .onSizeChanged { islandHeight.value = with(density) { it.height.toDp() } },
                 )
             }
         },
@@ -615,7 +638,7 @@ internal fun RoomView(r: Together.Room, onBack: () -> Unit, contentPadding: Padd
                 if (open) detectTapGestures { close() }
             },
             state = list,
-            contentPadding = PaddingValues(bottom = listBottom),
+            contentPadding = listPadding,
         ) {
             item { PageHeader(if (r.hosting) "Your room" else com.opentune.i18n.Tr.f("{0}'s room", r.hostName ?: com.opentune.i18n.Tr.t("Friend")), onBack = onBack) }
             item { CodeCard(r, onInvite = { inviting = true }, onCopy = { copyCode(context, r.code) }) }
@@ -652,13 +675,38 @@ internal fun RoomView(r: Together.Room, onBack: () -> Unit, contentPadding: Padd
         if (island) {
             val base = MaterialTheme.colorScheme.background
             val fade = 36.dp
-            val solid = (fade + islandHeight / 2) / (fade + islandHeight + above)
             Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(fade + islandHeight + above)
-                    .background(Brush.verticalGradient(0f to base.copy(alpha = 0f), solid * 0.5f to base.copy(alpha = 0.7f), solid to base, 1f to base)),
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .layout { measurable, constraints ->
+                        val height = (fade + islandHeight.value + above()).roundToPx().coerceAtLeast(0)
+                        val placeable = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
+                        layout(placeable.width, height) { placeable.place(0, 0) }
+                    }
+                    .drawBehind {
+                        val solid = ((fade + islandHeight.value / 2).toPx() / size.height).coerceIn(0f, 1f)
+                        drawRect(Brush.verticalGradient(0f to base.copy(alpha = 0f), solid * 0.5f to base.copy(alpha = 0.7f), solid to base, 1f to base))
+                    },
             )
         }
     }
+}
+
+/**
+ * Bottom padding worked out as it's laid out, from state that changes every
+ * frame (the keyboard as it slides), so only this element is measured again.
+ */
+private fun Modifier.bottomPadding(bottom: Density.() -> Dp): Modifier = layout { measurable, constraints ->
+    val b = bottom().roundToPx().coerceAtLeast(0)
+    val placeable = measurable.measure(constraints.offset(vertical = -b))
+    layout(placeable.width, constraints.constrainHeight(placeable.height + b)) { placeable.place(0, 0) }
+}
+
+/** A list's bottom padding, read when the list is measured rather than when it's composed. */
+private class LazyBottomPadding(private val bottom: () -> Dp) : PaddingValues {
+    override fun calculateLeftPadding(layoutDirection: LayoutDirection): Dp = 0.dp
+    override fun calculateTopPadding(): Dp = 0.dp
+    override fun calculateRightPadding(layoutDirection: LayoutDirection): Dp = 0.dp
+    override fun calculateBottomPadding(): Dp = bottom()
 }
 
 /**
