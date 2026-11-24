@@ -1,5 +1,6 @@
 package com.opentune.playback
 
+import com.opentune.data.lossless.SourceTier
 import com.opentune.data.model.Song
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
@@ -62,8 +63,16 @@ internal suspend fun prefetchExternalSources(lossless: suspend () -> Unit, lossy
     Unit
 }
 
-/** One song to ready ahead of time: its id, the song, and whether its FLAC is searched for too. */
-internal data class AheadWant(val id: String, val song: Song, val lossless: Boolean)
+/**
+ * One song to ready ahead of time: its id, the song, the source tiers that want it, and
+ * whether its FLAC is searched for too (the lossless tier wants it).
+ */
+internal data class AheadWant(
+    val id: String,
+    val song: Song,
+    val lossless: Boolean,
+    val tiers: Set<SourceTier> = if (lossless) setOf(SourceTier.LOSSLESS, SourceTier.HIGH_BITRATE) else setOf(SourceTier.HIGH_BITRATE),
+)
 
 /**
  * The songs to ready ahead of time, from [upcoming] (the songs after the playing one, in play
@@ -89,23 +98,27 @@ internal fun aheadWanted(
 }
 
 /**
- * As [aheadWanted], with the places chosen by a [QueuePlan] rather than counted: the songs at
- * [saavnAt] of [upcoming] are looked up on JioSaavn, and those at [losslessAt] for their FLAC too.
- * A song there twice is readied once, with its FLAC if either place wants it.
+ * As [aheadWanted], with the places chosen by a [QueuePlan] rather than counted: of [upcoming],
+ * the places in [at] (each source tier's places) are readied, for the tiers in [allowed]. A song
+ * there twice is readied once, with every tier that wants it.
  */
 internal fun aheadPlanned(
     upcoming: List<Song>,
     preload: Boolean,
-    saavn: Boolean,
-    lossless: Boolean,
-    saavnAt: Set<Int>,
-    losslessAt: Set<Int>,
+    allowed: Set<SourceTier>,
+    at: Map<SourceTier, Set<Int>>,
     eligible: (Song) -> Boolean = { true },
 ): List<AheadWant> {
-    if (!preload || (!saavn && !lossless)) return emptyList()
-    val near = if (lossless) upcoming.filterIndexed { i, _ -> i in losslessAt }.mapTo(HashSet()) { it.videoId } else emptySet()
-    val wanted = upcoming.filterIndexed { i, _ -> (saavn && i in saavnAt) || i in losslessAt && lossless }
-    return wanted.filter(eligible).distinctBy { it.videoId }.map { AheadWant(it.videoId, it, it.videoId in near) }
+    if (!preload || allowed.isEmpty()) return emptyList()
+    val tiersById = HashMap<String, Set<SourceTier>>()
+    upcoming.forEachIndexed { i, song ->
+        val tiers = allowed.filterTo(HashSet()) { tier -> i in at[tier].orEmpty() }
+        if (tiers.isNotEmpty()) tiersById.merge(song.videoId, tiers) { a, b -> a + b }
+    }
+    return upcoming.filter { it.videoId in tiersById }.filter(eligible).distinctBy { it.videoId }.map { song ->
+        val tiers = tiersById[song.videoId].orEmpty()
+        AheadWant(song.videoId, song, SourceTier.LOSSLESS in tiers, tiers)
+    }
 }
 
 /**

@@ -1,6 +1,7 @@
 package com.opentune.playback
 
 import com.opentune.data.history.PlayRecord
+import com.opentune.data.lossless.SourceTier
 import com.opentune.data.model.QueueTier
 import com.opentune.data.model.durationMillis
 
@@ -87,7 +88,7 @@ internal class PreloadHistory(records: List<PlayRecord>, private val liked: Set<
 internal object PlayChance {
     /** Worth readying fully: the next song's longer buffer, the second song's FLAC, its lyrics. */
     const val LIKELY = 0.6
-    /** Worth readying lightly: its address and JioSaavn match. */
+    /** Worth readying lightly: its address and high-bitrate match. */
     const val WORTH = 0.3
 
     /** [position] 0 is the song after the one playing. */
@@ -121,15 +122,15 @@ internal object PlayChance {
 
 /** What's readied for the songs in the queue, by their position after the one playing (0 is next). */
 internal data class QueuePlan(
-    val saavn: Set<Int>,
-    val lossless: Set<Int>,
+    /** The positions each source tier readies (see [PreloadSteps.forQueue]). */
+    val sources: Map<SourceTier, Set<Int>>,
     val warm: Set<Int>,
     val lyrics: Set<Int>,
     /** How much of the next song ExoPlayer loads ahead. */
     val nextBufferUs: Long,
 ) {
     companion object {
-        val NONE = QueuePlan(emptySet(), emptySet(), emptySet(), emptySet(), 0L)
+        val NONE = QueuePlan(emptyMap(), emptySet(), emptySet(), 0L)
     }
 }
 
@@ -137,7 +138,7 @@ internal data class QueuePlan(
 internal data class OffQueueWant(val song: com.opentune.data.model.Song, val chance: Double, val audio: Boolean)
 
 internal object PreloadSteps {
-    const val SAAVN_REACH = 5
+    const val HIGH_BITRATE_REACH = 5
     const val WARM_REACH = 3
     const val BUFFER_US = 10_000_000L
     const val BUFFER_LIKELY_US = 20_000_000L
@@ -151,13 +152,14 @@ internal object PreloadSteps {
      * Wi-Fi) give the next song its longer buffer.
      */
     fun forQueue(chances: List<Double>, unmetered: Boolean, boost: Boolean): QueuePlan {
-        if (chances.isEmpty()) return QueuePlan(emptySet(), emptySet(), emptySet(), emptySet(), BUFFER_US)
-        val saavn = chances.indices.filter { it == 0 || (it < SAAVN_REACH && chances[it] >= PlayChance.WORTH) }.toSet()
+        if (chances.isEmpty()) return QueuePlan(emptyMap(), emptySet(), emptySet(), BUFFER_US)
+        val high = chances.indices.filter { it == 0 || (it < HIGH_BITRATE_REACH && chances[it] >= PlayChance.WORTH) }.toSet()
         val lossless = chances.indices.filter { it == 0 || (it == 1 && chances[it] >= PlayChance.LIKELY) }.toSet()
         val warm = chances.indices.filter { it == 0 || (it < WARM_REACH && chances[it] >= PlayChance.WORTH) }.toSet()
         val lyrics = chances.indices.filter { it == 0 || (it == 1 && chances[it] >= PlayChance.LIKELY) }.toSet()
         val longer = unmetered && (boost || chances[0] >= PlayChance.LIKELY)
-        return QueuePlan(saavn, lossless, warm, lyrics, if (longer) BUFFER_LIKELY_US else BUFFER_US)
+        return QueuePlan(mapOf(SourceTier.HIGH_BITRATE to high, SourceTier.LOSSLESS to lossless), warm, lyrics,
+            if (longer) BUFFER_LIKELY_US else BUFFER_US)
     }
 
     /**

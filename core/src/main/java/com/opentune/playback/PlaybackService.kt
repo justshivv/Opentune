@@ -2,6 +2,7 @@ package com.opentune.playback
 
 import com.opentune.data.connect.meant
 import com.opentune.data.lossless.ExternalStreams
+import com.opentune.data.lossless.SourceRegistry
 import com.opentune.data.model.artworkAt
 import com.opentune.data.model.durationMillis
 import kotlinx.coroutines.ensureActive
@@ -2101,8 +2102,8 @@ class PlaybackService : MediaLibraryService() {
         val songs = upcoming.map { it.toSong() }
         val wanted = aheadPlanned(
             songs, preload,
-            saavn = ExternalStreams.allowed(false), lossless = ExternalStreams.allowed(true),
-            saavnAt = plan.saavn, losslessAt = plan.lossless,
+            allowed = SourceRegistry.eligible().mapTo(HashSet()) { it.tier },
+            at = plan.sources,
         ) { song ->
             val uri = upcoming.firstOrNull { it.mediaId == song.videoId }?.localConfiguration?.uri
             isYouTubeId(song.videoId) && !Podcasts.isEpisode(song.videoId) && uri?.scheme != "file"
@@ -2137,7 +2138,7 @@ class PlaybackService : MediaLibraryService() {
             }
             PreloadSteps.forQueue(chances, unmetered = !AppSettings.onMeteredNetwork(), boost = pb.preloadBoostOnWifi).also { plan ->
                 if (plan != queuePlan) com.opentune.data.DebugLog.d("Preload", "Queue ahead: chances " +
-                    chances.joinToString(" ") { "%.2f".format(it) } + "; JioSaavn at ${plan.saavn.sorted()}, FLAC at ${plan.lossless.sorted()}, " +
+                        chances.joinToString(" ") { "%.2f".format(it) } + "; " + plan.sources.entries.joinToString(", ") { (tier, at) -> "$tier at ${at.sorted()}" } + ", " +
                     "addresses at ${plan.warm.sorted()}, lyrics at ${plan.lyrics.sorted()}, next song's buffer ${plan.nextBufferUs / 1_000_000} s")
             }
         }

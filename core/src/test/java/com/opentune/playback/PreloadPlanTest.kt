@@ -1,6 +1,7 @@
 package com.opentune.playback
 
 import com.opentune.data.history.PlayRecord
+import com.opentune.data.lossless.SourceTier
 import com.opentune.data.model.QueueTier
 import com.opentune.data.model.Song
 import org.junit.Assert.assertEquals
@@ -38,8 +39,8 @@ class PreloadPlanTest {
     @Test
     fun theNextSongIsAlwaysReadiedWithItsLyricsAndAtLeastTenSecondsEvenWhenUsuallySkipped() {
         val plan = PreloadSteps.forQueue(listOf(0.2, 0.1), unmetered = false, boost = false)
-        assertEquals(setOf(0), plan.saavn)
-        assertEquals(setOf(0), plan.lossless)
+        assertEquals(setOf(0), plan.sources[SourceTier.HIGH_BITRATE])
+        assertEquals(setOf(0), plan.sources[SourceTier.LOSSLESS])
         assertEquals(setOf(0), plan.lyrics)
         assertEquals(setOf(0), plan.warm)
         assertEquals(PreloadSteps.BUFFER_US, plan.nextBufferUs)
@@ -48,13 +49,13 @@ class PreloadPlanTest {
     @Test
     fun theSecondSongGetsItsFlacAndLyricsOnlyWhenLikelyAndNothingPastTheFifthIsLookedUp() {
         val likely = PreloadSteps.forQueue(listOf(0.9, 0.7, 0.6, 0.5, 0.4, 0.35), unmetered = false, boost = false)
-        assertEquals(setOf(0, 1), likely.lossless)
+        assertEquals(setOf(0, 1), likely.sources[SourceTier.LOSSLESS])
         assertEquals(setOf(0, 1), likely.lyrics)
-        assertEquals(setOf(0, 1, 2, 3, 4), likely.saavn)
+        assertEquals(setOf(0, 1, 2, 3, 4), likely.sources[SourceTier.HIGH_BITRATE])
         assertEquals(setOf(0, 1, 2), likely.warm)
         val unlikely = PreloadSteps.forQueue(listOf(0.9, 0.4, 0.2), unmetered = false, boost = false)
-        assertEquals(setOf(0), unlikely.lossless)
-        assertEquals(setOf(0, 1), unlikely.saavn)
+        assertEquals(setOf(0), unlikely.sources[SourceTier.LOSSLESS])
+        assertEquals(setOf(0, 1), unlikely.sources[SourceTier.HIGH_BITRATE])
     }
 
     @Test
@@ -119,11 +120,14 @@ class PreloadPlanTest {
     @Test
     fun theQueueReadiesThePlacesThePlanPicksWithTheFlacOnlyWhereItSays() {
         val upcoming = listOf(song("a"), song("b"), song("c"), song("a"))
-        val wanted = aheadPlanned(upcoming, preload = true, saavn = true, lossless = true, saavnAt = setOf(0, 2, 3), losslessAt = setOf(0))
+        val at = mapOf(SourceTier.HIGH_BITRATE to setOf(0, 2, 3), SourceTier.LOSSLESS to setOf(0))
+        val wanted = aheadPlanned(upcoming, preload = true, allowed = setOf(SourceTier.LOSSLESS, SourceTier.HIGH_BITRATE), at = at)
         assertEquals(listOf("a" to true, "c" to false), wanted.map { it.id to it.lossless })
-        assertTrue(aheadPlanned(upcoming, preload = false, saavn = true, lossless = true, saavnAt = setOf(0), losslessAt = setOf(0)).isEmpty())
-        // JioSaavn not allowed: only the FLAC places.
-        assertEquals(listOf("a"), aheadPlanned(upcoming, preload = true, saavn = false, lossless = true, saavnAt = setOf(0, 1, 2), losslessAt = setOf(0)).map { it.id })
+        assertEquals(setOf(SourceTier.LOSSLESS, SourceTier.HIGH_BITRATE), wanted[0].tiers)
+        assertEquals(setOf(SourceTier.HIGH_BITRATE), wanted[1].tiers)
+        assertTrue(aheadPlanned(upcoming, preload = false, allowed = setOf(SourceTier.LOSSLESS, SourceTier.HIGH_BITRATE), at = at).isEmpty())
+        // The high-bitrate source not allowed: only the FLAC places.
+        assertEquals(listOf("a"), aheadPlanned(upcoming, preload = true, allowed = setOf(SourceTier.LOSSLESS), at = at).map { it.id })
     }
 
     @Test
