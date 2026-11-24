@@ -138,7 +138,11 @@ fun HomeScreen(
         fresh.refresh(MusicRepository.refreshPicks())
         loader.reload(keepContent = true)
     }
-    val refreshHome: () -> Unit = { reloadHome(true) }
+    val refreshHome: () -> Unit = {
+        reloadHome(true)
+        // A pull also asks the dashboard again, so a banner just published shows at once.
+        pickScope.launch { com.opentune.data.config.RemoteConfig.refresh(force = true) }
+    }
     val moreAll by MusicRepository.homeMore.collectAsState()
     val library by AppSettings.library.collectAsState()
     val hideExplicit = library.hideExplicit

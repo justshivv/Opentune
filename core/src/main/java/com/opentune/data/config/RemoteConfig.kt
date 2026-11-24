@@ -131,6 +131,21 @@ object RemoteConfigProtocol {
 /** Configuration is data, never executable code. Device verification has its own fixed trust policy. */
 object RemoteConfig {
     const val ORIGIN = "https://addon-opentune.rethinknow.in"
+
+    /**
+     * The dashboard's signing keys this build trusts outright (SPKI, base64). A phone that pinned
+     * an earlier key, from before the dashboard's database was set up again, would otherwise
+     * refuse every new configuration for good; one of these takes over the pin, and the revision
+     * count starts again with it. A key the server offers that isn't one of these is still pinned
+     * on first use, as before.
+     */
+    internal val BUNDLED_KEYS = listOf(
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEa/ugSt0oayRYS9XNc33hZiGqARuCaxeqNZI3GC57as+6eSrYxfV0fTOfVYrC8jyKVGGrIgqTM820cCgA9WDwJQ==",
+    )
+
+    /** How soon after one check the app may check again: a minute, so a banner published shows up when the app is next opened. */
+    private const val MIN_GAP_MS = 60_000L
+
     private val mutable = MutableStateFlow(AppConfig())
     val state = mutable.asStateFlow()
     val current: AppConfig get() = mutable.value.takeIf { it.expiresAt > System.currentTimeMillis() } ?: AppConfig()
@@ -144,27 +159,50 @@ object RemoteConfig {
         runCatching { RemoteConfigProtocol.verify(p.getString("envelope", "")!!, p.getString("key", "")!!, p.getLong("revision", 0)) }.getOrNull()?.let { mutable.value = it }
     }
     private fun get(path: String): String = client.newCall(Request.Builder().url(ORIGIN + path).build()).execute().use { response ->
-        require(response.isSuccessful)
+        require(response.isSuccessful) { "HTTP ${response.code} for $path" }
         val source = requireNotNull(response.body).source(); source.request(100_001); require(source.buffer.size <= 100_000)
         source.readUtf8()
     }
+
+    /** The key [envelope] verifies under and what it says, by the rules in [RemoteConfig]'s keys; null if none. */
+    internal fun accept(envelope: String, pinned: String?, revision: Long, offered: () -> String?, now: Long = System.currentTimeMillis()): Pair<String, AppConfig>? {
+        fun attempt(key: String, floor: Long) = runCatching { key to RemoteConfigProtocol.verify(envelope, key, floor, now) }
+        // The pinned key, held to the last revision seen.
+        pinned?.let { key -> attempt(key, revision).getOrNull()?.let { return it } }
+        // A key this build trusts: from a fresh count when it replaces another.
+        BUNDLED_KEYS.forEach { key -> attempt(key, if (key == pinned) revision else 0).getOrNull()?.let { return it } }
+        // Nothing pinned yet: the key the server offers, pinned on first use.
+        if (pinned == null) offered()?.let { key -> attempt(key, 0).getOrNull()?.let { return it } }
+        return null
+    }
+
     suspend fun refresh(force: Boolean = false): Boolean = mutex.withLock {
         val p = prefs ?: return@withLock false
         if (mutable.value.expiresAt <= System.currentTimeMillis()) mutable.value = AppConfig()
         val now = android.os.SystemClock.elapsedRealtime()
-        if (!force && lastAttempt != 0L && now - lastAttempt < 5 * 60_000) return@withLock current.revision > 0
+        if (!force && lastAttempt != 0L && now - lastAttempt < MIN_GAP_MS) return@withLock current.revision > 0
         lastAttempt = now
         withContext(Dispatchers.IO) {
             try {
-                // Bootstrap over the fixed HTTPS origin, then pin the signing key in app storage.
-                // A later key change is refused; restore control.sqlite when moving servers.
-                val key = p.getString("key", null) ?: JSONObject(get("/v1/app-config/key")).getString("publicKey")
+                val pinned = p.getString("key", null)
+                val revision = p.getLong("revision", 0)
                 val envelope = get("/v1/app-config")
-                val config = RemoteConfigProtocol.verify(envelope, key, p.getLong("revision", 0))
+                val (key, config) = accept(envelope, pinned, revision, offered = {
+                    runCatching { JSONObject(get("/v1/app-config/key")).getString("publicKey") }.getOrNull()
+                }) ?: run {
+                    // Kept for Export diagnostics: a configuration refused leaves the last one up.
+                    com.opentune.data.DebugLog.w("RemoteConfig", "Refused the dashboard's configuration: " +
+                        (if (pinned == null) "no trusted key verifies it" else "it doesn't verify under the pinned key, or its revision is under $revision"))
+                    return@withContext false
+                }
+                if (key != pinned) com.opentune.data.DebugLog.i("RemoteConfig", "Now trusting the dashboard key ${key.takeLast(12)}")
                 p.edit().putString("key", key).putString("envelope", envelope).putLong("revision", config.revision).apply()
                 mutable.value = config; true
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (_: Exception) { false }
+            catch (e: Exception) {
+                com.opentune.data.DebugLog.w("RemoteConfig", "Couldn't load the dashboard's configuration", e)
+                false
+            }
         }
     }
 }
