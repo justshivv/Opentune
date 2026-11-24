@@ -18,4 +18,6 @@ object SourceRegistry {
 
     /** The sources the current settings and network allow, in preference order. */
     fun eligible(): List<StreamSource> = all.filter { it.eligible() }
+    /** The sources of [tier] the current settings and network allow, in preference order. */
+    fun eligible(tier: SourceTier): List<StreamSource> = eligible().filter { it.tier == tier }
 }

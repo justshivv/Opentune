@@ -11,6 +11,7 @@ import com.opentune.data.innertube.StreamResolver
 import com.opentune.data.isYouTubeId
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.lossless.ExternalStreams
+import com.opentune.data.lossless.JioSaavnStreamSource
 import com.opentune.data.lossless.SaavnMatches
 import com.opentune.data.lyrics.LyricsRepository
 import com.opentune.data.model.Song
@@ -218,7 +219,7 @@ object PreloadPlanner {
         }
         val eligible = candidates.filter { (s, _) ->
             isYouTubeId(s.videoId) && !Podcasts.isEpisode(s.videoId) && s.videoId !in queued &&
-                Downloads.fileFor(s.videoId) == null && readied.due(s.videoId)
+                    Downloads.fileFor(s.videoId) == null && readied.due(s.videoId)
         }
         val wants = PreloadSteps.offQueue(eligible, unmetered)
         for (want in wants) {
@@ -246,7 +247,7 @@ object PreloadPlanner {
             val length = song.durationMillis()
             kotlinx.coroutines.coroutineScope {
                 val address = async { StreamResolver.resolve(id) }
-                if (ExternalStreams.allowed(false)) launch {
+                if (JioSaavnStreamSource.eligible()) launch {
                     try { withTimeoutOrNull(SAAVN_WAIT_MS) { ExternalStreams.findJioSaavn(song, length) } }
                     catch (e: CancellationException) { throw e } catch (e: Exception) { DebugLog.w(TAG, "$id: JioSaavn ahead: ${e.message}") }
                 }
@@ -268,8 +269,8 @@ object PreloadPlanner {
             }
             readied.readied(id)
             DebugLog.d(TAG, "$id readied $why (chance ${"%.2f".format(want.chance)}): address, " +
-                (if (ExternalStreams.allowed(false)) "JioSaavn, " else "") + "lyrics" +
-                (if (fetched > 0) ", ${fetched / 1024} kB of audio" else "") + " in ${SystemClock.elapsedRealtime() - started} ms")
+                    (if (JioSaavnStreamSource.eligible()) "JioSaavn, " else "") + "lyrics" +
+                    (if (fetched > 0) ", ${fetched / 1024} kB of audio" else "") + " in ${SystemClock.elapsedRealtime() - started} ms")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -317,16 +318,16 @@ object PreloadPlanner {
         if (!fromQueue && shownOn != null && visitStarted.add(shownOn)) { origins.started(origin); saveOrigins() }
         val pressed = videoId == pressedId && SystemClock.elapsedRealtime() - pressedAt < PRESS_COUNTS_MS
         val saavn = when {
-            !ExternalStreams.allowed(false) -> "off"
+            !JioSaavnStreamSource.eligible() -> "off"
             ExternalStreams.cached(videoId)?.let { !it.lossless && it.mimeType == null } == true -> "ready"
             SaavnMatches.book()?.idFor(videoId) != null -> "match known"
             SaavnMatches.book()?.missed(videoId) == true -> "none (known)"
             else -> "not ready"
         }
         DebugLog.d(TAG, "Started $videoId from $origin${if (pressed) " (pressed first)" else ""}: " +
-            "address ${if (StreamResolver.isFresh(videoId)) "ready" else "not ready"}, JioSaavn $saavn, " +
-            "lyrics ${if (LyricsRepository.readyFor(videoId)) "ready" else "not ready"}, " +
-            "audio ${if (videoId in audioAhead || fromQueue) "ahead" else "not ahead"}")
+                "address ${if (StreamResolver.isFresh(videoId)) "ready" else "not ready"}, JioSaavn $saavn, " +
+                "lyrics ${if (LyricsRepository.readyFor(videoId)) "ready" else "not ready"}, " +
+                "audio ${if (videoId in audioAhead || fromQueue) "ahead" else "not ahead"}")
         startedId = videoId
     }
 

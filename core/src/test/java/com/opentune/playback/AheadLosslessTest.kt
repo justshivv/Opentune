@@ -1,5 +1,6 @@
 package com.opentune.playback
 
+import com.opentune.data.lossless.SourceTier
 import com.opentune.data.model.Song
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -54,12 +55,12 @@ class AheadLosslessTest {
     // ---- How the lookups run ---------------------------------------------------------------
 
     private class Recorder {
-        val calls = mutableListOf<Pair<String, Boolean>>()
+        val calls = mutableListOf<Pair<String, Set<SourceTier>>>()
         var running = 0
         var most = 0
         var gate: CompletableDeferred<Unit>? = null
-        suspend fun look(s: Song, lossless: Boolean) {
-            calls += s.videoId to lossless
+        suspend fun look(s: Song, tiers: Set<SourceTier>) {
+            calls += s.videoId to tiers
             running++; most = maxOf(most, running)
             try { gate?.await() } finally { running-- }
         }
@@ -67,7 +68,7 @@ class AheadLosslessTest {
 
     /** Lookups on [scope] that settle for 100 ms, as the player's do for 1.5 s. */
     private fun lookups(scope: CoroutineScope, r: Recorder, atOnce: Int = 2) =
-        AheadLookups(scope, settleMs = 100, atOnce = atOnce) { s, l -> r.look(s, l) }
+        AheadLookups(scope, settleMs = 100, atOnce = atOnce) { s, t -> r.look(s, t) }
 
     /** Runs [block] on a scope of its own, cancelled after, so no lookup outlives a test. */
     private fun lookupTest(block: suspend CoroutineScope.() -> Unit) = runBlocking {
@@ -85,7 +86,7 @@ class AheadLosslessTest {
         // Skipped on: "a" is playing and gone from ahead, "b" is next.
         ahead.update(listOf(want("b", true)), keep = "x")
         delay(250)
-        assertEquals(listOf("b" to true), r.calls)
+        assertEquals(listOf("b" to setOf(SourceTier.LOSSLESS, SourceTier.HIGH_BITRATE)), r.calls)
     }
 
     @Test fun atMostTwoLookupsRunAtOnce() = lookupTest {
@@ -109,7 +110,8 @@ class AheadLosslessTest {
         // The queue changed (radio came in): the same songs ahead aren't looked up again.
         ahead.update(listOf(want("a", true), want("b", true), want("c", false)), keep = null)
         delay(250)
-        assertEquals(listOf("a" to true, "b" to true, "c" to false), r.calls)
+        assertEquals(listOf("a" to setOf(SourceTier.LOSSLESS, SourceTier.HIGH_BITRATE),
+            "b" to setOf(SourceTier.LOSSLESS, SourceTier.HIGH_BITRATE), "c" to setOf(SourceTier.HIGH_BITRATE)), r.calls)
     }
 
     @Test fun aSongComingNearHasItsFlacLookedUpThen() = lookupTest {
@@ -119,7 +121,8 @@ class AheadLosslessTest {
         delay(250)
         ahead.update(listOf(want("c", true)), keep = null)
         delay(250)
-        assertEquals(listOf("c" to false, "c" to true), r.calls)
+        assertEquals(listOf("c" to setOf(SourceTier.HIGH_BITRATE),
+            "c" to setOf(SourceTier.LOSSLESS, SourceTier.HIGH_BITRATE)), r.calls)
     }
 
     @Test fun thePlayingSongKeepsItsLookup() = lookupTest {

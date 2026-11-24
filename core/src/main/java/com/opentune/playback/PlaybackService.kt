@@ -3,6 +3,7 @@ package com.opentune.playback
 import com.opentune.data.connect.meant
 import com.opentune.data.lossless.ExternalStreams
 import com.opentune.data.lossless.SourceRegistry
+import com.opentune.data.lossless.SourceTier
 import com.opentune.data.model.artworkAt
 import com.opentune.data.model.durationMillis
 import kotlinx.coroutines.ensureActive
@@ -2216,28 +2217,30 @@ class PlaybackService : MediaLibraryService() {
 
     /** The lookups for the songs ahead; a couple at a time, see [AheadLookups]. */
     private val aheadLookups by lazy {
-        AheadLookups(scope, PREFETCH_SETTLE_MS, PREFETCH_AT_ONCE, Dispatchers.IO) { song, lossless ->
-            readyAhead(song, saavn = ExternalStreams.allowed(false), lossless = lossless && ExternalStreams.allowed(true))
+        AheadLookups(scope, PREFETCH_SETTLE_MS, PREFETCH_AT_ONCE, Dispatchers.IO) { song, tiers ->
+            readyAhead(song, tiers)
         }
     }
 
     /**
-     * Gets [song] ready to start in its best quality: JioSaavn and verified
-     * lossless files are prepared independently. Their files aren't read again
+     * Gets [song] ready to start in its best quality: each source tier that
+     * wants it is prepared independently. Their files aren't read again
      * here: the search read each one's start to verify it, and reading it once
      * more for every song ahead only used up the file servers' patience.
      */
-    private suspend fun readyAhead(song: com.opentune.data.model.Song, saavn: Boolean, lossless: Boolean) {
-        prefetchExternalSources(
-            lossless = {
-                if (lossless) {
-                    awaitForegroundLookup(song.videoId, { ExternalStreams.playingVideoId }, ExternalStreams::awaitingFirstLossless)
-                    val found = ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true)
-                    if (found?.lossless == true) withContext(Dispatchers.Main) { startAheadOnLossless(song.videoId) }
-                }
-            },
-            lossy = { if (saavn) ExternalStreams.findJioSaavn(song, song.durationMillis()) },
-        )
+    private suspend fun readyAhead(song: com.opentune.data.model.Song, tiers: Set<SourceTier>) {
+        val blocks = ArrayList<suspend () -> Unit>()
+        if (SourceTier.LOSSLESS in tiers && SourceRegistry.eligible(SourceTier.LOSSLESS).isNotEmpty()) blocks += {
+            awaitForegroundLookup(song.videoId, { ExternalStreams.playingVideoId }, ExternalStreams::awaitingFirstLossless)
+            val found = ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true)
+            if (found?.lossless == true) withContext(Dispatchers.Main) { startAheadOnLossless(song.videoId) }
+        }
+        // The high-bitrate source is readied for every song ahead, as it always was: its lookup
+        // is cheap, and it joins the one the song's own start would run anyway.
+        if (SourceRegistry.eligible(SourceTier.HIGH_BITRATE).isNotEmpty()) blocks += {
+            ExternalStreams.findJioSaavn(song, song.durationMillis())
+        }
+        prefetchExternalSources(blocks)
     }
 
     /** How a queue item with [uri] was opened, for [aheadToStartOnFlac]. */

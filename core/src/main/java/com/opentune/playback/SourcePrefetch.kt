@@ -53,13 +53,12 @@ internal fun aheadToStartOnFlac(id: String, ahead: List<Pair<String, AheadOpened
 internal fun lookAgainForFlac(playing: Boolean, ahead: Boolean, losslessAllowed: Boolean, firstForThisOpening: Boolean, searching: Boolean): Boolean =
     !playing && ahead && losslessAllowed && firstForThisOpening && !searching
 
-/** Neither provider's latency or failure delays the other's preparation. */
-internal suspend fun prefetchExternalSources(lossless: suspend () -> Unit, lossy: suspend () -> Unit) = supervisorScope {
+/** No source's latency or failure delays another's preparation. */
+internal suspend fun prefetchExternalSources(blocks: List<suspend () -> Unit>) = supervisorScope {
     suspend fun attempt(block: suspend () -> Unit) {
         try { block() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
     }
-    launch { attempt(lossless) }
-    launch { attempt(lossy) }
+    for (block in blocks) launch { attempt(block) }
     Unit
 }
 
@@ -131,21 +130,21 @@ internal fun aheadPlanned(
  *  - a song already readied isn't looked up again while it stays ahead: each search reads the
  *    start of every file it verifies, and asking again on every queue change had the file servers
  *    answering HTTP 429.
- * [lookUp] does the work for a song; [lossless] says whether its FLAC is searched for too.
+ * [lookUp] does the work for a song, for the source tiers that want it.
  */
 internal class AheadLookups(
     private val scope: CoroutineScope,
     private val settleMs: Long,
     atOnce: Int,
     private val context: CoroutineContext = EmptyCoroutineContext,
-    private val lookUp: suspend (song: Song, lossless: Boolean) -> Unit,
+    private val lookUp: suspend (song: Song, tiers: Set<SourceTier>) -> Unit,
 ) {
-    private class Lookup(val job: Job, val lossless: Boolean)
+    private class Lookup(val job: Job, val tiers: Set<SourceTier>)
 
     private val slots = Semaphore(atOnce)
     private val running = ConcurrentHashMap<String, Lookup>()
-    /** Songs readied while they've been ahead: whether their FLAC was searched for too. */
-    private val readied = ConcurrentHashMap<String, Boolean>()
+    /** Songs readied while they've been ahead: the tiers they were readied for. */
+    private val readied = ConcurrentHashMap<String, Set<SourceTier>>()
 
     /** Whether a lookup for [id] is under way. */
     fun looking(id: String): Boolean = running[id]?.job?.isActive == true
@@ -157,19 +156,19 @@ internal class AheadLookups(
         readied.keys.retainAll { it in ids || it == keep }
         for (want in wanted) {
             val now = running[want.id]
-            if (now != null && now.job.isActive && (now.lossless || !want.lossless)) continue
+            if (now != null && now.job.isActive && now.tiers.containsAll(want.tiers)) continue
             val done = readied[want.id]
-            if (done != null && (done || !want.lossless)) continue
-            // A song that came near enough for its FLAC while its JioSaavn lookup ran: asked again with it.
+            if (done != null && done.containsAll(want.tiers)) continue
+            // A song a further tier wants while its lookup ran: asked again with every tier.
             now?.job?.cancel()
-            start(want.song, want.lossless, settleMs)
+            start(want.song, want.tiers, settleMs)
         }
     }
 
     /** [song] looked up for its FLAC again, at once: opened on YouTube, with the FLAC found for it gone. */
     fun again(song: Song) {
         if (looking(song.videoId)) return
-        start(song, lossless = true, settle = 0L)
+        start(song, setOf(SourceTier.LOSSLESS, SourceTier.HIGH_BITRATE), settle = 0L)
     }
 
     /** Every lookup called off: Preload upcoming songs turned off. */
@@ -179,18 +178,18 @@ internal class AheadLookups(
         readied.clear()
     }
 
-    private fun start(song: Song, lossless: Boolean, settle: Long) {
+    private fun start(song: Song, tiers: Set<SourceTier>, settle: Long) {
         val id = song.videoId
         lateinit var lookup: Lookup
         val job = scope.launch(context, start = kotlinx.coroutines.CoroutineStart.LAZY) {
             if (settle > 0) delay(settle)
             slots.withPermit {
-                try { lookUp(song, lossless) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+                try { lookUp(song, tiers) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
             }
-            readied[id] = lossless || readied[id] == true
+            readied[id] = (readied[id] ?: emptySet()) + tiers
             running.remove(id, lookup)
         }
-        lookup = Lookup(job, lossless)
+        lookup = Lookup(job, tiers)
         running[id] = lookup
         job.start()
     }
