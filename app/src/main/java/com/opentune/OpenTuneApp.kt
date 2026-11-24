@@ -64,6 +64,8 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         com.opentune.data.tips.Tips.welcoming = {
             com.opentune.data.settings.AppSettings.ui.value.welcome == com.opentune.data.settings.WelcomeState.DUE
         }
+        // Settings › Equalizer › Each output its own: follows the output from now on.
+        com.opentune.playback.OutputEqualizer.start(this)
         // Lyrics on widgets and floating over other apps; each does nothing until turned on.
         com.opentune.lyrics.FloatingLyrics.install(this)
         com.opentune.lyrics.LyricsOutside.install(this, com.opentune.widget.WidgetLyrics, com.opentune.lyrics.FloatingLyrics)

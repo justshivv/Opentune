@@ -348,6 +348,36 @@ data class EqualizerSettings(
      * whether or not the equalizer above is on.
      */
     val headphone: HeadphoneEq? = null,
+    /**
+     * Each output keeps its own settings: wired headphones, every Bluetooth device, a USB DAC
+     * and the phone's speaker. See [com.opentune.playback.OutputEqualizer].
+     */
+    val perOutput: Boolean = false,
+    /** Those settings, by output key, while [perOutput] is on. */
+    val outputs: Map<String, EqSnapshot> = emptyMap(),
+) {
+    /** What one output keeps: everything above but the per-output switch and the others' settings. */
+    fun snapshot() = EqSnapshot(enabled, bands, preampDb, bassDb, trebleDb, balance, headphone)
+
+    fun with(s: EqSnapshot) = copy(
+        enabled = s.enabled, bands = s.bands, preampDb = s.preampDb, bassDb = s.bassDb,
+        trebleDb = s.trebleDb, balance = s.balance, headphone = s.headphone,
+    )
+
+    /** The part the sound depends on, without the outputs' saved settings. */
+    fun forSound() = if (outputs.isEmpty() && !perOutput) this else copy(perOutput = false, outputs = emptyMap())
+}
+
+/** One output's equalizer, as [EqualizerSettings.snapshot] takes it. */
+@Serializable
+data class EqSnapshot(
+    val enabled: Boolean = false,
+    val bands: List<Float> = List(15) { 0f },
+    val preampDb: Float = 0f,
+    val bassDb: Float = 0f,
+    val trebleDb: Float = 0f,
+    val balance: Float = 0f,
+    val headphone: HeadphoneEq? = null,
 )
 
 /** One AutoEq parametric profile: its preamp and filters, as published. */
