@@ -1059,6 +1059,10 @@ fun SeekBar(
     /** Flowing wave lines on the track itself, moving with the beat. Only ever passed for the plain bar. */
     visualizer: Boolean = false,
     quality: (@Composable () -> Unit)? = null,
+    /** The elapsed/total row under the track (and the quality slot it hosts); off where the caller draws its own times. */
+    showTimes: Boolean = true,
+    /** Called with true while the bar is being scrubbed, false when the finger lifts. */
+    onScrubbing: ((Boolean) -> Unit)? = null,
 ) {
     var dragFraction by remember(durationMs) { mutableStateOf<Float?>(null) }
     // Where the finger let go (or tapped), held until the player has got there: the seek takes
@@ -1074,6 +1078,8 @@ fun SeekBar(
         }
         heldFraction = null
     }
+    // A caller that auto-hides its chrome needs to know a scrub is in flight.
+    LaunchedEffect(dragFraction != null) { onScrubbing?.invoke(dragFraction != null) }
     fun seekTo(f: Float) {
         if (durationMs <= 0) return
         heldFraction = f.coerceIn(0f, 1f)
@@ -1420,7 +1426,7 @@ fun SeekBar(
         val elapsedSeconds by remember(durationMs) {
             derivedStateOf { (((dragFraction ?: heldFraction)?.times(durationMs)?.toLong() ?: position()) / 1000) }
         }
-        if (look.seekbarTime != com.opentune.data.settings.SeekbarTime.HIDDEN) {
+        if (showTimes && look.seekbarTime != com.opentune.data.settings.SeekbarTime.HIDDEN) {
             val timeStyle = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
             val measurer = androidx.compose.ui.text.rememberTextMeasurer()
             val density = LocalDensity.current
@@ -1449,7 +1455,7 @@ fun SeekBar(
                 )
             }
         }
-        if (look.seekbarTime == com.opentune.data.settings.SeekbarTime.HIDDEN) quality?.let { Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { it() } }
+        if (showTimes && look.seekbarTime == com.opentune.data.settings.SeekbarTime.HIDDEN) quality?.let { Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { it() } }
     }
 }
 

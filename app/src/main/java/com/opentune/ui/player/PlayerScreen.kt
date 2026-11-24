@@ -2014,7 +2014,7 @@ fun PlayerLayout(
                                                         )
                                                         PillButton(
                                                             ImageVector.vectorResource(
-                                                                AppIcons.ChatBubbleOutline
+                                                                AppIcons.Chat
                                                             ),
                                                             "Comments",
                                                             showComments,
@@ -2283,8 +2283,12 @@ fun PlayerLayout(
         if (videoFull != null && videoPage != null) {
             FullScreenVideo(
                 state, position, buffered, actions, videoPage,
+                liked = isLiked,
+                onLike = { LibraryStore.setLiked(current, !isLiked) },
+                commentsOpen = showComments,
+                onComments = { showComments = it },
                 entry = videoFull,
-                onExit = { videoFullName = null },
+                onExit = { videoFullName = null; showComments = false },
             )
         }
 
@@ -2307,7 +2311,7 @@ fun PlayerLayout(
         )
         if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
         if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })
-        if (showComments) CommentsSheet(current, onDismiss = { showComments = false })
+        if (showComments && videoFull == null) CommentsSheet(current, onDismiss = { showComments = false })
         if (showMenu) {
             SongMenuSheet(
                 current,
@@ -2319,7 +2323,7 @@ fun PlayerLayout(
                     ) { close(); PlaybackRequests.upgradeQuality() }
                     // Always here: the Comments button setting only takes it out of the button pill.
                     MenuRow(
-                        ImageVector.vectorResource(AppIcons.ChatBubbleOutline),
+                        ImageVector.vectorResource(AppIcons.Chat),
                         "Comments"
                     ) { close(); showComments = true }
                 },

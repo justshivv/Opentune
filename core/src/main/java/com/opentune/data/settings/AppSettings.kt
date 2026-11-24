@@ -630,6 +630,10 @@ data class InterfaceSettings(
     val podcasts: Boolean = true,
     /** The Radio tab in the dock (the account's mixes and live stations); off, the dock is a tab shorter. */
     val radioTab: Boolean = true,
+    /** The full-screen video fills the screen instead of fitting inside it; the fit/fill button and a two-finger pinch set it, and it is kept between sessions. */
+    val videoCrop: Boolean = false,
+    /** The fitted full-screen video's colours glow into the black around it, YouTube's ambient mode; the button beside fit/fill sets it. */
+    val videoAmbient: Boolean = false,
     /** Draw the played part of the seek bar as a moving wave. */
     val wavySeekbar: Boolean = false,
     /** The song's own wave above the seek bar, read from the audio already on the phone. */

@@ -80,6 +80,14 @@ internal object AppIcons {
     val FiberNew = R.drawable.symbol_fiber_new_rounded
     val FilterAlt = R.drawable.symbol_filter_alt
     val Flare = R.drawable.symbol_flare_rounded
+    val Chat = R.drawable.symbol_chat_rounded
+    val AspectRatio = R.drawable.symbol_aspect_ratio_rounded
+    val Badge8K = R.drawable.symbol_8k_rounded
+    val Badge4K = R.drawable.symbol_4k_rounded
+    val Badge2K = R.drawable.symbol_2k_rounded
+    val BadgeHD = R.drawable.symbol_hd_rounded
+    val BadgeSD = R.drawable.symbol_sd_rounded
+    val Ambient = R.drawable.symbol_light_mode_rounded
     val Folder = R.drawable.symbol_folder_rounded
     val FormatAlignCenter = R.drawable.symbol_format_align_center_rounded
     val FormatListBulleted = R.drawable.symbol_format_list_bulleted_rounded
