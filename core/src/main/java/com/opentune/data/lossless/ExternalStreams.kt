@@ -278,11 +278,11 @@ object ExternalStreams {
             if (heard.size > 256) heard.clear()
             heard[videoId] = Heard(revision, heardAt, settledNow.toSet(), erredNow.toSet(), addonLines(detail))
         }
-        fun losslessRendition(track: LosslessSource.Track) = Rendition(keyFor(videoId, track.addonId, track.trackId, track.tier), track.url,
+        fun losslessRendition(track: SourceHit) = Rendition(keyFor(videoId, track.addonId, track.trackId, track.tier), track.url,
             "${track.provider} · lossless requested", true, now(), provider = track.provider, bits = track.bits, sampleRate = track.sampleRate,
             maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType,
-            trackId = track.trackId.ifEmpty { null }, tier = track.tier.ifEmpty { null }, codec = track.codec)
-        val tracks = if (allowed(true) && !losslessMissed) LosslessSource.resolveAll(song, duration,
+            trackId = track.trackId, tier = track.tier, codec = track.codec)
+        val tracks = if (allowed(true) && !losslessMissed) AddonStreamSource.findAll(song, duration,
             beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { line ->
                 synchronized(detail) {
                     val prefix = line.substringBefore(":", "")
