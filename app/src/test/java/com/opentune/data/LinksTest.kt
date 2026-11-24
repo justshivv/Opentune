@@ -13,6 +13,20 @@ class LinksTest {
         assertEquals(LinkTarget.Song("dQw4w9WgXcQ"), Links.parse("Listen: https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
     }
 
+    @Test fun songLinksFromAMoment() {
+        assertEquals(LinkTarget.Song("dQw4w9WgXcQ", 135_000), Links.parse("https://music.youtube.com/watch?v=dQw4w9WgXcQ&t=135"))
+        assertEquals(LinkTarget.Song("dQw4w9WgXcQ", 135_000), Links.parse("https://youtu.be/dQw4w9WgXcQ?t=2m15s"))
+        assertEquals(LinkTarget.Song("dQw4w9WgXcQ", 3_723_000), Links.parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1h2m3s"))
+        assertEquals(LinkTarget.Song("dQw4w9WgXcQ", 42_000), Links.parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s"))
+        assertEquals(LinkTarget.Song("dQw4w9WgXcQ"), Links.parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=soon"))
+    }
+
+    @Test fun shareLinks() {
+        assertEquals("https://music.youtube.com/watch?v=abc", Links.songLink("abc"))
+        assertEquals("https://music.youtube.com/watch?v=abc", Links.songLink("abc", 400))
+        assertEquals("https://music.youtube.com/watch?v=abc&t=135", Links.songLink("abc", 135_900))
+    }
+
     @Test fun pages() {
         // A playlist may be a podcast show: YouTube says which, and the playlist page is the fallback.
         assertEquals(

@@ -158,6 +158,8 @@ class MainActivity : ComponentActivity(), PipHost {
         // Opened afresh, not turned or restored: counts toward the tips that wait for a later launch.
         if (savedInstanceState == null) com.opentune.data.tips.Tips.opened()
         if (savedInstanceState == null) receive(intent)
+        // Again on every start: their labels follow the app's language, and the icon picked.
+        Thread { com.opentune.ui.LauncherShortcuts.publish(this) }.start()
         // An older Android or a phone short of memory: Lite mode, once, before the first frame.
         if (!AppSettings.ui.value.liteChecked) {
             val memory = getSystemService(android.app.ActivityManager::class.java)

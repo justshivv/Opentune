@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /** Something a YouTube or YouTube Music link points at. */
 sealed interface LinkTarget {
-    data class Song(val videoId: String) : LinkTarget
+    /** A song, started [startMs] in when the link says where (`t=`). */
+    data class Song(val videoId: String, val startMs: Long = 0) : LinkTarget
     data class Browse(val browseId: String) : LinkTarget
     /** "Play … on OpenTune" from the Assistant; blank means "play some music". */
     data class PlaySearch(val query: String) : LinkTarget
@@ -33,6 +34,10 @@ sealed interface LinkTarget {
     data object Recognize : LinkTarget
     /** Open the app with the player up. */
     data object Player : LinkTarget
+    /** The app icon's shortcuts (see [LauncherShortcuts]). */
+    data object ShuffleLiked : LinkTarget
+    data object ShuffleDownloads : LinkTarget
+    data object Search : LinkTarget
 }
 
 /**
@@ -45,6 +50,9 @@ object Links {
 
     /** Opens the app with the player up. */
     const val ACTION_OPEN_PLAYER = "com.opentune.action.OPEN_PLAYER"
+    const val ACTION_SHUFFLE_LIKED = "com.opentune.action.SHUFFLE_LIKED"
+    const val ACTION_SHUFFLE_DOWNLOADS = "com.opentune.action.SHUFFLE_DOWNLOADS"
+    const val ACTION_SEARCH = "com.opentune.action.SEARCH"
 
     fun parse(text: String?): LinkTarget? {
         // A channel by its handle, as a link or just "@name": only YouTube knows which channel it is.
@@ -60,17 +68,38 @@ object Links {
         }.toMap()
         val path = uri.path.orEmpty().trim('/').split('/').filter { it.isNotEmpty() }
         fun valid(id: String?) = id?.takeIf { ID.matches(it) }
+        val startMs = startOf(query["t"] ?: query["start"])
+        fun song(id: String) = LinkTarget.Song(id, startMs)
         return when {
-            host == "youtu.be" -> valid(path.firstOrNull())?.let(LinkTarget::Song)
-            path.firstOrNull() == "watch" -> valid(query["v"])?.let(LinkTarget::Song)
+            host == "youtu.be" -> valid(path.firstOrNull())?.let(::song)
+            path.firstOrNull() == "watch" -> valid(query["v"])?.let(::song)
                 ?: valid(query["list"])?.let { LinkTarget.Browse(playlistBrowseId(it)) }
-            path.firstOrNull() == "shorts" -> valid(path.getOrNull(1))?.let(LinkTarget::Song)
+            path.firstOrNull() == "shorts" -> valid(path.getOrNull(1))?.let(::song)
             // A podcast's episodes are a playlist too: YouTube Music says whether it's a show.
             path.firstOrNull() == "playlist" -> valid(query["list"])?.let { LinkTarget.Resolve(raw, LinkTarget.Browse(playlistBrowseId(it))) }
             path.firstOrNull() == "browse" -> valid(path.getOrNull(1))?.let(LinkTarget::Browse)
             path.firstOrNull() == "channel" -> valid(path.getOrNull(1))?.let(LinkTarget::Browse)
             else -> null
         }
+    }
+
+    /**
+     * Where a link's `t=` starts, in ms: seconds ("135", "135s") or YouTube's "2m15s", "1h2m3s".
+     * 0 for none or one that can't be read.
+     */
+    internal fun startOf(t: String?): Long {
+        val v = t?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return 0
+        v.removeSuffix("s").toLongOrNull()?.let { return (it * 1000).coerceAtLeast(0) }
+        val m = START.matchEntire(v) ?: return 0
+        val (h, min, sec) = m.destructured
+        return ((h.toLongOrNull() ?: 0) * 3600 + (min.toLongOrNull() ?: 0) * 60 + (sec.toLongOrNull() ?: 0)) * 1000
+    }
+    private val START = Regex("^(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s)?$")
+
+    /** A song's link, starting [atMs] in when that's a second or more: what Share sends. */
+    fun songLink(videoId: String, atMs: Long = 0): String {
+        val base = "https://music.youtube.com/watch?v=$videoId"
+        return if (atMs >= 1000) "$base&t=${atMs / 1000}" else base
     }
 
     /** Playlists are browsed with a "VL" in front of their id. */
@@ -89,6 +118,11 @@ object Links {
         if (intent.action == ACTION_OPEN_PLAYER) {
             _incoming.value = LinkTarget.Player
             return
+        }
+        when (intent.action) {
+            ACTION_SHUFFLE_LIKED -> { _incoming.value = LinkTarget.ShuffleLiked; return }
+            ACTION_SHUFFLE_DOWNLOADS -> { _incoming.value = LinkTarget.ShuffleDownloads; return }
+            ACTION_SEARCH -> { _incoming.value = LinkTarget.Search; return }
         }
         if (intent.action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) {
             _incoming.value = LinkTarget.PlaySearch(intent.getStringExtra(SearchManager.QUERY).orEmpty())

@@ -446,6 +446,11 @@ fun AppRoot(vm: PlayerViewModel) {
                 if (at >= 0) vm.playAll(queue, at, false, "Shared link", fromList = false)
                 else vm.play(com.opentune.data.model.Song(link.videoId, "Shared song", "", null), "Shared link")
                 playerOpen = true
+                // A link from a moment in the song (t=) starts there.
+                if (link.startMs > 0) {
+                    kotlinx.coroutines.withTimeoutOrNull(10_000) { vm.currentSong.first { it?.videoId == link.videoId } }
+                        ?.let { vm.seekTo(link.startMs) }
+                }
             }
             is LinkTarget.Browse -> nav.openBrowse(link.browseId)
             // A channel by its handle, or a playlist that may be a podcast: YouTube says which page.
@@ -478,6 +483,28 @@ fun AppRoot(vm: PlayerViewModel) {
             is LinkTarget.TvRemote -> { playerOpen = false; com.opentune.ui.remote.RemoteCodes.pending.value = link.code; nav.navigate("tv-remote") { launchSingleTop = true } }
             is LinkTarget.Recognize -> { playerOpen = false; nav.navigate("recognize?listen=true") { launchSingleTop = true } }
             is LinkTarget.Player -> playerOpen = true
+            is LinkTarget.Search -> {
+                playerOpen = false
+                nav.navigate(SEARCH_ROUTE) { launchSingleTop = true }
+                // The page asks for the cursor only once it's listening; a request before that was lost.
+                kotlinx.coroutines.withTimeoutOrNull(3_000) { com.opentune.ui.search.SearchFocus.requests.subscriptionCount.first { it > 0 } }
+                com.opentune.ui.search.SearchFocus.request()
+            }
+            is LinkTarget.ShuffleLiked -> {
+                vm.player.connected.first { it }
+                // Straight after a cold start the library is still being read.
+                kotlinx.coroutines.withTimeoutOrNull(5_000) { com.opentune.data.library.LibraryStore.ready.first { it } }
+                val liked = com.opentune.data.library.LibraryStore.liked.value.map { it.toSong() }
+                if (liked.isNotEmpty()) { vm.playAll(liked, 0, true, "Liked Music"); playerOpen = true }
+                else com.opentune.data.Pills.info("No liked songs yet")
+            }
+            is LinkTarget.ShuffleDownloads -> {
+                vm.player.connected.first { it }
+                val ready = com.opentune.data.download.Downloads.entries.value.values
+                    .filter { it.state == com.opentune.data.download.DownloadState.DONE }.map { it.song.toSong() }
+                if (ready.isNotEmpty()) { vm.playAll(ready, 0, true, "Downloads"); playerOpen = true }
+                else com.opentune.data.Pills.info("No downloaded songs yet")
+            }
             is LinkTarget.PlaySearch -> {
                 vm.player.connected.first { it }
                 if (link.query.isBlank()) {
