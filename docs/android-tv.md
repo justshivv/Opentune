@@ -24,9 +24,12 @@ beside the phone app on the same device without replacing it.
 
 ## Using the remote
 
-- The arrows move the white focus ring. OK opens or plays.
-- The bar at the top has Home, Explore, Library, Now Playing, Search and Settings.
-  Down from it enters the page; Up from the first row comes back.
+- The arrows move the focus ring (blue, a little out from what it rings). OK opens or plays.
+- The bar at the top has Search, Home, Explore and Library at the left; what's playing
+  (OK opens Now Playing), Play/Pause and Settings at the right. Down from it enters the page;
+  Up from the first row comes back to the page's own tab.
+- A page takes the focus as it opens, on its first item. Coming back to a page with Back puts
+  the focus on the item you left from, scrolled as it was.
 - On Now Playing, focus starts on Play/Pause. Up reaches the seek bar, where
   Left and Right move ten seconds. The row of buttons holds shuffle, previous, play,
   next, repeat, like, lyrics and queue.
@@ -81,9 +84,10 @@ phone on the TV cuts it off at once.
 
 ## Verification
 
-Automated tests cover the pages (Library, Liked songs, Settings, the player's empty
-state, synced lyrics and the seek bar), focus moving along the top bar with the
-arrows and OK opening a tab, going back through pages, and the small rules behind
+Automated tests cover the pages (Home, Explore, Library, Liked songs, Settings, the
+player's empty state, synced lyrics and the seek bar), focus moving along the top bar with
+the arrows and OK opening a tab, a page taking the focus as it opens, Up from a page landing
+on its tab, Back putting the focus on the card it left from, and the small rules behind
 them (time formatting, the format line, how a search is sorted into rows). For the
 phone remote they cover pairing and control over real sockets, the refusals (a code used
 twice, a removed phone, a wrong key, a replayed or oversized message), the trackpad's
