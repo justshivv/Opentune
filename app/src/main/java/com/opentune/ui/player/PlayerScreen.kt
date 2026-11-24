@@ -1333,9 +1333,10 @@ fun PlayerLayout(
                             } else if (p == Pane.COVER) {
                                 val seekBy: (Long) -> Unit = { d ->
                                     actions.seekTo(
+                                        // A length not known yet (0) puts no ceiling on the jump, as on the video page.
                                         (position() + d).coerceIn(
                                             0L,
-                                            state.durationMs.coerceAtLeast(0L)
+                                            state.durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE
                                         )
                                     )
                                 }
