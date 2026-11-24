@@ -1,8 +1,6 @@
 package com.opentune.tv
 
 import android.content.Context
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,7 +33,7 @@ class CoverColors(val top: Color, val bottom: Color) {
 
 private val cache = ConcurrentHashMap<String, IntArray>()
 
-/** The colours of the cover at [url], easing from one song's to the next; neutral until it's read. */
+/** The colours of the cover at [url]; neutral until it's read. */
 @Composable
 fun rememberCoverColors(url: String?): CoverColors {
     val context = LocalContext.current
@@ -46,10 +44,8 @@ fun rememberCoverColors(url: String?): CoverColors {
         cache[url] = argb
         picked = colorsOf(argb)
     }
-    val spec = tween<Color>(900)
-    val top by animateColorAsState(picked.top, spec, label = "coverTop")
-    val bottom by animateColorAsState(picked.bottom, spec, label = "coverBottom")
-    return remember(top, bottom) { CoverColors(top, bottom) }
+    // Changes at once: a colour easing over a second redraws the whole screen every frame.
+    return picked
 }
 
 private fun colorsOf(argb: IntArray): CoverColors {

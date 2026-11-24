@@ -33,7 +33,8 @@ class TvApp : Application(), SingletonImageLoader.Factory {
                     .maxSizeBytes(150L * 1024 * 1024)
                     .build()
             }
-            .crossfade(250)
+            // Short: a long fade is a redraw every frame for each cover coming in. Rows ask for none.
+            .crossfade(100)
             .build()
 
     override fun onCreate() {

@@ -86,7 +86,7 @@ class TvRemoteTest {
 
     @Test fun aCursorClickLandsOnWhatItIsOver() {
         var alpha = 0; var beta = 0
-        show { Column { TvButton("Alpha", { alpha++ }); TvButton("Beta", { beta++ }) } }
+        show { Column { TvPillButton("Alpha", { alpha++ }); TvPillButton("Beta", { beta++ }) } }
         cursorTo("Beta")
         input.handle(RemoteMessage.Click())
         compose.waitForIdle()
@@ -133,7 +133,7 @@ class TvRemoteTest {
     }
 
     @Test fun theButtonsMoveFocusLikeARemote() {
-        show(remoteMode = true) { Column { TvButton("One", {}); TvButton("Two", {}) } }
+        show(remoteMode = true) { Column { TvPillButton("One", {}); TvPillButton("Two", {}) } }
         compose.onNodeWithText("One").requestFocus()
         compose.onNodeWithText("One").assertIsFocused()
         // The cursor goes away when the buttons are used.
@@ -173,7 +173,7 @@ class TvRemoteTest {
     }
 
     @Test fun theCursorIsDrawnOnTopAndFadesAway() {
-        show { Column { TvButton("Alpha", {}) }; TvCursor(remote.pointer) }
+        show { Column { TvPillButton("Alpha", {}) }; TvCursor(remote.pointer) }
         input.handle(RemoteMessage.Cursor(true))
         compose.waitForIdle()
         val view = compose.activity.window.decorView

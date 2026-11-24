@@ -96,7 +96,7 @@ fun SearchScreen(nav: TvNav) {
                 }
                 if (r.artists.isNotEmpty()) item(key = "artists") {
                     TvShelf("Artists") {
-                        items(r.artists, key = { it.browseId }) { a -> TvCard(a.title, null, a.thumbnailUrl, { nav.open(Dest.Artist(a.browseId, a.title)) }, round = true) }
+                        items(r.artists, key = { it.browseId }) { a -> TvCard(a.title, null, a.thumbnailUrl, { nav.open(Dest.Artist(a.browseId, a.title)) }, kind = TvCardKind.Round) }
                     }
                 }
                 if (r.albums.isNotEmpty()) item(key = "albums") {

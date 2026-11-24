@@ -61,7 +61,7 @@ fun SettingsScreen(nav: TvNav) {
         Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 56.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item { PageTitle("Settings") }
+        item { TvPageHeader("Settings") }
         item { Heading("Account") }
         item {
             if (signedIn) {
@@ -159,8 +159,8 @@ private fun PairPhonePanel(remote: TvRemote, onClose: () -> Unit) {
                 style = MaterialTheme.typography.bodyLarge, color = TvColors.TextDim,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (link == null && !done) TvButton("New code", { attempt++ }, primary = true)
-                TvButton(if (done) "Done" else "Cancel", onClose)
+                if (link == null && !done) TvPillButton("New code", { attempt++ }, primary = true)
+                TvPillButton(if (done) "Done" else "Cancel", onClose)
             }
         }
     }
@@ -233,8 +233,8 @@ private fun SignInPanel(onClose: () -> Unit) {
             Text("Sign in with your phone", style = MaterialTheme.typography.headlineMedium)
             Text(status, style = MaterialTheme.typography.bodyLarge, color = TvColors.TextDim)
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (receiver == null && !done) TvButton("New code", { attempt++ }, primary = true)
-                TvButton(if (done) "Done" else "Cancel", onClose)
+                if (receiver == null && !done) TvPillButton("New code", { attempt++ }, primary = true)
+                TvPillButton(if (done) "Done" else "Cancel", onClose)
             }
         }
     }

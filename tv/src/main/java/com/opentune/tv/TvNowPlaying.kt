@@ -89,7 +89,7 @@ fun NowPlayingScreen(nav: TvNav) {
             Spacer(Modifier.height(10.dp))
             Text("Pick something from Home, Explore or your Library.", style = MaterialTheme.typography.bodyLarge, color = TvColors.TextDim)
             Spacer(Modifier.height(28.dp))
-            TvButton("Go to Home", { nav.goTab(Dest.Home) }, primary = true)
+            TvPillButton("Go to Home", { nav.goTab(Dest.Home) }, primary = true)
         }
     } else PlayerBody(nav, current)
 }
@@ -118,7 +118,7 @@ private fun PlayerBody(nav: TvNav, song: Song) {
             .onPreviewKeyEvent { e -> mediaKey(e, p, SEEK_STEP_MS) },
     ) {
         Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Cover(song.thumbnailUrl, Modifier.size(380.dp), RoundedCornerShape(20.dp))
+            Cover(song.thumbnailUrl, Modifier.size(380.dp), RoundedCornerShape(20.dp), px = TvArt.Large)
             Spacer(Modifier.width(64.dp))
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 Crossfade(pane, label = "pane") { which ->
@@ -301,9 +301,9 @@ private fun QueuePane(nav: TvNav) {
     if (queue.isEmpty()) { TvNote("The queue is empty."); return }
     LazyColumn(state = state, modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         itemsIndexed(queue, key = { i, s -> "$i:${s.videoId}" }) { i, s ->
-            TvTrackRow(
-                number = i + 1, title = s.title, subtitle = s.artist, length = s.durationText,
-                onClick = { nav.player.playQueueItem(i) }, playing = i == index, imageUrl = s.thumbnailUrl,
+            TvSongRow(
+                title = s.title, artist = s.artist, duration = s.durationText, imageUrl = s.thumbnailUrl,
+                onClick = { nav.player.playQueueItem(i) }, index = i + 1, playing = i == index,
             )
         }
     }
