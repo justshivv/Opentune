@@ -144,7 +144,8 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
     val search = remember { com.opentune.ui.browse.PlaylistSearch() }
     val searching = search.open
     val query = search.query
-    var order by remember { mutableStateOf(com.opentune.ui.browse.ListOrder.DEFAULT) }
+    // The page opens newest first: the order the sort menu calls Recently added.
+    var order by remember { mutableStateOf(com.opentune.ui.browse.ListOrder.RECENT) }
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
