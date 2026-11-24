@@ -170,10 +170,11 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
       const rawId = String(t.trackId || t.id || '');
       const artist = names(t.artistNames?.length ? t.artistNames : t.artists);
       const duration = Number(t.duration);
-      if (!/^[\w-]{1,128}$/.test(rawId) || !text(t.title) || !artist || !(duration > 0)) return [];
+      if (!/^[\w-]{1,128}$/.test(rawId) || !text(t.title) || !artist || !Number.isFinite(duration) || duration <= 0) return [];
       return [{ id: opaque(['monochrome', rawId]), title: t.title, artist,
         album: text(t.albumTitle || t.releaseTitle || t.release?.title),
-        duration: duration > 1000 ? duration / 1000 : duration,
+        // Track Streamer uses milliseconds. Legacy catalogues report seconds, even for long mixes.
+        duration: duration > 10_000 ? duration / 1000 : duration,
         artworkURL: text(t.artwork || t.cover), isrc: text(t.isrc), format: 'flac' }];
     }).slice(0, 20);
   }
