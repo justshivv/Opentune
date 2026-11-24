@@ -14,6 +14,7 @@ import com.opentune.playback.bestKbps
 import com.opentune.playback.dolbyName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -38,6 +40,9 @@ class TvPlayer @JvmOverloads constructor(
     application: Application,
     /** False only in tests, which have no player service to reach. */
     connectNow: Boolean = true,
+    /** Where a song's words come from, given its length in ms; tests hand in their own. */
+    private val findWords: (Song, Long) -> Flow<Lyrics?> =
+        { song, length -> LyricsRepository.lyricsUpdates(song.videoId, song.title, song.artist, length) },
 ) : AndroidViewModel(application) {
     val player = PlayerConnection(application)
     val currentSong = player.currentSong
@@ -54,18 +59,27 @@ class TvPlayer @JvmOverloads constructor(
     /** Where the song is, in ms, kept up to date while the player is open. */
     val position: StateFlow<Long> = _position.asStateFlow()
 
-    /** The words of the playing song, once found: synced when a source has them in time. */
-    val lyrics: StateFlow<Lyrics?> = player.currentSong
+    /**
+     * The words of the playing song, and whether they are still being looked for: Now Playing
+     * says "Setting up the lyrics…" while [Words.Looking], and that there are none only once the
+     * search has come back empty.
+     */
+    val words: StateFlow<Words> = player.currentSong
         .distinctUntilChangedBy { it?.videoId }
         .flatMapLatest { song ->
-            if (song == null) flowOf(null)
-            else flow {
-                emit(null)
+            if (song == null) flowOf(Words.None)
+            else flow<Words> {
+                emit(Words.Looking)
                 // The length comes with the stream; a lyrics source wants it to pick the right recording.
                 val length = withTimeoutOrNull(4_000) { player.durationMs.first { it > 0 } } ?: 0L
-                emitAll(LyricsRepository.lyricsUpdates(song.videoId, song.title, song.artist, length))
-            }.catch { emit(null) }
+                emitAll(findWords(song, length).map { Words.of(it) })
+            }.catch { emit(Words.None) }
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Words.None)
+
+    /** The words of the playing song, once found: synced when a source has them in time. */
+    val lyrics: StateFlow<Lyrics?> = words
+        .map { (it as? Words.Ready)?.lyrics }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
@@ -111,15 +125,33 @@ class TvPlayer @JvmOverloads constructor(
         private const val IDLE_TICK_MS = 600L
 
         /** "Dolby Atmos · 48 kHz · 768 kbps": what the sound is, in one line; empty until known. */
-        fun formatLine(info: AudioFormatInfo?, measured: Int? = MeasuredBitrate.kbps.value): String {
-            if (info == null) return ""
+        fun formatLine(info: AudioFormatInfo?, measured: Int? = MeasuredBitrate.kbps.value): String =
+            formatParts(info, measured).joinToString(" · ")
+
+        /**
+         * The parts of [formatLine]: the Dolby name or the codec first, then the sample rate, bit
+         * depth and bitrate, each where known. Now Playing draws the first as a tag.
+         */
+        fun formatParts(info: AudioFormatInfo?, measured: Int? = MeasuredBitrate.kbps.value): List<String> {
+            if (info == null) return emptyList()
             val kbps = bestKbps(info, measured, null)
             return listOfNotNull(
                 dolbyName(info) ?: info.codec?.uppercase(),
                 info.sampleRateHz?.let { hz -> if (hz % 1000 == 0) "${hz / 1000} kHz" else "%.1f kHz".format(hz / 1000.0) },
                 info.bitDepth?.let { "$it-bit" },
                 kbps?.let { "$it kbps" },
-            ).joinToString(" · ")
+            )
         }
+    }
+}
+
+/** The playing song's words as Now Playing shows them: still being looked for, none, or found. */
+sealed interface Words {
+    data object Looking : Words
+    data object None : Words
+    data class Ready(val lyrics: Lyrics) : Words
+
+    companion object {
+        fun of(lyrics: Lyrics?): Words = if (lyrics == null) None else Ready(lyrics)
     }
 }

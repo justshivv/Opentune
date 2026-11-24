@@ -527,9 +527,14 @@ fun TvRowButton(
 /**
  * One song in a list: [index] (or the now-playing mark), the cover, title and artist, and the
  * length at the end. [playing] marks the song that is playing now: a still equalizer glyph in
- * place of the number (or over the cover without one) and the title in the accent. [trailing]
- * is a short tag before the length ("E", "Video"). [showCover] false for an album's own tracks,
- * which all share one cover. The row fills the width: in a [TvPage], pass `Modifier.safeSides()`.
+ * place of the number (or, without a number, a small badge on the cover's corner, the cover
+ * still showing) and the title in the accent. [trailing] is a short tag before the length ("E",
+ * "Video"). [showCover] false for an album's own tracks, which all share one cover. The row fills
+ * the width: in a [TvPage], pass `Modifier.safeSides()`.
+ *
+ * The layout is the same in every state: playing, focused or both only change colours and the
+ * mark, never where the cover and the words sit. Whether there is a number column depends on
+ * [index] alone, so give every row of a list an index, or none.
  */
 @Composable
 fun TvSongRow(
@@ -553,18 +558,21 @@ fun TvSongRow(
         focusKey = focusKey, entryFocus = entryFocus, onLongClick = onLongClick,
         modifier = modifier.fillMaxWidth(),
     ) { _ ->
+        // Every slot below has a fixed size that depends only on index and showCover, so the
+        // cover and the words stay put as the row is focused or starts playing.
         Row(Modifier.padding(horizontal = TvSpace.M, vertical = TvSpace.S), verticalAlignment = Alignment.CenterVertically) {
-            if (index != null) Box(Modifier.width(44.dp), contentAlignment = Alignment.CenterStart) {
+            if (index != null) Box(Modifier.size(RowNumberWidth, TvSizes.RowCover), contentAlignment = Alignment.CenterStart) {
                 if (playing) Icon(Icons.Rounded.GraphicEq, "Now Playing", tint = TvColors.Accent, modifier = Modifier.size(TvSizes.Icon))
                 else Text(index.toString(), style = TvType.Meta, color = TvColors.TextDim, maxLines = 1)
             }
             if (showCover) {
                 Box(Modifier.size(TvSizes.RowCover)) {
                     Cover(imageUrl, Modifier.size(TvSizes.RowCover), TvShapes.Small, px = TvArt.Small)
+                    // No number to swap for the mark: a small badge on the corner, the cover still in view.
                     if (playing && index == null) Box(
-                        Modifier.size(TvSizes.RowCover).background(Color.Black.copy(alpha = 0.55f), TvShapes.Small),
+                        Modifier.align(Alignment.BottomEnd).padding(3.dp).size(RowBadge).background(TvColors.Accent, TvShapes.Round),
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Rounded.GraphicEq, "Now Playing", tint = TvColors.Accent, modifier = Modifier.size(TvSizes.Icon)) }
+                    ) { Icon(Icons.Rounded.GraphicEq, "Now Playing", tint = TvColors.OnAccent, modifier = Modifier.size(RowBadge - 6.dp)) }
                 }
                 Spacer(Modifier.width(TvSpace.L))
             } else if (index == null) Spacer(Modifier.width(TvSpace.S))
@@ -580,6 +588,11 @@ fun TvSongRow(
         }
     }
 }
+
+/** A song row's number column, wide enough for "999" or the now-playing mark. */
+private val RowNumberWidth = 44.dp
+/** The now-playing badge on a song row's cover, when the row has no number to swap for it. */
+private val RowBadge = 22.dp
 
 /** [TvSongRow] for a [Song]. */
 @Composable
