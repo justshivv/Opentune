@@ -3326,6 +3326,9 @@ class PlaybackService : MediaLibraryService() {
 
     private var offlineRecovery: Job? = null
 
+    /** The song whose stream last lost its connection, and how many times in a row. */
+    private var networkTries: Pair<String, Int> = "" to 0
+
     private fun recover(error: PlaybackException) {
         val player = mediaSession?.player as? ExoPlayer ?: return
         val item = player.currentMediaItem ?: return
@@ -3370,9 +3373,14 @@ class PlaybackService : MediaLibraryService() {
             player.prepare()
             return
         }
-        // Loss of connectivity is not evidence that this recording or source is bad.
-        // Keep the queue, source and position; resume only if the listener still wants play.
-        if (!AppSettings.isOnline() && error.errorCode in IO_ERRORS) {
+        // Loss of connectivity is not evidence that this recording or source is bad: a
+        // lossless stream that lost its connection is not marked failed or swapped for a
+        // lesser one. Keep the queue, source and position; resume only if the listener still
+        // wants play. The error can come before Android notices the network is gone, so one
+        // that reads as a dropped connection counts too, for a few tries on the same song.
+        val dropped = NetworkFailure.of(error) && networkTries.let { (id, n) -> id != mediaId || n < MAX_NETWORK_TRIES }
+        if (error.errorCode in IO_ERRORS && (!AppSettings.isOnline() || dropped)) {
+            networkTries = mediaId to (if (networkTries.first == mediaId) networkTries.second + 1 else 1)
             offlineRecovery?.cancel()
             offlineRecovery = scope.launch {
                 while (player.currentMediaItem?.mediaId == mediaId && player.playWhenReady) {
@@ -3491,6 +3499,7 @@ class PlaybackService : MediaLibraryService() {
             if (player.isPlaying && player.currentMediaItem?.mediaId == id) {
                 failedInRow = 0
                 retriedMediaId = null
+                networkTries = "" to 0
             }
         }
     }
@@ -3586,6 +3595,8 @@ class PlaybackService : MediaLibraryService() {
         const val AUDITION_TIMEOUT_MS = 12_000L
         /** Network and input errors (Media3's 2000s): what a lost connection fails with. */
         val IO_ERRORS = 2000..2999
+        /** Errors in a row on one song that read as a dropped connection, while Android says it's online, before they count as the source failing. */
+        const val MAX_NETWORK_TRIES = 3
         /** Tries at switching to the verified files, this far apart, before giving up for the song. */
         const val SWAP_ROUNDS = 4
         const val SWAP_ROUND_GAP_MS = 3_000L

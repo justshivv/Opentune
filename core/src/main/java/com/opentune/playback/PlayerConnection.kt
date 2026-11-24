@@ -215,7 +215,7 @@ class PlayerConnection(private val context: Context) {
         override fun onPlayerError(error: PlaybackException) {
             val mime = controller?.currentTracks?.groups?.firstOrNull { it.type == C.TRACK_TYPE_AUDIO }?.getTrackFormat(0)?.sampleMimeType
             val dolby = mime != null && mime in DOLBY_MIMES
-            _error.value = when (error.errorCode) {
+            _error.value = if (NetworkFailure.of(error)) com.opentune.i18n.Tr.t(NetworkFailure.MESSAGE) else when (error.errorCode) {
                 // A Dolby stream (Atmos, Digital Plus) on a phone with no Dolby decoder, and no receiver to pass it to.
                 PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
                 PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
