@@ -33,6 +33,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -81,6 +82,17 @@ internal object Addons {
     val status: StateFlow<String> = _status.asStateFlow()
 
     private fun load(): Saved = runCatching { json.decodeFromString<Saved>(file.readText()) }.getOrDefault(Saved())
+        .let { it.copy(sources = it.sources.filterNot { source -> retired(source.url) }) }
+
+    /**
+     * A Monochrome source saved before it was removed: dropped from the list, so songs play from the others.
+     * That is OpenTune's own servers' /monochrome/ manifest and the root one that aliases it. (Literals here:
+     * [load] runs while this object is still being set up.)
+     */
+    fun retired(url: String): Boolean = url.toHttpUrlOrNull()?.let {
+        it.isHttps && it.host in setOf("addon-opentune.rethinknow.in", "opentune-lossless-addon.create-a-new-site-with-sites.workers.dev") &&
+            it.encodedPath in setOf("/monochrome/manifest.json", "/manifest.json")
+    } == true
 
     private fun save(change: (Saved) -> Saved) {
         val next = change(saved.value)
@@ -114,6 +126,7 @@ internal object Addons {
     /** Adds the listener's own add-on, after reading its manifest. */
     suspend fun add(raw: String) {
         val url = manifestUrl(raw)
+        require(!retired(url)) { "OpenTune no longer offers this source" }
         val manifest = AddonProtocol.manifest(text(url))
         val now = saved.value.sources
         require(now.count { !it.admin } < 20) { "Up to 20 sources can be added" }
@@ -154,7 +167,7 @@ internal object Addons {
      * it's no longer published; a new one joins at the end, on.
      */
     fun merge(local: List<Source>, published: List<Published>): List<Source> {
-        val incoming = LinkedHashMap(published.associateBy { "admin:${it.id}" })
+        val incoming = LinkedHashMap(published.filterNot { retired(it.url) }.associateBy { "admin:${it.id}" })
         val kept = local.mapNotNull { source ->
             if (!source.admin) return@mapNotNull source
             val update = incoming.remove(source.id) ?: return@mapNotNull null

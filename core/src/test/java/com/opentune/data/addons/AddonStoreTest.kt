@@ -10,37 +10,33 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class AddonStoreTest {
-    @Test fun builtInMonochromeNeedsNoUrlAndKeepsItsSwitchAcrossRestartAndCatalogSync() {
+    @Test fun savedMonochromeSourcesAreDroppedOnLoadAndPersonalServersStay() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        context.getSharedPreferences("audio_addons", 0).edit().clear().commit()
+        val origin = FirstPartyAddonAuth.ORIGIN
+        fun entry(key: String, base: String, id: String, enabled: Boolean = true) = org.json.JSONObject().put("key", key).put("base", base)
+            .put("enabled", enabled).put("admin", false).put("ownerOff", false)
+            .put("manifest", org.json.JSONObject().put("id", id).put("name", key).put("version", "1"))
+        // As the built-in module, the "Add Monochrome" shortcut and the official root alias saved them.
+        val saved = org.json.JSONArray()
+            .put(entry("builtin:monochrome", "$origin/monochrome/", "org.opentune.monochrome"))
+            .put(entry("mine", "https://mine.example/", "mine"))
+            .put(entry("shortcut", "$origin/monochrome/", "org.opentune.monochrome", enabled = false))
+            .put(entry("worker", "${FirstPartyAddonAuth.WORKER_ORIGIN}/monochrome/", "org.opentune.monochrome"))
+            .put(entry("root", "$origin/", "org.opentune.monochrome"))
+            .put(entry("archive", "$origin/archive/", "org.opentune.archive"))
+            .put(entry("personal", "https://other.example/", "org.opentune.monochrome"))
+        context.getSharedPreferences("audio_addons", 0).edit().clear().putString("items", saved.toString()).commit()
         AddonStore.init(context)
-        AddonStore.setMonochromeEnabled(true)
-        AddonStore.setMonochromeEnabled(true)
-        val source = AddonStore.addons.value.single()
-        assertEquals(MonochromeModule.BASE, source.base)
-        assertTrue(AddonStore.usable(source))
-        AddonStore.setMonochromeEnabled(false)
+        assertEquals(listOf("mine", "archive", "personal"), AddonStore.addons.value.map { it.key })
+        // Rewritten, so the next launch starts clean too.
+        assertFalse(context.getSharedPreferences("audio_addons", 0).getString("items", "")!!.contains("/monochrome/"))
         AddonStore.init(context)
-        assertFalse(AddonStore.addons.value.single().enabled)
-        val managed = source.copy(key = "admin:mono", admin = true, enabled = true, ownerOff = true)
-        AddonStore.syncCommunity(listOf(managed))
-        AddonStore.setMonochromeEnabled(true)
-        assertEquals(managed.key, AddonStore.addons.value.single().key)
-        assertFalse(AddonStore.usable(AddonStore.addons.value.single()))
-        AddonStore.syncCommunity(listOf(managed.copy(ownerOff = false)))
-        AddonStore.setMonochromeEnabled(true)
-        assertTrue(AddonStore.usable(AddonStore.addons.value.single()))
-    }
-
-    @Test fun aPersonalServerUsingTheSameManifestIdCannotTakeOverTheBuiltInSwitch() {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        context.getSharedPreferences("audio_addons", 0).edit().clear().commit()
-        AddonStore.init(context)
-        AddonStore.add("https://other.example/", MonochromeModule.preset)
-        AddonStore.setMonochromeEnabled(true)
-        AddonStore.setMonochromeEnabled(false)
-        assertTrue(AddonStore.addons.value.first().enabled)
-        assertFalse(AddonStore.addons.value.single(MonochromeModule::matches).enabled)
+        assertEquals(listOf("mine", "archive", "personal"), AddonStore.addons.value.map { it.key })
+        // A published list still naming it, or its address pasted in, doesn't bring it back.
+        AddonStore.syncCommunity(listOf(AudioAddon("admin:monochrome", "$origin/monochrome/", AddonManifest("admin:monochrome", "Monochrome", ""), admin = true)))
+        assertEquals(listOf("mine", "archive", "personal"), AddonStore.addons.value.map { it.key })
+        assertThrows(IllegalArgumentException::class.java) { AddonStore.add("$origin/monochrome/manifest.json", AddonManifest("org.opentune.monochrome", "Monochrome", "1")) }
+        assertEquals(3, AddonStore.addons.value.size)
     }
 
     @Test fun preservesPriorityAndEnablementAcrossRestartAndDoesNotExposePathAsName() {

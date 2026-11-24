@@ -41,7 +41,7 @@ Example banner:
 Example admin catalog:
 
 ```json
-[{"id":"monochrome","name":"OpenTune Monochrome","url":"https://addon-opentune.rethinknow.in/monochrome/manifest.json","enabled":true}]
+[{"id":"archive","name":"OpenTune Archive","url":"https://addon-opentune.rethinknow.in/archive/manifest.json","enabled":true}]
 ```
 
 Use stable IDs. Updating a URL/name preserves the listener's order and their on/off choice. `enabled:false` pauses that admin source without changing the listener's switch; enabling it again respects their previous choice. Personal sources remain untouched. URLs are public configuration, hidden only in the app's presentation: **do not include secrets or promise that users cannot inspect them**.

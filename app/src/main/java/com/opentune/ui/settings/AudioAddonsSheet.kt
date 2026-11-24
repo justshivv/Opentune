@@ -154,8 +154,6 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
                 }
             }
 
-            MonochromeSettings(addons.firstOrNull(MonochromeModule::matches))
-
             com.opentune.ui.components.GroupLabel("Lossless, in order")
             com.opentune.ui.components.GroupCard {
                 if (addons.isEmpty()) {
@@ -163,7 +161,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
                         Icon(ImageVector.vectorResource(AppIcons.Extension), null, tint = c.onSurfaceVariant, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.height(10.dp))
                         Text("No lossless sources yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text("Enable Monochrome above or add your own source.", style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+                        Text("Add one with its URL. Until then, songs play from the sources below.", style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
                 addons.forEachIndexed { index, addon ->
@@ -197,7 +195,6 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
                         checked != null -> if (checked.startsWith("Available")) Tone.Good else if (checked.startsWith("Checking")) Tone.Off else Tone.Bad
                         paused || blocked -> Tone.Waiting
                         !addon.enabled -> Tone.Off
-                        MonochromeModule.matches(addon) -> Tone.Off // The module card shows its audio check.
                         else -> Tone.Good
                     }
                     val on = addon.enabled && !addon.ownerOff
@@ -296,7 +293,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
                                 } }
                                 if (index > 0) SmallPill("Move up") { AddonStore.move(addon.key, -1) }
                                 if (index < addons.lastIndex) SmallPill("Move down") { AddonStore.move(addon.key, 1) }
-                                if (!addon.admin && !MonochromeModule.matches(addon)) SmallPill("Remove", danger = true) { AddonStore.remove(addon.key); expanded = null }
+                                if (!addon.admin) SmallPill("Remove", danger = true) { AddonStore.remove(addon.key); expanded = null }
                             }
                         }
                     }
