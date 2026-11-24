@@ -27,8 +27,9 @@ private const val RETURN_MS = 800L
  * playlist's name), the field lets go and the keyboard closes. Android hands focus back to the
  * app's view straight away, and Compose would pass it on to the first field it finds, bringing
  * the keyboard up over the page when the app returns; while the app is away, and for a moment
- * after it comes back, focus that wasn't asked for doesn't go into the pages. A tap on a field,
- * or a page asking for it (the Search button), focuses it as before.
+ * after it comes back, focus that wasn't asked for doesn't go into the pages. Coming back with
+ * another app's keyboard still up (typing in a chat, then switching here), it closes too. A tap
+ * on a field, or a page asking for it (the Search button), focuses it and opens the keyboard as before.
  */
 @Composable
 fun rememberLeaveFocusGuard(): Modifier {
@@ -47,9 +48,14 @@ fun rememberLeaveFocusGuard(): Modifier {
                     keyboard?.hide()
                     focus.clearFocus(force = true)
                 }
-                Lifecycle.Event.ON_RESUME -> if (away) {
-                    back?.cancel()
-                    back = scope.launch { delay(RETURN_MS); away = false }
+                Lifecycle.Event.ON_RESUME -> {
+                    // Another app's keyboard, open as the switch came, doesn't carry over (the
+                    // window's stateAlwaysHidden does the same as it takes input focus).
+                    keyboard?.hide()
+                    if (away) {
+                        back?.cancel()
+                        back = scope.launch { delay(RETURN_MS); away = false }
+                    }
                 }
                 else -> Unit
             }
