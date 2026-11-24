@@ -136,6 +136,8 @@ fun AppRoot(vm: PlayerViewModel) {
     // With another of the person's devices playing, its song (see Connect).
     val song by vm.currentSong.collectAsState()
     val isPlaying by vm.isPlaying.collectAsState()
+    val queueSource by vm.source.collectAsState()
+    val isSounding by vm.isSounding.collectAsState()
     val playbackError by vm.playbackError.collectAsState()
     var playerOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(playerOpen) { vm.setPlayerOpen(playerOpen) }
@@ -293,10 +295,13 @@ fun AppRoot(vm: PlayerViewModel) {
 
     // Kept across recompositions (opening the player, play/pause): a new
     // instance each time would recompose every screen and list handed one.
-    val actions = remember(song?.videoId, isPlaying) {
+    val actions = remember(song?.videoId, isPlaying, queueSource, isSounding) {
         SongActions(
             currentVideoId = song?.videoId,
             isPlaying = isPlaying,
+            queueSource = queueSource,
+            togglePlayPause = vm::togglePlayPause,
+            isSounding = isSounding,
             playAll = { songs, index, shuffle, source -> vm.playAll(songs, index, shuffle, source) },
             playNext = vm::playNext,
             addToQueue = vm::addToQueue,

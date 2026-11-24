@@ -211,6 +211,9 @@ fun ServerAlbumScreen(id: String, contentPadding: PaddingValues, actions: SongAc
                     PlayButtons(
                         onPlay = { actions.playAll(songs, 0, false, album.name) },
                         onShuffle = { actions.playAll(songs, 0, true, album.name) },
+                        showPause = actions.queueSource == album.name && actions.currentVideoId != null && actions.isSounding,
+                        onToggle = if (actions.queueSource == album.name && actions.currentVideoId != null) actions.togglePlayPause else null,
+                        busy = actions.queueSource == album.name && actions.currentVideoId != null && actions.isPlaying && !actions.isSounding,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 }
@@ -239,6 +242,9 @@ fun ServerPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Son
                     PlayButtons(
                         onPlay = { actions.playAll(songs, 0, false, playlist.name) },
                         onShuffle = { actions.playAll(songs, 0, true, playlist.name) },
+                        showPause = actions.queueSource == playlist.name && actions.currentVideoId != null && actions.isSounding,
+                        onToggle = if (actions.queueSource == playlist.name && actions.currentVideoId != null) actions.togglePlayPause else null,
+                        busy = actions.queueSource == playlist.name && actions.currentVideoId != null && actions.isPlaying && !actions.isSounding,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 }

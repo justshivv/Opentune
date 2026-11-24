@@ -73,14 +73,14 @@ import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
 
 @Composable
-internal fun PlayButtons(onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false, onSmartShuffle: (() -> Unit)? = null) {
+internal fun PlayButtons(onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false, onSmartShuffle: (() -> Unit)? = null, showPause: Boolean = false, onToggle: (() -> Unit)? = null, busy: Boolean = false) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (compact) {
             ShuffleButton(onShuffle, onSmartShuffle, compact = true)
-            GlassIconButton(ImageVector.vectorResource(AppIcons.PlayArrow), "Play", onPlay, size = 44.dp)
+            GlassIconButton(ImageVector.vectorResource(if (showPause) AppIcons.Pause else AppIcons.PlayArrow), if (showPause) "Pause" else "Play", if (busy) ({}) else (onToggle ?: onPlay), size = 44.dp)
         } else {
-            Button(onClick = onPlay, modifier = Modifier.weight(1f).height(52.dp)) {
-                Icon(ImageVector.vectorResource(AppIcons.PlayArrow), null); Spacer(Modifier.width(8.dp)); Text(com.opentune.ui.theme.tr("Play"))
+            Button(onClick = onToggle ?: onPlay, enabled = !busy, modifier = Modifier.weight(1f).height(52.dp)) {
+                Icon(ImageVector.vectorResource(if (showPause) AppIcons.Pause else AppIcons.PlayArrow), null); Spacer(Modifier.width(8.dp)); Text(com.opentune.ui.theme.tr(if (showPause) "Pause" else "Play"))
             }
             ShuffleButton(onShuffle, onSmartShuffle, Modifier.weight(1f))
         }
@@ -260,6 +260,9 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
                                         onPlay = { actions.playAll(shown, 0, false, "On this device") },
                                         onShuffle = { actions.playAll(shown, 0, true, "On this device") },
                                         onSmartShuffle = { actions.smartShuffle(shown, "On this device") },
+                                        showPause = actions.queueSource == "On this device" && actions.currentVideoId != null && actions.isSounding,
+                                        onToggle = if (actions.queueSource == "On this device" && actions.currentVideoId != null) actions.togglePlayPause else null,
+                                        busy = actions.queueSource == "On this device" && actions.currentVideoId != null && actions.isPlaying && !actions.isSounding,
                                         band = band,
                                         listState = listState,
                                     )
@@ -335,6 +338,8 @@ private fun LocalMusicSkeleton(band: com.opentune.ui.components.RubberBandOversc
 private fun LocalMusicHero(
     heroSong: Song?, songs: List<Song>, folder: String?,
     onPlay: () -> Unit, onShuffle: () -> Unit, onSmartShuffle: () -> Unit,
+    showPause: Boolean = false, onToggle: (() -> Unit)? = null,
+    busy: Boolean = false,
     band: com.opentune.ui.components.RubberBandOverscroll? = null,
     listState: androidx.compose.foundation.lazy.LazyListState? = null,
 ) {
@@ -367,6 +372,9 @@ private fun LocalMusicHero(
                     onPlay = onPlay,
                     onShuffle = onShuffle,
                     onSmartShuffle = onSmartShuffle,
+                    showPause = showPause,
+                    onToggle = onToggle,
+                    busy = busy,
                     onSave = null,
                     modifier = Modifier.fillMaxWidth(),
                 )

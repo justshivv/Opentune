@@ -119,6 +119,12 @@ class SongActions(
     val playAll: (List<Song>, Int, Boolean, String?) -> Unit,
     val playNext: (Song) -> Unit,
     val addToQueue: (Song) -> Unit,
+    /** The "Playing from" label of the queue playing now, or null when it has none. */
+    val queueSource: String? = null,
+    /** Pause or resume what is playing, from where it is. */
+    val togglePlayPause: () -> Unit = {},
+    /** Actually making sound now, not still loading: a list's Pause waits for this. */
+    val isSounding: Boolean = false,
     /** Shuffle with similar songs mixed in: a long press on Shuffle. */
     val smartShuffle: (List<Song>, String?) -> Unit = { songs, source -> playAll(songs, 0, true, source) },
 )
@@ -127,6 +133,9 @@ class SongActions(
 internal fun SongActions.alsoOnPlay(onPlay: () -> Unit): SongActions = SongActions(
     currentVideoId, isPlaying,
     playAll = { songs, index, shuffle, source -> onPlay(); playAll(songs, index, shuffle, source) },
+    queueSource = queueSource,
+    togglePlayPause = togglePlayPause,
+    isSounding = isSounding,
     playNext = playNext,
     addToQueue = addToQueue,
     smartShuffle = { songs, source -> onPlay(); smartShuffle(songs, source) },
@@ -861,12 +870,18 @@ internal fun ListPlayRow(
     onSave: (() -> Unit)?,
     modifier: Modifier = Modifier,
     actionLabel: String? = null,
+    /** The queue playing now is this list's and it is playing: offer Pause instead of Play. */
+    showPause: Boolean = false,
+    /** Set while the queue playing now is this list's: pressing Play or Pause pauses or resumes it in place, never a restart. */
+    onToggle: (() -> Unit)? = null,
+    /** This list's queue is still loading: the Play button shows but cannot be pressed again. */
+    busy: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
     if (posterLayout()) {
         // Play as a glass pill, then round glass buttons beside it, centred under the title.
         Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-            PosterPill(com.opentune.ui.theme.tr("Play"), ImageVector.vectorResource(AppIcons.PlayArrow), enabled, onPlay)
+            PosterPill(com.opentune.ui.theme.tr(if (showPause) "Pause" else "Play"), ImageVector.vectorResource(if (showPause) AppIcons.Pause else AppIcons.PlayArrow), enabled && !busy, onToggle ?: onPlay)
             ShuffleButton(onShuffle, onSmartShuffle, Modifier.size(POSTER_ROUND), enabled = enabled, compact = true)
             if (onSave != null) PosterRound(
                 if (saved) ImageVector.vectorResource(AppIcons.Check) else ImageVector.vectorResource(AppIcons.Add),
@@ -879,14 +894,14 @@ internal fun ListPlayRow(
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
         ShuffleButton(onShuffle, onSmartShuffle, Modifier.size(56.dp), enabled = enabled, compact = true)
         androidx.compose.material3.Button(
-            onClick = onPlay,
-            enabled = enabled,
+            onClick = onToggle ?: onPlay,
+            enabled = enabled && !busy,
             modifier = Modifier.weight(1f).height(56.dp),
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colors.onSurface, contentColor = colors.surface),
         ) {
-            Icon(ImageVector.vectorResource(AppIcons.PlayArrow), null)
+            Icon(ImageVector.vectorResource(if (showPause) AppIcons.Pause else AppIcons.PlayArrow), null)
             Spacer(Modifier.width(8.dp))
-            Text(com.opentune.ui.theme.tr("Play"), style = MaterialTheme.typography.titleMedium)
+            Text(com.opentune.ui.theme.tr(if (showPause) "Pause" else "Play"), style = MaterialTheme.typography.titleMedium)
         }
         if (onSave != null) Box(
             Modifier.size(56.dp).pageButtonFace(androidx.compose.foundation.shape.CircleShape, poster = false).clickable(enabled = enabled, onClick = onSave),
@@ -1321,6 +1336,9 @@ fun CollectionScreen(
                                                 enabled = c.songs.isNotEmpty(),
                                                 saved = saved || accountSaved.saved,
                                                 onPlay = { actions.playAll(shown.ifEmpty { c.songs }, 0, false, c.title) },
+                                                showPause = actions.queueSource == c.title && actions.currentVideoId != null && actions.isSounding,
+                                                onToggle = if (actions.queueSource == c.title && actions.currentVideoId != null) actions.togglePlayPause else null,
+                                                busy = actions.queueSource == c.title && actions.currentVideoId != null && actions.isPlaying && !actions.isSounding,
                                                 onShuffle = { actions.playAll(shown.ifEmpty { c.songs }, 0, true, c.title) },
                                                 onSmartShuffle = { actions.smartShuffle(shown.ifEmpty { c.songs }, c.title) },
                                                 onSave = when {

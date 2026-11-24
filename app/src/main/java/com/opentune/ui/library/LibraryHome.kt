@@ -1249,6 +1249,9 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
                     PlayButtons(
                         onPlay = { actions.playAll(ready, 0, false, saved.title) },
                         onShuffle = { actions.playAll(ready, 0, true, saved.title) },
+                        showPause = actions.queueSource == saved.title && actions.currentVideoId != null && actions.isSounding,
+                        onToggle = if (actions.queueSource == saved.title && actions.currentVideoId != null) actions.togglePlayPause else null,
+                        busy = actions.queueSource == saved.title && actions.currentVideoId != null && actions.isPlaying && !actions.isSounding,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 }
@@ -1337,6 +1340,9 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
                     PlayButtons(
                         onPlay = { actions.playAll(ready, 0, false, "Downloads") },
                         onShuffle = { actions.playAll(ready, 0, true, "Downloads") },
+                        showPause = actions.queueSource == "Downloads" && actions.currentVideoId != null && actions.isSounding,
+                        onToggle = if (actions.queueSource == "Downloads" && actions.currentVideoId != null) actions.togglePlayPause else null,
+                        busy = actions.queueSource == "Downloads" && actions.currentVideoId != null && actions.isPlaying && !actions.isSounding,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 }
@@ -1721,6 +1727,9 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                             onPlay = { actions.playAll(shown, 0, false, "Liked Music") },
                             onShuffle = { actions.playAll(shown, 0, true, "Liked Music") },
                             onSmartShuffle = { actions.smartShuffle(shown, "Liked Music") },
+                            showPause = actions.queueSource == "Liked Music" && actions.currentVideoId != null && actions.isSounding,
+                            onToggle = if (actions.queueSource == "Liked Music" && actions.currentVideoId != null) actions.togglePlayPause else null,
+                            busy = actions.queueSource == "Liked Music" && actions.currentVideoId != null && actions.isPlaying && !actions.isSounding,
                             band = band,
                             listState = listState,
                         )
@@ -1858,6 +1867,8 @@ private const val HERO_FRACTION = 0.68f
 private fun LikedHero(
     latest: Song?, count: Int, totalSeconds: Long,
     onPlay: () -> Unit, onShuffle: () -> Unit, onSmartShuffle: () -> Unit,
+    showPause: Boolean = false, onToggle: (() -> Unit)? = null,
+    busy: Boolean = false,
     band: com.opentune.ui.components.RubberBandOverscroll? = null,
     listState: androidx.compose.foundation.lazy.LazyListState? = null,
 ) {
@@ -1895,6 +1906,9 @@ private fun LikedHero(
                     onPlay = onPlay,
                     onShuffle = onShuffle,
                     onSmartShuffle = onSmartShuffle,
+                    showPause = showPause,
+                    onToggle = onToggle,
+                    busy = busy,
                     onSave = null,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -2199,6 +2213,9 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                                     onPlay = { actions.playAll(shown, 0, false, playlist.name) },
                                     onShuffle = { actions.playAll(shown, 0, true, playlist.name) },
                                     onSmartShuffle = { actions.smartShuffle(shown, playlist.name) },
+                                    showPause = actions.queueSource == playlist.name && actions.currentVideoId != null && actions.isSounding,
+                                    onToggle = if (actions.queueSource == playlist.name && actions.currentVideoId != null) actions.togglePlayPause else null,
+                                    busy = actions.queueSource == playlist.name && actions.currentVideoId != null && actions.isPlaying && !actions.isSounding,
                                     onSave = if (playlist.spotifyId == null) ({ adding = true }) else null,
                                     modifier = Modifier.fillMaxWidth(),
                                     actionLabel = "Add songs",
