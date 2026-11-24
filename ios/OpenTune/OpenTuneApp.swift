@@ -14,6 +14,11 @@ struct OpenTuneApp: App {
             let lang = Locale.current.language.languageCode?.identifier ?? "en"
             let region = Locale.current.region?.identifier ?? "US"
             await Innertube.shared.setLocale(language: lang, region: region)
+            let solver = BrowserSolver()
+            await Innertube.shared.setSolver(solver)
+            if let visitor = try? await Innertube.shared.ensureVisitorData() {
+                await solver.warmUp(visitorData: visitor)
+            }
         }
     }
 

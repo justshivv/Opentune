@@ -77,11 +77,26 @@ public actor Innertube {
 
     private let session: URLSession
     private var visitorData: String?
+    private var solver: WebClientSolver?
+    private var solverRestsUntil = Date.distantPast
     public var language = "en"
     public var region = "US"
 
     public init(session: URLSession = .shared) {
         self.session = session
+    }
+
+    public var sessionVisitorData: String? { visitorData }
+
+    public func setSolver(_ solver: WebClientSolver?) {
+        self.solver = solver
+    }
+
+    public func ensureVisitorData() async throws -> String {
+        if let visitorData { return visitorData }
+        _ = try await postMusic("browse", ["browseId": "FEmusic_home"])
+        guard let visitorData else { throw Failure.badResponse(0) }
+        return visitorData
     }
 
     public func setLocale(language: String, region: String) {
@@ -121,12 +136,24 @@ public actor Innertube {
     // MARK: Streams
 
     /**
-     * A stream for [videoId], walking the device clients until one answers.
-     * AVPlayer can't play WebM/Opus, so an AAC (`audio/mp4`) format is taken,
-     * the best one offered; failing that, the HLS manifest the iOS client sends.
+     * A stream for [videoId]. With a solver, the WEB_REMIX client first: on networks YouTube
+     * is wary of, it's the only one whose URLs play past the first megabyte. Then the device
+     * clients, until one answers. AVPlayer can't play WebM/Opus, so an AAC (`audio/mp4`)
+     * format is taken, the best one offered; failing that, the HLS manifest the iOS client sends.
      */
     public func stream(_ videoId: String) async throws -> Stream {
         var lastError: Error = Failure.noStream
+        if let solver, Date() >= solverRestsUntil {
+            do {
+                return try await webRemixStream(videoId, solver: solver)
+            } catch Failure.unplayable(let reason) {
+                // About this video, not the solver.
+                lastError = Failure.unplayable(reason)
+            } catch {
+                lastError = error
+                solverRestsUntil = Date().addingTimeInterval(120)
+            }
+        }
         for client in [PlayerClient.ios, .iosRecent, .androidVR] {
             do {
                 let response = try await postPlayer(videoId, client)
@@ -141,6 +168,81 @@ public actor Innertube {
             }
         }
         throw lastError
+    }
+
+    static let webRemixPlayerUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"
+
+    /**
+     * WEB_REMIX's stream, as the Android app's InnerTubeX makes it: the player request carries
+     * the player's signature timestamp; the chosen format's signature and `n` are unscrambled
+     * by the player itself, and the URL gets the video-bound token as `pot` and a playback nonce.
+     */
+    func webRemixStream(_ videoId: String, solver: WebClientSolver) async throws -> Stream {
+        let visitor = try await ensureVisitorData()
+        let sts = try await solver.signatureTimestamp()
+        let origin = "https://music.youtube.com"
+        let ua = Self.webRemixPlayerUserAgent
+        let client: [String: Any] = ["clientName": "WEB_REMIX", "clientVersion": Self.webRemixVersion, "hl": language, "gl": region, "visitorData": visitor]
+        let body: [String: Any] = [
+            "context": ["client": client],
+            "videoId": videoId,
+            "playbackContext": ["contentPlaybackContext": ["signatureTimestamp": sts]],
+            "contentCheckOk": true,
+            "racyCheckOk": true,
+        ]
+        let headers = [
+            "User-Agent": ua, "Origin": origin, "X-Origin": origin, "Referer": origin + "/",
+            "X-YouTube-Client-Name": "67", "X-YouTube-Client-Version": Self.webRemixVersion,
+            "X-Goog-Visitor-Id": visitor, "X-Goog-Api-Format-Version": "1",
+        ]
+        let response = try await post("\(Self.musicBase)/player", body: body, headers: headers, query: [:], timeout: 10)
+        let status = response.o("playabilityStatus").s("status")
+        if let status, status != "OK" {
+            throw Failure.unplayable(response.o("playabilityStatus").s("reason") ?? status)
+        }
+        let audio = (response.o("streamingData").a("adaptiveFormats") ?? []).filter { (Optional($0).s("mimeType") ?? "").hasPrefix("audio/mp4") }
+        guard let best = audio.max(by: { ($0["bitrate"]?.doubleValue ?? 0) < ($1["bitrate"]?.doubleValue ?? 0) }) else { throw Failure.noStream }
+
+        var base: String
+        if let plain = Optional(best).s("url") {
+            base = plain
+        } else if let cipher = Optional(best).s("signatureCipher").flatMap(StreamCipherData.signatureCipher) {
+            let sig = try await solver.signature(cipher.s)
+            guard let signed = StreamCipherData.url(cipher.url, setting: [(cipher.sp, sig)]) else { throw Failure.noStream }
+            base = signed.absoluteString
+        } else {
+            throw Failure.noStream
+        }
+        var params: [(String, String)] = []
+        if let n = StreamCipherData.nValue(in: base) { params.append(("n", try await solver.n(n))) }
+        params.append(("pot", try await solver.videoToken(videoId: videoId, visitorData: visitor)))
+        params.append(("cpn", StreamCipherData.playbackNonce()))
+        guard let url = StreamCipherData.url(base, setting: params) else { throw Failure.noStream }
+        let mediaHeaders = ["User-Agent": ua, "Accept": "*/*", "Origin": origin, "Referer": origin + "/"]
+        let length = Optional(best).s("contentLength").flatMap { Int64($0) }
+
+        // One byte from the middle: past the first megabyte, where a wrong signature or a token
+        // the CDN won't take shows. Caught here, the device clients still get their turn.
+        var probe = URLRequest(url: url, timeoutInterval: 6)
+        mediaHeaders.forEach { probe.setValue($1, forHTTPHeaderField: $0) }
+        let at = (length ?? 2) / 2
+        probe.setValue("bytes=\(at)-\(at)", forHTTPHeaderField: "Range")
+        let (_, probed) = try await session.data(for: probe)
+        let code = (probed as? HTTPURLResponse)?.statusCode ?? -1
+        guard code == 206 || code == 200 else {
+            await solver.reset()
+            throw Failure.badResponse(code)
+        }
+
+        return Stream(
+            url: url,
+            headers: mediaHeaders,
+            isHLS: false, mimeType: Optional(best).s("mimeType"),
+            bitrate: best["bitrate"]?.doubleValue.map { Int($0) },
+            loudnessDb: response.o("playerConfig").o("audioConfig")?["loudnessDb"]?.doubleValue,
+            durationMs: response.o("videoDetails").s("lengthSeconds").flatMap { Int64($0) }.map { $0 * 1000 },
+            contentLength: length
+        )
     }
 
     /** The best AAC audio format with a plain URL, or the HLS manifest. */

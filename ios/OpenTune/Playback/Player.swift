@@ -293,7 +293,7 @@ final class Player: ObservableObject {
                 Task { @MainActor in
                     guard let self else { return }
                     if item.status == .failed { self.error = item.error?.localizedDescription ?? "Couldn't play this song" }
-                    if item.status == .readyToPlay, item.duration.isNumeric { self.duration = item.duration.seconds }
+                    if item.status == .readyToPlay, self.duration <= 0, item.duration.isNumeric { self.duration = item.duration.seconds }
                 }
             },
         ]
