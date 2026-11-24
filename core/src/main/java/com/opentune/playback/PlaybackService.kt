@@ -882,7 +882,7 @@ class PlaybackService : MediaLibraryService() {
         if (player.mediaItemCount > 0) return
         val saved = QueueStore.load() ?: return
         val items = saved.songs.mapIndexed { i, ref ->
-            ref.toSong().copy(queueTier = saved.tiers?.getOrNull(i) ?: QueueTier.CONTEXT).toMediaItem()
+            ref.toSong().copy(queueTier = saved.tiers?.getOrNull(i) ?: QueueTier.CONTEXT, queueSource = saved.source).toMediaItem()
         }
         // A saved queue with no songs in it has no index to start at.
         if (items.isEmpty()) return
@@ -929,6 +929,7 @@ class PlaybackService : MediaLibraryService() {
         val tiers = items.map { it.queueTier }
         return QueueStore.Saved(
             items.map { SongRef.of(it.toSong()) }, player.currentMediaItemIndex, player.currentPosition,
+            source = items.getOrNull(player.currentMediaItemIndex)?.queueSource ?: items.firstNotNullOfOrNull { it.queueSource },
             tiers = tiers.takeIf { t -> t.any { it != QueueTier.CONTEXT } },
             shuffle = player.shuffleModeEnabled,
             repeat = player.repeatMode,

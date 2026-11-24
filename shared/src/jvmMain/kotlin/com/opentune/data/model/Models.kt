@@ -92,6 +92,8 @@ data class Song(
     val smartShuffle: Boolean = false,
     /** Which part of the queue this entry is in; see [com.opentune.playback.QueueTimeline]. */
     val queueTier: QueueTier = QueueTier.CONTEXT,
+    /** The "Playing from" label of the list this entry was queued from, when it was queued from one. */
+    val queueSource: String? = null,
 )
 
 /**

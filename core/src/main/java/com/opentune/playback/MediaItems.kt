@@ -32,6 +32,7 @@ private const val EXTRA_EXPLICIT = "explicit"
 private const val EXTRA_ARTIST_ID = "artistId"
 private const val EXTRA_SMART_SHUFFLE = "smartShuffle"
 private const val EXTRA_TIER = "tier"
+private const val EXTRA_SOURCE = "source"
 private const val EXTRA_ALBUM_ID = "albumId"
 private const val EXTRA_LIST_POSITION = "listPosition"
 private const val EXTRA_VIDEO = "video"
@@ -150,6 +151,7 @@ fun Song.toMediaItem(): MediaItem =
                         // A music video's runtime vouches for less than a track's: lossless matching needs to know.
                         if (isVideo) putBoolean(EXTRA_VIDEO, true)
                         if (queueTier != QueueTier.CONTEXT) putString(EXTRA_TIER, queueTier.name)
+                        queueSource?.let { putString(EXTRA_SOURCE, it) }
                     },
                 )
                 .build(),
@@ -170,6 +172,7 @@ fun MediaItem.toSong(): Song =
         smartShuffle = mediaMetadata.extras?.getBoolean(EXTRA_SMART_SHUFFLE) == true,
         isVideo = mediaMetadata.extras?.getBoolean(EXTRA_VIDEO) == true,
         queueTier = mediaMetadata.extras?.getString(EXTRA_TIER)?.let { t -> QueueTier.entries.firstOrNull { it.name == t } } ?: QueueTier.CONTEXT,
+        queueSource = mediaMetadata.extras?.getString(EXTRA_SOURCE),
     )
 
 /** Update credits for this exact recording without touching its selected audio or queue extras. */
@@ -206,6 +209,10 @@ val MediaItem.albumSpot: AlbumSpot
 /** Which part of the queue this entry is in. */
 val MediaItem.queueTier: QueueTier
     get() = mediaMetadata.extras?.getString(EXTRA_TIER)?.let { t -> QueueTier.entries.firstOrNull { it.name == t } } ?: QueueTier.CONTEXT
+
+/** The "Playing from" label this entry was queued under, if it carries one. */
+val MediaItem.queueSource: String?
+    get() = mediaMetadata.extras?.getString(EXTRA_SOURCE)
 
 /**
  * Queue indices in the order they will play from here: the current item

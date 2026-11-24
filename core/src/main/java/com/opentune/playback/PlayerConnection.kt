@@ -306,6 +306,10 @@ class PlayerConnection(private val context: Context) {
         val mixing = MixState.showing.value?.takeIf { it.index in 0 until player.mediaItemCount }
         _currentIndex.value = mixing?.index ?: player.currentMediaItemIndex
         _currentSong.value = (mixing?.item ?: player.currentMediaItem)?.toSong()
+        // The queue's entries carry where they were queued from, so a connection
+        // made after the app was reopened learns it again. An entry carrying none
+        // (queued by hand, an autoplay continuation) leaves it as it was.
+        (mixing?.item ?: player.currentMediaItem)?.queueSource?.let { _source.value = it }
         _upNext.value = player.upcomingPlayOrder().drop(1).let { up -> if (mixing != null) up.dropWhile { it != mixing.index }.drop(1) else up }
         _hasNext.value = player.hasNextMediaItem()
         _hasPrevious.value = player.hasPreviousMediaItem()
@@ -392,7 +396,7 @@ class PlayerConnection(private val context: Context) {
         val kept = handQueued(controller)
         beforeShuffle = null
         beforeSmart = null
-        controller.setMediaItems((listOf(song.copy(queueTier = QueueTier.CONTEXT)) + kept).map { it.toMediaItem() }, 0, 0L)
+        controller.setMediaItems((listOf(song.copy(queueTier = QueueTier.CONTEXT, queueSource = source)) + kept).map { it.toMediaItem() }, 0, 0L)
         controller.prepare()
         controller.play()
     }
@@ -441,7 +445,7 @@ class PlayerConnection(private val context: Context) {
         val seed = Random.nextLong()
         // Smart shuffle starts on the list alone, in the order the mix will
         // have, so the first song plays at once; the picks are slotted in later.
-        val list = songs.map { it.copy(queueTier = QueueTier.CONTEXT) }
+        val list = songs.map { it.copy(queueTier = QueueTier.CONTEXT, queueSource = source) }
         val ordered = when {
             mixing -> SmartShuffle.mix(list, emptyList(), LibraryStore.hidden.value, seed)
             shuffled -> list.shuffled()
