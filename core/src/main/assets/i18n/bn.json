@@ -3607,5 +3607,19 @@
 "Full": "পূর্ণ",
 "Tempos up to 8% apart are brought together while the songs blend": "8% পর্যন্ত আলাদা টেম্পো গান মেশার সময় মিলিয়ে দেওয়া হয়",
 "Music videos for you": "আপনার জন্য মিউজিক ভিডিও",
-"Live performances": "লাইভ পারফরম্যান্স"
+"Live performances": "লাইভ পারফরম্যান্স",
+"Press and hold a tile for more options.": "আরও বিকল্পের জন্য একটি টাইল চেপে ধরে রাখুন।",
+"Press and hold Search to find out what's playing around you.": "আপনার চারপাশে কী বাজছে তা জানতে সার্চ চেপে ধরে রাখুন।",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "এড়িয়ে যেতে কভার সোয়াইপ করুন। ১০ সেকেন্ড সরতে এর বাম বা ডান দিকে দুবার ট্যাপ করুন।",
+"Swipe the cover sideways to skip a song.": "একটি গান এড়িয়ে যেতে কভারটি পাশে সোয়াইপ করুন।",
+"Swipe sideways to skip, or down to stop the music.": "এড়িয়ে যেতে পাশে সোয়াইপ করুন, বা গান থামাতে নিচে।",
+"Show tips": "টিপস দেখান",
+"A short hint the first time you meet a hidden gesture": "প্রথমবার কোনো লুকানো অঙ্গভঙ্গির মুখোমুখি হলে একটি ছোট ইঙ্গিত",
+"Show tips again": "টিপস আবার দেখান",
+"Each tip shows once more, the next time it's of use": "প্রতিটি টিপ কাজে লাগার সময় আরও একবার দেখাবে",
+"No tip seen yet": "এখনও কোনো টিপ দেখা হয়নি",
+"tips hints help gestures swipe hold tutorial": "টিপস ইঙ্গিত সাহায্য অঙ্গভঙ্গি সোয়াইপ চেপে ধরা টিউটোরিয়াল",
+"tips hints help gestures reset again": "টিপস ইঙ্গিত সাহায্য অঙ্গভঙ্গি রিসেট আবার",
+"Swipe a song left to play it next, or right to add it to the queue.": "পরবর্তী হিসেবে চালাতে একটি গান বামে সোয়াইপ করুন, বা সারিতে যোগ করতে ডানে।",
+"Listen to this a lot? Download it from here to play it without a connection.": "এটি প্রায়ই শোনেন? সংযোগ ছাড়াই চালাতে এখান থেকে ডাউনলোড করুন।"
 }

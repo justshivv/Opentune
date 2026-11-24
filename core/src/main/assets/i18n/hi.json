@@ -3678,5 +3678,19 @@
 "Full": "पूरा",
 "Tempos up to 8% apart are brought together while the songs blend": "8% तक अलग टेम्पो गानों के ब्लेंड होते समय मिला दिए जाते हैं",
 "Music videos for you": "आपके लिए म्यूज़िक वीडियो",
-"Live performances": "लाइव परफ़ॉर्मेंस"
+"Live performances": "लाइव परफ़ॉर्मेंस",
+"Press and hold a tile for more options.": "और विकल्पों के लिए किसी टाइल को दबाकर रखें।",
+"Press and hold Search to find out what's playing around you.": "आपके आसपास क्या बज रहा है, यह जानने के लिए खोज को दबाकर रखें।",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "छोड़ने के लिए कवर को स्वाइप करें। 10 सेकंड आगे या पीछे जाने के लिए उसकी बाईं या दाईं ओर दो बार टैप करें।",
+"Swipe the cover sideways to skip a song.": "गाना छोड़ने के लिए कवर को बगल में स्वाइप करें।",
+"Swipe sideways to skip, or down to stop the music.": "छोड़ने के लिए बगल में स्वाइप करें, या संगीत रोकने के लिए नीचे।",
+"Show tips": "टिप्स दिखाएं",
+"A short hint the first time you meet a hidden gesture": "किसी छिपे जेस्चर से पहली बार मिलने पर एक छोटा संकेत",
+"Show tips again": "टिप्स फिर से दिखाएं",
+"Each tip shows once more, the next time it's of use": "हर टिप काम आने पर एक बार और दिखेगी",
+"No tip seen yet": "अभी तक कोई टिप नहीं देखी",
+"tips hints help gestures swipe hold tutorial": "टिप्स संकेत मदद जेस्चर स्वाइप दबाकर रखें ट्यूटोरियल",
+"tips hints help gestures reset again": "टिप्स संकेत मदद जेस्चर रीसेट फिर से",
+"Swipe a song left to play it next, or right to add it to the queue.": "किसी गाने को अगला चलाने के लिए बाईं ओर स्वाइप करें, या कतार में जोड़ने के लिए दाईं ओर।",
+"Listen to this a lot? Download it from here to play it without a connection.": "इसे अक्सर सुनते हैं? बिना कनेक्शन के चलाने के लिए इसे यहाँ से डाउनलोड करें।"
 }

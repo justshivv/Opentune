@@ -3678,5 +3678,19 @@
 "Full": "Teljes",
 "Tempos up to 8% apart are brought together while the songs blend": "A legfeljebb 8%-kal eltérő tempók az átkeverés alatt összehangolódnak",
 "Music videos for you": "Zenei videók neked",
-"Live performances": "Élő fellépések"
+"Live performances": "Élő fellépések",
+"Press and hold a tile for more options.": "Tartsd lenyomva a csempét a további lehetőségekhez.",
+"Press and hold Search to find out what's playing around you.": "Tartsd lenyomva a Keresést, hogy megtudd, mi szól körülötted.",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "Húzd el a borítót a léptetéshez. Koppints duplán a bal vagy jobb oldalára 10 másodperces ugráshoz.",
+"Swipe the cover sideways to skip a song.": "Húzd oldalra a borítót egy dal átugrásához.",
+"Swipe sideways to skip, or down to stop the music.": "Húzd oldalra a léptetéshez, vagy lefelé a zene leállításához.",
+"Show tips": "Tippek megjelenítése",
+"A short hint the first time you meet a hidden gesture": "Rövid tipp, amikor először találkozol egy rejtett mozdulattal",
+"Show tips again": "Tippek újbóli megjelenítése",
+"Each tip shows once more, the next time it's of use": "Minden tipp még egyszer megjelenik, amikor hasznos",
+"No tip seen yet": "Még nem láttál tippet",
+"tips hints help gestures swipe hold tutorial": "tippek segítség súgó mozdulatok húzás nyomva tartás útmutató",
+"tips hints help gestures reset again": "tippek segítség súgó mozdulatok visszaállítás újra",
+"Swipe a song left to play it next, or right to add it to the queue.": "Húzz egy dalt balra, hogy következőként szóljon, vagy jobbra, hogy a sorhoz add.",
+"Listen to this a lot? Download it from here to play it without a connection.": "Gyakran hallgatod? Töltsd le innen, hogy kapcsolat nélkül is szólhasson."
 }

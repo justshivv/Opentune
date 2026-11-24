@@ -3655,5 +3655,19 @@
 "Full": "Pełne",
 "Tempos up to 8% apart are brought together while the songs blend": "Wyrównuje tempa różniące się nawet o 8% podczas przejścia",
 "Music videos for you": "Teledyski dla Ciebie",
-"Live performances": "Występy na żywo"
+"Live performances": "Występy na żywo",
+"Press and hold a tile for more options.": "Przytrzymaj kafelek, aby zobaczyć więcej opcji.",
+"Press and hold Search to find out what's playing around you.": "Przytrzymaj Szukaj, aby sprawdzić, co gra wokół ciebie.",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "Przesuń okładkę, aby pominąć. Stuknij dwukrotnie jej lewą lub prawą stronę, aby przeskoczyć o 10 sekund.",
+"Swipe the cover sideways to skip a song.": "Przesuń okładkę w bok, aby pominąć utwór.",
+"Swipe sideways to skip, or down to stop the music.": "Przesuń w bok, aby pominąć, lub w dół, aby zatrzymać muzykę.",
+"Show tips": "Pokazuj wskazówki",
+"A short hint the first time you meet a hidden gesture": "Krótka podpowiedź, gdy po raz pierwszy natrafisz na ukryty gest",
+"Show tips again": "Pokaż wskazówki ponownie",
+"Each tip shows once more, the next time it's of use": "Każda wskazówka pojawi się jeszcze raz, gdy się przyda",
+"No tip seen yet": "Nie widziano jeszcze żadnej wskazówki",
+"tips hints help gestures swipe hold tutorial": "wskazówki podpowiedzi pomoc gesty przesunięcie przytrzymanie samouczek",
+"tips hints help gestures reset again": "wskazówki podpowiedzi pomoc gesty resetuj ponownie",
+"Swipe a song left to play it next, or right to add it to the queue.": "Przesuń utwór w lewo, aby odtworzyć go jako następny, lub w prawo, aby dodać go do kolejki.",
+"Listen to this a lot? Download it from here to play it without a connection.": "Często tego słuchasz? Pobierz to stąd, aby grać bez połączenia."
 }

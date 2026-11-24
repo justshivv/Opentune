@@ -3678,5 +3678,19 @@
 "Full": "كامل",
 "Tempos up to 8% apart are brought together while the songs blend": "تُوحَّد الإيقاعات التي يفصلها حتى 8% أثناء مزج الأغاني",
 "Music videos for you": "فيديوهات موسيقية لك",
-"Live performances": "عروض مباشرة"
+"Live performances": "عروض مباشرة",
+"Press and hold a tile for more options.": "اضغط مطولًا على مربع لعرض المزيد من الخيارات.",
+"Press and hold Search to find out what's playing around you.": "اضغط مطولًا على البحث لمعرفة ما يُشغَّل من حولك.",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "اسحب الغلاف للتخطي. انقر مرتين على جانبه الأيسر أو الأيمن للانتقال 10 ثوانٍ.",
+"Swipe the cover sideways to skip a song.": "اسحب الغلاف جانبًا لتخطي الأغنية.",
+"Swipe sideways to skip, or down to stop the music.": "اسحب جانبًا للتخطي، أو إلى الأسفل لإيقاف الموسيقى.",
+"Show tips": "إظهار النصائح",
+"A short hint the first time you meet a hidden gesture": "تلميح قصير في أول مرة تصادف فيها إيماءة مخفية",
+"Show tips again": "إظهار النصائح مرة أخرى",
+"Each tip shows once more, the next time it's of use": "ستظهر كل نصيحة مرة أخرى عندما تكون مفيدة",
+"No tip seen yet": "لم تُعرض أي نصيحة بعد",
+"tips hints help gestures swipe hold tutorial": "نصائح تلميحات مساعدة إيماءات سحب ضغط مطول شرح",
+"tips hints help gestures reset again": "نصائح تلميحات مساعدة إيماءات إعادة تعيين مرة أخرى",
+"Swipe a song left to play it next, or right to add it to the queue.": "اسحب أغنية إلى اليسار لتشغيلها تاليًا، أو إلى اليمين لإضافتها إلى قائمة الانتظار.",
+"Listen to this a lot? Download it from here to play it without a connection.": "تستمع إلى هذا كثيرًا؟ نزّله من هنا لتشغيله دون اتصال."
 }

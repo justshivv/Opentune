@@ -83,6 +83,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, player.upNext.value)
     val hasNext = combine(player.hasNext, remote) { here, far -> far != null || here }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+    /** A song before this one to go back to (else going back starts this one over). */
+    val hasPrevious = player.hasPrevious
     // Meant to play there, stalled to load or not, as this phone's own button shows it: by
     // moving, a stall there showed Play, and pressing it sent "play" to a device already playing.
     val isPlaying = combine(player.isPlaying, remote) { here, far -> far?.state?.meant ?: here }

@@ -3678,5 +3678,19 @@
 "Full": "کامل",
 "Tempos up to 8% apart are brought together while the songs blend": "تمپوهایی که تا 8% با هم فاصله دارند هنگام ترکیب آهنگ‌ها یکی می‌شوند",
 "Music videos for you": "موزیک‌ویدیوها برای شما",
-"Live performances": "اجراهای زنده"
+"Live performances": "اجراهای زنده",
+"Press and hold a tile for more options.": "برای گزینه‌های بیشتر، روی یک کاشی انگشت خود را نگه دارید.",
+"Press and hold Search to find out what's playing around you.": "برای فهمیدن اینکه چه آهنگی دور و برتان پخش می‌شود، جستجو را نگه دارید.",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "برای رد کردن، جلد را بکشید. برای جابه‌جایی ۱۰ ثانیه‌ای، دو بار روی سمت چپ یا راست آن بزنید.",
+"Swipe the cover sideways to skip a song.": "برای رد کردن آهنگ، جلد را به کنار بکشید.",
+"Swipe sideways to skip, or down to stop the music.": "برای رد کردن به کنار بکشید، یا برای توقف موسیقی به پایین.",
+"Show tips": "نمایش نکته‌ها",
+"A short hint the first time you meet a hidden gesture": "راهنمایی کوتاه وقتی برای اولین بار به یک حرکت پنهان برمی‌خورید",
+"Show tips again": "نمایش دوبارهٔ نکته‌ها",
+"Each tip shows once more, the next time it's of use": "هر نکته یک بار دیگر، وقتی به کار بیاید، نشان داده می‌شود",
+"No tip seen yet": "هنوز هیچ نکته‌ای دیده نشده",
+"tips hints help gestures swipe hold tutorial": "نکته‌ها راهنمایی کمک حرکت‌ها کشیدن نگه داشتن آموزش",
+"tips hints help gestures reset again": "نکته‌ها راهنمایی کمک حرکت‌ها بازنشانی دوباره",
+"Swipe a song left to play it next, or right to add it to the queue.": "آهنگی را به چپ بکشید تا بعدی پخش شود، یا به راست تا به صف اضافه شود.",
+"Listen to this a lot? Download it from here to play it without a connection.": "زیاد به این گوش می‌دهید؟ از اینجا دانلودش کنید تا بدون اتصال پخش شود."
 }

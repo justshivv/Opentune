@@ -3678,5 +3678,19 @@
 "Full": "Полная",
 "Tempos up to 8% apart are brought together while the songs blend": "Темпы с разницей до 8% выравниваются во время перехода",
 "Music videos for you": "Клипы для вас",
-"Live performances": "Живые выступления"
+"Live performances": "Живые выступления",
+"Press and hold a tile for more options.": "Нажмите и удерживайте плитку, чтобы увидеть другие действия.",
+"Press and hold Search to find out what's playing around you.": "Нажмите и удерживайте «Поиск», чтобы узнать, что играет рядом.",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "Проведите по обложке, чтобы переключить трек. Дважды коснитесь её левой или правой части, чтобы перемотать на 10 секунд.",
+"Swipe the cover sideways to skip a song.": "Проведите по обложке в сторону, чтобы пропустить трек.",
+"Swipe sideways to skip, or down to stop the music.": "Проведите в сторону, чтобы пропустить, или вниз, чтобы остановить музыку.",
+"Show tips": "Показывать подсказки",
+"A short hint the first time you meet a hidden gesture": "Короткая подсказка, когда вы впервые встречаете скрытый жест",
+"Show tips again": "Показать подсказки снова",
+"Each tip shows once more, the next time it's of use": "Каждая подсказка появится ещё раз, когда пригодится",
+"No tip seen yet": "Подсказок пока не было",
+"tips hints help gestures swipe hold tutorial": "подсказки советы помощь жесты свайп удержание обучение",
+"tips hints help gestures reset again": "подсказки советы помощь жесты сбросить снова",
+"Swipe a song left to play it next, or right to add it to the queue.": "Проведите по треку влево, чтобы включить его следующим, или вправо, чтобы добавить в очередь.",
+"Listen to this a lot? Download it from here to play it without a connection.": "Часто слушаете? Скачайте отсюда, чтобы слушать без подключения."
 }

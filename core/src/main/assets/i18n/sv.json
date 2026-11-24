@@ -3678,5 +3678,19 @@
 "Full": "Full",
 "Tempos up to 8% apart are brought together while the songs blend": "Tempon upp till 8 % ifrån varandra jämkas ihop medan låtarna tonas över",
 "Music videos for you": "Musikvideor för dig",
-"Live performances": "Liveframträdanden"
+"Live performances": "Liveframträdanden",
+"Press and hold a tile for more options.": "Tryck länge på en ruta för fler alternativ.",
+"Press and hold Search to find out what's playing around you.": "Tryck länge på Sök för att ta reda på vad som spelas runt dig.",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "Svep omslaget för att hoppa över. Dubbeltryck på dess vänstra eller högra sida för att hoppa 10 sekunder.",
+"Swipe the cover sideways to skip a song.": "Svep omslaget åt sidan för att hoppa över en låt.",
+"Swipe sideways to skip, or down to stop the music.": "Svep åt sidan för att hoppa över, eller nedåt för att stoppa musiken.",
+"Show tips": "Visa tips",
+"A short hint the first time you meet a hidden gesture": "En kort ledtråd första gången du stöter på en dold gest",
+"Show tips again": "Visa tips igen",
+"Each tip shows once more, the next time it's of use": "Varje tips visas en gång till, när det kommer till nytta",
+"No tip seen yet": "Inget tips visat ännu",
+"tips hints help gestures swipe hold tutorial": "tips ledtrådar hjälp gester svep håll guide",
+"tips hints help gestures reset again": "tips ledtrådar hjälp gester återställ igen",
+"Swipe a song left to play it next, or right to add it to the queue.": "Svep en låt åt vänster för att spela den härnäst, eller åt höger för att lägga till den i kön.",
+"Listen to this a lot? Download it from here to play it without a connection.": "Lyssnar du ofta på det här? Ladda ned det här för att spela utan anslutning."
 }

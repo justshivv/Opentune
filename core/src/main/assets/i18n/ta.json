@@ -3678,5 +3678,19 @@
 "Full": "முழு",
 "Tempos up to 8% apart are brought together while the songs blend": "8% வரை வேறுபடும் டெம்போக்கள் பாடல்கள் கலக்கும்போது ஒன்றாக்கப்படும்",
 "Music videos for you": "உங்களுக்கான மியூசிக் வீடியோக்கள்",
-"Live performances": "நேரலை நிகழ்ச்சிகள்"
+"Live performances": "நேரலை நிகழ்ச்சிகள்",
+"Press and hold a tile for more options.": "மேலும் விருப்பங்களுக்கு ஒரு டைலை அழுத்திப் பிடிக்கவும்.",
+"Press and hold Search to find out what's playing around you.": "உங்களைச் சுற்றி என்ன பாடல் ஒலிக்கிறது என அறிய தேடலை அழுத்திப் பிடிக்கவும்.",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "தவிர்க்க அட்டையை ஸ்வைப் செய்யவும். 10 விநாடிகள் தாவ அதன் இடது அல்லது வலது பக்கத்தை இருமுறை தட்டவும்.",
+"Swipe the cover sideways to skip a song.": "பாடலைத் தவிர்க்க அட்டையைப் பக்கவாட்டில் ஸ்வைப் செய்யவும்.",
+"Swipe sideways to skip, or down to stop the music.": "தவிர்க்கப் பக்கவாட்டில் ஸ்வைப் செய்யவும், அல்லது இசையை நிறுத்தக் கீழே.",
+"Show tips": "உதவிக்குறிப்புகளைக் காட்டு",
+"A short hint the first time you meet a hidden gesture": "மறைந்த சைகையை முதல் முறை சந்திக்கும்போது ஒரு சிறு குறிப்பு",
+"Show tips again": "உதவிக்குறிப்புகளை மீண்டும் காட்டு",
+"Each tip shows once more, the next time it's of use": "ஒவ்வொரு குறிப்பும் பயன்படும்போது மேலும் ஒருமுறை காட்டப்படும்",
+"No tip seen yet": "இதுவரை எந்தக் குறிப்பும் பார்க்கவில்லை",
+"tips hints help gestures swipe hold tutorial": "குறிப்புகள் உதவி சைகைகள் ஸ்வைப் அழுத்திப் பிடி பயிற்சி",
+"tips hints help gestures reset again": "குறிப்புகள் உதவி சைகைகள் மீட்டமை மீண்டும்",
+"Swipe a song left to play it next, or right to add it to the queue.": "பாடலை அடுத்ததாக இயக்க இடதுபுறம் ஸ்வைப் செய்யவும், அல்லது வரிசையில் சேர்க்க வலதுபுறம்.",
+"Listen to this a lot? Download it from here to play it without a connection.": "இதை அடிக்கடி கேட்கிறீர்களா? இணைப்பு இல்லாமல் இயக்க இங்கிருந்து பதிவிறக்குங்கள்."
 }

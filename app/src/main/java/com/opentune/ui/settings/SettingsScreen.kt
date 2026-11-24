@@ -1652,6 +1652,18 @@ private fun settingsSections(
                 Entry("Reduce animation", "motion") {
                     ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes decorative motion and simplifies player and lyric transitions", icon = ImageVector.vectorResource(AppIcons.Animation))
                 },
+                Entry("Show tips", "tips hints help gestures swipe hold tutorial") {
+                    val tipsOn by com.opentune.data.tips.Tips.enabled.collectAsState()
+                    ToggleRow("Show tips", tipsOn, com.opentune.data.tips.Tips::setEnabled, summary = "A short hint the first time you meet a hidden gesture", icon = ImageVector.vectorResource(AppIcons.HelpOutline))
+                },
+                Entry("Show tips again", "tips hints help gestures reset again") {
+                    val tipsSeen by com.opentune.data.tips.Tips.seen.collectAsState()
+                    val tipsOn by com.opentune.data.tips.Tips.enabled.collectAsState()
+                    NavRow("Show tips again", com.opentune.data.tips.Tips::reset,
+                        summary = if (tipsSeen.isEmpty() && tipsOn) "No tip seen yet" else "Each tip shows once more, the next time it's of use",
+                        icon = ImageVector.vectorResource(AppIcons.RestartAlt),
+                        enabled = tipsSeen.isNotEmpty() || !tipsOn)
+                },
                 Entry("Lite three-dot menu", "song menu page animation performance low end") {
                     ToggleRow("Lite three-dot menu", ui.liteThreeDotMenu, { v -> AppSettings.updateUi { it.copy(liteThreeDotMenu = v) } }, summary = "Opens the song menu as a plain page, lighter on slow phones", icon = ImageVector.vectorResource(AppIcons.Speed))
                 },

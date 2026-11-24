@@ -495,6 +495,12 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 }
             })
         }
+        // No playlists yet, from anywhere: where to bring some over from, rather than an empty row.
+        if (rows.isEmpty() && !ytmSync.running) item(key = "playlists-import") {
+            ActionLine(null, "Import a playlist", "From a Spotify or YouTube Music link", onClick = nav.importPlaylist, picture = {
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(30.dp))
+            })
+        }
         if (libraryUi.playlistList) {
             // The list, as Library had it before the tiles: the pinned ones and each
             // source's own, five of each until "Show more".
@@ -1789,6 +1795,7 @@ private fun LikedMoreSheet(
             }
             com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Download), "Download all") {
                 close()
+                com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.DOWNLOAD)
                 songs.forEach { com.opentune.data.download.Downloads.enqueue(context, it) }
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size), context)
             }
@@ -2282,6 +2289,7 @@ private fun LocalListMoreSheet(
             com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.QueueMusic), "Add to queue") { close(); songs.forEach(actions.addToQueue) }
             com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Download), "Download all") {
                 close()
+                com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.DOWNLOAD)
                 songs.forEach { Downloads.enqueue(context, it) }
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size), context)
             }

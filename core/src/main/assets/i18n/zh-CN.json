@@ -3678,5 +3678,19 @@
 "Full": "完全",
 "Tempos up to 8% apart are brought together while the songs blend": "速度相差 8% 以内的会在过渡时被拉齐",
 "Music videos for you": "为你推荐的音乐视频",
-"Live performances": "现场表演"
+"Live performances": "现场表演",
+"Press and hold a tile for more options.": "长按磁贴可查看更多选项。",
+"Press and hold Search to find out what's playing around you.": "长按“搜索”可识别周围正在播放的歌曲。",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "滑动封面可切歌。双击封面左侧或右侧可快退或快进 10 秒。",
+"Swipe the cover sideways to skip a song.": "向侧面滑动封面可跳过歌曲。",
+"Swipe sideways to skip, or down to stop the music.": "向侧面滑动可切歌，向下滑动可停止播放。",
+"Show tips": "显示提示",
+"A short hint the first time you meet a hidden gesture": "首次遇到隐藏手势时显示简短提示",
+"Show tips again": "重新显示提示",
+"Each tip shows once more, the next time it's of use": "每条提示会在用得上时再显示一次",
+"No tip seen yet": "还没有看过提示",
+"tips hints help gestures swipe hold tutorial": "提示 帮助 手势 滑动 长按 教程",
+"tips hints help gestures reset again": "提示 帮助 手势 重置 再次",
+"Swipe a song left to play it next, or right to add it to the queue.": "向左滑动歌曲可下一首播放，向右滑动可添加到队列。",
+"Listen to this a lot? Download it from here to play it without a connection.": "经常听这个？在这里下载，没有网络也能播放。"
 }

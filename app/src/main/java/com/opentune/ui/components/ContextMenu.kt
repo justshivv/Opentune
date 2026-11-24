@@ -459,7 +459,7 @@ fun CollectionContextMenu(
             add(MenuEntry("Play next", ImageVector.vectorResource(AppIcons.PlaylistPlay)) { actions.playNext(list.browseId) })
             add(MenuEntry("Add to queue", ImageVector.vectorResource(AppIcons.QueueMusic)) { actions.addToQueue(list.browseId) })
             add(MenuEntry("Add to playlist", ImageVector.vectorResource(AppIcons.PlaylistAdd)) { adding = true })
-            add(MenuEntry("Download all", ImageVector.vectorResource(AppIcons.Download)) { actions.downloadAll(list.browseId) })
+            add(MenuEntry("Download all", ImageVector.vectorResource(AppIcons.Download)) { com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.DOWNLOAD); actions.downloadAll(list.browseId) })
             add(MenuEntry(com.opentune.i18n.Tr.f("Open {0}", kind), ImageVector.vectorResource(AppIcons.KeyboardArrowRight)) { actions.open(list.browseId, list.type) })
         }
         add(MenuEntry("Share", ImageVector.vectorResource(AppIcons.Share)) { com.opentune.ui.share.ListShare.shareList(context, list.title, list.browseId, listOf(list.thumbnailUrl), list.subtitle) })

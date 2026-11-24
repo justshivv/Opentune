@@ -3678,5 +3678,19 @@
 "Full": "Completo",
 "Tempos up to 8% apart are brought together while the songs blend": "Se igualan los tempos que difieren hasta un 8% mientras las canciones se funden",
 "Music videos for you": "Videos musicales para ti",
-"Live performances": "Actuaciones en directo"
+"Live performances": "Actuaciones en directo",
+"Press and hold a tile for more options.": "Mantén pulsado un mosaico para ver más opciones.",
+"Press and hold Search to find out what's playing around you.": "Mantén pulsado Buscar para saber qué está sonando a tu alrededor.",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "Desliza la portada para saltar. Toca dos veces su lado izquierdo o derecho para avanzar o retroceder 10 segundos.",
+"Swipe the cover sideways to skip a song.": "Desliza la portada hacia un lado para saltar una canción.",
+"Swipe sideways to skip, or down to stop the music.": "Desliza hacia un lado para saltar, o hacia abajo para detener la música.",
+"Show tips": "Mostrar consejos",
+"A short hint the first time you meet a hidden gesture": "Una breve pista la primera vez que encuentras un gesto oculto",
+"Show tips again": "Volver a mostrar los consejos",
+"Each tip shows once more, the next time it's of use": "Cada consejo se mostrará una vez más, cuando sea útil",
+"No tip seen yet": "Aún no has visto ningún consejo",
+"tips hints help gestures swipe hold tutorial": "consejos pistas ayuda gestos deslizar mantener tutorial",
+"tips hints help gestures reset again": "consejos pistas ayuda gestos restablecer otra vez",
+"Swipe a song left to play it next, or right to add it to the queue.": "Desliza una canción a la izquierda para reproducirla a continuación, o a la derecha para añadirla a la cola.",
+"Listen to this a lot? Download it from here to play it without a connection.": "¿Lo escuchas a menudo? Descárgalo desde aquí para escucharlo sin conexión."
 }

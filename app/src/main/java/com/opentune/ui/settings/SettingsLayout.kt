@@ -109,7 +109,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         listOf(
             "Dock" to listOf("Dock animation", "Dock lens", "Dock slides away"),
             "Pages and player" to listOf("Opening animation", "Page transitions"),
-            "Feel" to listOf("Haptic feedback"),
+            "Feel" to listOf("Haptic feedback", "Show tips", "Show tips again"),
             "Smoothness" to listOf("Performance profile", "High performance mode", "Lite mode", "Reduce animation", "Lite three-dot menu"),
         ),
     ),

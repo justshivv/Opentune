@@ -59,6 +59,11 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         // The words on every screen, in the chosen language (the phone's own when none is chosen).
         com.opentune.i18n.Tr.use(this, com.opentune.ui.theme.AppLanguages.selected(this).tag)
         com.opentune.data.Core.init(this)
+        // Tips at first use: which were seen, and none while the welcome is up.
+        com.opentune.data.tips.Tips.init(this)
+        com.opentune.data.tips.Tips.welcoming = {
+            com.opentune.data.settings.AppSettings.ui.value.welcome == com.opentune.data.settings.WelcomeState.DUE
+        }
         // Lyrics on widgets and floating over other apps; each does nothing until turned on.
         com.opentune.lyrics.FloatingLyrics.install(this)
         com.opentune.lyrics.LyricsOutside.install(this, com.opentune.widget.WidgetLyrics, com.opentune.lyrics.FloatingLyrics)

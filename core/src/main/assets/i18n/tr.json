@@ -3607,5 +3607,19 @@
 "Full": "Tam",
 "Tempos up to 8% apart are brought together while the songs blend": "Aralarında en fazla %8 fark olan tempolar şarkılar birbirine bağlanırken eşitlenir",
 "Music videos for you": "Senin için müzik videoları",
-"Live performances": "Canlı performanslar"
+"Live performances": "Canlı performanslar",
+"Press and hold a tile for more options.": "Daha fazla seçenek için bir kutuya basılı tutun.",
+"Press and hold Search to find out what's playing around you.": "Çevrenizde ne çaldığını öğrenmek için Ara'ya basılı tutun.",
+"Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds.": "Atlamak için kapağı kaydırın. 10 saniye atlamak için sol veya sağ tarafına iki kez dokunun.",
+"Swipe the cover sideways to skip a song.": "Bir şarkıyı atlamak için kapağı yana kaydırın.",
+"Swipe sideways to skip, or down to stop the music.": "Atlamak için yana, müziği durdurmak için aşağı kaydırın.",
+"Show tips": "İpuçlarını göster",
+"A short hint the first time you meet a hidden gesture": "Gizli bir hareketle ilk karşılaştığınızda kısa bir ipucu",
+"Show tips again": "İpuçlarını yeniden göster",
+"Each tip shows once more, the next time it's of use": "Her ipucu, işe yarayacağı zaman bir kez daha gösterilir",
+"No tip seen yet": "Henüz ipucu görülmedi",
+"tips hints help gestures swipe hold tutorial": "ipuçları yardım hareketler kaydırma basılı tutma eğitim",
+"tips hints help gestures reset again": "ipuçları yardım hareketler sıfırla yeniden",
+"Swipe a song left to play it next, or right to add it to the queue.": "Bir şarkıyı sonra çalmak için sola, kuyruğa eklemek için sağa kaydırın.",
+"Listen to this a lot? Download it from here to play it without a connection.": "Bunu sık mı dinliyorsunuz? Bağlantı olmadan çalmak için buradan indirin."
 }
