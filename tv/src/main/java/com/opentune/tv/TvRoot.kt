@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,17 +38,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInputModeManager
@@ -231,7 +236,8 @@ internal fun TvShell(nav: TvNav, voice: MutableStateFlow<String?> = remember { M
                         .focusRequester(pageFocus)
                         .onFocusChanged { if (it.hasFocus) memory.wantsFocus = false }
                         .focusRestorer()
-                        .focusGroup(),
+                        .focusGroup()
+                        .fadeTopEdge(),
                 ) {
                     saved.SaveableStateProvider(memory.id) {
                         CompositionLocalProvider(LocalPageMemory provides memory) { Page(nav, current) }
@@ -294,6 +300,22 @@ private fun EnterPage(memory: PageMemory, pageFocus: FocusRequester) {
 }
 
 private const val REMEMBERED_WAIT_MS = 1_500L
+
+/**
+ * Rows scrolled up fade out under the bar instead of showing cut in half. A mask, not a coloured
+ * overlay, so it suits a cover-tinted page as well as a plain one. The page is drawn once into its
+ * own layer and only redrawn when it changes, so a still page costs nothing more.
+ */
+private fun Modifier.fadeTopEdge(): Modifier = graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val fade = TvSpace.XL.toPx()
+        drawRect(
+            brush = Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, startY = 0f, endY = fade),
+            size = Size(size.width, fade),
+            blendMode = BlendMode.DstIn,
+        )
+    }
 
 /** Keeps the TV from dimming while the player is open and music plays; otherwise its screensaver may come. */
 @Composable

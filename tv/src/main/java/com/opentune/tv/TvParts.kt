@@ -67,12 +67,6 @@ fun TvDetailHeader(
     }
 }
 
-/** A section's title inside a page ("Songs"), in line with the page's text. */
-@Composable
-fun TvSectionTitle(title: String, modifier: Modifier = Modifier) {
-    Text(title, style = TvType.Title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier.safeSides())
-}
-
 /**
  * A small solid tag with a word or two: "Dolby Atmos" on Now Playing, "Loading…" while the song
  * comes in. [strong] fills it light with dark ink, for the one tag that should stand out.

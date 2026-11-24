@@ -85,9 +85,6 @@ fun ArtistScreen(nav: TvNav, dest: Dest.Artist) {
 
 private const val TOP_SONGS = 8
 
-/** "12 songs", or "1 song". */
-internal fun songCount(n: Int): String = if (n == 1) Tr.t("1 song") else Tr.f("{0} songs", n)
-
 /** A detail page whose data is on its way: the header from what the card knew, and still rows. */
 @Composable
 private fun DetailLoading(title: String, kind: String, art: String?, round: Boolean = false) {

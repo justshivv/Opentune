@@ -22,6 +22,9 @@ beside the phone app on the same device without replacing it.
   seek bar, and the format line (Dolby Atmos, sample rate, bit depth, bitrate).
 - **Settings**: sign in, streaming quality, lossless, even loudness, autoplay, Automix.
 
+The design is kept light for TV hardware: no moving backgrounds or looping animation.
+Album pages and Now Playing take a still tint from the cover; every other page is plain.
+
 ## Using the remote
 
 - The arrows move the focus ring (blue, a little out from what it rings). OK opens or plays.
@@ -87,7 +90,8 @@ phone on the TV cuts it off at once.
 Automated tests cover the pages (Home, Explore, Library, Liked songs, Settings, the
 player's empty state, synced lyrics and the seek bar), focus moving along the top bar with
 the arrows and OK opening a tab, a page taking the focus as it opens, Up from a page landing
-on its tab, Back putting the focus on the card it left from, and the small rules behind
+on its tab, Back putting the focus on the card it left from, Down from Play on an album
+reaching its first song, the Queue button opening the queue on the playing song, and the small rules behind
 them (time formatting, the format line, how a search is sorted into rows). For the
 phone remote they cover pairing and control over real sockets, the refusals (a code used
 twice, a removed phone, a wrong key, a replayed or oversized message), the trackpad's
