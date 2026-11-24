@@ -10,6 +10,7 @@ struct LibraryView: View {
     @State private var confirmClear = false
     @State private var naming = false
     @State private var newName = ""
+    @State private var importing = false
 
     enum Tab: String, CaseIterable {
         case playlists = "Playlists", liked = "Liked", saved = "Albums", downloads = "Downloads", history = "History"
@@ -50,6 +51,10 @@ struct LibraryView: View {
             }
             Button("Cancel", role: .cancel) { newName = "" }
         }
+        // A finished import is cleared once the sheet is gone, however it was closed.
+        .sheet(isPresented: $importing, onDismiss: { PlaylistImporter.shared.dismiss() }) {
+            ImportView(library: library) { openRoute?(.playlist(id: $0)) }
+        }
         .alert("Download failed", isPresented: Binding(get: { library.downloadError != nil }, set: { if !$0 { library.downloadError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(library.downloadError ?? "") }
@@ -85,6 +90,18 @@ struct LibraryView: View {
                 }
                 .frame(width: 56, height: 56)
                 Text("New playlist").font(.body.weight(.medium))
+            }
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+        Button { importing = true } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8).fill(Theme.card)
+                    Image(systemName: "square.and.arrow.down").font(.title3.weight(.semibold))
+                }
+                .frame(width: 56, height: 56)
+                Text("Import from Spotify").font(.body.weight(.medium))
             }
         }
         .buttonStyle(.plain)

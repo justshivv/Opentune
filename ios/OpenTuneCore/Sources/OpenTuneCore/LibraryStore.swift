@@ -196,6 +196,14 @@ public final class LibraryStore: @unchecked Sendable {
         return added
     }
 
+    /** Adds each of [songs] not there yet, in order, with one write. */
+    public func addAllToPlaylist(_ id: String, _ songs: [Song]) {
+        editPlaylist(id) { p in
+            var seen = Set(p.songs.map(\.videoId))
+            p.songs += songs.filter { seen.insert($0.videoId).inserted }
+        }
+    }
+
     public func removeFromPlaylist(_ id: String, videoId: String) {
         editPlaylist(id) { $0.songs.removeAll { $0.videoId == videoId } }
     }

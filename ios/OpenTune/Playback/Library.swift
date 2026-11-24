@@ -55,6 +55,14 @@ final class Library: ObservableObject {
         return id
     }
 
+    /** A new playlist holding [songs], saved in one write; its id is returned. */
+    func createPlaylist(_ name: String, songs: [Song]) -> String {
+        let id = store.createPlaylist(name)
+        store.addAllToPlaylist(id, songs)
+        refresh()
+        return id
+    }
+
     func renamePlaylist(_ id: String, to name: String) {
         store.renamePlaylist(id, to: name)
         refresh()
