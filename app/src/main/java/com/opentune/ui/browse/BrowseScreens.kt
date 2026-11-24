@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,6 +67,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.draw.drawWithContent
@@ -541,10 +547,14 @@ internal enum class ListOrder(val label: String) {
 }
 
 /**
- * The sort menu for a list's songs, iOS-style: a rounded panel in the page's own
- * colours — it is composed inside the page's tint, so it wears them — with an
- * icon for each order and a check on the current one. The panel is a solid
- * colour from the page's scheme; nothing is blurred behind it.
+The sort menu for a list's songs, iOS-style: a rounded panel in the page's own
+colours — it is composed inside the page's tint, so it wears them — with an
+icon for each order and a check on the current one. The panel is a solid
+colour from the page's scheme; nothing is blurred behind it.
+ *
+The panel is hosted in a dialog, as the song menu is: hosted in a dropdown,
+its popup window stacked under the page's own window, and the glass bar drew
+over the panel's top. A dialog opens above everything on the page.
  */
 @Composable
 internal fun ListSortMenu(
@@ -554,33 +564,112 @@ internal fun ListSortMenu(
     onPick: (ListOrder) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    androidx.compose.material3.DropdownMenu(
-        expanded = expanded,
+    // Where the sort button sits on the screen. The menu's dialog has no anchor
+    // of its own, so the button's place is read here: this layer is a child of
+    // the same box as the button and reports that box's place in screen
+    // coordinates, the way the song menu's anchor reports its own.
+    val view = androidx.compose.ui.platform.LocalView.current
+    var anchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    Box(
+        Modifier.size(0.dp).onGloballyPositioned { c ->
+            val parent = c.parentLayoutCoordinates ?: return@onGloballyPositioned
+            val at = IntArray(2)
+            view.rootView.getLocationOnScreen(at)
+            anchor = parent.boundsInWindow().translate(at[0].toFloat(), at[1].toFloat())
+        },
+    )
+    if (!expanded) return
+    val button = anchor ?: return
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 0.dp,
-        shadowElevation = 8.dp,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
-        val options = ListOrder.entries.filter { includeRecent || it != ListOrder.RECENT }
-        options.forEachIndexed { index, o ->
-            if (index > 0) androidx.compose.material3.HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-            androidx.compose.material3.DropdownMenuItem(
-                text = { Text(o.label, fontWeight = if (o == order) androidx.compose.ui.text.font.FontWeight.SemiBold else null) },
-                leadingIcon = {
-                    Icon(
-                        when (o) {
-                            ListOrder.DEFAULT -> ImageVector.vectorResource(AppIcons.Reorder)
-                            ListOrder.RECENT -> ImageVector.vectorResource(AppIcons.History)
-                            ListOrder.A_TO_Z, ListOrder.Z_TO_A -> ImageVector.vectorResource(AppIcons.SortByAlpha)
-                        },
-                        null,
-                        Modifier.size(20.dp),
-                    )
+        val dialogView = androidx.compose.ui.platform.LocalView.current
+        // Undimmed, and no window animation of the system's: the panel simply
+        // appears over the untouched page, as the dropdown's did.
+        androidx.compose.runtime.SideEffect {
+            (dialogView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.apply {
+                setDimAmount(0f)
+                setWindowAnimations(0)
+            }
+        }
+        // Where this dialog's own window sits on the screen, to place the panel
+        // where the button is (the song menu's own reckoning).
+        var origin by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { c ->
+                    val at = IntArray(2)
+                    dialogView.rootView.getLocationOnScreen(at)
+                    origin = c.positionInWindow() + androidx.compose.ui.geometry.Offset(at[0].toFloat(), at[1].toFloat())
+                }
+                .pointerInput(Unit) { detectTapGestures { onDismiss() } },
+        ) {
+            val o = origin ?: return@Box
+            val at = button.translate(-o.x, -o.y)
+            // The panel grows a touch as it fades in, from the corner by the button.
+            val grown = remember { androidx.compose.animation.core.Animatable(0.9f) }
+            LaunchedEffect(Unit) { grown.animateTo(1f, androidx.compose.animation.core.tween(130)) }
+            androidx.compose.ui.layout.Layout(
+                content = {
+                    androidx.compose.material3.Surface(
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        modifier = Modifier
+                            .graphicsLayer {
+                                scaleX = grown.value
+                                scaleY = grown.value
+                                alpha = grown.value
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)
+                            }
+                            .pointerInput(Unit) { detectTapGestures { } },
+                    ) {
+                        Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max).padding(vertical = 8.dp)) {
+                            val options = ListOrder.entries.filter { includeRecent || it != ListOrder.RECENT }
+                            options.forEachIndexed { index, option ->
+                                if (index > 0) androidx.compose.material3.HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(option.label, fontWeight = if (option == order) androidx.compose.ui.text.font.FontWeight.SemiBold else null) },
+                                    leadingIcon = {
+                                        Icon(
+                                            when (option) {
+                                                ListOrder.DEFAULT -> ImageVector.vectorResource(AppIcons.Reorder)
+                                                ListOrder.RECENT -> ImageVector.vectorResource(AppIcons.History)
+                                                ListOrder.A_TO_Z, ListOrder.Z_TO_A -> ImageVector.vectorResource(AppIcons.SortByAlpha)
+                                            },
+                                            null,
+                                            Modifier.size(20.dp),
+                                        )
+                                    },
+                                    trailingIcon = if (option == order) ({ Icon(ImageVector.vectorResource(AppIcons.Check), null) }) else null,
+                                    onClick = { onPick(option) },
+                                )
+                            }
+                        }
+                    }
                 },
-                trailingIcon = if (o == order) ({ Icon(ImageVector.vectorResource(AppIcons.Check), null) }) else null,
-                onClick = { onPick(o) },
-            )
+            ) { measurables, constraints ->
+                val w = constraints.maxWidth
+                val h = constraints.maxHeight
+                val margin = 16.dp.roundToPx()
+                val gap = 6.dp.roundToPx()
+                val panel = measurables[0].measure(
+                    androidx.compose.ui.unit.Constraints(maxWidth = w - 2 * margin, maxHeight = h - 2 * margin),
+                )
+                // Under the button, its end edge lined up with the button's, kept
+                // inside the screen's margins; above the button when below has
+                // no room (a bar at the screen's foot).
+                val x = (at.right.roundToInt() - panel.width).coerceIn(margin, (w - margin - panel.width).coerceAtLeast(margin))
+                var y = at.bottom.roundToInt() + gap
+                if (y + panel.height > h - margin) y = (at.top.roundToInt() - gap - panel.height).coerceAtLeast(margin)
+                layout(w, h) { panel.place(x, y) }
+            }
         }
     }
 }
