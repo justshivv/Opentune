@@ -115,10 +115,10 @@ object ExternalStreams {
     private suspend fun lookupJioSaavn(song: Song, durationMs: Long): Rendition? {
         val duration = CatalogMetadata.duration(song, durationMs)
         if (duration <= 0) return null
-        val url = JioSaavnSource.resolve(song, duration, report = { reportSaavn(song.videoId, it) },
+        val hit = JioSaavnStreamSource.find(song, duration, report = { reportSaavn(song.videoId, it) },
             onArtists = { rememberArtistLine(song.videoId, it) }) ?: return null
-        val rendition = Rendition(java.util.UUID.randomUUID().toString(), url, "JioSaavn · 320 kbps (lossy)", false, now(),
-            provider = "JioSaavn", kbps = 320, sessionRevision = com.opentune.data.addons.AddonStore.revision.value)
+        val rendition = Rendition(java.util.UUID.randomUUID().toString(), hit.url, "${hit.provider} · 320 kbps (lossy)", false, now(),
+            provider = hit.provider, kbps = hit.kbps, sessionRevision = com.opentune.data.addons.AddonStore.revision.value)
         // Keep this lossy fallback address, but never overwrite a FLAC which
         // answered while JioSaavn was still searching. Decide atomically.
         remember(song.videoId, rendition, preserveLossless = true)
@@ -325,7 +325,7 @@ object ExternalStreams {
         if (earlier != null && earlier === held && fresh == null) detail += com.opentune.i18n.Tr.f("{0}: verified FLAC, found earlier and available for playback", earlier.provider)
         if (allowed(true)) detail += if (track == null && earlier == null) "FLAC: no verified matching stream available" else "Verified FLAC available; the track info above shows the source currently playing"
         val askedSaavn = !losslessOnly && track == null && earlier == null && allowed(false) && !saavnMissed && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
-        val saavn = if (askedSaavn) JioSaavnSource.resolve(song, duration, report = { detail += it },
+        val saavn = if (askedSaavn) JioSaavnStreamSource.find(song, duration, report = { detail += it },
             onArtists = { rememberArtistLine(song.videoId, it) }) else null
         report(videoId, detail.joinToString("\n").ifEmpty { "No external source eligible for this quality setting." })
         if (track == null && earlier == null && allowed(true) && !losslessMissed) {
@@ -343,10 +343,10 @@ object ExternalStreams {
         }
         if (track == null && saavn == null) return null
         // Even two FLACs of the same recording can have different byte offsets.
-        val rendition = Rendition(keyFor(videoId, track?.addonId, track?.trackId, track?.tier), track?.url ?: saavn!!,
-            track?.let { "${it.provider} · lossless requested" } ?: "JioSaavn · 320 kbps (lossy)", track != null, now(),
-            provider = track?.provider ?: "JioSaavn", bits = track?.bits, sampleRate = track?.sampleRate,
-            kbps = if (track == null) 320 else null, maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track?.addonId, mimeType = track?.mimeType,
+        val rendition = Rendition(keyFor(videoId, track?.addonId, track?.trackId, track?.tier), track?.url ?: saavn!!.url,
+            track?.let { "${it.provider} · lossless requested" } ?: "${saavn!!.provider} · 320 kbps (lossy)", track != null, now(),
+            provider = track?.provider ?: saavn!!.provider, bits = track?.bits, sampleRate = track?.sampleRate,
+            kbps = if (track == null) saavn!!.kbps else null, maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track?.addonId, mimeType = track?.mimeType,
             trackId = track?.trackId?.ifEmpty { null }, tier = track?.tier?.ifEmpty { null }, codec = track?.codec)
         remember(videoId, rendition)
         // The other verified files of this recording, to fall back on if this one won't load.
@@ -503,7 +503,7 @@ object ExternalStreams {
 
     /** A JioSaavn stream still held for [videoId]: what a failed add-on stream falls back to before YouTube. */
     fun saavnFor(videoId: String): Rendition? = if (!allowed(false)) null else
-        pinned.values.firstOrNull { (id, r) -> id == videoId && r.addonId == null && !r.lossless && r.provider == "JioSaavn" && now() - r.at < TTL }?.second
+        pinned.values.firstOrNull { (id, r) -> id == videoId && r.addonId == null && !r.lossless && r.provider == JioSaavnStreamSource.provider && now() - r.at < TTL }?.second
 
     private fun addonAllowed(rendition: Rendition): Boolean = rendition.addonId?.let { key ->
         com.opentune.data.addons.AddonStore.addons.value.firstOrNull { it.key == key }?.let(com.opentune.data.addons.AddonStore::usable) == true

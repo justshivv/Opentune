@@ -13,12 +13,15 @@ object JioSaavnStreamSource : StreamSource {
     override val tier = SourceTier.HIGH_BITRATE
     override val capabilities = SourceCapabilities(fastPath = true, keepsMatches = true, searchCost = 1)
 
+    /** The name this source's renditions carry; the one place it is written. */
+    val provider = "JioSaavn"
+
     override fun eligible(): Boolean = ExternalStreams.allowed(false)
 
     override suspend fun find(song: Song, durationMs: Long,
                               report: (String) -> Unit, onArtists: (String) -> Unit): SourceHit? =
         JioSaavnSource.resolve(song, durationMs, report = report, onArtists = onArtists)?.let { url ->
-            SourceHit(url = url, provider = "JioSaavn", lossless = false, kbps = 320)
+            SourceHit(url = url, provider = provider, lossless = false, kbps = 320)
         }
 }
 
