@@ -951,6 +951,10 @@ internal fun SeekTaps(
     var total by remember { mutableStateOf(0) }
     var lastTap by remember { mutableStateOf(0L) }
     val scope = rememberCoroutineScope()
+    // The taps are watched once (pointerInput(Unit)); the jump they make is read afresh at each tap,
+    // or it kept the song's length from when the player opened (0 then, or the last song's),
+    // and every jump was clamped to the start.
+    val seekBy by androidx.compose.runtime.rememberUpdatedState(onSeekBy)
     Box(
         modifier.pointerInput(Unit) {
             detectTapGestures(onDoubleTap = { o ->
@@ -961,7 +965,7 @@ internal fun SeekTaps(
                 at = o
                 lastTap = now
                 haptics.tick()
-                onSeekBy(s * 10_000L)
+                seekBy(s * 10_000L)
                 scope.launch {
                     ripple.snapTo(0f)
                     ripple.animateTo(1f, tween(650, easing = FastOutSlowInEasing))
