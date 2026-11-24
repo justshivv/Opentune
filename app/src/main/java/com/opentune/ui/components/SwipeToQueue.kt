@@ -221,13 +221,15 @@ internal fun SwipeToQueueRow(
      * the playlist, in place of play next and add to queue.
      */
     onRemove: (() -> Unit)? = null,
+    /** The swipe tip is up on this row: it slides a little each way by itself, to show what's under it. */
+    peek: Boolean = false,
     content: @Composable (actions: Modifier) -> Unit,
 ) {
     if (onRemove != null) {
-        SwipeRow(title, onAddToQueue, onRemove, SwipeAction.ADD_TO_QUEUE, SwipeAction.REMOVE, modifier, content)
+        SwipeRow(title, onAddToQueue, onRemove, SwipeAction.ADD_TO_QUEUE, SwipeAction.REMOVE, modifier, false, content)
         return
     }
-    SwipeRow(title, onPlayNext, onAddToQueue, SwipeAction.PLAY_NEXT, SwipeAction.ADD_TO_QUEUE, modifier, content)
+    SwipeRow(title, onPlayNext, onAddToQueue, SwipeAction.PLAY_NEXT, SwipeAction.ADD_TO_QUEUE, modifier, peek, content)
 }
 
 /** The swipe itself: [onForward] toward the end of the line, as [forward]; [onBackward] toward its start, as [backward]. */
@@ -239,6 +241,7 @@ private fun SwipeRow(
     forward: SwipeAction,
     backward: SwipeAction,
     modifier: Modifier,
+    peek: Boolean,
     content: @Composable (actions: Modifier) -> Unit,
 ) {
     // The arithmetic names the two sides PLAY_NEXT and ADD_TO_QUEUE; [shown] says what each does here.
@@ -266,8 +269,23 @@ private fun SwipeRow(
     val vanish = remember { Animatable(0f) }
     var settling by remember { mutableStateOf<Job?>(null) }
 
+    // The tip's demonstration: a short way toward the end of the line and back, then toward its start.
+    // Without motion, the tip's words alone. A finger on the row takes it over (settling is cancelled).
+    androidx.compose.runtime.LaunchedEffect(peek, calm) {
+        if (!peek || calm) return@LaunchedEffect
+        kotlinx.coroutines.delay(PEEK_DELAY_MS)
+        settling = launch {
+            val reach = width * PEEK_SHARE * (if (rtl) -1f else 1f)
+            for (to in listOf(reach, 0f, -reach, 0f)) {
+                animate(offset, to, animationSpec = tween(PEEK_LEG_MS)) { v, _ -> offset = v }
+                if (to == 0f) kotlinx.coroutines.delay(PEEK_PAUSE_MS)
+            }
+        }
+    }
+
     fun run(side: SwipeAction) {
         val act = (if (side == SwipeAction.PLAY_NEXT) playNext else addToQueue) ?: return
+        com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.SWIPE_ROW)
         act()
         // A removal says so itself, with an Undo on it.
         if (shown(side) != SwipeAction.REMOVE) QueueNotices.post(shown(side), name)
@@ -464,3 +482,9 @@ private fun androidx.compose.foundation.layout.BoxScope.SwipeReveal(
         }
     }
 }
+
+/** How far the swipe tip slides its row each way, as a share of the row's width: short of acting. */
+private const val PEEK_SHARE = 0.22f
+private const val PEEK_LEG_MS = 380
+private const val PEEK_PAUSE_MS = 250L
+private const val PEEK_DELAY_MS = 600L

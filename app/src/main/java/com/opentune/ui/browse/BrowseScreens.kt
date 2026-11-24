@@ -1,5 +1,6 @@
 package com.opentune.ui.browse
 
+import com.opentune.ui.components.tipAnchor
 import com.opentune.ui.components.pinnedToTop
 import com.opentune.ui.components.iconRes
 import com.opentune.ui.components.meaning
@@ -929,6 +930,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
             com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.QueueMusic), "Add to queue") { close(); c.songs.forEach(actions.addToQueue) }
             com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Download), "Download all") {
                 close()
+                com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.DOWNLOAD)
                 c.songs.forEach { com.opentune.data.download.Downloads.enqueue(context, it) }
                 fromList?.keepWhole(c.songs)
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", c.songs.size), context)
@@ -1051,6 +1053,19 @@ fun CollectionScreen(
     var moreOpen by remember { mutableStateOf(false) }
     val loaded = (state as? UiState.Success)?.data
     val context = androidx.compose.ui.platform.LocalContext.current
+    // Played from often and not yet saved: the download, in this page's menu, pointed out once.
+    val collectionPlays by com.opentune.data.history.ListenedCollections.plays.collectAsState()
+    val downloadEntries by com.opentune.data.download.Downloads.entries.collectAsState()
+    val playedOften = collectionPlays.firstOrNull { it.browseId == browseId }?.playedAt.orEmpty().size >= com.opentune.data.tips.TipRules.DOWNLOAD_AFTER_PLAYS
+    val savedAll = loaded?.songs?.let { songs ->
+        val pick = com.opentune.data.download.downloadSelection(songs, downloadEntries)
+        pick.wanted.isEmpty() || pick.complete.size == pick.wanted.size
+    } ?: true
+    val downloadTip = com.opentune.ui.components.rememberTipTarget(
+        com.opentune.data.tips.Tip.DOWNLOAD,
+        "Listen to this a lot? Download it from here to play it without a connection.",
+        enabled = playedOften && !savedAll,
+    )
     // Taken out of this playlist on YouTube Music: hidden here at once, and
     // put back if YouTube Music says no.
     var removed by remember(browseId) { mutableStateOf<Set<String>>(emptySet()) }
@@ -1134,7 +1149,7 @@ fun CollectionScreen(
                                 // An album's songs aren't added to it: no "Recently added" there.
                                 ListSortMenu(sortOpen, order, includeRecent = !browseId.startsWith("MPRE"), onPick = { order = it; sortOpen = false }, onDismiss = { sortOpen = false })
                             }
-                            androidx.compose.material3.IconButton(onClick = { moreOpen = true }, enabled = loaded != null) { Icon(ImageVector.vectorResource(AppIcons.MoreHoriz), "More") }
+                            androidx.compose.material3.IconButton(onClick = { moreOpen = true }, enabled = loaded != null, modifier = Modifier.tipAnchor(downloadTip)) { Icon(ImageVector.vectorResource(AppIcons.MoreHoriz), "More") }
                         }
                     }
                 }

@@ -52,6 +52,8 @@ class MainActivity : ComponentActivity() {
         java.util.Locale.setDefault(resources.configuration.locales[0])
         enableEdgeToEdge()
         com.opentune.ui.components.GlassPerformance.init(this)
+        // Opened afresh, not turned or restored: counts toward the tips that wait for a later launch.
+        if (savedInstanceState == null) com.opentune.data.tips.Tips.opened()
         if (savedInstanceState == null) receive(intent)
         // An older Android or a phone short of memory: Lite mode, once, before the first frame.
         if (!AppSettings.ui.value.liteChecked) {

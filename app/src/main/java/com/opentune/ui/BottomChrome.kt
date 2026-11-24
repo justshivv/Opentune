@@ -1,5 +1,6 @@
 package com.opentune.ui
 
+import com.opentune.ui.components.tipAnchor
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.Crossfade
@@ -1181,6 +1182,12 @@ internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onLongP
         spring(stiffness = 500f),
         label = "orbFill"
     )
+    // Holding Search listens for the song playing nearby; pointed out once, from the second launch.
+    val recognizeTip = com.opentune.ui.components.rememberTipTarget(
+        com.opentune.data.tips.Tip.RECOGNIZE,
+        "Press and hold Search to find out what's playing around you.",
+        enabled = onLongPress != null,
+    )
     val ink = dockInk()
     val fg by animateColorAsState(
         if (selected) MaterialTheme.colorScheme.onPrimary else ink.search,
@@ -1190,6 +1197,7 @@ internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onLongP
         modifier
             .sizeIn(maxWidth = CHROME_TAB_HEIGHT, maxHeight = CHROME_TAB_HEIGHT)
             .aspectRatio(1f)
+            .tipAnchor(recognizeTip)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .dockShadow(CircleShape)
             .glass(CircleShape, tint = ink.film ?: MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -1201,7 +1209,9 @@ internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onLongP
                 interactionSource = interaction,
                 indication = com.opentune.ui.components.FocusRing(CircleShape),
                 onClick = onClick,
-                onLongClick = onLongPress
+                onLongClick = onLongPress?.let { long ->
+                    { com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.RECOGNIZE); long() }
+                }
             )
             .semantics { role = Role.Tab; this.selected = selected },
         contentAlignment = Alignment.Center,

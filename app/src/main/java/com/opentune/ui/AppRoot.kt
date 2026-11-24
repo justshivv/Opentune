@@ -1,6 +1,8 @@
 package com.opentune.ui
 
 
+import com.opentune.ui.components.TipHost
+import com.opentune.ui.components.tipsCloseOnTouch
 import com.opentune.ui.server.ServerAlbumScreen
 import com.opentune.ui.server.ServerArtistScreen
 import com.opentune.ui.server.ServerArtistsScreen
@@ -669,7 +671,9 @@ fun AppRoot(vm: PlayerViewModel) {
                     // the sharp page show through the glass instead of the blurred copy.
                     .background(MaterialTheme.colorScheme.background)
                     .hazeSource(haze)
-                    .nestedScroll(chromeScroll),
+                    .nestedScroll(chromeScroll)
+                    // The tip that's up goes at the first touch anywhere; the touch still does its own thing.
+                    .tipsCloseOnTouch(),
             ) {
                 // Glass inside the pages is part of the layer the chrome blurs, so it
                 // can't blur that layer itself: it's filled, unless a page records
@@ -1118,6 +1122,12 @@ fun AppRoot(vm: PlayerViewModel) {
             ) {
                 com.opentune.ui.components.PillHost(chromeUi.reduceAnimation, Modifier.align(Alignment.TopCenter))
             }
+            // Tips at first use, beside what they point at; over the player too, which has one of its own.
+            androidx.compose.runtime.SideEffect {
+                com.opentune.ui.components.TipAnchors.pagesCovered = sheetOpen && song != null
+                com.opentune.ui.components.TipAnchors.playerShown = (sheetOpen || layout.sidePlayer) && song != null
+            }
+            TipHost(chromeUi.reduceAnimation)
         }
     }
     if (opening) {

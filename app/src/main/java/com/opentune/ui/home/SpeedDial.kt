@@ -62,6 +62,7 @@ import com.opentune.ui.components.MenuAnchor
 import com.opentune.ui.components.PageHeader
 import com.opentune.ui.components.SongContextMenu
 import com.opentune.ui.components.menuAnchor
+import com.opentune.ui.components.tipAnchor
 import com.opentune.ui.components.rememberHaptics
 import com.opentune.ui.type
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -106,6 +107,12 @@ internal fun SpeedDialSection(
             }
             Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), "Show all", Modifier.size(28.dp))
         }
+        // The first tile, when it has a menu, points out the press and hold, once.
+        val holdTip = com.opentune.ui.components.rememberTipTarget(
+            com.opentune.data.tips.Tip.HOLD_TILE,
+            "Press and hold a tile for more options.",
+            enabled = shown.first().cardMenu() != null,
+        )
         val pager = rememberPagerState(pageCount = { pageCount })
         val onPage = remember(shown, pager.currentPage) {
             shown.drop(pager.currentPage * PER_PAGE).take(PER_PAGE).mapNotNull { item ->
@@ -133,7 +140,7 @@ internal fun SpeedDialSection(
                         Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
                             for (column in 0 until 3) {
                                 val item = shown.getOrNull(page * PER_PAGE + row * 3 + column)
-                                if (item != null) SpeedDialTile(item, { onItemClick(item) }, Modifier.size(tile))
+                                if (item != null) SpeedDialTile(item, { onItemClick(item) }, Modifier.size(tile), tip = holdTip.takeIf { page == 0 && row == 0 && column == 0 })
                                 else Spacer(Modifier.size(tile))
                             }
                         }
@@ -157,7 +164,7 @@ internal fun SpeedDialSection(
 
 /** One square: the cover edge to edge (an artist's photo round), its name over a shade at the foot. */
 @Composable
-private fun SpeedDialTile(item: ShelfItem, onClick: () -> Unit, modifier: Modifier) {
+private fun SpeedDialTile(item: ShelfItem, onClick: () -> Unit, modifier: Modifier, tip: com.opentune.ui.components.TipTarget? = null) {
     val round = item.type() == BrowseType.ARTIST
     val menu = item.cardMenu()
     val anchor = remember { MenuAnchor() }
@@ -179,13 +186,18 @@ private fun SpeedDialTile(item: ShelfItem, onClick: () -> Unit, modifier: Modifi
     }
     Box(
         modifier
+            .tipAnchor(tip)
             .menuAnchor(anchor, view)
             .clip(RoundedCornerShape(TILE_CORNER))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .readyOnPress((menu as? CardMenu.ForSong)?.song)
             .then(
                 if (menu == null) Modifier.clickable(onClick = onClick)
-                else Modifier.menuClickable(onClick = onClick, onLongClick = { haptics.press(); menuOpen = true }),
+                else Modifier.menuClickable(onClick = onClick, onLongClick = {
+                    haptics.press()
+                    com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.HOLD_TILE)
+                    menuOpen = true
+                }),
             ),
     ) {
         SpeedDialTileFace(item, round)

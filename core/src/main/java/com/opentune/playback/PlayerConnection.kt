@@ -67,6 +67,9 @@ class PlayerConnection(private val context: Context) {
 
     private val _hasNext = MutableStateFlow(false)
     val hasNext = _hasNext.asStateFlow()
+    private val _hasPrevious = MutableStateFlow(false)
+    /** A song before this one in the queue (going back otherwise only starts this one over). */
+    val hasPrevious = _hasPrevious.asStateFlow()
 
     private val _videoMode = MutableStateFlow(false)
     /** True while the playing song is on its music video instead of its audio stream. */
@@ -305,6 +308,7 @@ class PlayerConnection(private val context: Context) {
         _currentSong.value = (mixing?.item ?: player.currentMediaItem)?.toSong()
         _upNext.value = player.upcomingPlayOrder().drop(1).let { up -> if (mixing != null) up.dropWhile { it != mixing.index }.drop(1) else up }
         _hasNext.value = player.hasNextMediaItem()
+        _hasPrevious.value = player.hasPreviousMediaItem()
         _shuffleEnabled.value = player.shuffleModeEnabled
         publishShuffle(player)
         _repeatMode.value = player.repeatMode

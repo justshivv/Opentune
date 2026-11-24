@@ -1,5 +1,6 @@
 package com.opentune.ui.player
 
+import com.opentune.ui.components.tipAnchor
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
@@ -1483,6 +1484,8 @@ fun MiniPlayer(
     onPrevious: () -> Unit,
     onClick: () -> Unit,
     onDismiss: () -> Unit = {},
+    /** A song to go back to: only then is the sideways swipe worth a tip, as both ways do something. */
+    hasPrevious: Boolean = false,
     modifier: Modifier = Modifier,
     inline: Boolean = false,
     /**
@@ -1562,6 +1565,12 @@ fun MiniPlayer(
 
     // One card in every page layout, like the one dock it sits on.
     val shape = RoundedCornerShape(22.dp)
+    // Its swipes, pointed out once; not by the still copy inside the player card.
+    val miniTip = com.opentune.ui.components.rememberTipTarget(
+        com.opentune.data.tips.Tip.MINI_PLAYER,
+        "Swipe sideways to skip, or down to stop the music.",
+        enabled = !replica && hasNext && hasPrevious,
+    )
     if (replica) {
         // No buttons that take a touch: the replica lies over the open player, at its full size and
         // invisible once the card is up, and its play and next buttons, centred on the screen,
@@ -1581,10 +1590,12 @@ fun MiniPlayer(
                 alpha = 1f - (offsetY.value / (dismissThreshold * 2.2f)).coerceIn(0f, 0.8f)
             }
             .glass(shape, tint, swell = false)
+            .tipAnchor(miniTip)
             .pullToOpen(round = false, onOpen = onClick)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
+                        if (kotlin.math.abs(offsetX.value) > threshold) com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.MINI_PLAYER)
                         when {
                             offsetX.value < -threshold -> onNext()
                             offsetX.value > threshold -> onPrevious()
@@ -1617,7 +1628,10 @@ fun MiniPlayer(
                         if (!change.pressed) {
                             if (engaged) {
                                 change.consume()
-                                if (lastMoveY > dismissThreshold) dragPositions.trySend(MiniDragCommand.Dismiss)
+                                if (lastMoveY > dismissThreshold) {
+                                    com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.MINI_PLAYER)
+                                    dragPositions.trySend(MiniDragCommand.Dismiss)
+                                }
                                 else dragPositions.trySend(MiniDragCommand.SpringBack)
                             }
                             break

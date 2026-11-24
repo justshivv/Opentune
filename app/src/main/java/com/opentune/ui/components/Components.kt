@@ -326,14 +326,25 @@ fun SongListItem(
     val hairline = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f)
     // Toward the end of the line plays next, toward the start adds to the queue.
     val swipes = swipeToQueue && playback.swipeToQueue && !selecting
+    // The first row that swipes both ways points the gesture out, once.
+    val swipeTip = rememberTipTarget(
+        com.opentune.data.tips.Tip.SWIPE_ROW,
+        // Right-to-left layouts mirror the swipe: play next is then toward the left.
+        if (androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl)
+            "Swipe a song left to play it next, or right to add it to the queue."
+        else "Swipe a song right to play it next, or left to add it to the queue.",
+        enabled = swipes && onPlayNext != null && onAddToQueue != null && onSwipeRemove == null,
+    )
     SwipeToQueueRow(
         title = song.title,
         onPlayNext = onPlayNext.takeIf { swipes },
         onAddToQueue = onAddToQueue.takeIf { (swipes || onSwipeRemove != null) && !selecting },
         modifier = modifier.fillMaxWidth()
             .readyOnPress(song.takeUnless { selecting })
-            .then(if (picked) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) else Modifier),
+            .then(if (picked) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) else Modifier)
+            .tipAnchor(swipeTip),
         onRemove = onSwipeRemove.takeIf { !selecting },
+        peek = tipShowing(swipeTip),
     ) { swipeActions ->
         Row(
             modifier = Modifier

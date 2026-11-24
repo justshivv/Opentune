@@ -1,5 +1,6 @@
 package com.opentune.ui.player
 
+import com.opentune.ui.components.tipAnchor
 import com.opentune.data.connect.meant
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.draw.drawBehind
@@ -1331,7 +1332,19 @@ fun PlayerLayout(
                                     controlsVisible = !controlsHidden,
                                 )
                             } else if (p == Pane.COVER) {
+                                // The cover's gestures, whatever the design: pointed out the first time the
+                                // player opens, and done with once the cover has skipped a song or jumped.
+                                val playerTip = com.opentune.ui.components.rememberTipTarget(
+                                    com.opentune.data.tips.Tip.PLAYER,
+                                    if (state.ui.doubleTapSeek) "Swipe the cover to skip. Double-tap its left or right side to jump 10 seconds."
+                                    else "Swipe the cover sideways to skip a song.",
+                                    enabled = !state.videoMode,
+                                    inside = true,
+                                )
+                                val coverNext: () -> Unit = { com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.PLAYER); actions.next() }
+                                val coverPrevious: () -> Unit = { com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.PLAYER); actions.previous() }
                                 val seekBy: (Long) -> Unit = { d ->
+                                    com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.PLAYER)
                                     actions.seekTo(
                                         // A length not known yet (0) puts no ceiling on the jump, as on the video page.
                                         (position() + d).coerceIn(
@@ -1342,7 +1355,8 @@ fun PlayerLayout(
                                 }
                                 Box(
                                     Modifier.weight(1f).fillMaxWidth()
-                                        .then(if (docked) Modifier.fitSquare() else Modifier),
+                                        .then(if (docked) Modifier.fitSquare() else Modifier)
+                                        .tipAnchor(playerTip),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     // The plain cover has the taps built in; every other design is wrapped in them here.
@@ -1359,8 +1373,8 @@ fun PlayerLayout(
                                             // the backdrop's picture, this one included.
                                             fullStyle || videoTakeover ->
                                                 ArtworkSwipeArea(
-                                                    onSwipeNext = actions.next,
-                                                    onSwipePrevious = actions.previous,
+                                                    onSwipeNext = coverNext,
+                                                    onSwipePrevious = coverPrevious,
                                                     modifier = Modifier.fillMaxSize()
                                                         .onGloballyPositioned { c ->
                                                             // Scaled down under the lists: not its place.
@@ -1384,8 +1398,8 @@ fun PlayerLayout(
                                                 VinylPane(
                                                     current,
                                                     state.isPlaying,
-                                                    onSwipeNext = actions.next,
-                                                    onSwipePrevious = actions.previous,
+                                                    onSwipeNext = coverNext,
+                                                    onSwipePrevious = coverPrevious,
                                                     animate = !state.ui.reduceAnimation,
                                                     musicVideo = state.videoMode,
                                                     videoSurface = inlineVideo
@@ -1396,8 +1410,8 @@ fun PlayerLayout(
                                                     current,
                                                     state.isPlaying,
                                                     progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
-                                                    onSwipeNext = actions.next,
-                                                    onSwipePrevious = actions.previous,
+                                                    onSwipeNext = coverNext,
+                                                    onSwipePrevious = coverPrevious,
                                                     animate = !state.ui.reduceAnimation,
                                                     musicVideo = state.videoMode,
                                                     videoSurface = inlineVideo,
@@ -1407,8 +1421,8 @@ fun PlayerLayout(
                                                 HaloPane(
                                                     current,
                                                     state.isPlaying,
-                                                    onSwipeNext = actions.next,
-                                                    onSwipePrevious = actions.previous,
+                                                    onSwipeNext = coverNext,
+                                                    onSwipePrevious = coverPrevious,
                                                     animate = !state.ui.reduceAnimation,
                                                     musicVideo = state.videoMode,
                                                     videoSurface = inlineVideo
@@ -1418,8 +1432,8 @@ fun PlayerLayout(
                                                 PolaroidPane(
                                                     current,
                                                     state.isPlaying,
-                                                    onSwipeNext = actions.next,
-                                                    onSwipePrevious = actions.previous,
+                                                    onSwipeNext = coverNext,
+                                                    onSwipePrevious = coverPrevious,
                                                     animate = !state.ui.reduceAnimation,
                                                     musicVideo = state.videoMode,
                                                     videoSurface = inlineVideo
@@ -1429,8 +1443,8 @@ fun PlayerLayout(
                                                 ArtworkPane(
                                                     current,
                                                     state.isPlaying,
-                                                    onSwipeNext = actions.next,
-                                                    onSwipePrevious = actions.previous,
+                                                    onSwipeNext = coverNext,
+                                                    onSwipePrevious = coverPrevious,
                                                     moving = state.ui.movingCover && !state.ui.reduceAnimation,
                                                     artworkMotion = artworkMotion,
                                                     change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
@@ -2889,6 +2903,7 @@ fun MiniPlayerBar(
     val isPlaying by vm.isPlaying.collectAsState()
     val isBuffering by vm.isBuffering.collectAsState()
     val hasNext by vm.hasNext.collectAsState()
+    val hasPrevious by vm.hasPrevious.collectAsState()
     val duration by vm.durationMs.collectAsState()
     val position = rememberPlaybackPosition(vm)
     val haptics = com.opentune.ui.components.rememberHaptics()
@@ -2900,6 +2915,7 @@ fun MiniPlayerBar(
         isPlaying = isPlaying,
         isBuffering = isBuffering,
         hasNext = hasNext,
+        hasPrevious = hasPrevious,
         progress = { if (duration > 0) position().toFloat() / duration else 0f },
         onTogglePlay = {
             haptics.pattern(if (isPlaying) com.opentune.ui.components.Haptics.Pattern.PAUSE else com.opentune.ui.components.Haptics.Pattern.PLAY)
