@@ -628,6 +628,8 @@ data class InterfaceSettings(
     val homeDaylist: Boolean = true,
     /** The Podcasts tab in the dock and podcast rows on Home; off, both are left out. */
     val podcasts: Boolean = true,
+    /** The Radio tab in the dock (the account's mixes and live stations); off, the dock is a tab shorter. */
+    val radioTab: Boolean = true,
     /** Draw the played part of the seek bar as a moving wave. */
     val wavySeekbar: Boolean = false,
     /** The song's own wave above the seek bar, read from the audio already on the phone. */
@@ -748,8 +750,6 @@ data class InterfaceSettings(
     val welcome: WelcomeState = WelcomeState.UNDECIDED,
     /** On wide windows (tablets, unfolded phones, phones on their side): the tabs in a rail and pages in a readable column. */
     val wideLayout: Boolean = true,
-    /** Explore has its own tab; off, it leaves the dock and fills the Search page until a search starts. */
-    val separateExplore: Boolean = true,
     /** On large screens, the player stays docked beside the page while a song is loaded. */
     val sidePlayer: Boolean = true,
     /** Your top songs play behind the Wrapped story; off is its mute button, kept for next time. */

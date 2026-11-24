@@ -70,7 +70,7 @@ import com.opentune.ui.type
 import kotlinx.coroutines.CancellationException
 
 /**
- * The Radio tab of the Poster layout: YouTube Music's mixes made for the account. The big
+ * The Radio tab: YouTube Music's mixes made for the account. The big
  * ones (Supermix, Discover, New Release, Replay, Archive, and Liked Music) are tiles washed
  * in their covers' colours; the numbered "My Mix" cards run large in a row of their own;
  * each mood follows with its Supermix and numbered mixes. Live stations are at the foot.
@@ -226,9 +226,10 @@ private fun MixTile(label: String, artUrl: String?, colors: List<Color>?, onClic
             .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), shape)
             .clickable(role = Role.Button, onClick = onClick),
     ) {
+        // The OpenTune mark (the launcher icon's, whose shape fills the middle half of its square).
         Icon(
-            ImageVector.vectorResource(AppIcons.Waves), null,
-            Modifier.align(Alignment.Center).padding(bottom = 18.dp).size(46.dp),
+            androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_launcher_monochrome), null,
+            Modifier.align(Alignment.Center).padding(bottom = 18.dp).size(92.dp),
             tint = Color.White,
         )
         Text(

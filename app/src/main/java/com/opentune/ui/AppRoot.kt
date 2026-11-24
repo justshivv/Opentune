@@ -117,7 +117,7 @@ object TabEvents {
 private enum class Tab(val route: String, val label: String, val iconRes: Int, val selectedIconRes: Int) {
     HOME("home", "Home", AppIcons.HomeOutline, AppIcons.Home),
     EXPLORE("explore", "Explore", AppIcons.ExploreOutline, AppIcons.Explore),
-    /** YouTube Music's mixes for the account, in the Poster layout only (see RadioMixesScreen). */
+    /** YouTube Music's mixes for the account and live stations (see RadioMixesScreen); can be turned off. */
     RADIO(com.opentune.ui.radio.RADIO_ROUTE, "Radio", AppIcons.Radio, AppIcons.Radio),
     PODCASTS("podcasts", "Podcasts", AppIcons.Podcasts, AppIcons.Podcasts),
     LIBRARY("library", "Library", AppIcons.LibraryMusicOutline, AppIcons.LibraryMusic),
@@ -153,14 +153,13 @@ fun AppRoot(vm: PlayerViewModel) {
     // grows out of it (see CoverMorph). Whether this page did is settled as it
     // opens, before its transition is picked.
     com.opentune.ui.components.FollowCoverPages(nav, com.opentune.ui.components.CoverMorph.allowed(chromeUi), COVER_ROUTES)
-    // Explore without a tab of its own lives on the Search page instead.
-    val separateExplore = chromeUi.separateExplore
-    // The Poster layout has a Radio tab of the account's mixes.
-    val radioTab = chromeUi.pageLayout == com.opentune.data.settings.PageLayout.POSTER
-    // Podcasts can be turned off in Settings › Appearance, their tab with them (issue 65).
+    // One dock in every layout: Home, Radio, Podcasts and Library, with Search beside it. Explore
+    // has no tab: it fills the Search page until a search starts. Radio and Podcasts can each be
+    // turned off in Settings › Appearance, to keep the dock short (Podcasts: issue 65).
+    val radioTab = chromeUi.radioTab
     val podcastsTab = chromeUi.podcasts
-    val dockTabs = remember(separateExplore, radioTab, podcastsTab) {
-        Tab.entries.filter { (it != Tab.EXPLORE || separateExplore) && (it != Tab.RADIO || radioTab) && (it != Tab.PODCASTS || podcastsTab) }
+    val dockTabs = remember(radioTab, podcastsTab) {
+        Tab.entries.filter { it != Tab.EXPLORE && (it != Tab.RADIO || radioTab) && (it != Tab.PODCASTS || podcastsTab) }
     }
     val chromeTabs = dockTabs.map { ChromeTab(it.label, ImageVector.vectorResource(it.iconRes), ImageVector.vectorResource(it.selectedIconRes)) }
     // A page opened from inside the player (the artist, from a tap on their
@@ -257,14 +256,14 @@ fun AppRoot(vm: PlayerViewModel) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
-    // Explore's tab turned off while on it: back to Home, Explore is on the Search page now.
-    LaunchedEffect(separateExplore) {
-        if (!separateExplore && tab == Tab.EXPLORE) {
+    // Explore had a tab once: a tab kept from then is Home's now, and Explore is on the Search page.
+    LaunchedEffect(Unit) {
+        if (tab == Tab.EXPLORE) {
             tab = Tab.HOME
             if (route == Tab.EXPLORE.route) nav.popBackStack(Tab.HOME.route, inclusive = false)
         }
     }
-    // Out of the Poster layout while on its Radio tab: back to Home.
+    // Radio turned off while on its tab: back to Home.
     LaunchedEffect(radioTab) {
         if (!radioTab && tab == Tab.RADIO) {
             tab = Tab.HOME
@@ -774,9 +773,9 @@ fun AppRoot(vm: PlayerViewModel) {
                                 onOpenList = { list ->
                                     list.playlistId?.let { pages.open("playlist/${Uri.encode(it)}") } ?: list.browseId?.let { nav.openBrowse(it) }
                                 },
-                                explore = if (separateExplore) null else ({
+                                explore = {
                                     ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, showHeader = false)
-                                }),
+                                },
                             )
                         }
                         page("settings?page={page}", listOf(navArgument("page") { type = NavType.StringType; nullable = true; defaultValue = null })) { e ->

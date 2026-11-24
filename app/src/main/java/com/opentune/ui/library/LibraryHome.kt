@@ -432,8 +432,8 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     Shortcut(ImageVector.vectorResource(AppIcons.History), "Replay", "Your top songs", nav.replay, Modifier.weight(1f))
                 }
                 val server by Subsonic.server.collectAsState()
+                val room by com.opentune.data.together.Together.room.collectAsState()
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Shortcut(ImageVector.vectorResource(AppIcons.Radio), "Radio", "Live stations", nav.radio, Modifier.weight(1f))
                     Shortcut(
                         ImageVector.vectorResource(AppIcons.Dns),
                         "Music server",
@@ -441,9 +441,6 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         nav.server,
                         Modifier.weight(1f),
                     )
-                }
-                val room by com.opentune.data.together.Together.room.collectAsState()
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Shortcut(
                         ImageVector.vectorResource(AppIcons.Groups),
                         "Listen together",
@@ -451,6 +448,10 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         nav.together,
                         Modifier.weight(1f),
                     )
+                }
+                // Live stations are on the Radio tab; with that tab turned off, they're reached from here.
+                val radioTab = com.opentune.data.settings.AppSettings.ui.collectAsState().value.radioTab
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     val podcastShows by com.opentune.data.podcasts.Podcasts.subscriptions.collectAsState()
                     Shortcut(
                         ImageVector.vectorResource(AppIcons.Podcasts),
@@ -459,6 +460,8 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         nav.podcasts,
                         Modifier.weight(1f),
                     )
+                    if (radioTab) androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    else Shortcut(ImageVector.vectorResource(AppIcons.Radio), "Radio", "Live stations", nav.radio, Modifier.weight(1f))
                 }
             }
         }

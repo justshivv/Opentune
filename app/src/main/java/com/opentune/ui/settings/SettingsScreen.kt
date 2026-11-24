@@ -1692,14 +1692,9 @@ private fun settingsSections(
                     ToggleRow("Podcasts", ui.podcasts, { v -> AppSettings.updateUi { it.copy(podcasts = v) } },
                         summary = "The Podcasts tab and podcast rows on Home", icon = ImageVector.vectorResource(AppIcons.Podcasts))
                 },
-                Entry("Separate Explore tab", "explore tab dock search page navigation moods genres own") {
-                    ToggleRow(
-                        "Separate Explore tab",
-                        ui.separateExplore,
-                        { v -> AppSettings.updateUi { it.copy(separateExplore = v) } },
-                        summary = if (ui.separateExplore) "Explore has a tab in the dock" else "Explore fills the Search page until you start a search",
-                        icon = ImageVector.vectorResource(AppIcons.Explore),
-                    )
+                Entry("Radio tab", "radio tab dock mixes supermix stations hide navigation") {
+                    ToggleRow("Radio tab", ui.radioTab, { v -> AppSettings.updateUi { it.copy(radioTab = v) } },
+                        summary = "Your mixes and live stations, in the dock", icon = ImageVector.vectorResource(AppIcons.Radio))
                 },
                 Entry("Wide-screen layout", "tablet foldable large screen landscape rail side navigation dock columns") {
                     ToggleRow(
