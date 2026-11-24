@@ -73,6 +73,14 @@ test('Monochrome search maps identity, excludes unavailable tracks, resolves mea
   assert.match(calls[1].options.headers['User-Agent'], /^OpenTune-/);
   assert.equal(calls[1].options.headers.Origin, undefined);
 });
+test('Monochrome preserves long tracks from catalogues that report seconds', async () => {
+  const handler = createAddon({ fetcher: async () => json({ tracks: [
+    { ...raw, duration: 1200 },
+    { ...raw, duration: 'Infinity' },
+  ] }) });
+  const { tracks } = await (await handler(req('/monochrome/search?q=mix'))).json();
+  assert.deepEqual(tracks.map(track => track.duration), [1200]);
+});
 test('CD FLAC stays CD quality; arbitrary or malformed content never earns a FLAC label', () => {
   assert.equal(flacInfo(flac({ rate: 44100, bits: 16 })).bitDepth, 16);
   for (const bytes of [new Uint8Array(), new TextEncoder().encode('<html>cloudflare error</html>'), flac({ rate: 0 }), flac({ duration: 0 })]) {

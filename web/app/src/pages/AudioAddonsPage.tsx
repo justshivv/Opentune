@@ -7,9 +7,10 @@ import { JIOSAAVN_ORIGIN } from '@/addons/jiosaavn';
 import { SourceList } from './SourceList';
 import { settingsUi } from './settingsStyles';
 import { AddonVerification } from './AddonVerification';
-import { isOfficialAddon } from '@/addons/verification';
+import { isOfficialAddon, OFFICIAL_ADDON } from '@/addons/verification';
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+const monochromeManifest = `${OFFICIAL_ADDON}/monochrome/manifest.json`;
 
 export default function AudioAddonsPage() {
   const status = useAddons(s => s.status);
@@ -31,9 +32,9 @@ export default function AudioAddonsPage() {
     document.addEventListener('visibilitychange', again);
     return () => document.removeEventListener('visibilitychange', again);
   }, []);
-  const add = () => {
+  const add = (manifestUrl = url) => {
     setBusy(true);
-    void addSource(url)
+    void addSource(manifestUrl)
       .then(() => { setUrl(''); setNotice('Source added'); })
       .catch(e => setNotice(message(e, 'Could not add source')))
       .finally(() => setBusy(false));
@@ -87,6 +88,12 @@ export default function AudioAddonsPage() {
 
       <h2 className={settingsUi.sectionHeader}>Add a source</h2>
       <form className={`${settingsUi.group} p-4`} onSubmit={e => { e.preventDefault(); add(); }}>
+        {!sources.some(source => source.url === monochromeManifest || source.url === `${OFFICIAL_ADDON}/manifest.json`) && (
+          <button type="button" className="ot-allow !mt-0 mb-3" disabled={busy} onClick={() => {
+            setUrl(monochromeManifest);
+            add(monochromeManifest);
+          }}>Add Monochrome</button>
+        )}
         <label htmlFor="addon-url" className="sr-only">Source URL</label>
         <div className="flex flex-wrap gap-2">
           <input id="addon-url" type="url" required value={url} onChange={e => setUrl(e.target.value)} placeholder="https://your-addon.example/manifest.json" className="ot-field min-w-0 flex-[1_1_240px]" />

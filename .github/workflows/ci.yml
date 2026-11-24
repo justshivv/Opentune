@@ -212,9 +212,9 @@ jobs:
           packages: platform-tools platforms;android-37.0 build-tools;36.0.0 ndk;27.2.12479018 cmake;3.22.1
       - uses: gradle/actions/setup-gradle@v4
       # jpackage builds the .rpm with the system's own rpmbuild.
-      - name: RPM tools
+      - name: Linux packaging tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y rpm
+        run: sudo apt-get update && sudo apt-get install -y rpm desktop-file-utils
       # The sound output (desktop/native/otaudio.c) is built with MinGW's gcc on Windows.
       - name: C compiler (Windows)
         if: runner.os == 'Windows'

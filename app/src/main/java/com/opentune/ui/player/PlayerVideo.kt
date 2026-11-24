@@ -8,6 +8,7 @@ import android.view.Surface
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -127,7 +128,7 @@ internal fun rememberVideoOutput(connection: PlayerConnection): VideoOutput {
  * into [output]'s view: the whole frame fitted inside the box, or with
  * [crop] filling it, the overflow cut off. Only one place shows it at a time.
  */
-@OptIn(UnstableApi::class)
+@OptIn(markerClass = [UnstableApi::class])
 @Composable
 internal fun VideoSurface(output: VideoOutput, size: VideoSize?, modifier: Modifier = Modifier, crop: Boolean = false) {
     val view = output.view
@@ -169,7 +170,7 @@ internal fun VideoSurface(output: VideoOutput, size: VideoSize?, modifier: Modif
 }
 
 /** A picture's shape, width over height as it is shown, or 0 while unknown. */
-@OptIn(UnstableApi::class)
+@OptIn(markerClass = [UnstableApi::class])
 internal fun videoAspect(size: VideoSize): Float {
     if (size.width <= 0 || size.height <= 0) return 0f
     val swapped = size.unappliedRotationDegrees % 180 != 0
