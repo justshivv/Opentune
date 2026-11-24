@@ -10,6 +10,39 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class AddonStoreTest {
+    @Test fun builtInMonochromeNeedsNoUrlAndKeepsItsSwitchAcrossRestartAndCatalogSync() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences("audio_addons", 0).edit().clear().commit()
+        AddonStore.init(context)
+        AddonStore.setMonochromeEnabled(true)
+        AddonStore.setMonochromeEnabled(true)
+        val source = AddonStore.addons.value.single()
+        assertEquals(MonochromeModule.BASE, source.base)
+        assertTrue(AddonStore.usable(source))
+        AddonStore.setMonochromeEnabled(false)
+        AddonStore.init(context)
+        assertFalse(AddonStore.addons.value.single().enabled)
+        val managed = source.copy(key = "admin:mono", admin = true, enabled = true, ownerOff = true)
+        AddonStore.syncCommunity(listOf(managed))
+        AddonStore.setMonochromeEnabled(true)
+        assertEquals(managed.key, AddonStore.addons.value.single().key)
+        assertFalse(AddonStore.usable(AddonStore.addons.value.single()))
+        AddonStore.syncCommunity(listOf(managed.copy(ownerOff = false)))
+        AddonStore.setMonochromeEnabled(true)
+        assertTrue(AddonStore.usable(AddonStore.addons.value.single()))
+    }
+
+    @Test fun aPersonalServerUsingTheSameManifestIdCannotTakeOverTheBuiltInSwitch() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences("audio_addons", 0).edit().clear().commit()
+        AddonStore.init(context)
+        AddonStore.add("https://other.example/", MonochromeModule.preset)
+        AddonStore.setMonochromeEnabled(true)
+        AddonStore.setMonochromeEnabled(false)
+        assertTrue(AddonStore.addons.value.first().enabled)
+        assertFalse(AddonStore.addons.value.single(MonochromeModule::matches).enabled)
+    }
+
     @Test fun preservesPriorityAndEnablementAcrossRestartAndDoesNotExposePathAsName() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         AddonStore.init(context)
