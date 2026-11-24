@@ -196,6 +196,7 @@ fun AppRoot(vm: PlayerViewModel) {
     // is rarely started afresh.
     val appContext = androidx.compose.ui.platform.LocalContext.current
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val leaveFocusGuard = com.opentune.ui.components.rememberLeaveFocusGuard()
     var update by remember { mutableStateOf<com.opentune.data.UpdateCheck.Release?>(null) }
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
@@ -652,6 +653,7 @@ fun AppRoot(vm: PlayerViewModel) {
         ) {
             Box(
                 Modifier.fillMaxSize()
+                    .then(leaveFocusGuard)
                     .then(if (sampled) Modifier.layerBackdrop(backdrop) else Modifier)
                     // Painted inside the recorded layer: a see-through backdrop would let
                     // the sharp page show through the glass instead of the blurred copy.
