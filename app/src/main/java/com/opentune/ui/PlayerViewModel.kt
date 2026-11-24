@@ -309,6 +309,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun toRoom(song: Song?): Boolean = song != null && Together.room.value?.following == true && Together.suggest(song)
 
     fun play(song: Song, source: String? = null) { if (!toRoom(song)) player.play(song, source) }
+    /** Plays [song] as its music video from the start; in a room, as a song suggested to the host. */
+    fun playVideo(song: Song, source: String? = null) { if (!toRoom(song)) player.playVideo(song, source) }
     fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false, source: String? = null, fromList: Boolean = true) {
         if (!toRoom(songs.getOrNull(if (shuffle) 0 else startIndex))) player.playAll(songs, startIndex, shuffle, source, fromList = fromList)
     }

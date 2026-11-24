@@ -104,6 +104,19 @@ object PlaybackRequests {
         _videoMode.tryEmit(videoId to on)
     }
 
+    @Volatile private var startAsVideo: String? = null
+
+    /** [videoId], about to be played, plays as its music video from the start. */
+    fun startAsVideo(videoId: String) { startAsVideo = videoId }
+
+    /** The song asked to start as a video, if it's [videoId]; asked once. */
+    fun takeStartAsVideo(videoId: String?): String? {
+        val asked = startAsVideo ?: return null
+        if (videoId != asked) return null
+        startAsVideo = null
+        return asked
+    }
+
     private val _videoQuality = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 1)
     /** Songs whose music video should move onto the picture size now chosen. */
     val videoQuality: kotlinx.coroutines.flow.SharedFlow<String> = _videoQuality

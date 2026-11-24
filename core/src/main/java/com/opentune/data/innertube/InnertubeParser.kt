@@ -1793,7 +1793,7 @@ object InnertubeParser {
      */
     private val TALLY = Regex(
         """[\d.,]+\s*[KMB]?\s+(plays|views|likes|songs|tracks|subscribers|""" +
-                """hours?|minutes?|seconds?)\b.*""",
+                """hours?|hrs?|minutes?|mins?|seconds?|secs?)\b.*""",
         RegexOption.IGNORE_CASE,
     )
     /** Header words that mark a page as a release, whose rows share its credit. */

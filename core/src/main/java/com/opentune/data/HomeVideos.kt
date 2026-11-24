@@ -33,6 +33,23 @@ object HomeVideos {
         )
     }
 
+    /**
+     * [shelves] with no two rows of videos side by side: a video row that would follow another
+     * waits for the next row of something else, and goes after it.
+     */
+    fun spacedApart(shelves: List<HomeShelf>, after: HomeShelf? = null): List<HomeShelf> {
+        val out = ArrayList<HomeShelf>(shelves.size)
+        val waiting = ArrayDeque<HomeShelf>()
+        for (shelf in shelves) {
+            val last = out.lastOrNull() ?: after
+            if (shelf.videos && last?.videos == true) { waiting += shelf; continue }
+            out += shelf
+            if (!shelf.videos && waiting.isNotEmpty()) out += waiting.removeFirst()
+        }
+        out += waiting
+        return out
+    }
+
     private fun takeTurns(rows: List<List<ShelfItem>>, seen: MutableSet<String>): List<ShelfItem> {
         val out = ArrayList<ShelfItem>()
         val longest = rows.maxOfOrNull { it.size } ?: 0

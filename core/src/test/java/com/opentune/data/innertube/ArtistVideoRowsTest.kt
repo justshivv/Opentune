@@ -77,4 +77,25 @@ class ArtistVideoRowsTest {
         val rows = HomeVideos.shelves(listOf(page), "Music videos for you", "Live performances")
         assertEquals(listOf("Music videos for you", "Live performances"), rows.map { it.title })
     }
+
+    private fun row(title: String, videos: Boolean = false) = HomeShelf(title, listOf(card(title)), videos = videos)
+
+    @Test
+    fun videoRowsNeverSitOneUnderTheOther() {
+        val home = listOf(row("Radio"), row("Videos", true), row("Live", true), row("Albums"), row("Charts"))
+        assertEquals(listOf("Radio", "Videos", "Albums", "Live", "Charts"), HomeVideos.spacedApart(home).map { it.title })
+        // Nor under a video row at the end of the first page.
+        val after = HomeVideos.spacedApart(listOf(row("Videos", true), row("Albums")), after = row("Their videos", true))
+        assertEquals(listOf("Albums", "Videos"), after.map { it.title })
+        // Other rows keep their order.
+        val plain = listOf(row("A"), row("B"), row("C"))
+        assertEquals(plain, HomeVideos.spacedApart(plain))
+    }
+
+    @Test
+    fun aSpelledOutLengthIsNoArtist() {
+        assertEquals("", InnertubeParser.artistFromSubtitle("2 min 59 sec"))
+        assertEquals("Mohit Chauhan", InnertubeParser.artistFromSubtitle("Mohit Chauhan • 3 min 2 sec"))
+        assertEquals("50 Cent", InnertubeParser.artistFromSubtitle("50 Cent • 2.1M views"))
+    }
 }

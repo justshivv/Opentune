@@ -366,6 +366,15 @@ class PlayerConnection(private val context: Context) {
      * Starts [song] on its own, replacing the queue but for the songs queued
      * by hand, which come next. The service fills in radio after them.
      */
+    /**
+     * Plays [song] as its music video from the start (a video card): the service puts it onto its
+     * picture as it begins. As a plain [play] when music videos are turned off in Settings.
+     */
+    fun playVideo(song: Song, source: String? = null) {
+        if (AppSettings.playback.value.videoModeEnabled) PlaybackRequests.startAsVideo(song.videoId)
+        play(song, source)
+    }
+
     fun play(song: Song, source: String? = null) {
         val controller = controller ?: return
         _error.value = null

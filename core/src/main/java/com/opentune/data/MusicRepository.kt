@@ -243,8 +243,11 @@ object MusicRepository {
         val extras = arrayOfNulls<List<HomeShelf>>(HomeSource.entries.size)
         fun publish() = synchronized(lock) {
             val seen = first.mapTo(HashSet()) { it.dedupeKey() }
-            _homeMore.value = (pages + extras.filterNotNull().flatten())
-                .filter { it.items.isNotEmpty() && seen.add(it.dedupeKey()) }
+            // Rows of videos are kept apart, so two never sit one under the other.
+            _homeMore.value = HomeVideos.spacedApart(
+                (pages + extras.filterNotNull().flatten()).filter { it.items.isNotEmpty() && seen.add(it.dedupeKey()) },
+                after = first.lastOrNull(),
+            )
         }
         launch {
             var next = token
@@ -275,7 +278,7 @@ object MusicRepository {
     }
 
     /** Where Home's extra shelves come from, in the order they're shown. */
-    private enum class HomeSource { SEED, RADIO, VIDEOS, LISTENBRAINZ, ARTISTS, NEW_RELEASES, CHARTS, EXPLORE, MOODS }
+    private enum class HomeSource { SEED, RADIO, VIDEOS, LISTENBRAINZ, ARTISTS, NEW_RELEASES, LIVE, CHARTS, EXPLORE, MOODS }
 
     private class Fetched(
         val shelves: List<HomeShelf>,
@@ -309,7 +312,8 @@ object MusicRepository {
                 HomeSource.SEED -> seedShelves()
                 HomeSource.RADIO -> radioShelf(engine)
                 HomeSource.LISTENBRAINZ -> listenBrainzShelf()
-                HomeSource.VIDEOS -> videoShelves()
+                HomeSource.VIDEOS -> videoShelves().filter { it.title == videosTitle() }
+                HomeSource.LIVE -> videoShelves().filter { it.title == liveTitle() }
                 HomeSource.ARTISTS -> artistShelves()
                 HomeSource.NEW_RELEASES -> shelvesOf("FEmusic_new_releases")
                 HomeSource.CHARTS -> chartShelves()
@@ -461,6 +465,9 @@ object MusicRepository {
      * a turn each ([HomeVideos]). Signed in or out, so Home always has videos, as YouTube's own
      * Home only sometimes does.
      */
+    private fun videosTitle() = com.opentune.i18n.Tr.t("Music videos for you")
+    private fun liveTitle() = com.opentune.i18n.Tr.t("Live performances")
+
     private suspend fun videoShelves(): List<HomeShelf> = coroutineScope {
         val hidden = com.opentune.data.library.LibraryStore.hidden.value
         val played = personalArtists().map { it.browseId to it.name }
@@ -480,8 +487,8 @@ object MusicRepository {
         }.awaitAll().filterNotNull()
         HomeVideos.shelves(
             pages,
-            videosTitle = com.opentune.i18n.Tr.t("Music videos for you"),
-            liveTitle = com.opentune.i18n.Tr.t("Live performances"),
+            videosTitle = videosTitle(),
+            liveTitle = liveTitle(),
         ).map { shelf -> shelf.copy(items = shelf.items.filterNot { hidden.hides(it.videoId, it.subtitle) }) }
             .filter { it.items.size >= 3 }
     }

@@ -305,6 +305,12 @@ fun AppRoot(vm: PlayerViewModel) {
         val browseId = item.browseId
         when {
             browseId != null -> nav.openBrowse(browseId)
+            // A music video or live performance plays as a video, with the player open on it.
+            item.video -> item.toSong()?.let { song ->
+                vm.playVideo(song, "Home")
+                if (!com.opentune.data.settings.AppSettings.ui.value.reduceAnimation) com.opentune.ui.components.PlayerMorph.openSheet()
+                playerOpen = true
+            }
             else -> item.toSong()?.let { vm.play(it, "Home") }
         }
     } }

@@ -218,6 +218,39 @@ class PlaybackService : MediaLibraryService() {
      * the rendition it was on when video mode took over, else the best
      * external rendition on record for it, else its plain track address.
      */
+    /**
+     * Puts the playing song [id] onto its music video, or back onto its audio, where it stands.
+     * Nothing happens unless [id] is the song playing.
+     */
+    private fun switchVideo(id: String, on: Boolean) {
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val item = player.currentMediaItem ?: return
+        if (item.mediaId != id) return
+        // A switch to the mode already showing is not a switch: it
+        // must not even touch the remembered rendition, let alone
+        // build the item again.
+        val alreadyVideo = item.localConfiguration?.uri?.let { isVideoUri(it) || isVideoOnlyUri(it) } == true
+        if (on == alreadyVideo) return
+        val uri = if (on) {
+            videoAudioStash = id to (item.localConfiguration?.uri ?: trackUri(id))
+            videoModeSongId = id
+            videoStreamUri(id, height = videoHeightFor(id))
+        } else {
+            if (videoModeSongId == id) videoModeSongId = null
+            audioUriFor(id).also { if (videoAudioStash?.first == id) videoAudioStash = null }
+        }
+        if (item.localConfiguration?.uri == uri) return
+        // A rendition swap like the quality switch's own: the position
+        // and play state are carried across by hand, because replacing
+        // the playing item drops the playhead to its start.
+        val index = player.currentMediaItemIndex
+        val position = player.currentPosition
+        val playing = player.isPlaying
+        player.replaceMediaItem(index, item.buildUpon().setUri(uri).build())
+        if (position > 0) player.seekTo(index, position)
+        if (playing) player.play()
+    }
+
     private fun audioUriFor(id: String): Uri {
         val stashed = videoAudioStash?.takeIf { it.first == id }?.second
         if (stashed != null && externalStreamKeyOf(selectedUri(stashed)) != null) return stashed
@@ -681,36 +714,7 @@ class PlaybackService : MediaLibraryService() {
             }
         }
         scope.launch { PlaybackRequests.upgrade.collect { scheduleUpgrade(force = true) } }
-        scope.launch {
-            PlaybackRequests.videoMode.collect { (id, on) ->
-                val player = mediaSession?.player as? ExoPlayer ?: return@collect
-                val item = player.currentMediaItem ?: return@collect
-                if (item.mediaId != id) return@collect
-                // A switch to the mode already showing is not a switch: it
-                // must not even touch the remembered rendition, let alone
-                // build the item again.
-                val alreadyVideo = item.localConfiguration?.uri?.let { isVideoUri(it) || isVideoOnlyUri(it) } == true
-                if (on == alreadyVideo) return@collect
-                val uri = if (on) {
-                    videoAudioStash = id to (item.localConfiguration?.uri ?: trackUri(id))
-                    videoModeSongId = id
-                    videoStreamUri(id, height = videoHeightFor(id))
-                } else {
-                    if (videoModeSongId == id) videoModeSongId = null
-                    audioUriFor(id).also { if (videoAudioStash?.first == id) videoAudioStash = null }
-                }
-                if (item.localConfiguration?.uri == uri) return@collect
-                // A rendition swap like the quality switch's own: the position
-                // and play state are carried across by hand, because replacing
-                // the playing item drops the playhead to its start.
-                val index = player.currentMediaItemIndex
-                val position = player.currentPosition
-                val playing = player.isPlaying
-                player.replaceMediaItem(index, item.buildUpon().setUri(uri).build())
-                if (position > 0) player.seekTo(index, position)
-                if (playing) player.play()
-            }
-        }
+        scope.launch { PlaybackRequests.videoMode.collect { (id, on) -> switchVideo(id, on) } }
         // Another video size chosen: the playing video item is built again on it where it
         // stands, with the song's audio on the same rendition (see audioUriFor), the way a
         // stall step-down rebuilds it.
@@ -1367,6 +1371,8 @@ class PlaybackService : MediaLibraryService() {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             nowPlayingId = mediaItem?.mediaId
             if (mediaItem?.mediaId != videoModeSongId) videoModeSongId = null
+            // A video picked to play as a video (a Home video card): onto its picture as it starts.
+            PlaybackRequests.takeStartAsVideo(mediaItem?.mediaId)?.let { id -> scope.launch { switchVideo(id, true) } }
             refreshArtistCredit(mediaItem)
             // The same song put onto its better stream: the swap that did it is
             // still running, waiting to bring the volume back up. A new upgrade
