@@ -120,6 +120,17 @@ fun EqualizerScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
                     summary = "Boosts are balanced with automatic headroom, so they don't distort",
                     icon = ImageVector.vectorResource(AppIcons.Equalizer),
                 )
+                // The output's name, again whenever a device comes or goes.
+                val route = com.opentune.ui.player.rememberOutputRoute()
+                val output = remember(route, eq) { com.opentune.playback.OutputEqualizer.current()?.name }
+                ToggleRow(
+                    "Each output its own",
+                    eq.perOutput,
+                    { v -> AppSettings.updateEqualizer { it.copy(perOutput = v, outputs = if (v) it.outputs else emptyMap()) } },
+                    summary = if (eq.perOutput && output != null) com.opentune.i18n.Tr.f("Now set for {0}. Headphones, each Bluetooth device, USB and the speaker keep their own settings", output)
+                        else "Headphones, each Bluetooth device, USB and the speaker keep their own settings",
+                    icon = com.opentune.ui.player.PlayerIcons.Headphones,
+                )
             }
         }
         item {

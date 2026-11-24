@@ -549,7 +549,8 @@ class PlaybackService : MediaLibraryService() {
                 if (bp is BitPerfectUsb.Status.Active) {
                     DspParams(outputGainDb = audioManager?.let(BitPerfectUsb::softwareGainDb) ?: 0f)
                 } else {
-                    DspParams(eq, sound.bassBoost, pb.spatialAudio, pb.clarity, eightDPeriod = sound.eightD.periodSeconds, spacePeriod = sound.space.periodSeconds)
+                    // Saving an output's settings (OutputEqualizer) doesn't change the sound.
+                    DspParams(eq.forSound(), sound.bassBoost, pb.spatialAudio, pb.clarity, eightDPeriod = sound.eightD.periodSeconds, spacePeriod = sound.space.periodSeconds)
                 }
             }.distinctUntilChanged().collect { dsp.params = it; bridgeDsp.params = it; tailDsp.params = it }
         }
