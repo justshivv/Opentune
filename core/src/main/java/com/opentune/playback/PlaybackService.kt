@@ -214,15 +214,11 @@ class PlaybackService : MediaLibraryService() {
     private fun selectedUri(uri: Uri): Uri = startupToken(uri)?.let { startupSelections[it]?.selected } ?: uri
 
     /**
-     * The one address a song's audio plays from, whichever mode shows it:
-     * the rendition it was on when video mode took over, else the best
-     * external rendition on record for it, else its plain track address.
-     */
-    /**
      * Puts the playing song [id] onto its music video, or back onto its audio, where it stands.
-     * Nothing happens unless [id] is the song playing.
+     * Nothing happens unless [id] is the song playing, nor onto a video with music videos off.
      */
     private fun switchVideo(id: String, on: Boolean) {
+        if (on && !AppSettings.playback.value.videoModeEnabled) return
         val player = mediaSession?.player as? ExoPlayer ?: return
         val item = player.currentMediaItem ?: return
         if (item.mediaId != id) return
@@ -251,6 +247,11 @@ class PlaybackService : MediaLibraryService() {
         if (playing) player.play()
     }
 
+    /**
+     * The one address a song's audio plays from, whichever mode shows it:
+     * the rendition it was on when video mode took over, else the best
+     * external rendition on record for it, else its plain track address.
+     */
     private fun audioUriFor(id: String): Uri {
         val stashed = videoAudioStash?.takeIf { it.first == id }?.second
         if (stashed != null && externalStreamKeyOf(selectedUri(stashed)) != null) return stashed

@@ -363,20 +363,24 @@ class PlayerConnection(private val context: Context) {
     }
 
     /**
+     * Plays [song] as its music video from the start (a video card): the service puts it onto its
+     * picture as it begins. As a plain [play] when music videos are turned off in Settings.
+     * False when nothing could play (the player isn't connected yet).
+     */
+    fun playVideo(song: Song, source: String? = null): Boolean {
+        if (controller == null) return false
+        play(song, source, asVideo = AppSettings.playback.value.videoModeEnabled)
+        return true
+    }
+
+    /**
      * Starts [song] on its own, replacing the queue but for the songs queued
      * by hand, which come next. The service fills in radio after them.
      */
-    /**
-     * Plays [song] as its music video from the start (a video card): the service puts it onto its
-     * picture as it begins. As a plain [play] when music videos are turned off in Settings.
-     */
-    fun playVideo(song: Song, source: String? = null) {
-        if (AppSettings.playback.value.videoModeEnabled) PlaybackRequests.startAsVideo(song.videoId)
-        play(song, source)
-    }
-
-    fun play(song: Song, source: String? = null) {
+    fun play(song: Song, source: String? = null, asVideo: Boolean = false) {
         val controller = controller ?: return
+        // Anything played withdraws a video card's request still waiting, unless it is that card.
+        PlaybackRequests.startAsVideo(song.videoId.takeIf { asVideo })
         _error.value = null
         _source.value = source
         endSmartShuffle()
@@ -421,6 +425,7 @@ class PlayerConnection(private val context: Context) {
          */
         keepQueued: Boolean = true,
     ) {
+        PlaybackRequests.startAsVideo(null)
         val controller = controller ?: return
         if (songs.isEmpty()) return
         _error.value = null

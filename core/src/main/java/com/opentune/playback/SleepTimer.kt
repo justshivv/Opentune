@@ -104,18 +104,27 @@ object PlaybackRequests {
         _videoMode.tryEmit(videoId to on)
     }
 
-    @Volatile private var startAsVideo: String? = null
+    private class StartAsVideo(val videoId: String, val at: Long)
+    @Volatile private var startAsVideo: StartAsVideo? = null
 
-    /** [videoId], about to be played, plays as its music video from the start. */
-    fun startAsVideo(videoId: String) { startAsVideo = videoId }
+    /**
+     * [videoId], about to be played, plays as its music video from the start; null withdraws
+     * the request (anything else played instead). A request is good for [START_AS_VIDEO_MS].
+     */
+    fun startAsVideo(videoId: String?) {
+        startAsVideo = videoId?.let { StartAsVideo(it, android.os.SystemClock.elapsedRealtime()) }
+    }
 
-    /** The song asked to start as a video, if it's [videoId]; asked once. */
+    /** The song asked to start as a video, if it's [videoId] and it was asked just now; asked once. */
     fun takeStartAsVideo(videoId: String?): String? {
         val asked = startAsVideo ?: return null
-        if (videoId != asked) return null
+        if (android.os.SystemClock.elapsedRealtime() - asked.at > START_AS_VIDEO_MS) { startAsVideo = null; return null }
+        if (videoId != asked.videoId) return null
         startAsVideo = null
-        return asked
+        return asked.videoId
     }
+
+    private const val START_AS_VIDEO_MS = 15_000L
 
     private val _videoQuality = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 1)
     /** Songs whose music video should move onto the picture size now chosen. */
