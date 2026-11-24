@@ -88,6 +88,7 @@ import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.ErrorState
 import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.SongListItem
+import com.opentune.ui.components.readyOnPress
 import com.opentune.ui.components.SongRowPlaceholder
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -532,7 +533,7 @@ private fun TopResult(song: Song, onPlay: () -> Unit, isCurrent: Boolean = false
         onClick = onPlay,
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.secondaryContainer,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).readyOnPress(song),
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Artwork(song.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.size(84.dp), MaterialTheme.shapes.medium)

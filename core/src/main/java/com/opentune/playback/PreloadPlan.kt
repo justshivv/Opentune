@@ -238,3 +238,54 @@ internal class ReadiedSongs(
         failed.entries.removeAll { t - it.value >= failedMs }
     }
 }
+
+/**
+ * How often a visit to each kind of screen ([origin] of its key: "search", "collection",
+ * "speed-dial") ends with a song started from it, so the screens the listener really plays from
+ * get their songs readied first. A screen with no record counts as average.
+ */
+internal class OriginStats {
+    private val shown = HashMap<String, Int>()
+    private val started = HashMap<String, Int>()
+
+    @Synchronized fun shown(origin: String) {
+        shown.merge(origin, 1, Int::plus)
+        // Old habits fade: halved once a screen has many visits on record.
+        if ((shown[origin] ?: 0) > FADE_AT) {
+            shown[origin] = (shown[origin] ?: 0) / 2
+            started[origin] = (started[origin] ?: 0) / 2
+        }
+    }
+
+    @Synchronized fun started(origin: String) { started.merge(origin, 1, Int::plus) }
+
+    /** How much likelier than average a song shown on [origin] is to be started, [MIN]..[MAX]. */
+    @Synchronized fun factor(origin: String): Double {
+        val allShown = shown.values.sum()
+        val allStarted = started.values.sum().coerceAtMost(allShown)
+        val average = (allStarted + 1.0) / (allShown + 3.0)
+        val s = shown[origin] ?: 0
+        val st = (started[origin] ?: 0).coerceAtMost(s)
+        val rate = (st + WEIGHT * average) / (s + WEIGHT)
+        return (rate / average).coerceIn(MIN, MAX)
+    }
+
+    @Synchronized fun counts(): Map<String, Pair<Int, Int>> =
+        (shown.keys + started.keys).associateWith { (shown[it] ?: 0) to (started[it] ?: 0) }
+
+    @Synchronized fun load(counts: Map<String, Pair<Int, Int>>) {
+        counts.forEach { (o, c) -> shown[o] = c.first; started[o] = c.second }
+    }
+
+    companion object {
+        /** Visits it takes for a screen's own record to count as much as the average. */
+        const val WEIGHT = 5.0
+        /** Never so low that the first song of a screen falls under [PlayChance.WORTH]. */
+        const val MIN = 0.6
+        const val MAX = 1.6
+        const val FADE_AT = 200
+
+        /** The kind of screen a [PreloadPlanner.onScreen] key names. */
+        fun origin(key: String): String = key.substringBefore(':')
+    }
+}

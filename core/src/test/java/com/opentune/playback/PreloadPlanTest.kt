@@ -151,4 +151,28 @@ class PreloadPlanTest {
         assertEquals((1.0 + 5.0 / 180 + 1.0) / 3, a.artistFinished!!, 1e-9)
         assertEquals(2L, history.record("a")!!.playedAt)
     }
+
+    @Test
+    fun theScreensTheListenerPlaysFromCountForMoreWithinLimits() {
+        val stats = OriginStats()
+        assertEquals(1.0, stats.factor("search"), 1e-9)
+        repeat(20) { stats.shown("speed-dial"); stats.started("speed-dial") }
+        repeat(20) { stats.shown("search") }
+        assertTrue(stats.factor("speed-dial") > 1.0)
+        assertTrue(stats.factor("search") < 1.0)
+        assertTrue(stats.factor("search") >= OriginStats.MIN)
+        assertTrue(stats.factor("speed-dial") <= OriginStats.MAX)
+        // Even the least played-from screen still readies its first song.
+        assertTrue(PlayChance.onScreen(0, fresh) * OriginStats.MIN >= PlayChance.WORTH)
+        assertEquals("collection", OriginStats.origin("collection:VL123"))
+    }
+
+    @Test
+    fun aScreensRecordIsKeptAndFadesOnceLong() {
+        val stats = OriginStats()
+        repeat(OriginStats.FADE_AT + 1) { stats.shown("search") }
+        assertTrue(stats.counts().getValue("search").first <= OriginStats.FADE_AT / 2 + 1)
+        val again = OriginStats().apply { load(stats.counts()) }
+        assertEquals(stats.factor("search"), again.factor("search"), 1e-9)
+    }
 }

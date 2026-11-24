@@ -55,6 +55,7 @@ import com.opentune.ui.opens
 import com.opentune.ui.cardMenu
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.CardMenu
+import com.opentune.ui.components.readyOnPress
 import com.opentune.ui.components.CollectionContextMenu
 import com.opentune.ui.components.ItemCard
 import com.opentune.ui.components.MenuAnchor
@@ -181,6 +182,7 @@ private fun SpeedDialTile(item: ShelfItem, onClick: () -> Unit, modifier: Modifi
             .menuAnchor(anchor, view)
             .clip(RoundedCornerShape(TILE_CORNER))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .readyOnPress((menu as? CardMenu.ForSong)?.song)
             .then(
                 if (menu == null) Modifier.clickable(onClick = onClick)
                 else Modifier.menuClickable(onClick = onClick, onLongClick = { haptics.press(); menuOpen = true }),

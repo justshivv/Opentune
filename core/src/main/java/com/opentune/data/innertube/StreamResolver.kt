@@ -2539,6 +2539,10 @@ object StreamResolver {
      */
     private val recent = ConcurrentHashMap<String, Resolved>()
 
+    /** Whether [videoId]'s address is at hand, so starting it needn't wait for one. */
+    fun isFresh(videoId: String): Boolean =
+        recent[videoId]?.let { SystemClock.elapsedRealtime() - it.at < URL_TTL_MS } == true
+
     private const val URL_TTL_MS = 20 * 60 * 1000L
 
     /** Enough for the queue in hand; this is a latency cache, not a store. */

@@ -17,14 +17,44 @@ import javax.crypto.spec.SecretKeySpec
 internal object JioSaavnSource {
     suspend fun resolve(song: Song, durationMs: Long, report: (String) -> Unit = {},
                         onArtists: (String) -> Unit = {},
+                        /** Matches found before, kept across launches; none in tests. */
+                        book: SaavnMatchBook? = SaavnMatches.book(),
                         read: suspend (Request, Int, Boolean) -> LosslessHttp.Data = { request, limit, prefix -> LosslessHttp.read(request, limit, prefix) },
     ): String? = withContext(Dispatchers.IO) {
         suspend fun json(url: String) = JSONObject(read(Request.Builder().url(url).build(), 1_048_576, false).bytes.toString(Charsets.UTF_8))
         var reported = false
         fun rejected(reason: String): String? { reported = true; report("JioSaavn: $reason"); return null }
+        val videoId = song.videoId
+
+        /** The verified stream of JioSaavn track [id]; else null with the reason in [reason]. */
+        var reason = ""
+        suspend fun streamOf(id: String): String? {
+            val details = json(api("song.getDetails", "pids" to id))
+            val track = details.optJSONObject(id) ?: details.optJSONArray("songs")?.optJSONObject(0) ?: run { reason = "track details unavailable"; return null }
+            if (track.optString("id") != id) { reason = "track identity changed"; return null }
+            val info = track.optJSONObject("more_info") ?: run { reason = "track details unavailable"; return null }
+            val url = streamUrl(info) ?: run { reason = "320 kbps stream unavailable"; return null }
+            val request = Request.Builder().url(url).header("Range", "bytes=0-63").build()
+            val data = read(request, 64, true)
+            if (!verified320(data.bytes, data.totalBytes, durationMs)) { reason = "stream failed the audio/bitrate check"; return null }
+            displayLine(info, song.artist)?.let(onArtists)
+            return url
+        }
+
         try {
             // Only a guard against a hung connection; a slow but real answer is waited for.
             val result = withTimeoutOrNull(30_000) {
+                // Matched before: straight to its stream, without the search.
+                book?.idFor(videoId)?.let { known ->
+                    streamOf(known)?.let { url ->
+                        book?.matched(videoId, known); SaavnMatches.changed()
+                        report("JioSaavn: verified 320 kbps stream (track matched before)")
+                        return@withTimeoutOrNull url
+                    }
+                    // Gone or changed: searched for again below.
+                    book?.forget(videoId)
+                }
+                if (book?.missed(videoId) == true) return@withTimeoutOrNull rejected("no matching 320 kbps recording (searched lately)")
                 val identity = CatalogIdentity(song.title, song.artist, song.albumName, durationMs)
                 // Artist searches can fill the first page with compilations;
                 // ask for the requested album first, without relaxing identity.
@@ -35,16 +65,12 @@ internal object JioSaavnSource {
                     matched = match(root, identity)
                     if (matched != null) break
                 }
-                val id = matched ?: return@withTimeoutOrNull rejected("no matching 320 kbps recording (title, artists, album and duration)")
-                val details = json(api("song.getDetails", "pids" to id))
-                val track = details.optJSONObject(id) ?: details.optJSONArray("songs")?.optJSONObject(0) ?: return@withTimeoutOrNull rejected("track details unavailable")
-                if (track.optString("id") != id) return@withTimeoutOrNull rejected("track identity changed")
-                val info = track.optJSONObject("more_info") ?: return@withTimeoutOrNull rejected("track details unavailable")
-                val url = streamUrl(info) ?: return@withTimeoutOrNull rejected("320 kbps stream unavailable")
-                val request = Request.Builder().url(url).header("Range", "bytes=0-63").build()
-                val data = read(request, 64, true)
-                if (!verified320(data.bytes, data.totalBytes, durationMs)) return@withTimeoutOrNull rejected("stream failed the audio/bitrate check")
-                displayLine(info, song.artist)?.let(onArtists)
+                val id = matched ?: run {
+                    book?.noMatch(videoId); SaavnMatches.changed()
+                    return@withTimeoutOrNull rejected("no matching 320 kbps recording (title, artists, album and duration)")
+                }
+                val url = streamOf(id) ?: return@withTimeoutOrNull rejected(reason)
+                book?.matched(videoId, id); SaavnMatches.changed()
                 report("JioSaavn: verified 320 kbps stream")
                 url
             }
