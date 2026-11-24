@@ -23,7 +23,7 @@ class AddonProtocolTest {
         assertThrows(IllegalArgumentException::class.java) { AddonProtocol.normalize("https://user:password@addon.example") }
     }
     @Test fun acceptsPlainHttpOnlyForAnAddonOnThisDevice() {
-        assertEquals("http://127.0.0.1:8787/monochrome/", AddonProtocol.normalize("http://127.0.0.1:8787/monochrome/manifest.json"))
+        assertEquals("http://127.0.0.1:8787/netease/", AddonProtocol.normalize("http://127.0.0.1:8787/netease/manifest.json"))
         assertEquals("http://localhost:8787/", AddonProtocol.normalize("http://localhost:8787/manifest.json"))
         assertEquals("http://[::1]:8787/", AddonProtocol.normalize("http://[::1]:8787"))
         assertEquals("https://addon.example/", AddonProtocol.normalize("https://addon.example/manifest.json"))

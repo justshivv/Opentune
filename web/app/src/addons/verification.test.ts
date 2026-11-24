@@ -4,8 +4,8 @@ import { OFFICIAL_ADDON, isOfficialAddon, needsVerification, verificationHeaders
 afterEach(() => vi.unstubAllGlobals());
 describe('verification is private to the official source', () => {
   it('uses exact HTTPS origin, not provider names, URL substrings or another Worker', () => {
-    expect(isOfficialAddon(OFFICIAL_ADDON + '/monochrome/manifest.json')).toBe(true);
-    expect(needsVerification(OFFICIAL_ADDON + '/monochrome/search?q=track')).toBe(true);
+    expect(isOfficialAddon(OFFICIAL_ADDON + '/netease/manifest.json')).toBe(true);
+    expect(needsVerification(OFFICIAL_ADDON + '/netease/search?q=track')).toBe(true);
     for (const url of [
       'https://public-addon.example/search?q=OpenTune',
       'https://public-addon.example/auth/web/info',
@@ -21,7 +21,7 @@ describe('verification is private to the official source', () => {
     vi.stubGlobal('indexedDB', { open: blocked });
     vi.stubGlobal('fetch', blocked);
     for (const url of ['https://public-addon.example/search', 'https://public-addon.example/stream/123',
-      OFFICIAL_ADDON + '/monochrome/manifest.json', OFFICIAL_ADDON + '/archive/health', OFFICIAL_ADDON + '/']) {
+      OFFICIAL_ADDON + '/netease/manifest.json', OFFICIAL_ADDON + '/archive/health', OFFICIAL_ADDON + '/']) {
       expect(await verificationHeaders(url)).toEqual({});
     }
     expect(blocked).not.toHaveBeenCalled();

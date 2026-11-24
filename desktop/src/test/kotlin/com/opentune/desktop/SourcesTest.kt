@@ -58,21 +58,41 @@ class SourcesTest {
 
     @Test fun thePublishedCatalogFoldsInLikeOnThePhone() {
         val published = Addons.publishedOf(
-            """{"sources":[{"id":"mono","name":"Monochrome","url":"https://addon-opentune.rethinknow.in/monochrome/manifest.json","enabled":true},
+            """{"sources":[{"id":"arc","name":"Archive","url":"https://addon-opentune.rethinknow.in/archive/manifest.json","enabled":true},
                {"id":"bad id!","name":"X","url":"https://x.example/manifest.json"},
                {"id":"net","name":"NetEase","url":"https://addon-opentune.rethinknow.in/netease","enabled":false}]}""",
         )
-        assertEquals(listOf("mono", "net"), published.map { it.id })
+        assertEquals(listOf("arc", "net"), published.map { it.id })
         assertEquals("https://addon-opentune.rethinknow.in/netease/manifest.json", published[1].url)
         val mine = Addons.Source("mine", "Mine", "https://mine.example/manifest.json")
         val stale = Addons.Source("admin:gone", "Gone", "https://gone.example/manifest.json", admin = true)
-        val turnedOff = Addons.Source("admin:mono", "Old name", "https://old.example/manifest.json", enabled = false, admin = true)
+        val turnedOff = Addons.Source("admin:arc", "Old name", "https://old.example/manifest.json", enabled = false, admin = true)
         val merged = Addons.merge(listOf(mine, stale, turnedOff), published)
         // Their own source and their "off" stay; the gone one goes; the new one joins, marked off by its owner.
-        assertEquals(listOf("mine", "admin:mono", "admin:net"), merged.map { it.id })
-        assertEquals("Monochrome", merged[1].name)
+        assertEquals(listOf("mine", "admin:arc", "admin:net"), merged.map { it.id })
+        assertEquals("Archive", merged[1].name)
         assertFalse(merged[1].enabled)
         assertTrue(merged[2].ownerOff)
+    }
+
+    @Test fun theRetiredMonochromeSourcesAreDroppedAndOthersStay() {
+        assertTrue(Addons.retired("https://addon-opentune.rethinknow.in/monochrome/manifest.json"))
+        assertTrue(Addons.retired("https://addon-opentune.rethinknow.in/manifest.json"))
+        assertTrue(Addons.retired("https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/monochrome/manifest.json"))
+        assertFalse(Addons.retired("https://addon-opentune.rethinknow.in/archive/manifest.json"))
+        assertFalse(Addons.retired("https://other.example/monochrome/manifest.json"))
+        val saved = Addons.Source("admin:mono", "Monochrome", "https://addon-opentune.rethinknow.in/monochrome/manifest.json", admin = true)
+        val mine = Addons.Source("mine", "Mine", "https://mine.example/manifest.json")
+        val published = listOf(Addons.Published("mono", "Monochrome", saved.url, true))
+        assertEquals(listOf("mine"), Addons.merge(listOf(saved, mine), published).map { it.id })
+        // As saved by the old "Use Monochrome" shortcut: gone when the list is read again.
+        val file = Files.createTempFile("sources", ".json").toFile()
+        file.writeText("""{"sources":[{"id":"short","name":"Monochrome","url":"${saved.url}"},{"id":"mine","name":"Mine","url":"${mine.url}"}]}""")
+        try {
+            Addons.useFile(file)
+            assertEquals(listOf("mine"), Addons.sources.value.map { it.id })
+            assertFalse(file.readText().contains("monochrome"))
+        } finally { file.delete() }
     }
 
     @Test fun flacHeadersAreRead() {
@@ -85,9 +105,9 @@ class SourcesTest {
     }
 
     @Test fun onlyTheOfficialServersSearchesAreSigned() {
-        assertTrue(AddonPairing.protects("https://addon-opentune.rethinknow.in/monochrome/search?q=a"))
-        assertFalse(AddonPairing.protects("https://addon-opentune.rethinknow.in/monochrome/manifest.json"))
-        assertFalse(AddonPairing.protects("https://other.example/monochrome/search?q=a"))
+        assertTrue(AddonPairing.protects("https://addon-opentune.rethinknow.in/netease/search?q=a"))
+        assertFalse(AddonPairing.protects("https://addon-opentune.rethinknow.in/netease/manifest.json"))
+        assertFalse(AddonPairing.protects("https://other.example/netease/search?q=a"))
         assertEquals(emptyMap<String, String>(), AddonPairing.headersFor("https://other.example/search?q=a"))
     }
 

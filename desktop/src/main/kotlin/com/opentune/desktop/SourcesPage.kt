@@ -104,7 +104,7 @@ internal fun SourcesSection() {
                 if (sources.size > 1) CardFooter("Asked in this order: move one up or down with its arrows.")
                 CardHeading("Add a source")
                 RowsCard {
-                    AddSource(sources)
+                    AddSource()
                     ButtonsRow { QuietPill("Check for published add-ons", { scope.launch { Addons.syncPublished(force = true) } }) }
                 }
                 if (sources.any { it.enabled && !it.ownerOff && AddonPairing.protects(it.url.replace("manifest.json", "search")) }) {
@@ -140,19 +140,12 @@ private fun SourceRow(source: Addons.Source, first: Boolean, last: Boolean) {
 
 /** An add-on's address and the Add button beside it, as the web's Add a source card. */
 @Composable
-private fun AddSource(sources: List<Addons.Source>) {
+private fun AddSource() {
     var address by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val monochrome = "${AddonPairing.OFFICIAL}/monochrome/manifest.json"
     Column(Modifier.hairline(TEXT_INSET).fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (sources.none { it.url == monochrome || it.url == "${AddonPairing.OFFICIAL}/manifest.json" }) {
-            KeyPill("Use Monochrome", onClick = {
-                address = monochrome
-                problem = null
-            }, enabled = !busy)
-        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WebField(
                 address, { address = it; problem = null }, "Add-on address",

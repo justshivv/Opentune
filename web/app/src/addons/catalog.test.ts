@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { mergeCatalog, publishedOf } from './catalog';
+import { isRetiredSource, mergeCatalog, publishedOf } from './catalog';
 
 describe('published sources', () => {
   const mine = { id: 'm1', name: 'Mine', url: 'https://mine.example/manifest.json', enabled: true };
+  it('drops the retired Monochrome sources and keeps the rest of OpenTune’s and the listener’s own', () => {
+    for (const url of ['https://addon-opentune.rethinknow.in/monochrome/manifest.json', 'https://addon-opentune.rethinknow.in/manifest.json',
+      'https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/monochrome/manifest.json']) expect(isRetiredSource(url)).toBe(true);
+    for (const url of ['https://addon-opentune.rethinknow.in/archive/manifest.json', 'https://other.example/monochrome/manifest.json', 'not a url'])
+      expect(isRetiredSource(url)).toBe(false);
+    const saved = { id: 'admin:mono', name: 'Monochrome', url: 'https://addon-opentune.rethinknow.in/monochrome/manifest.json', enabled: true, admin: true };
+    const merged = mergeCatalog([saved, mine], [{ id: 'mono', name: 'Monochrome', url: saved.url }, { id: 'arc', name: 'Archive', url: 'https://addon-opentune.rethinknow.in/archive/manifest.json' }]);
+    expect(merged.map((s) => s.id)).toEqual(['m1', 'admin:arc']);
+  });
   it('applies owner pauses without changing personal sources or the listener switch', () => {
     const source = { id: 'a', name: 'A', url: 'https://a.example/manifest.json', enabled: false };
     const first = mergeCatalog([mine], [source]);
