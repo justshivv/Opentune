@@ -318,18 +318,24 @@ fun AppRoot(vm: PlayerViewModel) {
     } }
     // A long press on an album or playlist card: its songs are fetched when an action needs them.
     val collectionMenu = remember(nav, vm) {
-        fun withSongs(id: String, use: (List<com.opentune.data.model.Song>) -> Unit) {
+        fun withCollection(id: String, use: (com.opentune.data.Collection) -> Unit) {
             uiScope.launch {
-                val songs = runCatching { MusicRepository.collection(id).songs }.getOrNull().orEmpty()
-                if (songs.isEmpty()) com.opentune.data.Pills.error("Couldn't load its songs just now") else use(songs)
+                val list = runCatching { MusicRepository.collection(id) }.getOrNull()
+                if (list == null || list.songs.isEmpty()) com.opentune.data.Pills.error("Couldn't load its songs just now") else use(list)
             }
         }
+        fun withSongs(id: String, use: (List<com.opentune.data.model.Song>) -> Unit) = withCollection(id) { use(it.songs) }
         com.opentune.ui.components.CollectionMenuActions(
             play = { id, title, shuffle -> withSongs(id) { vm.playAll(it, 0, shuffle, title) } },
             // Last first, so the list plays next in its own order.
             playNext = { id -> withSongs(id) { songs -> songs.asReversed().forEach(vm::playNext); com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("{0} songs play next", songs.size)) } },
             addToQueue = { id -> withSongs(id) { songs -> songs.forEach(vm::addToQueue); com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("{0} songs added to the queue", songs.size)) } },
-            downloadAll = { id -> withSongs(id) { songs -> songs.forEach { com.opentune.data.download.Downloads.enqueue(appContext.applicationContext, it) }; com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size)) } },
+            downloadAll = { id -> withCollection(id) { c ->
+                c.songs.forEach { com.opentune.data.download.Downloads.enqueue(appContext.applicationContext, it) }
+                // Kept as a list, so Downloads shows it under Playlists with its name and cover.
+                com.opentune.ui.library.DownloadedListInfo(c.browseId, c.title, c.subtitle, c.thumbnailUrl?.takeIf { it.isNotBlank() }).keepWhole(c.songs)
+                com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", c.songs.size))
+            } },
             open = { id, type -> fromPlayer { nav.openBrowse(id, type) } },
         )
     }

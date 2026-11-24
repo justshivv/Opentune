@@ -3612,5 +3612,7 @@
 "Your mixes and live stations, in the dock": "Mix của bạn và đài trực tiếp, trên thanh dock",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation thẻ radio",
 "OpenTune no longer offers this source.": "OpenTune không còn cung cấp nguồn này.",
-"No internet connection. The song plays on when you're back online.": "Không có kết nối internet. Bài hát sẽ phát tiếp khi bạn trực tuyến trở lại."
+"No internet connection. The song plays on when you're back online.": "Không có kết nối internet. Bài hát sẽ phát tiếp khi bạn trực tuyến trở lại.",
+"{0} songs downloaded · plays offline": "Đã tải {0} bài · nghe ngoại tuyến",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Tải một danh sách phát hoặc album từ trang của nó, hoặc hơn năm bài trong đó, và nó sẽ hiện ở đây."
 }

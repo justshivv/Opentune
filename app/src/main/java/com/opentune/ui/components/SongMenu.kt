@@ -132,6 +132,8 @@ fun SongMenuSheet(
     fitContent: Boolean = true,
 ) {
     val actions = LocalSongMenu.current
+    // On a playlist or album page: a song downloaded from here is kept under that list in Downloads.
+    val fromList = com.opentune.ui.library.LocalDownloadList.current
     val context = LocalContext.current
     val liked by LibraryStore.liked.collectAsState()
     val downloads by Downloads.entries.collectAsState()
@@ -196,7 +198,7 @@ fun SongMenuSheet(
                     when (download?.state) {
                         DownloadState.DONE, DownloadState.QUEUED, DownloadState.DOWNLOADING -> Downloads.remove(context, song.videoId)
                         DownloadState.FAILED -> Downloads.retry(context, song.videoId)
-                        null -> Downloads.enqueue(context, song)
+                        null -> { Downloads.enqueue(context, song); fromList?.keepPicked(listOf(song)) }
                     }
                 }
             }

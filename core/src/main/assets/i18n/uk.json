@@ -3624,5 +3624,7 @@
 "Your mixes and live stations, in the dock": "Ваші мікси й живі станції на панелі",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation вкладка «радіо»",
 "OpenTune no longer offers this source.": "OpenTune більше не пропонує це джерело.",
-"No internet connection. The song plays on when you're back online.": "Немає підключення до інтернету. Пісня продовжиться, щойно ви знову будете онлайн."
+"No internet connection. The song plays on when you're back online.": "Немає підключення до інтернету. Пісня продовжиться, щойно ви знову будете онлайн.",
+"{0} songs downloaded · plays offline": "Завантажено пісень: {0} · грають офлайн",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Завантажте плейлист чи альбом з його сторінки або понад п’ять його пісень, і він з’явиться тут."
 }

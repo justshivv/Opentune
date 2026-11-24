@@ -3683,5 +3683,7 @@
 "Your mixes and live stations, in the dock": "میکس‌ها و ایستگاه‌های زنده شما، در نوار",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation زبانه رادیو",
 "OpenTune no longer offers this source.": "OpenTune دیگر این منبع را ارائه نمی‌دهد.",
-"No internet connection. The song plays on when you're back online.": "اتصال اینترنت برقرار نیست. آهنگ وقتی دوباره آنلاین شوید ادامه پیدا می‌کند."
+"No internet connection. The song plays on when you're back online.": "اتصال اینترنت برقرار نیست. آهنگ وقتی دوباره آنلاین شوید ادامه پیدا می‌کند.",
+"{0} songs downloaded · plays offline": "{0} آهنگ دانلود شده · بدون اینترنت پخش می‌شود",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "یک پلی‌لیست یا آلبوم را از صفحه‌اش دانلود کنید، یا بیش از پنج آهنگش را، تا اینجا نشان داده شود."
 }

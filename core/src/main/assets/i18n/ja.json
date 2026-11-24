@@ -3683,5 +3683,7 @@
 "Your mixes and live stations, in the dock": "あなたのミックスとライブ局をドックに",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation ラジオタブ",
 "OpenTune no longer offers this source.": "OpenTune ではこのソースを提供しなくなりました。",
-"No internet connection. The song plays on when you're back online.": "インターネットに接続されていません。オンラインに戻ると曲の続きが再生されます。"
+"No internet connection. The song plays on when you're back online.": "インターネットに接続されていません。オンラインに戻ると曲の続きが再生されます。",
+"{0} songs downloaded · plays offline": "{0} 曲をダウンロード済み · オフラインで再生",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "プレイリストやアルバムをそのページからダウンロードするか、その曲を6曲以上ダウンロードすると、ここに表示されます。"
 }

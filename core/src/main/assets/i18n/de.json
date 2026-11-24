@@ -3683,5 +3683,7 @@
 "Your mixes and live stations, in the dock": "Deine Mixe und Live-Sender im Dock",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation radio-tab",
 "OpenTune no longer offers this source.": "OpenTune bietet diese Quelle nicht mehr an.",
-"No internet connection. The song plays on when you're back online.": "Keine Internetverbindung. Der Song läuft weiter, sobald du wieder online bist."
+"No internet connection. The song plays on when you're back online.": "Keine Internetverbindung. Der Song läuft weiter, sobald du wieder online bist.",
+"{0} songs downloaded · plays offline": "{0} Songs heruntergeladen · offline abspielbar",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Lade eine Playlist oder ein Album auf seiner Seite herunter, oder mehr als fünf seiner Songs, dann erscheint es hier."
 }

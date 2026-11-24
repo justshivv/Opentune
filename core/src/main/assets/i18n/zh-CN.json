@@ -3683,5 +3683,7 @@
 "Your mixes and live stations, in the dock": "你的合辑和直播电台，放在底栏",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation 电台标签",
 "OpenTune no longer offers this source.": "OpenTune 不再提供此来源。",
-"No internet connection. The song plays on when you're back online.": "没有网络连接。恢复联网后歌曲会继续播放。"
+"No internet connection. The song plays on when you're back online.": "没有网络连接。恢复联网后歌曲会继续播放。",
+"{0} songs downloaded · plays offline": "已下载 {0} 首 · 可离线播放",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "在歌单或专辑页面下载它，或下载其中超过五首歌曲，它就会显示在这里。"
 }

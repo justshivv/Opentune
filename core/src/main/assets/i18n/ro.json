@@ -3612,5 +3612,7 @@
 "Your mixes and live stations, in the dock": "Mixurile tale și posturile live, în dock",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation fila radio",
 "OpenTune no longer offers this source.": "OpenTune nu mai oferă această sursă.",
-"No internet connection. The song plays on when you're back online.": "Nu există conexiune la internet. Melodia continuă când revii online."
+"No internet connection. The song plays on when you're back online.": "Nu există conexiune la internet. Melodia continuă când revii online.",
+"{0} songs downloaded · plays offline": "{0} melodii descărcate · se aud offline",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Descarcă un playlist sau un album din pagina lui, sau mai mult de cinci melodii din el, și apare aici."
 }

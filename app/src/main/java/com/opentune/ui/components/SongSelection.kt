@@ -119,6 +119,7 @@ fun SongSelectionBar(
     offerDownload: Boolean = true,
 ) {
     val context = LocalContext.current
+    val fromList = com.opentune.ui.library.LocalDownloadList.current
     var adding by remember { mutableStateOf<List<Song>?>(null) }
     adding?.let { songs -> AddAllToPlaylistDialog(songs, onDismiss = { adding = null }, onDone = { adding = null; selection.clear() }) }
     androidx.activity.compose.BackHandler(enabled = selection.active) { selection.clear() }
@@ -171,6 +172,7 @@ fun SongSelectionBar(
                 if (offerDownload) BarAction(ImageVector.vectorResource(AppIcons.Download), "Download", enabled && inOrder.any { isYouTubeId(it.videoId) }) {
                     val online = inOrder.filter { isYouTubeId(it.videoId) }
                     online.forEach { Downloads.enqueue(context, it) }
+                    fromList?.keepPicked(online)
                     com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} {1}", online.size, if (online.size == 1) "song" else "songs"), context)
                     selection.clear()
                 }

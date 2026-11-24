@@ -1283,11 +1283,13 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
     val downloadedLists by com.opentune.data.download.DownloadedLists.lists.collectAsState()
     val list = remember(entries) { entries.values.sortedByDescending { it.addedAt } }
     val ready = remember(list) { list.filter { it.state == DownloadState.DONE }.map { it.song.toSong() } }
-    // Downloaded lists with something of theirs still downloaded, and how much.
+    // Lists downloaded whole with something of theirs still here, and playlists more than five
+    // of whose songs were downloaded one by one; with how many are on the phone.
     val lists = remember(downloadedLists, entries) {
         downloadedLists.mapNotNull { l ->
             val have = l.songIds.count { entries[it]?.state == DownloadState.DONE }
-            if (l.songIds.any { it in entries }) l to have else null
+            val kept = l.songIds.count { it in entries }
+            if (com.opentune.data.download.DownloadedLists.shows(l, if (l.whole) kept else have)) l to have else null
         }
     }
     var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(DownloadsTab.SONGS) }
@@ -1313,10 +1315,15 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
                 if (tab == DownloadsTab.PLAYLISTS) {
                     if (lists.isEmpty()) item {
                         MessageState(ImageVector.vectorResource(AppIcons.QueueMusic), "No playlists downloaded", Modifier.padding(top = 32.dp),
-                            message = "Use Download on a playlist or album page to keep the whole list offline.")
+                            message = "Download a playlist or album from its page, or more than five of its songs, and it shows here.")
                     }
                     items(lists, key = { "list:${it.first.id}" }) { (l, have) ->
-                        PlaylistRow(l.thumbnailUrl, l.title, com.opentune.i18n.Tr.f("{0} of {1} downloaded · plays offline", have, l.songIds.size), { onOpenList(l.id) }, Modifier.animateItem())
+                        PlaylistRow(
+                            l.thumbnailUrl, l.title,
+                            if (l.whole) com.opentune.i18n.Tr.f("{0} of {1} downloaded · plays offline", have, l.songIds.size)
+                            else com.opentune.i18n.Tr.f("{0} songs downloaded · plays offline", have),
+                            { onOpenList(l.id) }, Modifier.animateItem(),
+                        )
                     }
                     return@LazyColumn
                 }
@@ -1651,6 +1658,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     } else {
         null
     }
+    androidx.compose.runtime.CompositionLocalProvider(LocalDownloadList provides remember(songs, likedCoverUrl) { DownloadedListInfo("liked", com.opentune.i18n.Tr.t("Liked Music"), "", likedCoverUrl ?: songs.firstOrNull()?.thumbnailUrl, songs.map { it.videoId }) }) {
     com.opentune.ui.browse.ListPageTint(coverUrl = likedCoverUrl, seed = LIKED_SEED) {
         // The page's menu is composed inside the tint, so its sheet wears the page's colours.
         if (moreOpen) LikedMoreSheet(songs, actions) { moreOpen = false }
@@ -1748,6 +1756,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
             }
         } }
     }
+    }
 }
 
 /**
@@ -1760,6 +1769,7 @@ private fun LikedMoreSheet(
     actions: SongActions,
     onDismiss: () -> Unit,
 ) {
+    val fromList = com.opentune.ui.library.LocalDownloadList.current
     val context = LocalContext.current
     com.opentune.ui.components.FloatingCard(
         onDismiss = onDismiss,
@@ -1793,6 +1803,7 @@ private fun LikedMoreSheet(
             com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Download), "Download all") {
                 close()
                 songs.forEach { com.opentune.data.download.Downloads.enqueue(context, it) }
+                fromList?.keepWhole(songs)
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size), context)
             }
             com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Share), "Share") {
@@ -2108,6 +2119,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         playlist.coverUrl
     }
     // The page's background as Settings ask for it, from the playlist's cover or its first song's.
+    // Songs downloaded from this playlist are kept under it in Downloads (whole, or past five one by one).
+    androidx.compose.runtime.CompositionLocalProvider(LocalDownloadList provides remember(playlist.id, playlist.name, pageCoverUrl, songs) { DownloadedListInfo(playlist.id, playlist.name, "", pageCoverUrl ?: songs.firstOrNull()?.thumbnailUrl, songs.map { it.videoId }) }) {
     com.opentune.ui.browse.ListPageTint(coverUrl = pageCoverUrl ?: playlist.songs.firstOrNull()?.thumbnailUrl) {
         // The page's menu is composed inside the tint, so its sheet wears the page's colours.
         if (moreOpen) LocalListMoreSheet(playlist, songs, actions,
@@ -2228,6 +2241,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             }
         } }
     }
+    }
 }
 
 /**
@@ -2248,6 +2262,7 @@ private fun LocalListMoreSheet(
     onPrivacy: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
+    val fromList = com.opentune.ui.library.LocalDownloadList.current
     val context = LocalContext.current
     val spotify = playlist.spotifyId != null
     val pinned = AppSettings.ui.collectAsState().value.pinnedPlaylists.contains(playlist.id)
@@ -2286,6 +2301,7 @@ private fun LocalListMoreSheet(
             com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Download), "Download all") {
                 close()
                 songs.forEach { Downloads.enqueue(context, it) }
+                fromList?.keepWhole(songs)
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size), context)
             }
             if (songs.isNotEmpty()) com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.PlaylistAdd), "Add all to playlist") { adding = true }

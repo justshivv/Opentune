@@ -889,6 +889,7 @@ internal fun rememberAccountSaved(c: com.opentune.data.Collection, own: Boolean)
 /** The page's own menu: the list's cover and name, then what can be done with the whole list. */
 @Composable
 private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, actions: SongActions, onRefresh: () -> Unit, onDismiss: () -> Unit) {
+    val fromList = com.opentune.ui.library.LocalDownloadList.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
     val saved = savedLists.any { it.browseId == c.browseId }
@@ -929,6 +930,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
             com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Download), "Download all") {
                 close()
                 c.songs.forEach { com.opentune.data.download.Downloads.enqueue(context, it) }
+                fromList?.keepWhole(c.songs)
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", c.songs.size), context)
             }
             if (c.songs.isNotEmpty()) com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.PlaylistAdd), if (isAlbum) "Add album to playlist" else "Add all to playlist") { adding = true }
@@ -1093,6 +1095,11 @@ fun CollectionScreen(
     val selection = com.opentune.ui.components.rememberSongSelection()
     // The page's background as Settings ask for it; YouTube Music's liked songs have a drawn cover, so its colour is given.
     val likes = com.opentune.ui.library.isYouTubeLikes(browseId)
+    // Songs downloaded from this page are kept under it in Downloads (whole, or past five one by one).
+    val downloadList = remember(loaded) {
+        loaded?.let { c -> com.opentune.ui.library.DownloadedListInfo(c.browseId, c.title, c.subtitle, c.thumbnailUrl?.takeIf { it.isNotBlank() } ?: c.songs.firstOrNull()?.thumbnailUrl, c.songs.map { it.videoId }) }
+    }
+    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.library.LocalDownloadList provides downloadList) {
     ListPageTint(
         coverUrl = if (likes) null else loaded?.thumbnailUrl?.takeIf { it.isNotBlank() } ?: loaded?.songs?.firstOrNull()?.thumbnailUrl,
         seed = if (likes) com.opentune.ui.library.LIKED_SEED else null,
@@ -1271,5 +1278,6 @@ fun CollectionScreen(
                 }
             }
         } }
+    }
     }
 }

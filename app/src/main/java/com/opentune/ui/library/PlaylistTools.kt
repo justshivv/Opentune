@@ -76,7 +76,21 @@ import com.opentune.ui.theme.AppIcons
  * last one is done.
  */
 /** The list a [DownloadAllButton] downloads, kept so the library can show it as a list of its downloads. */
-data class DownloadedListInfo(val id: String, val title: String, val subtitle: String, val thumbnailUrl: String?)
+data class DownloadedListInfo(val id: String, val title: String, val subtitle: String, val thumbnailUrl: String?, val songIds: List<String> = emptyList()) {
+    /** All of it downloaded at once ("Download all"). */
+    fun keepWhole(songs: List<Song>) =
+        com.opentune.data.download.DownloadedLists.save(id, title, subtitle, thumbnailUrl ?: songs.firstOrNull()?.thumbnailUrl, songs.map { it.videoId })
+
+    /** [songs] of it downloaded one by one; past five, the list shows on the Downloads page. */
+    fun keepPicked(songs: List<Song>) =
+        com.opentune.data.download.DownloadedLists.noteSongs(id, title, subtitle, thumbnailUrl ?: songs.firstOrNull()?.thumbnailUrl, songs.map { it.videoId }, songIds)
+}
+
+/**
+ * The album or playlist a page shows, for the songs downloaded from it one by one (their menus,
+ * or several picked at once), so the Downloads page can gather them under it. Null elsewhere.
+ */
+val LocalDownloadList = androidx.compose.runtime.compositionLocalOf<DownloadedListInfo?> { null }
 
 @Composable
 fun DownloadAllButton(songs: List<Song>, modifier: Modifier = Modifier, list: DownloadedListInfo? = null) {

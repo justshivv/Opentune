@@ -334,6 +334,7 @@ fun SongContextMenu(
     preview: @Composable () -> Unit,
 ) {
     val actions = LocalSongMenu.current
+    val fromList = com.opentune.ui.library.LocalDownloadList.current
     val context = LocalContext.current
     val liked by LibraryStore.liked.collectAsState()
     val downloads by Downloads.entries.collectAsState()
@@ -361,7 +362,7 @@ fun SongContextMenu(
                 DownloadState.DONE -> MenuEntry("Remove download", ImageVector.vectorResource(AppIcons.DeleteOutline)) { Downloads.remove(context, song.videoId) }
                 DownloadState.QUEUED, DownloadState.DOWNLOADING -> MenuEntry("Cancel download", ImageVector.vectorResource(AppIcons.DeleteOutline)) { Downloads.remove(context, song.videoId) }
                 DownloadState.FAILED -> MenuEntry("Retry download", ImageVector.vectorResource(AppIcons.Download)) { Downloads.retry(context, song.videoId) }
-                null -> MenuEntry("Download", ImageVector.vectorResource(AppIcons.Download)) { Downloads.enqueue(context, song) }
+                null -> MenuEntry("Download", ImageVector.vectorResource(AppIcons.Download)) { Downloads.enqueue(context, song); fromList?.keepPicked(listOf(song)) }
             },
         )
         if (cached && download?.state != DownloadState.DONE) add(MenuEntry("Remove from cache", ImageVector.vectorResource(AppIcons.DeleteSweep)) {

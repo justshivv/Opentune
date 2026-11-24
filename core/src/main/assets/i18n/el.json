@@ -3683,5 +3683,7 @@
 "Your mixes and live stations, in the dock": "Τα μιξ σας και οι ζωντανοί σταθμοί, στη βάση",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation καρτέλα ραδιόφωνο",
 "OpenTune no longer offers this source.": "Το OpenTune δεν προσφέρει πλέον αυτή την πηγή.",
-"No internet connection. The song plays on when you're back online.": "Δεν υπάρχει σύνδεση στο διαδίκτυο. Το τραγούδι συνεχίζει μόλις επανασυνδεθείτε."
+"No internet connection. The song plays on when you're back online.": "Δεν υπάρχει σύνδεση στο διαδίκτυο. Το τραγούδι συνεχίζει μόλις επανασυνδεθείτε.",
+"{0} songs downloaded · plays offline": "{0} τραγούδια λήφθηκαν · παίζουν εκτός σύνδεσης",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Κατεβάστε μια λίστα ή ένα άλμπουμ από τη σελίδα του, ή πάνω από πέντε τραγούδια του, και θα εμφανιστεί εδώ."
 }

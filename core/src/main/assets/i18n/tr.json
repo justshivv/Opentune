@@ -3612,5 +3612,7 @@
 "Your mixes and live stations, in the dock": "Mikslerin ve canlı istasyonlar, dock'ta",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation radyo sekmesi",
 "OpenTune no longer offers this source.": "OpenTune artık bu kaynağı sunmuyor.",
-"No internet connection. The song plays on when you're back online.": "İnternet bağlantısı yok. Tekrar çevrimiçi olduğunda şarkı kaldığı yerden devam eder."
+"No internet connection. The song plays on when you're back online.": "İnternet bağlantısı yok. Tekrar çevrimiçi olduğunda şarkı kaldığı yerden devam eder.",
+"{0} songs downloaded · plays offline": "{0} şarkı indirildi · çevrimdışı çalar",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Bir çalma listesini veya albümü sayfasından indir ya da beşten fazla şarkısını indir, burada görünsün."
 }

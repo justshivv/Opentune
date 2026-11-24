@@ -3612,5 +3612,7 @@
 "Your mixes and live stations, in the dock": "มิกซ์ของคุณและสถานีสด ในด็อก",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation แท็บวิทยุ",
 "OpenTune no longer offers this source.": "OpenTune ไม่มีแหล่งนี้ให้แล้ว",
-"No internet connection. The song plays on when you're back online.": "ไม่มีการเชื่อมต่ออินเทอร์เน็ต เพลงจะเล่นต่อเมื่อคุณกลับมาออนไลน์"
+"No internet connection. The song plays on when you're back online.": "ไม่มีการเชื่อมต่ออินเทอร์เน็ต เพลงจะเล่นต่อเมื่อคุณกลับมาออนไลน์",
+"{0} songs downloaded · plays offline": "ดาวน์โหลดแล้ว {0} เพลง · เล่นแบบออฟไลน์ได้",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "ดาวน์โหลดเพลย์ลิสต์หรืออัลบั้มจากหน้าของมัน หรือเพลงในนั้นมากกว่าห้าเพลง แล้วจะแสดงที่นี่"
 }

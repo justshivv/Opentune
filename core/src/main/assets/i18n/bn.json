@@ -3612,5 +3612,7 @@
 "Your mixes and live stations, in the dock": "আপনার মিক্স আর লাইভ স্টেশন, ডকে",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation রেডিও ট্যাব",
 "OpenTune no longer offers this source.": "OpenTune এই উৎসটি আর দেয় না।",
-"No internet connection. The song plays on when you're back online.": "ইন্টারনেট সংযোগ নেই। আবার অনলাইনে এলে গানটি চলতে থাকবে।"
+"No internet connection. The song plays on when you're back online.": "ইন্টারনেট সংযোগ নেই। আবার অনলাইনে এলে গানটি চলতে থাকবে।",
+"{0} songs downloaded · plays offline": "{0}টি গান ডাউনলোড হয়েছে · অফলাইনে চলে",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "কোনো প্লেলিস্ট বা অ্যালবাম তার পেজ থেকে ডাউনলোড করুন, বা তার পাঁচটির বেশি গান, তাহলে এখানে দেখাবে।"
 }

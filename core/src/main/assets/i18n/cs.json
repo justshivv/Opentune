@@ -3612,5 +3612,7 @@
 "Your mixes and live stations, in the dock": "Vaše mixy a živé stanice v doku",
 "radio tab dock mixes supermix stations hide navigation": "radio tab dock mixes supermix stations hide navigation karta rádio",
 "OpenTune no longer offers this source.": "OpenTune tento zdroj už nenabízí.",
-"No internet connection. The song plays on when you're back online.": "Žádné připojení k internetu. Skladba bude pokračovat, až budete znovu online."
+"No internet connection. The song plays on when you're back online.": "Žádné připojení k internetu. Skladba bude pokračovat, až budete znovu online.",
+"{0} songs downloaded · plays offline": "Staženo skladeb: {0} · hraje offline",
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Stáhněte playlist nebo album z jeho stránky, nebo víc než pět jeho skladeb, a objeví se tady."
 }
