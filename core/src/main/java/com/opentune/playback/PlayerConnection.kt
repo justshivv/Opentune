@@ -906,6 +906,19 @@ class PlayerConnection(private val context: Context) {
         if (songs.isNotEmpty()) controller.addMediaItems(songs.map { it.toMediaItem() })
     }
 
+    /**
+     * Takes out every song still to come and leaves the one playing. With the player's own
+     * shuffle on, songs before the current one can still be ahead, so only the current one stays.
+     */
+    fun clearUpcoming() {
+        val controller = controller ?: return
+        beforeShuffle = null
+        beforeSmart = null
+        val current = controller.currentMediaItemIndex
+        if (current + 1 < controller.mediaItemCount) controller.removeMediaItems(current + 1, controller.mediaItemCount)
+        if (controller.shuffleModeEnabled && current > 0) controller.removeMediaItems(0, current)
+    }
+
     /** Jumps to queue entry [index] at [positionMs]. */
     fun seekToItem(index: Int, positionMs: Long) {
         val controller = controller ?: return

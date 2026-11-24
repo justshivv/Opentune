@@ -355,6 +355,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
     // Reordering stays on this device's own queue.
     fun moveQueueItem(from: Int, to: Int) { if (remote.value == null) player.moveQueueItem(from, to) }
+    /**
+     * Empties Up Next on this device, the song playing keeps on, with Undo to put the songs back
+     * in the order they were to play. Another device's queue is left alone.
+     */
+    fun clearUpNext() {
+        if (remote.value != null) return
+        val queue = player.queue.value
+        val removed = player.upNext.value.mapNotNull { queue.getOrNull(it) }
+        if (removed.isEmpty()) return
+        player.clearUpcoming()
+        com.opentune.data.Pills.withAction(com.opentune.i18n.Tr.t("Up next cleared"), com.opentune.i18n.Tr.t("Undo")) {
+            player.replaceUpcoming(removed)
+        }
+    }
     /** A song on its own; the service follows it with radio. */
     fun startRadio(song: Song) { if (!toRoom(song)) player.play(song, com.opentune.i18n.Tr.f("{0} radio", song.title)) }
     fun seekTo(positionMs: Long) { if (!Connect.seekTo(positionMs) && !Together.intercept(Together.Control.Seek(positionMs))) player.seekTo(positionMs) }
