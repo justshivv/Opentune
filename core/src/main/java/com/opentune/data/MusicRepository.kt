@@ -275,7 +275,7 @@ object MusicRepository {
     }
 
     /** Where Home's extra shelves come from, in the order they're shown. */
-    private enum class HomeSource { SEED, RADIO, LISTENBRAINZ, ARTISTS, NEW_RELEASES, CHARTS, EXPLORE, MOODS }
+    private enum class HomeSource { SEED, RADIO, VIDEOS, LISTENBRAINZ, ARTISTS, NEW_RELEASES, CHARTS, EXPLORE, MOODS }
 
     private class Fetched(
         val shelves: List<HomeShelf>,
@@ -309,6 +309,7 @@ object MusicRepository {
                 HomeSource.SEED -> seedShelves()
                 HomeSource.RADIO -> radioShelf(engine)
                 HomeSource.LISTENBRAINZ -> listenBrainzShelf()
+                HomeSource.VIDEOS -> videoShelves()
                 HomeSource.ARTISTS -> artistShelves()
                 HomeSource.NEW_RELEASES -> shelvesOf("FEmusic_new_releases")
                 HomeSource.CHARTS -> chartShelves()
@@ -454,6 +455,37 @@ object MusicRepository {
         }.awaitAll().flatten()
     }
 
+    /**
+     * "Music videos for you" and "Live performances": the music videos and live performances of
+     * the artists played most, else those followed, else those popular in the listener's country,
+     * a turn each ([HomeVideos]). Signed in or out, so Home always has videos, as YouTube's own
+     * Home only sometimes does.
+     */
+    private suspend fun videoShelves(): List<HomeShelf> = coroutineScope {
+        val hidden = com.opentune.data.library.LibraryStore.hidden.value
+        val played = personalArtists().map { it.browseId to it.name }
+        val followed = NewReleases.followed.value.sortedByDescending { it.followedAt }.map { it.browseId to it.name }
+        var artists = (played + followed).distinctBy { it.first }.filterNot { hidden.hidesArtist(it.second) }.take(VIDEO_ARTISTS)
+        if (artists.size < 3) {
+            val popular = runCatching { popularArtists(Innertube.currentRegion).artists }.getOrDefault(emptyList())
+            artists = (artists + popular.map { it.browseId to it.name }).distinctBy { it.first }
+                .filterNot { hidden.hidesArtist(it.second) }.take(VIDEO_ARTISTS)
+        }
+        val slots = kotlinx.coroutines.sync.Semaphore(3)
+        val pages = artists.map { (id, _) ->
+            async {
+                slots.acquire()
+                try { personalArtistPage(id) } catch (e: CancellationException) { throw e } catch (_: Exception) { null } finally { slots.release() }
+            }
+        }.awaitAll().filterNotNull()
+        HomeVideos.shelves(
+            pages,
+            videosTitle = com.opentune.i18n.Tr.t("Music videos for you"),
+            liveTitle = com.opentune.i18n.Tr.t("Live performances"),
+        ).map { shelf -> shelf.copy(items = shelf.items.filterNot { hidden.hides(it.videoId, it.subtitle) }) }
+            .filter { it.items.size >= 3 }
+    }
+
     private val personalArtistPages = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, ArtistPage>>()
     private val personalArtistLocks = Array(8) { kotlinx.coroutines.sync.Mutex() }
     private suspend fun personalArtistPage(id: String): ArtistPage {
@@ -525,6 +557,9 @@ object MusicRepository {
     private const val MAX_HOME_PAGES = 8
     private const val MIXES_TTL_MS = 30 * 60_000L
     private const val EXTRAS_FRESH_MS = 30 * 60 * 1000L
+
+    /** How many artists Home's video rows are made from. */
+    private const val VIDEO_ARTISTS = 6
     /** How many recent songs Home's picks take turns to start from. */
     private const val RECENT_SEEDS = 6
     private const val MAX_PICKS = 16

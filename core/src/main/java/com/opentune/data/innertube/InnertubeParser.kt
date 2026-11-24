@@ -409,6 +409,7 @@ object InnertubeParser {
         val songs = mutableListOf<Song>()
         var moreSongs: String? = null
         val shelves = mutableListOf<HomeShelf>()
+        val videoShelves = mutableListOf<HomeShelf>()
         val header = response["header"]
         // "Top songs" rows are billed by the page they sit on: the subtitle
         // beside them counts plays where a search row names the artist.
@@ -431,6 +432,11 @@ object InnertubeParser {
             section.o("musicCarouselShelfRenderer")?.let { carousel ->
                 val header = carousel.o("header").o("musicCarouselShelfBasicHeaderRenderer")
                 val title = header.o("title").runs()
+                // Music videos and live performances: kept apart, as wide cards (Home shows them).
+                videoShelfItems(carousel.a("contents").orEmpty())?.let { videos ->
+                    videoShelves += HomeShelf(title.ifBlank { "Videos" }, videos, videos = true)
+                    return@let
+                }
                 if (VIDEO_WORD.containsMatchIn(title)) return@let
                 val items = carousel.a("contents").orEmpty().mapNotNull {
                     parseTwoRowItem(it.o("musicTwoRowItemRenderer"))
@@ -467,6 +473,7 @@ object InnertubeParser {
             subscriberCountText = subscriberCount(header),
             monthlyListenerCount = monthlyListeners(header),
             subscription = subscription(header),
+            videoShelves = videoShelves,
         )
     }
 

@@ -501,6 +501,11 @@ data class ArtistPage(
     val monthlyListenerCount: String? = null,
     /** The header's subscribe button, when the page carries one. */
     val subscription: SubscriptionState? = null,
+    /**
+     * The page's rows of music videos and of live performances, in the page's order (videos
+     * first), as wide cards. Known by their cards, not their titles.
+     */
+    val videoShelves: List<HomeShelf> = emptyList()
 )
 
 /**
