@@ -48,6 +48,15 @@ fun rememberCoverColors(url: String?): CoverColors {
     return picked
 }
 
+/**
+ * Takes [argb] (a cover's main colours, the one filling the most of it first) as the colours of
+ * the cover at [url], as if it had been read: for a cover whose colours are already known, and
+ * for tests, which load no images.
+ */
+internal fun knowCoverColors(url: String, vararg argb: Int) {
+    if (argb.isNotEmpty()) cache[url] = argb
+}
+
 private fun colorsOf(argb: IntArray): CoverColors {
     val hcts = argb.map { Hct.fromInt(it) }
     val first = hcts.firstOrNull() ?: return CoverColors.Neutral
