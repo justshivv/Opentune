@@ -244,7 +244,7 @@ object ExternalStreams {
             return null
         }
         val now = now()
-        if (force) { losslessMissUntil.remove(videoId); saavnMissUntil.remove(videoId) }
+        if (force) { losslessMissUntil.remove(videoId); saavnMissUntil.remove(videoId); SaavnMatches.book()?.takeIf { it.missed(videoId) }?.let { SaavnMatches.forget(videoId) } }
         val losslessMissed = (losslessMissUntil[videoId] ?: 0) > now
         val saavnMissed = (saavnMissUntil[videoId] ?: 0) > now
         if (losslessMissed && (losslessOnly || saavnMissed)) return null

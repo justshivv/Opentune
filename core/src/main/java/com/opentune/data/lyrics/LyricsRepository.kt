@@ -111,7 +111,9 @@ object LyricsRepository {
      * after each of [RETRY_WAITS_MS], answers already in being reused.
      */
     fun lyricsUpdates(videoId: String, title: String, artist: String, durationMs: Long): Flow<Lyrics?> = flow {
+        val asked = android.os.SystemClock.elapsedRealtime()
         var found = find(videoId, title, artist, durationMs)
+        Log.d("Preload", "$videoId: lyrics ${if (found.lyrics != null) "shown" else "not found"} in ${android.os.SystemClock.elapsedRealtime() - asked} ms")
         emit(found.lyrics)
         for (wait in RETRY_WAITS_MS) {
             if (found.settled) break
@@ -144,14 +146,20 @@ object LyricsRepository {
         val tail = "|${settings.ordered.filter { it.enabled }.joinToString(",") { it.source.name }}|${settings.preferWordSynced}|$chosen"
         val seconds = durationMs / 1000
         val key = "$videoId|$seconds$tail"
-        cache[key]?.let { return Found(it, true) }
         // Readied ahead from a card, whose length is only to the second (see [prefetch]): within
         // [CLOSE_S] it's the same recording.
-        if (durationMs > 0) for (off in NEAR_SECONDS) cache["$videoId|${seconds + off}$tail"]?.let { return Found(it, true) }
+        fun inMemory(): Lyrics? = cache[key]
+            ?: if (durationMs > 0) NEAR_SECONDS.firstNotNullOfOrNull { off -> cache["$videoId|${seconds + off}$tail"] } else null
+        inMemory()?.let { return Found(it, true) }
+        // Kept from an earlier launch (see [LyricsDisk]): read once per song a launch.
+        if (durationMs > 0 && readFromDisk.add(videoId)) {
+            withContext(Dispatchers.IO) { LyricsDisk.read(videoId) }.forEach { (k, v) -> cache.putIfAbsent(k, v) }
+            inMemory()?.let { return Found(it, true) }
+        }
         // A source picked for this song from the player goes first, on its own, as it comes.
         if (chosen != null) {
             answerOf(chosen, videoId, title, artist, durationMs).await().getOrNull()?.let { LyricsQuality.tidy(it, durationMs) }?.let { picked ->
-                if (durationMs > 0) cache[key] = picked
+                if (durationMs > 0) keep(videoId, key, picked)
                 return Found(picked, true)
             }
         }
@@ -218,9 +226,22 @@ object LyricsRepository {
         // version's lyrics can match, timed for another cut), and only ones
         // asking again couldn't better.
         val settled = !failed || rank(result) >= target
-        if (result != null && durationMs > 0 && settled) cache[key] = result
+        if (result != null && durationMs > 0 && settled) keep(videoId, key, result)
         return Found(result, settled)
     }
+
+    /** Songs whose lyrics kept on disk were read this launch. */
+    private val readFromDisk = ConcurrentHashMap.newKeySet<String>()
+
+    /** Remembers [lyrics] for this launch and the next ones (see [LyricsDisk]). */
+    private fun keep(videoId: String, key: String, lyrics: Lyrics) {
+        cache[key] = lyrics
+        lookups.launch { runCatching { LyricsDisk.write(videoId, key, lyrics) } }
+    }
+
+    /** Whether lyrics for [videoId] are at hand, for this launch or kept from an earlier one. */
+    fun readyFor(videoId: String): Boolean =
+        cache.keys.any { it.startsWith("$videoId|") } || LyricsDisk.has(videoId)
 
     /** A podcast episode's transcript (see [PodcastTranscripts]); asked again later when YouTube didn't answer. */
     private suspend fun transcriptOf(videoId: String, durationMs: Long): Found {

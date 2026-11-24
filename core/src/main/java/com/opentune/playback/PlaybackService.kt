@@ -1415,6 +1415,10 @@ class PlaybackService : MediaLibraryService() {
             startListen(mediaItem?.toSong(), mediaSession?.player?.isPlaying == true)
             // Only time starts meant to sound now, not a skip made while paused.
             startRequestedAt = if (mediaSession?.player?.playWhenReady == true) SystemClock.elapsedRealtime() else 0L
+            // What of it was ready, and where it was started from (see PreloadPlanner.started).
+            if (startRequestedAt > 0) mediaItem?.mediaId?.let {
+                PreloadPlanner.started(it, fromQueue = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK)
+            }
             healVideoMode()
         }
 
@@ -1423,6 +1427,7 @@ class PlaybackService : MediaLibraryService() {
             if (!isPlaying) mediaSession?.player?.let(::saveEpisodePosition)
             if (isPlaying && startRequestedAt > 0) {
                 NerdStats.onStartup(SystemClock.elapsedRealtime() - startRequestedAt)
+                mediaSession?.player?.currentMediaItem?.mediaId?.let { PreloadPlanner.sounded(it, SystemClock.elapsedRealtime() - startRequestedAt) }
                 startRequestedAt = 0
             }
             if (isPlaying) {

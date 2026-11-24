@@ -331,6 +331,7 @@ fun SongListItem(
         onPlayNext = onPlayNext.takeIf { swipes },
         onAddToQueue = onAddToQueue.takeIf { (swipes || onSwipeRemove != null) && !selecting },
         modifier = modifier.fillMaxWidth()
+            .readyOnPress(song.takeUnless { selecting })
             .then(if (picked) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) else Modifier),
         onRemove = onSwipeRemove.takeIf { !selecting },
     ) { swipeActions ->
