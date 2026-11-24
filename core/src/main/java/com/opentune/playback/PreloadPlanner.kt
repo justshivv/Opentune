@@ -66,12 +66,15 @@ object PreloadPlanner {
     private val budget = AudioBudget(now = SystemClock::elapsedRealtime)
     private val readied = ReadiedSongs(now = SystemClock::elapsedRealtime)
 
-    /** [songs] shown under [key] (one screen or section), likeliest first; replaces what [key] showed. */
-    fun onScreen(key: String, songs: List<Song>) {
+    /**
+     * [songs] shown under [key] (one screen or section), likeliest first; replaces what [key] showed.
+     * [now]: plan at once, for a screen the listener taps from as soon as it shows (search results).
+     */
+    fun onScreen(key: String, songs: List<Song>, now: Boolean = false) {
         if (songs.isEmpty()) return offScreen(key)
         if (screens[key] == songs) return
         screens[key] = songs
-        poke()
+        poke(if (now) 0L else SETTLE_MS)
     }
 
     /** [key] left the screen. */
@@ -118,11 +121,13 @@ object PreloadPlanner {
     }
 
     /** Plans again, once things have settled: the screen, the queue, the network or the setting changed. */
-    fun poke() {
+    fun poke() = poke(SETTLE_MS)
+
+    private fun poke(settleMs: Long) {
         synchronized(this) {
             job?.cancel()
             job = scope.launch {
-                delay(SETTLE_MS)
+                if (settleMs > 0) delay(settleMs)
                 run(host ?: return@launch)
             }
         }
@@ -163,16 +168,21 @@ object PreloadPlanner {
         val id = song.videoId
         val started = SystemClock.elapsedRealtime()
         try {
+            // The three lookups at once: a tap soon after joins each of them where it has got to
+            // (each keeps running for whoever asks next), so starting them together starts the song sooner.
             awaitGate(h)
-            StreamResolver.resolve(id)
-            if (ExternalStreams.allowed(false)) {
-                awaitGate(h)
-                withTimeoutOrNull(SAAVN_WAIT_MS) { ExternalStreams.findJioSaavn(song, song.durationMillis()) }
-            }
             val length = song.durationMillis()
-            if (length > 0 && AppSettings.lyrics.value.ordered.any { it.enabled }) {
-                awaitGate(h)
-                LyricsRepository.prefetch(id, song.title, song.artist, length)
+            kotlinx.coroutines.coroutineScope {
+                val address = async { StreamResolver.resolve(id) }
+                if (ExternalStreams.allowed(false)) launch {
+                    try { withTimeoutOrNull(SAAVN_WAIT_MS) { ExternalStreams.findJioSaavn(song, length) } }
+                    catch (e: CancellationException) { throw e } catch (e: Exception) { DebugLog.w(TAG, "$id: JioSaavn ahead: ${e.message}") }
+                }
+                if (length > 0 && AppSettings.lyrics.value.ordered.any { it.enabled }) launch {
+                    try { LyricsRepository.prefetch(id, song.title, song.artist, length) }
+                    catch (e: CancellationException) { throw e } catch (e: Exception) { DebugLog.w(TAG, "$id: lyrics ahead: ${e.message}") }
+                }
+                address.await()
             }
             var fetched = 0L
             if (want.audio && !AppSettings.onMeteredNetwork()) {

@@ -472,7 +472,7 @@ private fun Results(
             val topSongs = remember(state.data) {
                 state.data.mapNotNull { r -> when (r) { is SearchResult.TopTrack -> r.song; is SearchResult.Track -> r.song; else -> null } }.take(3)
             }
-            com.opentune.ui.components.PreloadCandidates("search", topSongs)
+            com.opentune.ui.components.PreloadCandidates("search", topSongs, immediate = true)
             LazyColumn(state = rememberSearchListState(), contentPadding = contentPadding, modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
                 sections.forEach { (title, rows) ->
                     if (sections.size > 1) {
