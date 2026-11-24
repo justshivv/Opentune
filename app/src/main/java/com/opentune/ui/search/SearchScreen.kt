@@ -99,6 +99,19 @@ object SearchFocus {
     fun request() { requests.tryEmit(Unit) }
 }
 
+/** The route the Search button reselects, scrolling the page's list back to its top (issue 98). */
+const val SEARCH_TAB_ROUTE = "search"
+
+/** A list on the Search page, scrolled back to its top when the Search button is tapped again there. */
+@Composable
+private fun rememberSearchListState(): androidx.compose.foundation.lazy.LazyListState {
+    val state = androidx.compose.foundation.lazy.rememberLazyListState()
+    androidx.compose.runtime.LaunchedEffect(state) {
+        com.opentune.ui.TabEvents.reselected.collect { if (it == SEARCH_TAB_ROUTE) state.animateScrollToItem(0) }
+    }
+    return state
+}
+
 @Composable
 fun SearchScreen(
     contentPadding: PaddingValues,
@@ -342,7 +355,7 @@ private fun Typing(
     onAddToQueue: (Song) -> Unit = {},
     onBrowse: (BrowseItem) -> Unit = {},
 ) {
-    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+    LazyColumn(state = rememberSearchListState(), contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         if (query.isBlank()) {
             if (recent.isEmpty()) {
                 item {
@@ -456,7 +469,7 @@ private fun Results(
             // The mixed page comes back as one list; show it in sections the way
             // YouTube Music does: songs, then artists, albums, playlists.
             val sections = remember(state.data) { state.data.groupBy(::sectionOf).toList() }
-            LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+            LazyColumn(state = rememberSearchListState(), contentPadding = contentPadding, modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
                 sections.forEach { (title, rows) ->
                     if (sections.size > 1) {
                         item(key = "h:$title") {
@@ -670,7 +683,7 @@ private fun LibraryResults(
     onAddToQueue: (Song) -> Unit,
     onOpenList: (LibraryList) -> Unit,
 ) {
-    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+    LazyColumn(state = rememberSearchListState(), contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         if (query.isNotBlank() && found != null && lists.isNotEmpty()) {
             item(key = "lib:lists") { LibraryHeading("Playlists") }
             items(lists, key = { "lib:${it.key}" }) { list -> LibraryListRow(list) { onOpenList(list) } }
@@ -726,7 +739,7 @@ private fun AddonResults(
     onPick: (String) -> Unit,
     onPlay: (AddonHit) -> Unit,
 ) {
-    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+    LazyColumn(state = rememberSearchListState(), contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         if (query.isBlank() || found == null) {
             if (recent.isEmpty()) {
                 item { SourceHint("Search every enabled add-on at once. The song you pick starts on that add-on's stream.") }

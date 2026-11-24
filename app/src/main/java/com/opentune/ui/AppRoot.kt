@@ -591,7 +591,11 @@ fun AppRoot(vm: PlayerViewModel) {
     // Tapped again on Search, the cursor goes straight into the search bar.
     val openSearch = {
         if (route != SEARCH_ROUTE) nav.navigate(SEARCH_ROUTE) { launchSingleTop = true }
-        else com.opentune.ui.search.SearchFocus.request()
+        else {
+            // Already there: back to the top of the results or Explore (issue 98), the cursor in the bar.
+            TabEvents.reselect(SEARCH_ROUTE)
+            com.opentune.ui.search.SearchFocus.request()
+        }
     }
     val openMood: (com.opentune.data.model.MoodGenre) -> Unit = { mood ->
         pages.open("mood/${Uri.encode(mood.browseId)}?params=${Uri.encode(mood.params.orEmpty())}&title=${Uri.encode(mood.title)}")

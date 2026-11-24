@@ -122,7 +122,14 @@ internal fun ExploreBoard(
     header: (@Composable () -> Unit)? = { PageHeader("Explore") },
 ) {
     val tiles = remember(canvas, filter) { canvas?.tiles?.filter { filter == null || it.kind.name == filter }.orEmpty() }
+    // Back to the top when its button is tapped again: Explore's own tab, or Search, where it lives without a header.
+    val grid = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
+    LaunchedEffect(grid, header == null) {
+        val route = if (header == null) com.opentune.ui.search.SEARCH_TAB_ROUTE else "explore"
+        com.opentune.ui.TabEvents.reselected.collect { if (it == route) grid.animateScrollToItem(0) }
+    }
     LazyVerticalStaggeredGrid(
+        state = grid,
         columns = TileColumns,
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = contentPadding.calculateBottomPadding() + 16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
