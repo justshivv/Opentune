@@ -46,8 +46,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
 
-private const val MONOCHROME_BASE = "${FirstPartyAddonAuth.ORIGIN}/monochrome/"
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
@@ -61,10 +59,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
     LaunchedEffect(Unit) { AddonRefresh.refresh() }
     // Edge to edge: the page pads itself for the system bars, and nothing behind shows under them.
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        AudioAddonsPage(onDismiss, onAdd = { preset ->
-            if (preset != null) input = preset else if (input == "${MONOCHROME_BASE}manifest.json") input = ""
-            adding = true
-        }, notice = notice, onNotice = { notice = it })
+        AudioAddonsPage(onDismiss, onAdd = { adding = true }, notice = notice, onNotice = { notice = it })
     }
     if (adding) AddSourceCard(
         input = input,
@@ -120,7 +115,7 @@ private enum class Tone { Good, Waiting, Off, Bad }
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: (String?) -> Unit, notice: String?, onNotice: (String?) -> Unit) {
+internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: String?, onNotice: (String?) -> Unit) {
     val addons by AddonStore.addons.collectAsState()
     val playback by AppSettings.playback.collectAsState()
     val ui by AppSettings.ui.collectAsState()
@@ -159,6 +154,8 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: (String?) -> Unit, no
                 }
             }
 
+            MonochromeSettings(addons.firstOrNull(MonochromeModule::matches))
+
             com.opentune.ui.components.GroupLabel("Lossless, in order")
             com.opentune.ui.components.GroupCard {
                 if (addons.isEmpty()) {
@@ -166,7 +163,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: (String?) -> Unit, no
                         Icon(ImageVector.vectorResource(AppIcons.Extension), null, tint = c.onSurfaceVariant, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.height(10.dp))
                         Text("No lossless sources yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text("Add one with its URL. Until then, songs play from the sources below.", style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+                        Text("Enable Monochrome above or add your own source.", style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
                 addons.forEachIndexed { index, addon ->
@@ -200,6 +197,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: (String?) -> Unit, no
                         checked != null -> if (checked.startsWith("Available")) Tone.Good else if (checked.startsWith("Checking")) Tone.Off else Tone.Bad
                         paused || blocked -> Tone.Waiting
                         !addon.enabled -> Tone.Off
+                        MonochromeModule.matches(addon) -> Tone.Off // The module card shows its audio check.
                         else -> Tone.Good
                     }
                     val on = addon.enabled && !addon.ownerOff
@@ -298,7 +296,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: (String?) -> Unit, no
                                 } }
                                 if (index > 0) SmallPill("Move up") { AddonStore.move(addon.key, -1) }
                                 if (index < addons.lastIndex) SmallPill("Move down") { AddonStore.move(addon.key, 1) }
-                                if (!addon.admin) SmallPill("Remove", danger = true) { AddonStore.remove(addon.key); expanded = null }
+                                if (!addon.admin && !MonochromeModule.matches(addon)) SmallPill("Remove", danger = true) { AddonStore.remove(addon.key); expanded = null }
                             }
                         }
                     }
@@ -322,17 +320,9 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: (String?) -> Unit, no
                 }
             }
 
-            if (addons.none { it.manifest.id == "org.opentune.monochrome" || it.base == MONOCHROME_BASE }) {
-                TextButton(
-                    onClick = { onAdd("${MONOCHROME_BASE}manifest.json") },
-                    modifier = Modifier.padding(start = 16.dp, top = 16.dp),
-                ) {
-                    Text("Add Monochrome")
-                }
-            }
             Row(
                 Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                    .border(1.dp, c.outlineVariant, RoundedCornerShape(28.dp)).clickable { onAdd(null) }.padding(horizontal = 20.dp, vertical = 18.dp),
+                    .border(1.dp, c.outlineVariant, RoundedCornerShape(28.dp)).clickable(onClick = onAdd).padding(horizontal = 20.dp, vertical = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(40.dp).clip(CircleShape).background(c.onSurface), contentAlignment = Alignment.Center) {

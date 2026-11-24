@@ -11,6 +11,16 @@ import java.util.UUID
 data class AudioAddon(val key: String, val base: String, val manifest: AddonManifest, val enabled: Boolean = true, val admin: Boolean = false,
     /** An admin source its owner turned off in the published list: nothing is sent to it, whatever the listener's switch says. */
     val ownerOff: Boolean = false)
+/** Built-in preset. Only the official service and its Monochrome root alias share this identity. */
+object MonochromeModule {
+    const val BASE = "${FirstPartyAddonAuth.ORIGIN}/monochrome/"
+    const val ID = "org.opentune.monochrome"
+    internal val preset = AddonManifest(ID, "Monochrome", "")
+
+    fun matches(source: AudioAddon): Boolean = source.base == BASE ||
+        (source.base == "${FirstPartyAddonAuth.ORIGIN}/" && source.manifest.id == ID)
+}
+
 object AddonStore {
     private var preferences: android.content.SharedPreferences? = null
     private val state = MutableStateFlow<List<AudioAddon>>(emptyList())
@@ -33,9 +43,20 @@ object AddonStore {
         // Retire obsolete verification credentials without touching saved music.
         context.getSharedPreferences("spotiflac", Context.MODE_PRIVATE).edit().clear().apply()
     }
+    /** The module is visible before opt-in and uses the same ordered sources as normal playback. */
+    @Synchronized fun setMonochromeEnabled(enabled: Boolean) {
+        val current = state.value
+        val source = current.firstOrNull(MonochromeModule::matches)
+        if (source != null) {
+            if (!source.ownerOff && source.enabled != enabled) enable(source.key, enabled)
+        } else if (enabled) {
+            save(current + AudioAddon("builtin:monochrome", MonochromeModule.BASE, MonochromeModule.preset))
+        }
+    }
+
     @Synchronized fun add(base: String, manifest: AddonManifest) {
         val normalized = AddonProtocol.normalize(base)
-        require(state.value.count { !it.admin } < 20 || state.value.any { it.base == normalized }) { "You can add up to 20 audio add-ons." }
+        require(state.value.count { !it.admin && !MonochromeModule.matches(it) } < 20 || state.value.any { it.base == normalized }) { "You can add up to 20 audio add-ons." }
         val old = state.value.firstOrNull { it.base == normalized }
         save(if (old == null) state.value + AudioAddon(UUID.randomUUID().toString(), normalized, manifest)
             else state.value.map { if (it.key == old.key) it.copy(manifest = if (it.admin) manifest.copy(name = it.manifest.name) else manifest) else it })
@@ -61,9 +82,14 @@ object AddonStore {
     }
     @Synchronized fun syncCommunity(incoming: List<AudioAddon>) {
         val incomingByKey = incoming.associateBy { it.key }
+        val managedMono = incoming.firstOrNull(MonochromeModule::matches)
         val retained = state.value.mapNotNull { old ->
-            if (!old.admin) old else incomingByKey[old.key]?.copy(enabled = old.enabled)
-        }
+            when {
+                managedMono != null && MonochromeModule.matches(old) -> managedMono.copy(enabled = old.enabled)
+                !old.admin -> old
+                else -> incomingByKey[old.key]?.copy(enabled = old.enabled)
+            }
+        }.distinctBy { it.key }
         val currentKeys = retained.map { it.key }.toSet()
         val next = retained + incoming.filter { it.key !in currentKeys }
         if (next != state.value) save(next)
