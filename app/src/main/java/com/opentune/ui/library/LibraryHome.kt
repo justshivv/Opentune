@@ -1628,7 +1628,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     // The top bar turns solid once the hero's title zone has scrolled under it:
     // a derived flag, so it costs a recomposition only when it flips.
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val heroHeightPx = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * HERO_FRACTION).dp.toPx() }
+    val heroHeightPx = with(density) { com.opentune.ui.browse.collectionHeroHeight().toPx() }
     val barHeightPx = with(density) { 56.dp.toPx() }
     // Keyed on the sizes, so turning the phone works the threshold out again.
     val barSolid by remember(heroHeightPx, barHeightPx) {
@@ -1853,9 +1853,6 @@ private fun LikedSkeleton(band: com.opentune.ui.components.RubberBandOverscroll?
 
 /** How many liked songs the page lays out at a time; see LikedScreen. */
 private const val PAGE_SIZE = 50
-
-/** How much of the screen's height the Liked hero takes. */
-private const val HERO_FRACTION = 0.68f
 
 /**
  * The Liked page's hero: its cover is Liked Music's own (the thumb on its
@@ -2157,7 +2154,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
                 com.opentune.ui.browse.PlaylistSearchHeader(search) {
                     val density = androidx.compose.ui.platform.LocalDensity.current
-                    val heroPx = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * HERO_FRACTION).dp.roundToPx() }
+                    val heroPx = with(density) { com.opentune.ui.browse.collectionHeroHeight().roundToPx() }
                     val pastHero by remember(listState, heroPx) {
                         androidx.compose.runtime.derivedStateOf {
                             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > heroPx - with(density) { 56.dp.roundToPx() }

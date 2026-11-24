@@ -97,9 +97,6 @@ private val DEVICE_SEED = androidx.compose.ui.graphics.Color(0xFF5E7A8C)
 /** How many device songs the page lays out at a time; see LocalMusicScreen. */
 private const val LOCAL_PAGE_SIZE = 50
 
-/** How much of the screen's height the device hero takes, as the playlist pages' heroes do. */
-private const val LOCAL_HERO_FRACTION = 0.68f
-
 /**
  * Audio files on the device, after asking for permission to read them.
  *
@@ -154,7 +151,7 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
     // hundreds of files, laying out every row up front makes the page stutter.
     var shownCount by remember { androidx.compose.runtime.mutableIntStateOf(LOCAL_PAGE_SIZE) }
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val heroHeightPx = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * LOCAL_HERO_FRACTION).dp.toPx() }
+    val heroHeightPx = with(density) { com.opentune.ui.browse.collectionHeroHeight().toPx() }
     val barHeightPx = with(density) { 56.dp.toPx() }
     // The top bar turns solid once the hero's title zone has scrolled under it.
     val barSolid by remember(heroHeightPx, barHeightPx) {

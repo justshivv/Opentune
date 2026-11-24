@@ -356,7 +356,7 @@ internal fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, lis
         // The height of a full-screen playlist cover, so the photo takes
         // the same share of the screen as the covers on the other pages;
         // the Poster layout gives it more, with the name low over it.
-        val photoHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * if (poster) POSTER_HERO_FRACTION else ARTIST_HERO_FRACTION).dp
+        val photoHeight = collectionHeroHeight(if (poster) POSTER_HERO_FRACTION else ARTIST_HERO_FRACTION)
         Box(
             Modifier
                 .recordHeaderPicture(picture, behind)

@@ -737,7 +737,7 @@ internal fun ListHero(
     // The colour the buttons take when Settings › Page buttons asks for the accent.
     val accent = LocalListAccent.current
     if (fullListCover()) {
-        val heroHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
+        val heroHeight = collectionHeroHeight()
         // The cover drifts down at a fraction of the scroll, so the list rises
         // over it little by little instead of the two moving as one piece.
         val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
@@ -812,6 +812,24 @@ internal fun FullListCover(url: String?, modifier: Modifier = Modifier, cover: (
 /** The title starts below the complete square cover, never over the artwork. */
 internal const val FULL_COVER_TITLE_AT = 1f
 private const val COLLECTION_HERO_FRACTION = 0.68f
+
+/** The least height the full-cover hero may take: its title, counts and buttons need that much room. */
+private val COLLECTION_HERO_MIN_HEIGHT = 340.dp
+
+/**
+ * The full-cover hero's height: its share of the screen, floored at
+ * [COLLECTION_HERO_MIN_HEIGHT]. Sideways the screen's height halves while
+ * the hero's contents keep theirs, so the share alone would crush them.
+ * Every list page's scroll threshold reads the height from here too, so
+ * the hero and its thresholds can never drift apart. A hero with its own
+ * share of the screen (the artist page's photo) passes it and floors at
+ * the same minimum.
+ */
+@Composable
+internal fun collectionHeroHeight(fraction: Float = COLLECTION_HERO_FRACTION) = maxOf(
+    (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * fraction).dp,
+    COLLECTION_HERO_MIN_HEIGHT,
+)
 private const val LIST_PARALLAX = 0.4f
 private const val COLLECTION_PAGE_SIZE = 50
 
@@ -1231,7 +1249,7 @@ fun CollectionScreen(
             GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
                 PlaylistSearchHeader(search) {
                     val density = androidx.compose.ui.platform.LocalDensity.current
-                    val heroPx = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp.roundToPx() }
+                    val heroPx = with(density) { collectionHeroHeight().roundToPx() }
                     val pastHero by remember(listState, heroPx) {
                         androidx.compose.runtime.derivedStateOf {
                             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > heroPx - with(density) { 56.dp.roundToPx() }
