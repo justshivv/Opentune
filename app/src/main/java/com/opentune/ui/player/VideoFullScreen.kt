@@ -452,8 +452,11 @@ internal fun FullScreenVideo(
 
             seekMark?.let { SeekRipple(it, animate) }
 
+            // A pull takes the controls with it: they hide while the picture
+            // is away from rest and return as it settles back, on the same
+            // fade the auto hide uses; the shown state itself is untouched.
             ControlsVisibility(
-                visible = shown,
+                visible = shown && pull.value == 0f,
                 animate = animate,
                 modifier = Modifier.fillMaxSize(),
             ) {
