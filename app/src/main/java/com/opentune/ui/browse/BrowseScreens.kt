@@ -371,7 +371,9 @@ internal fun rememberCoverTint(url: String?): Color {
     val loaded = !url.isNullOrBlank()
     val tint by androidx.compose.animation.animateColorAsState(
         if (loaded) androidx.compose.ui.graphics.lerp(background, coverTone(seed, background.luminance() < 0.5f), 0.32f) else background,
-        animationSpec = if (com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation)
+        // The page's whole scheme is made from this, so each frame of the fade builds the page
+        // again: where frames are short of time it changes at once, as the app's theme does.
+        animationSpec = if (!com.opentune.ui.theme.schemeFades())
             androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(550),
         label = "coverTint",
     )
@@ -475,7 +477,7 @@ internal fun ListPageTint(coverUrl: String?, seed: Color? = null, content: @Comp
     val fromCover = rememberCoverTint(coverUrl)
     val fromSeed by androidx.compose.animation.animateColorAsState(
         seed?.let { androidx.compose.ui.graphics.lerp(base.background, coverTone(it, dark), 0.32f) } ?: base.background,
-        animationSpec = if (ui.reduceAnimation) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(550),
+        animationSpec = if (!com.opentune.ui.theme.schemeFades()) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(550),
         label = "listSeedTint",
     )
     val tint = if (coverUrl.isNullOrBlank()) fromSeed else fromCover
@@ -490,7 +492,9 @@ internal fun ListPageTint(coverUrl: String?, seed: Color? = null, content: @Comp
         surfaceContainerHigh = lift(0.10f),
         surfaceContainerHighest = lift(0.14f),
     )
-    MaterialTheme(colorScheme = scheme) {
+    // The same scheme object while its colours are the same: a new one each time this ran
+    // built the whole page again (see rememberSteadyScheme).
+    MaterialTheme(colorScheme = com.opentune.ui.theme.rememberSteadyScheme(scheme)) {
         // The wash this page paints, shared with the bars frosted over it.
         // Read here, inside the scheme, so the glow is mixed against the
         // tint exactly as the wash behind the songs mixes it. The wash's

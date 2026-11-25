@@ -13,6 +13,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -130,7 +131,7 @@ fun PlayerTheme(seed: Color?, settings: ThemeSettings, neutral: Boolean = false,
         surfaceContainer = Color(0xFF2B2B2E), surfaceContainerHigh = Color(0xFF36363A),
     ) else scheme
     MaterialTheme(
-        colorScheme = if (!active) MaterialTheme.colorScheme else if (amoled) playerScheme.toPureBlack() else playerScheme.animated(),
+        colorScheme = if (!active) MaterialTheme.colorScheme else if (amoled) rememberSteadyScheme(playerScheme.toPureBlack()) else playerScheme.animated(),
         typography = rememberAppTypography(settings),
         shapes = AppShapes,
     ) {
@@ -158,13 +159,24 @@ private fun ColorScheme.toPureBlack(): ColorScheme = copy(
     outlineVariant = Color(0xFF2E2E32),
 )
 
-/** The scheme with every colour easing to its new value, so a change of seed fades rather than snaps. */
+/**
+ * The scheme with every colour easing to its new value, so a change of seed fades rather than snaps.
+ *
+ * Material's scheme is one fixed object handed down to everything under the theme, and any new
+ * one makes all of it compose again, skipping nothing (the whole app under [OpenTuneTheme], the
+ * whole player under [PlayerTheme]). So the same object is handed down for as long as the
+ * colours stay the same ([rememberSteadyScheme]); a fresh copy on every pass had the whole player
+ * built again at each play, pause or buffering change, and the whole app at each new song.
+ * While the colours fade it is still a new scheme every frame, for [SCHEME_FADE_MS]; where
+ * frames are short of time ([schemeFades]) the colours change at once instead.
+ */
 @Composable
-internal fun ColorScheme.animated(): ColorScheme {
-    val spec = tween<Color>(durationMillis = 600)
+internal fun ColorScheme.animated(fade: Boolean = schemeFades()): ColorScheme {
+    if (!fade) return rememberSteadyScheme(this)
+    val spec = tween<Color>(durationMillis = SCHEME_FADE_MS)
     @Composable
     fun Color.a() = animateColorAsState(this, spec, label = "scheme").value
-    return copy(
+    return rememberSteadyScheme(copy(
         primary = primary.a(),
         onPrimary = onPrimary.a(),
         primaryContainer = primaryContainer.a(),
@@ -189,8 +201,62 @@ internal fun ColorScheme.animated(): ColorScheme {
         surfaceContainerHighest = surfaceContainerHighest.a(),
         outline = outline.a(),
         outlineVariant = outlineVariant.a(),
-    )
+    ))
 }
+
+/** How long a scheme takes to fade to a new song's colours. */
+internal const val SCHEME_FADE_MS = 600
+
+/**
+ * Whether a theme's colours fade between songs, or change at once: at once with motion
+ * reduced, in Lite mode, on Battery saver, and on a phone whose frames ran late under glass,
+ * as each frame of the fade builds everything under the theme again.
+ */
+@Composable
+internal fun schemeFades(): Boolean {
+    val ui = com.opentune.data.settings.AppSettings.ui.collectAsState().value
+    return !ui.reduceAnimation && !ui.liteMode &&
+        ui.performanceProfile != com.opentune.data.settings.PerformanceProfile.BATTERY_SAVER &&
+        !com.opentune.ui.components.GlassPerformance.lite
+}
+
+/**
+ * [scheme], or the one returned last time when every colour in it is the same: Material
+ * hands its scheme down as one fixed object compared by identity, so an equal copy would
+ * still rebuild everything under the theme. Plain memory, not state.
+ */
+@Composable
+internal fun rememberSteadyScheme(scheme: ColorScheme): ColorScheme {
+    val last = remember { arrayOfNulls<ColorScheme>(1) }
+    val kept = last[0]
+    if (kept != null && kept.sameColorsAs(scheme)) return kept
+    last[0] = scheme
+    return scheme
+}
+
+/** Whether every colour of the two schemes is the same. */
+internal fun ColorScheme.sameColorsAs(other: ColorScheme): Boolean = this === other || (
+    primary == other.primary && onPrimary == other.onPrimary && primaryContainer == other.primaryContainer &&
+        onPrimaryContainer == other.onPrimaryContainer && inversePrimary == other.inversePrimary &&
+        secondary == other.secondary && onSecondary == other.onSecondary && secondaryContainer == other.secondaryContainer &&
+        onSecondaryContainer == other.onSecondaryContainer && tertiary == other.tertiary && onTertiary == other.onTertiary &&
+        tertiaryContainer == other.tertiaryContainer && onTertiaryContainer == other.onTertiaryContainer &&
+        background == other.background && onBackground == other.onBackground && surface == other.surface &&
+        onSurface == other.onSurface && surfaceVariant == other.surfaceVariant && onSurfaceVariant == other.onSurfaceVariant &&
+        surfaceTint == other.surfaceTint && inverseSurface == other.inverseSurface && inverseOnSurface == other.inverseOnSurface &&
+        error == other.error && onError == other.onError && errorContainer == other.errorContainer &&
+        onErrorContainer == other.onErrorContainer && outline == other.outline && outlineVariant == other.outlineVariant &&
+        scrim == other.scrim && surfaceBright == other.surfaceBright && surfaceDim == other.surfaceDim &&
+        surfaceContainer == other.surfaceContainer && surfaceContainerHigh == other.surfaceContainerHigh &&
+        surfaceContainerHighest == other.surfaceContainerHighest && surfaceContainerLow == other.surfaceContainerLow &&
+        surfaceContainerLowest == other.surfaceContainerLowest &&
+        primaryFixed == other.primaryFixed && primaryFixedDim == other.primaryFixedDim && onPrimaryFixed == other.onPrimaryFixed &&
+        onPrimaryFixedVariant == other.onPrimaryFixedVariant && secondaryFixed == other.secondaryFixed &&
+        secondaryFixedDim == other.secondaryFixedDim && onSecondaryFixed == other.onSecondaryFixed &&
+        onSecondaryFixedVariant == other.onSecondaryFixedVariant && tertiaryFixed == other.tertiaryFixed &&
+        tertiaryFixedDim == other.tertiaryFixedDim && onTertiaryFixed == other.onTertiaryFixed &&
+        onTertiaryFixedVariant == other.onTertiaryFixedVariant
+    )
 
 private val baseType = Typography()
 
