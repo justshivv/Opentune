@@ -3658,5 +3658,7 @@
 "OpenTune no longer offers this source.": "OpenTune nu mai oferă această sursă.",
 "No internet connection. The song plays on when you're back online.": "Nu există conexiune la internet. Melodia continuă când revii online.",
 "{0} songs downloaded · plays offline": "{0} melodii descărcate · se aud offline",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Descarcă un playlist sau un album din pagina lui, sau mai mult de cinci melodii din el, și apare aici."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Descarcă un playlist sau un album din pagina lui, sau mai mult de cinci melodii din el, și apare aici.",
+"Grow video while playing": "Mărește videoclipul în timpul redării",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "În timpul redării, videoclipul se extinde până la marginile ecranului după 3 secunde și se micșorează la pauză"
 }

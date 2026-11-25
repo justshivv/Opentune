@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "OpenTune больше не предлагает этот источник.",
 "No internet connection. The song plays on when you're back online.": "Нет подключения к интернету. Песня продолжится, когда вы снова будете онлайн.",
 "{0} songs downloaded · plays offline": "Скачано песен: {0} · играют офлайн",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Скачайте плейлист или альбом с его страницы или больше пяти его песен, и он появится здесь."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Скачайте плейлист или альбом с его страницы или больше пяти его песен, и он появится здесь.",
+"Grow video while playing": "Увеличивать видео при воспроизведении",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Во время воспроизведения видео через 3 секунды расширяется до краёв экрана, а при паузе сжимается обратно"
 }

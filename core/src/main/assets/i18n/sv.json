@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "OpenTune erbjuder inte längre den här källan.",
 "No internet connection. The song plays on when you're back online.": "Ingen internetanslutning. Låten spelar vidare när du är online igen.",
 "{0} songs downloaded · plays offline": "{0} låtar nedladdade · spelas offline",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Ladda ner en spellista eller ett album från dess sida, eller fler än fem av dess låtar, så visas den här."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Ladda ner en spellista eller ett album från dess sida, eller fler än fem av dess låtar, så visas den här.",
+"Grow video while playing": "Förstora video under uppspelning",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Medan en video spelas utvidgas den till skärmens kanter efter 3 sekunder och krymper tillbaka vid paus"
 }

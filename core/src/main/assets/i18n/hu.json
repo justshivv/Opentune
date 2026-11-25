@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "Az OpenTune már nem kínálja ezt a forrást.",
 "No internet connection. The song plays on when you're back online.": "Nincs internetkapcsolat. A dal folytatódik, amint újra online leszel.",
 "{0} songs downloaded · plays offline": "{0} dal letöltve · offline is szól",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Tölts le egy lejátszási listát vagy albumot az oldaláról, vagy több mint öt dalát, és itt megjelenik."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Tölts le egy lejátszási listát vagy albumot az oldaláról, vagy több mint öt dalát, és itt megjelenik.",
+"Grow video while playing": "Videó nagyítása lejátszás közben",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Lejátszás közben a videó 3 másodperc után a képernyő széléig tágul, szünetkor pedig visszaugrik"
 }

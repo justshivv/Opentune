@@ -3658,5 +3658,7 @@
 "OpenTune no longer offers this source.": "OpenTune এই উৎসটি আর দেয় না।",
 "No internet connection. The song plays on when you're back online.": "ইন্টারনেট সংযোগ নেই। আবার অনলাইনে এলে গানটি চলতে থাকবে।",
 "{0} songs downloaded · plays offline": "{0}টি গান ডাউনলোড হয়েছে · অফলাইনে চলে",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "কোনো প্লেলিস্ট বা অ্যালবাম তার পেজ থেকে ডাউনলোড করুন, বা তার পাঁচটির বেশি গান, তাহলে এখানে দেখাবে।"
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "কোনো প্লেলিস্ট বা অ্যালবাম তার পেজ থেকে ডাউনলোড করুন, বা তার পাঁচটির বেশি গান, তাহলে এখানে দেখাবে।",
+"Grow video while playing": "চলার সময় ভিডিও বড় করুন",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "ভিডিও চলার সময়, এটি 3 সেকেন্ড পরে স্ক্রিনের প্রান্ত পর্যন্ত প্রসারিত হয় এবং বিরতি দিলে সঙ্কুচিত হয়"
 }

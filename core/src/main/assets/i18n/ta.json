@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "OpenTune இனி இந்த மூலத்தை வழங்காது.",
 "No internet connection. The song plays on when you're back online.": "இணைய இணைப்பு இல்லை. மீண்டும் இணைந்ததும் பாடல் தொடரும்.",
 "{0} songs downloaded · plays offline": "{0} பாடல்கள் பதிவிறக்கப்பட்டன · இணையமின்றி இயங்கும்",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "ஒரு பிளேலிஸ்ட் அல்லது ஆல்பத்தை அதன் பக்கத்திலிருந்து பதிவிறக்குங்கள், அல்லது அதன் ஐந்துக்கும் மேற்பட்ட பாடல்களை, அது இங்கே தோன்றும்."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "ஒரு பிளேலிஸ்ட் அல்லது ஆல்பத்தை அதன் பக்கத்திலிருந்து பதிவிறக்குங்கள், அல்லது அதன் ஐந்துக்கும் மேற்பட்ட பாடல்களை, அது இங்கே தோன்றும்.",
+"Grow video while playing": "இயங்கும்போது வீடியோவைப் பெரிதாக்கு",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "வீடியோ இயங்கும்போது, அது 3 விநாடிகளுக்குப் பிறகு திரையின் விளிம்புகள் வரை விரிவடைந்து, இடைநிறுத்தும்போது சுருங்குகிறது"
 }

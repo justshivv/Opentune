@@ -3658,5 +3658,7 @@
 "OpenTune no longer offers this source.": "OpenTune không còn cung cấp nguồn này.",
 "No internet connection. The song plays on when you're back online.": "Không có kết nối internet. Bài hát sẽ phát tiếp khi bạn trực tuyến trở lại.",
 "{0} songs downloaded · plays offline": "Đã tải {0} bài · nghe ngoại tuyến",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Tải một danh sách phát hoặc album từ trang của nó, hoặc hơn năm bài trong đó, và nó sẽ hiện ở đây."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Tải một danh sách phát hoặc album từ trang của nó, hoặc hơn năm bài trong đó, và nó sẽ hiện ở đây.",
+"Grow video while playing": "Phóng to video khi phát",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Khi video đang phát, video sẽ mở rộng ra các cạnh màn hình sau 3 giây và thu nhỏ lại khi tạm dừng"
 }

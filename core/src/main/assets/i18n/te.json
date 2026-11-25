@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "OpenTune ఇకపై ఈ మూలాన్ని అందించదు.",
 "No internet connection. The song plays on when you're back online.": "ఇంటర్నెట్ కనెక్షన్ లేదు. మళ్లీ ఆన్‌లైన్‌కి వచ్చాక పాట కొనసాగుతుంది.",
 "{0} songs downloaded · plays offline": "{0} పాటలు డౌన్‌లోడ్ అయ్యాయి · ఆఫ్‌లైన్‌లో ప్లే అవుతాయి",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "ప్లేలిస్ట్ లేదా ఆల్బమ్‌ను దాని పేజీ నుంచి డౌన్‌లోడ్ చేయండి, లేదా దానిలోని ఐదు కంటే ఎక్కువ పాటలు, అప్పుడు అది ఇక్కడ కనిపిస్తుంది."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "ప్లేలిస్ట్ లేదా ఆల్బమ్‌ను దాని పేజీ నుంచి డౌన్‌లోడ్ చేయండి, లేదా దానిలోని ఐదు కంటే ఎక్కువ పాటలు, అప్పుడు అది ఇక్కడ కనిపిస్తుంది.",
+"Grow video while playing": "ప్లే అవుతున్నప్పుడు వీడియోను పెద్దది చేయండి",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "వీడియో ప్లే అవుతున్నప్పుడు, అది 3 సెకన్ల తర్వాత స్క్రీన్ అంచుల వరకు విస్తరిస్తుంది మరియు పాజ్ చేసినప్పుడు కుదించబడుతుంది"
 }

@@ -3658,5 +3658,7 @@
 "OpenTune no longer offers this source.": "OpenTune artık bu kaynağı sunmuyor.",
 "No internet connection. The song plays on when you're back online.": "İnternet bağlantısı yok. Tekrar çevrimiçi olduğunda şarkı kaldığı yerden devam eder.",
 "{0} songs downloaded · plays offline": "{0} şarkı indirildi · çevrimdışı çalar",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Bir çalma listesini veya albümü sayfasından indir ya da beşten fazla şarkısını indir, burada görünsün."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Bir çalma listesini veya albümü sayfasından indir ya da beşten fazla şarkısını indir, burada görünsün.",
+"Grow video while playing": "Oynatılırken videoyu büyüt",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Bir video oynatılırken, 3 saniye sonra ekranın kenarlarına kadar genişler ve duraklatıldığında geri küçülür"
 }

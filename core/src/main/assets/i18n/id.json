@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "OpenTune tidak lagi menyediakan sumber ini.",
 "No internet connection. The song plays on when you're back online.": "Tidak ada koneksi internet. Lagu akan lanjut saat Anda kembali online.",
 "{0} songs downloaded · plays offline": "{0} lagu diunduh · bisa diputar offline",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Unduh playlist atau album dari halamannya, atau lebih dari lima lagunya, maka akan muncul di sini."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Unduh playlist atau album dari halamannya, atau lebih dari lima lagunya, maka akan muncul di sini.",
+"Grow video while playing": "Perbesar video saat diputar",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Saat video diputar, video akan melebar ke tepi layar setelah 3 detik, dan menyusut kembali saat dijeda"
 }

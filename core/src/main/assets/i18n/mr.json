@@ -3658,5 +3658,7 @@
 "OpenTune no longer offers this source.": "OpenTune आता हा स्रोत देत नाही.",
 "No internet connection. The song plays on when you're back online.": "इंटरनेट कनेक्शन नाही. तुम्ही पुन्हा ऑनलाइन आल्यावर गाणे पुढे सुरू होईल.",
 "{0} songs downloaded · plays offline": "{0} गाणी डाउनलोड झाली · ऑफलाइन वाजतात",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "प्लेलिस्ट किंवा अल्बम त्याच्या पेजवरून डाउनलोड करा, किंवा त्यातील पाचपेक्षा जास्त गाणी, म्हणजे ते इथे दिसेल."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "प्लेलिस्ट किंवा अल्बम त्याच्या पेजवरून डाउनलोड करा, किंवा त्यातील पाचपेक्षा जास्त गाणी, म्हणजे ते इथे दिसेल.",
+"Grow video while playing": "चालू असताना व्हिडिओ मोठा करा",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "व्हिडिओ चालू असताना, तो 3 सेकंदांनंतर स्क्रीनच्या कडांपर्यंत विस्तारतो आणि थांबवल्यावर आकुंचन पावतो"
 }

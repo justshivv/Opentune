@@ -3658,5 +3658,7 @@
 "OpenTune no longer offers this source.": "OpenTune ไม่มีแหล่งนี้ให้แล้ว",
 "No internet connection. The song plays on when you're back online.": "ไม่มีการเชื่อมต่ออินเทอร์เน็ต เพลงจะเล่นต่อเมื่อคุณกลับมาออนไลน์",
 "{0} songs downloaded · plays offline": "ดาวน์โหลดแล้ว {0} เพลง · เล่นแบบออฟไลน์ได้",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "ดาวน์โหลดเพลย์ลิสต์หรืออัลบั้มจากหน้าของมัน หรือเพลงในนั้นมากกว่าห้าเพลง แล้วจะแสดงที่นี่"
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "ดาวน์โหลดเพลย์ลิสต์หรืออัลบั้มจากหน้าของมัน หรือเพลงในนั้นมากกว่าห้าเพลง แล้วจะแสดงที่นี่",
+"Grow video while playing": "ขยายวิดีโอขณะเล่น",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "ขณะเล่นวิดีโอ วิดีโอจะขยายไปถึงขอบหน้าจอหลังจาก 3 วินาที และหดกลับเมื่อหยุดชั่วคราว"
 }

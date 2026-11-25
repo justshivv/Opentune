@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "OpenTune ne propose plus cette source.",
 "No internet connection. The song plays on when you're back online.": "Pas de connexion Internet. Le morceau reprendra quand vous serez de nouveau en ligne.",
 "{0} songs downloaded · plays offline": "{0} titres téléchargés · lecture hors ligne",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Téléchargez une playlist ou un album depuis sa page, ou plus de cinq de ses titres, et il s'affiche ici."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Téléchargez une playlist ou un album depuis sa page, ou plus de cinq de ses titres, et il s'affiche ici.",
+"Grow video while playing": "Agrandir la vidéo pendant la lecture",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Pendant la lecture, la vidéo s'étend jusqu'aux bords de l'écran après 3 secondes et se réduit en pause"
 }

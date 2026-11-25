@@ -3706,5 +3706,7 @@
 "OpenTune no longer offers this source.": "OpenTune 不再提供此來源。",
 "No internet connection. The song plays on when you're back online.": "沒有網路連線。恢復連線後歌曲會繼續播放。",
 "{0} songs downloaded · plays offline": "已下載 {0} 首 · 可離線播放",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "在播放清單或專輯頁面下載它，或下載其中超過五首歌曲，它就會顯示在這裡。"
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "在播放清單或專輯頁面下載它，或下載其中超過五首歌曲，它就會顯示在這裡。",
+"Grow video while playing": "播放時放大影片",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "影片播放時，會在 3 秒後擴展到螢幕邊緣，暫停時收縮回去"
 }

@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "OpenTune ではこのソースを提供しなくなりました。",
 "No internet connection. The song plays on when you're back online.": "インターネットに接続されていません。オンラインに戻ると曲の続きが再生されます。",
 "{0} songs downloaded · plays offline": "{0} 曲をダウンロード済み · オフラインで再生",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "プレイリストやアルバムをそのページからダウンロードするか、その曲を6曲以上ダウンロードすると、ここに表示されます。"
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "プレイリストやアルバムをそのページからダウンロードするか、その曲を6曲以上ダウンロードすると、ここに表示されます。",
+"Grow video while playing": "再生中に動画を拡大",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "動画の再生中、3秒後に画面の端まで拡大し、一時停止すると元に戻ります"
 }

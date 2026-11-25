@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "Το OpenTune δεν προσφέρει πλέον αυτή την πηγή.",
 "No internet connection. The song plays on when you're back online.": "Δεν υπάρχει σύνδεση στο διαδίκτυο. Το τραγούδι συνεχίζει μόλις επανασυνδεθείτε.",
 "{0} songs downloaded · plays offline": "{0} τραγούδια λήφθηκαν · παίζουν εκτός σύνδεσης",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Κατεβάστε μια λίστα ή ένα άλμπουμ από τη σελίδα του, ή πάνω από πέντε τραγούδια του, και θα εμφανιστεί εδώ."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Κατεβάστε μια λίστα ή ένα άλμπουμ από τη σελίδα του, ή πάνω από πέντε τραγούδια του, και θα εμφανιστεί εδώ.",
+"Grow video while playing": "Μεγέθυνση βίντεο κατά την αναπαραγωγή",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Κατά την αναπαραγωγή, το βίντεο επεκτείνεται στις άκρες της οθόνης μετά από 3 δευτερόλεπτα και συρρικνώνεται στην παύση"
 }

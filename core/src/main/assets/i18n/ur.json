@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "OpenTune اب یہ ذریعہ پیش نہیں کرتا۔",
 "No internet connection. The song plays on when you're back online.": "انٹرنیٹ کنکشن نہیں ہے۔ دوبارہ آن لائن ہونے پر گانا آگے چلے گا۔",
 "{0} songs downloaded · plays offline": "{0} گانے ڈاؤن لوڈ ہوئے · آف لائن چلتے ہیں",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "کوئی پلے لسٹ یا البم اس کے صفحے سے ڈاؤن لوڈ کریں، یا اس کے پانچ سے زیادہ گانے، تو وہ یہاں دکھائی دے گا۔"
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "کوئی پلے لسٹ یا البم اس کے صفحے سے ڈاؤن لوڈ کریں، یا اس کے پانچ سے زیادہ گانے، تو وہ یہاں دکھائی دے گا۔",
+"Grow video while playing": "چلتے وقت ویڈیو بڑا کریں",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "جب ویڈیو چل رہا ہو تو یہ 3 سیکنڈ بعد اسکرین کے کناروں تک پھیل جاتا ہے اور رکنے پر سکڑ جاتا ہے"
 }

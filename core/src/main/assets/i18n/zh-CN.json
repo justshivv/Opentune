@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "OpenTune 不再提供此来源。",
 "No internet connection. The song plays on when you're back online.": "没有网络连接。恢复联网后歌曲会继续播放。",
 "{0} songs downloaded · plays offline": "已下载 {0} 首 · 可离线播放",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "在歌单或专辑页面下载它，或下载其中超过五首歌曲，它就会显示在这里。"
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "在歌单或专辑页面下载它，或下载其中超过五首歌曲，它就会显示在这里。",
+"Grow video while playing": "播放时放大视频",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "视频播放时，会在 3 秒后扩展到屏幕边缘，暂停时收缩回去"
 }

@@ -3658,5 +3658,7 @@
 "OpenTune no longer offers this source.": "OpenTune tento zdroj už nenabízí.",
 "No internet connection. The song plays on when you're back online.": "Žádné připojení k internetu. Skladba bude pokračovat, až budete znovu online.",
 "{0} songs downloaded · plays offline": "Staženo skladeb: {0} · hraje offline",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Stáhněte playlist nebo album z jeho stránky, nebo víc než pět jeho skladeb, a objeví se tady."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Stáhněte playlist nebo album z jeho stránky, nebo víc než pět jeho skladeb, a objeví se tady.",
+"Grow video while playing": "Zvětšit video při přehrávání",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Při přehrávání se video po 3 sekundách roztáhne k okrajům obrazovky a při pozastavení se zmenší zpět"
 }

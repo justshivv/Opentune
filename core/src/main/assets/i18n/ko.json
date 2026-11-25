@@ -3729,5 +3729,7 @@
 "OpenTune no longer offers this source.": "OpenTune에서 더 이상 이 소스를 제공하지 않습니다.",
 "No internet connection. The song plays on when you're back online.": "인터넷에 연결되어 있지 않습니다. 다시 온라인이 되면 곡이 이어서 재생됩니다.",
 "{0} songs downloaded · plays offline": "{0}곡 다운로드됨 · 오프라인 재생",
-"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "재생목록이나 앨범을 해당 페이지에서 다운로드하거나 그 곡을 다섯 곡 넘게 다운로드하면 여기에 표시됩니다."
+"Download a playlist or album from its page, or more than five of its songs, and it shows here.": "재생목록이나 앨범을 해당 페이지에서 다운로드하거나 그 곡을 다섯 곡 넘게 다운로드하면 여기에 표시됩니다.",
+"Grow video while playing": "재생 중 동영상 확대",
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "동영상이 재생되는 동안 3초 후 화면 가장자리까지 확장되고, 일시정지하면 다시 축소됩니다"
 }
