@@ -77,6 +77,14 @@ export interface YtAuthState {
   active: (YtChannel & { authUser: string }) | null;
   /** Signed in to the browser but no account could be read: what YouTube answered, for display. */
   problem: string | null;
+  /**
+   * Set with `problem` when the failure looks passing (YouTube was slow, busy
+   * or unreachable), so asking again soon may work; false when YouTube's
+   * answer was clear. Extensions before 0.2.1 leave it out.
+   */
+  retryable?: boolean;
+  /** How long YouTube asked to wait (Retry-After), when it said, in ms. */
+  retryAfterMs?: number | null;
 }
 
 /** The browser's open.spotify.com session, as OpenTune may use it (prompt §7.1). Names only, never tokens. */

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from '@/components/toastStore';
 import type { Track } from '@/data/music/types';
 import { getAudio, loadingTrack, partyPlayer, setConnectHooks, usePlayer } from '@/state/player';
 import { toRoomTrack } from '@/together/room';
@@ -113,10 +114,17 @@ function here(f: () => void): void {
 }
 
 /** The queue row of entry [at] in Snapshot.queue (the shareable songs after this one), checked against [id]. */
-function queuedRow(at: number, id: string): number | null {
+/** The player's rows behind Snapshot.queue: what comes after the song playing, as other devices see it. */
+function queuedRows(): number[] {
   const { queue, index } = usePlayer.getState();
   const rows: number[] = [];
   for (let i = index + 1; i < queue.length; i++) if (toCTrack(queue[i]!.track)) rows.push(i);
+  return rows;
+}
+
+function queuedRow(at: number, id: string): number | null {
+  const { queue } = usePlayer.getState();
+  const rows = queuedRows();
   const exact = rows[at];
   if (exact !== undefined && queue[exact]!.track.videoId === id) return exact;
   return rows.find((r) => queue[r]!.track.videoId === id) ?? null;
@@ -180,6 +188,13 @@ export const webPlayer: ConnectPlayer = {
     const row = queuedRow(at, id);
     if (row === null) return false;
     usePlayer.getState().removeAt(row);
+    return true;
+  },
+  moveQueued: (from, to, id) => {
+    const row = queuedRow(from, id);
+    const target = queuedRows()[to];
+    if (row === null || target === undefined) return false;
+    if (row !== target) usePlayer.getState().move(row, target);
     return true;
   },
   // A tab nobody has clicked in since it loaded may not start sound (the browser's autoplay rule).
@@ -397,7 +412,19 @@ export function playQueuedRemote(at: number, track: CTrack): void {
 }
 export function removeQueuedRemote(at: number, track: CTrack): void {
   const target = controllingOf(useConnect.getState().view);
-  if (target) session?.removeOn(target.id, at, track);
+  if (target) session?.removeOn(target.id, at, track, () => toast(`Couldn’t remove it on ${target.name || 'the other device'}`));
+}
+/**
+ * Moves entry [from] ([track]) of the Up Next on the device playing elsewhere
+ * to [to]: shown at once, put back with a message if that device says no
+ * (one too old to know `move` does).
+ */
+export function moveQueuedRemote(from: number, to: number, track: CTrack): void {
+  const target = controllingOf(useConnect.getState().view);
+  if (!target) return;
+  session?.moveOn(target.id, from, to, track, () =>
+    toast(`${target.name || 'The other device'} couldn’t reorder its Up Next. Updating NepTune there adds it.`),
+  );
 }
 /** Seeks the device playing elsewhere to [ms]. */
 export const seekRemote = (ms: number) => session?.intercept('seek', Math.round(ms)) ?? false;

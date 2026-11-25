@@ -19,7 +19,7 @@ import { isPopupRequest } from '../lib/popupMessages';
 import { installRules } from '../lib/rules';
 import { isOwnPage, isPlayerSender, senderOrigin } from '../lib/senders';
 import { validateParams } from '../lib/validate';
-import { authState, invalidateAccounts, isSessionCookie, selectChannel, setConnected } from '../lib/ytAuth';
+import { authState, invalidateAccounts, isSessionCookie, onAccountsChanged, selectChannel, setConnected } from '../lib/ytAuth';
 import * as spotify from '../lib/spotify';
 import { ytFetch } from '../lib/ytFetch';
 
@@ -293,6 +293,12 @@ export default defineBackground(() => {
   });
 
   browser.cookies.onChanged.addListener(onCookieChanged);
+  // A list answered from the cache while a new read ran behind it: the open pages hear what changed.
+  onAccountsChanged(() => {
+    authState()
+      .then((data) => broadcast({ event: 'yt.authState', data }))
+      .catch((error: unknown) => console.warn('NepTune: reading the YouTube session failed', error));
+  });
 
   // Discord's account is written by the connect page as well as here.
   discord.onDiscordState((data) => broadcast({ event: 'discord.state', data }));

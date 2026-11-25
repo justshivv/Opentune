@@ -46,6 +46,21 @@ describe('senders', () => {
     assert.equal(isPlayerSender({ url }, SITES), true); // Firefox's relay: no origin
   });
 
+  it('lets in every page of the live player, hash routes and deep paths included', () => {
+    const origin = 'https://justshivv.github.io';
+    for (const url of [
+      'https://justshivv.github.io/Opentune/player/',
+      'https://justshivv.github.io/Opentune/player/#/artist/UCabcdefghijklmnopqrstuv',
+      'https://justshivv.github.io/Opentune/player/#/library/playlists',
+      'https://justshivv.github.io/Opentune/player/home',
+      'https://justshivv.github.io/Opentune/player/artist/UCabcdefghijklmnopqrstuv?tab=songs',
+      'https://justshivv.github.io/Opentune/player/library/playlists#top',
+    ]) {
+      assert.equal(isPlayerSender({ url, origin }, SITES), true, url);
+      assert.equal(isPlayerSender({ url }, SITES), true, url);
+    }
+  });
+
   it('refuses a frame whose origin differs from its URL', () => {
     assert.equal(isPlayerSender({ url: 'about:srcdoc', origin: 'https://justshivv.github.io' }, SITES), false);
     assert.equal(isPlayerSender({ url: 'https://justshivv.github.io/Opentune/player/', origin: 'null' }, SITES), false);

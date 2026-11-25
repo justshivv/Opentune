@@ -15,7 +15,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/platform', () => ({ isMobileBrowser: () => false }));
-vi.mock('@/extension/useExtension', () => ({ useExtension: () => state.extension }));
+vi.mock('@/extension/useExtension', () => ({ useExtension: () => state.extension, recheckExtension: () => undefined }));
 vi.mock('@/extension/useHostAccess', () => ({
   useHostAccess: () => ({ access: state.lyrics, request: state.requestLyrics }),
 }));
@@ -124,4 +124,54 @@ it('comes back if a host is no longer allowed', async () => {
   await render();
   expect(document.querySelector('[role="dialog"]')).toBeTruthy();
   expect(locked).toBe(true);
+});
+
+it('stays out of the way while an extension seen here before wakes, with a quiet note after a moment', async () => {
+  vi.useFakeTimers();
+  try {
+    state.extension = { state: 'checking', seenBefore: true };
+    await render();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(locked).toBe(false);
+    expect(document.querySelector('[data-extension-hint]')).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1600);
+    });
+    expect(document.querySelector('[data-extension-hint="connecting"]')?.textContent).toContain('Connecting to the NepTune extension');
+    // It answers: the note goes, and no popup ever showed.
+    state.extension = present;
+    state.lyrics = 'granted';
+    await act(async () => useAddons.setState({ locked: [] }));
+    await rerender();
+    expect(document.querySelector('[data-extension-hint]')).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('says the extension isn’t responding, rather than "install it", when one seen before stays silent', async () => {
+  localStorage.setItem('opentune:allow-gate-done', '1');
+  state.extension = { state: 'missing', seenBefore: true };
+  await render();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(locked).toBe(false);
+  const note = document.querySelector('[data-extension-hint="silent"]');
+  expect(note?.textContent).toContain('isn’t responding');
+  expect(button('Try Again')).toBeTruthy();
+  // A slow extension doesn't undo the setup someone finished.
+  expect(localStorage.getItem('opentune:allow-gate-done')).toBe('1');
+});
+
+it('shows a first-time visitor the setup popup at once, while it looks', async () => {
+  state.extension = { state: 'checking', seenBefore: false };
+  await render();
+  expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+  expect(steps()[0]).toBe('checking');
+});
+
+it('says plainly when the installed extension is too old for this page', async () => {
+  state.extension = { state: 'missing', seenBefore: true, refused: { code: 'protocol', message: 'speaks 2' } };
+  await render();
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('too old for this page');
+  expect(document.querySelector('a[download]')).toBeTruthy();
 });

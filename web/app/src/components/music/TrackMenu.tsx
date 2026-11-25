@@ -1,22 +1,91 @@
-import { ChevronLeft, ChevronRight, Disc3, Link2, ListEnd, ListPlus, ListStart, MoreHorizontal, Radio, Star, User } from 'lucide-react';
+import {
+  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
+  Disc3,
+  Link2,
+  ListEnd,
+  ListPlus,
+  ListStart,
+  LogIn,
+  MoreHorizontal,
+  Plus,
+  Radio,
+  RotateCw,
+  Star,
+  User,
+} from 'lucide-react';
 import { useCallback, useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { Menu, MenuHeader, MenuItem, MenuSeparator, type MenuPoint } from '@/components/Menu';
 import { toast } from '@/components/Toast';
-import {
-  useAddToPlaylist,
-  useLikeStatus,
-  usePlaylistOptions,
-  useSetLiked,
-  useSignedIn,
-} from '@/data/music/queries';
+import { useAddToPlaylist, useCreatePlaylistWith, useLikeStatus, usePlaylistOptions, useSetLiked } from '@/data/music/queries';
 import type { MusicItem, Track } from '@/data/music/types';
+import { useYtAuth, type YtAuthStatus } from '@/extension/useYtAuth';
 import { usePlayer } from '@/state/player';
 import { albumHref, artistHref } from './links';
 import { toTrack } from './play';
 
+const SIGN_IN_URL = 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://music.youtube.com/';
+
+/** Why the account's actions can't run right now, or null when they can. */
+function accountBlocker(auth: YtAuthStatus, what: string): string | null {
+  if (auth.state === 'ready' && auth.auth.signedIn) return null;
+  if (auth.state === 'checking') return 'Connecting to your account…';
+  if (auth.state === 'unavailable') return 'Needs the NepTune extension';
+  if (auth.state === 'error' || (auth.auth.browserSignedIn && auth.auth.connected)) return 'Your account didn’t load. Retry from the sidebar.';
+  return `Sign in to ${what}`;
+}
+
+/** A name for a new playlist, typed in the menu itself. */
+function NewPlaylist({ videoId, onDone }: { videoId: string; onDone: () => void }) {
+  const [naming, setNaming] = useState(false);
+  const [title, setTitle] = useState('');
+  const create = useCreatePlaylistWith();
+  if (!naming) {
+    return (
+      <MenuItem icon={<Plus size={15} />} onSelect={() => setNaming(true)}>
+        New Playlist…
+      </MenuItem>
+    );
+  }
+  return (
+    <form
+      className="flex items-center gap-1.5 px-1 py-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const name = title.trim();
+        if (!name) return;
+        create.mutate(
+          { title: name, videoId },
+          {
+            onSuccess: () => toast(`Added to ${name}`),
+            onError: () => toast('Couldn’t make the playlist'),
+          },
+        );
+        onDone();
+      }}
+    >
+      <input
+        className="min-w-0 flex-1 rounded-[5px] bg-quinary px-2 py-1 type-body text-primary outline-none placeholder:text-tertiary focus-visible:ring-1 focus-visible:ring-key"
+        placeholder="Playlist name"
+        aria-label="New playlist name"
+        maxLength={150}
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        autoFocus
+      />
+      <button type="submit" className="rounded-[5px] px-2 py-1 type-body-emphasized text-key disabled:text-tertiary" disabled={!title.trim()}>
+        Create
+      </button>
+    </form>
+  );
+}
+
 function PlaylistChoices({ videoId, onDone, onBack }: { videoId: string; onDone: () => void; onBack: () => void }) {
-  const options = usePlaylistOptions(videoId, true);
+  const auth = useYtAuth();
+  const blocked = accountBlocker(auth, 'add to your YouTube Music playlists');
+  const options = usePlaylistOptions(videoId, !blocked);
   const add = useAddToPlaylist();
   return (
     <>
@@ -25,39 +94,77 @@ function PlaylistChoices({ videoId, onDone, onBack }: { videoId: string; onDone:
       </MenuItem>
       <MenuSeparator />
       <MenuHeader>Add to Playlist</MenuHeader>
-      {options.isPending && (
-        <MenuItem disabled onSelect={() => {}}>
-          Loading…
-        </MenuItem>
+      {blocked ? (
+        <>
+          <MenuItem disabled onSelect={() => {}}>
+            {blocked}
+          </MenuItem>
+          {auth.state === 'ready' && !auth.auth.browserSignedIn && (
+            <MenuItem
+              icon={<LogIn size={15} />}
+              trailing={<ArrowUpRight size={13} />}
+              onSelect={() => {
+                onDone();
+                window.open(SIGN_IN_URL, '_blank', 'noreferrer');
+              }}
+            >
+              Sign In
+            </MenuItem>
+          )}
+        </>
+      ) : (
+        <>
+          <NewPlaylist videoId={videoId} onDone={onDone} />
+          <MenuSeparator />
+          {!options.data && options.isFetching && (
+            <MenuItem disabled onSelect={() => {}}>
+              Loading your playlists…
+            </MenuItem>
+          )}
+          {!options.data && options.isError && (
+            <>
+              <MenuItem disabled onSelect={() => {}} detail={options.error instanceof Error ? options.error.message : undefined}>
+                Couldn’t load your playlists
+              </MenuItem>
+              <MenuItem icon={<RotateCw size={14} />} onSelect={() => void options.refetch()}>
+                Try Again
+              </MenuItem>
+            </>
+          )}
+          {options.data?.length === 0 && (
+            <MenuItem disabled onSelect={() => {}}>
+              No playlists yet
+            </MenuItem>
+          )}
+          {options.data?.map((option) => (
+            <MenuItem
+              key={option.playlistId}
+              onSelect={() => {
+                add.mutate(
+                  { playlistId: option.playlistId, videoId },
+                  { onError: () => toast(`Couldn’t add to ${option.title}`) },
+                );
+                toast(`Added to ${option.title}`);
+                onDone();
+              }}
+            >
+              {option.title}
+            </MenuItem>
+          ))}
+        </>
       )}
-      {options.isError && (
-        <MenuItem disabled onSelect={() => {}}>
-          Couldn’t load your playlists
-        </MenuItem>
-      )}
-      {options.data?.length === 0 && (
-        <MenuItem disabled onSelect={() => {}}>
-          No playlists yet
-        </MenuItem>
-      )}
-      {options.data?.map((option) => (
-        <MenuItem
-          key={option.playlistId}
-          onSelect={() => {
-            add.mutate({ playlistId: option.playlistId, videoId });
-            toast(`Added to ${option.title}`);
-            onDone();
-          }}
-        >
-          {option.title}
-        </MenuItem>
-      ))}
     </>
   );
 }
 
-/** Favorite and Add to Playlist: the account's actions, signed in only. */
+/**
+ * Favorite and Add to Playlist: the account's actions. Liking needs only the
+ * song's id, so Favorite never waits on the like status; it is unavailable
+ * only when there is no account to like with, and then says why.
+ */
 function AccountItems({ track, onClose, onPlaylists }: { track: Track; onClose: () => void; onPlaylists: () => void }) {
+  const auth = useYtAuth();
+  const blocked = accountBlocker(auth, 'like songs');
   const status = useLikeStatus(track.videoId);
   const setLiked = useSetLiked();
   const liked = status.data === 'LIKE';
@@ -66,7 +173,8 @@ function AccountItems({ track, onClose, onPlaylists }: { track: Track; onClose: 
       <MenuSeparator />
       <MenuItem
         icon={<Star size={15} fill={liked ? 'currentColor' : 'none'} />}
-        disabled={status.isPending}
+        disabled={blocked !== null}
+        detail={blocked ?? undefined}
         onSelect={() => {
           setLiked.mutate({ videoId: track.videoId, liked: !liked });
           toast(liked ? 'Removed from Favorites' : 'Added to Favorites');
@@ -96,7 +204,6 @@ async function copyLink(track: Track) {
 
 function TrackMenuItems({ track, onClose }: { track: Track; onClose: () => void }) {
   const [view, setView] = useState<'main' | 'playlists'>('main');
-  const signedIn = useSignedIn();
   const navigate = useNavigate();
   if (view === 'playlists') {
     return <PlaylistChoices videoId={track.videoId} onDone={onClose} onBack={() => setView('main')} />;
@@ -162,7 +269,7 @@ function TrackMenuItems({ track, onClose }: { track: Track; onClose: () => void 
       >
         Copy Link
       </MenuItem>
-      {signedIn && <AccountItems track={track} onClose={onClose} onPlaylists={() => setView('playlists')} />}
+      <AccountItems track={track} onClose={onClose} onPlaylists={() => setView('playlists')} />
     </>
   );
 }
@@ -195,7 +302,7 @@ export function useTrackContextMenu(item: Track | MusicItem | null) {
 
 /**
  * The ⋯ button for a song (report §14), in rows, on cards and for what's playing: Play Next,
- * Add to Queue and Start Radio, Go to Artist and Album, Copy Link; Favorite and Add to Playlist signed in.
+ * Add to Queue and Start Radio, Go to Artist and Album, Copy Link; Favorite and Add to Playlist (saying why when there is no account to use).
  */
 export function TrackMenu({ track: item, className }: { track: Track | MusicItem; className?: string }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);

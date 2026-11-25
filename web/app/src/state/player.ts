@@ -334,6 +334,12 @@ function scheduleSave() {
 
 const restored = restoredSession();
 
+/** A play() cut short by the next load (AbortError) is routine; anything else is worth a warning. */
+function playRefused(what: string, error: unknown): void {
+  if (error instanceof DOMException && error.name === 'AbortError') trackLog.d(`${what} interrupted by the next load`);
+  else trackLog.w(`${what} refused: ${String(error)}`);
+}
+
 export const usePlayer = create<PlayerState>()((set, get) => ({
   ...loadSettings(),
   ...restored,
@@ -458,7 +464,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
       // A stopped or failed track starts again from where it was.
       void startAt(index, { startSec: audio?.currentTime ?? resumeSec });
     } else if (audio.paused) {
-      void audio.play().catch((e: unknown) => trackLog.w(`play() refused: ${String(e)}`));
+      void audio.play().catch((e: unknown) => playRefused('play()', e));
     } else {
       cancelCrossfade();
       audio.pause();
@@ -989,7 +995,7 @@ export const partyPlayer = {
   },
   play(): void {
     const audio = getAudio();
-    if (audio?.paused) void audio.play().catch((e: unknown) => trackLog.w(`party play() refused: ${String(e)}`));
+    if (audio?.paused) void audio.play().catch((e: unknown) => playRefused('party play()', e));
   },
   pause(): void {
     const audio = getAudio();

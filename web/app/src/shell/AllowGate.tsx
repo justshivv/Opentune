@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { allowSources, checkAccess, syncPublished, useAddons } from '@/addons/client';
 import { currentBrowser, downloadsFor } from '@/extension/downloads';
-import { useExtension } from '@/extension/useExtension';
+import { recheckExtension, useExtension } from '@/extension/useExtension';
 import { usePublishedExtension } from '@/extension/useExtensionUpdate';
 import { useHostAccess } from '@/extension/useHostAccess';
 import { isMobileBrowser } from '@/lib/platform';
@@ -13,6 +13,8 @@ const mobile = isMobileBrowser();
 /** Safari has no OpenTune extension: the popup says which browsers do. */
 const safari = /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent);
 const DONE_KEY = 'opentune:allow-gate-done';
+/** How long a returning visitor waits for the extension before a quiet "Connecting…" shows. */
+const CONNECTING_HINT_MS = 1500;
 
 function rememberedDone(): boolean {
   try {
@@ -72,10 +74,14 @@ function useAddonAccess(present: boolean) {
 export function useAllowGate(): { locked: boolean; gate: ReactNode } {
   const extension = useExtension();
   const present = extension.state === 'present';
+  const refused = extension.state === 'missing' ? (extension.refused ?? null) : null;
+  // It answered on this browser before: while it wakes (or if it has stopped answering) the
+  // player isn't put behind the setup popup, only a small note. A refusal still gets the popup.
+  const quiet = !mobile && extension.state !== 'present' && !!extension.seenBefore && !refused;
   const lyrics = useHostAccess(LYRIC_EXTENSION_ORIGINS, present ? extension.extension : null);
   const addons = useAddonAccess(present);
   const [asked, setAsked] = useState<'lyrics' | 'addons' | null>(null);
-  const [hint, setHint] = useState('');
+  const [message, setHint] = useState('');
 
   const extensionStep: StepState = extension.state === 'checking' ? 'checking' : present ? 'done' : 'todo';
   // An extension too old to answer can't be asked either: it doesn't hold the player back.
@@ -90,7 +96,7 @@ export function useAllowGate(): { locked: boolean; gate: ReactNode } {
   const steps = [extensionStep, lyricsStep, addonsStep];
   const allDone = steps.every((s) => s === 'done');
   // Someone who has been through it before isn't shown it while the checks run, only if one fails.
-  const needed = mobile ? false : steps.includes('todo') || (!rememberedDone() && !allDone);
+  const needed = mobile || quiet ? false : steps.includes('todo') || (!rememberedDone() && !allDone);
 
   // Once open it stays open until "Start Listening", so the last step's tick is seen.
   const [open, setOpen] = useState(false);
@@ -98,10 +104,12 @@ export function useAllowGate(): { locked: boolean; gate: ReactNode } {
     if (needed) setOpen(true);
   }, [needed]);
   useEffect(() => {
-    if (mobile || extensionStep === 'checking') return;
+    if (mobile || !present) return;
+    // Only a host that is no longer allowed undoes it; the extension being slow to answer doesn't.
     if (allDone) remember(true);
     else if (steps.includes('todo')) remember(false);
   });
+  const hint = useConnectingHint(quiet && extension.state === 'checking');
 
   const allowLyrics = useCallback(() => {
     lyrics.request();
@@ -116,7 +124,10 @@ export function useAllowGate(): { locked: boolean; gate: ReactNode } {
   }, [addons.waiting]);
 
   const shown = needed || open;
-  if (!shown) return { locked: false, gate: null };
+  if (!shown) {
+    if (quiet && extension.state === 'missing') return { locked: false, gate: <NotResponding /> };
+    return { locked: false, gate: hint ? <ConnectingHint /> : null };
+  }
 
   return {
     locked: !allDone,
@@ -128,7 +139,8 @@ export function useAllowGate(): { locked: boolean; gate: ReactNode } {
         addonsStep={addonsStep}
         addonCount={addons.waiting.length}
         asked={asked}
-        hint={hint}
+        hint={message}
+        refused={refused}
         allDone={allDone}
         onAllowLyrics={allowLyrics}
         onAllowAddons={allowAddons}
@@ -146,6 +158,7 @@ interface GateProps {
   addonCount: number;
   asked: 'lyrics' | 'addons' | null;
   hint: string;
+  refused: { code: string; message: string } | null;
   allDone: boolean;
   onAllowLyrics: () => void;
   onAllowAddons: () => void;
@@ -225,7 +238,11 @@ function GateDialog(props: GateProps) {
             detail={
               safari
                 ? 'Safari can’t run it. Open NepTune in Chrome, Edge, Brave or Firefox.'
-                : 'This page notices it on its own once it’s loaded.'
+                : props.refused
+                  ? props.refused.code === 'protocol'
+                    ? 'The installed extension is too old for this page. Download the new one below and install it over the old one.'
+                    : `The installed extension didn’t accept this page: ${props.refused.message}`
+                  : 'This page notices it on its own once it’s loaded.'
             }
             state={extensionStep}
             doneText={version ? `Connected · v${version}` : 'Connected'}
@@ -306,6 +323,57 @@ function GateDialog(props: GateProps) {
           </button>
         )}
       </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** True once [waiting] has lasted CONNECTING_HINT_MS. */
+function useConnectingHint(waiting: boolean): boolean {
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    if (!waiting) return setLate(false);
+    const timer = setTimeout(() => setLate(true), CONNECTING_HINT_MS);
+    return () => clearTimeout(timer);
+  }, [waiting]);
+  return waiting && late;
+}
+
+const noteClass =
+  'fixed bottom-[calc(var(--player-pill-height,64px)+var(--player-bottom-offset,16px)+12px)] left-1/2 z-(--z-modal) flex max-w-[min(520px,calc(100vw-32px))] -translate-x-1/2 animate-fade items-center gap-3 rounded-[14px] bg-thick-material px-4 py-2.5 type-callout text-secondary shadow-glass [backdrop-filter:saturate(2.2)_blur(32px)]';
+
+/** A returning visitor's extension is taking a moment: said quietly, nothing is blocked. */
+function ConnectingHint() {
+  return createPortal(
+    <div className={noteClass} role="status" data-extension-hint="connecting">
+      Connecting to the NepTune extension…
+    </div>,
+    document.body,
+  );
+}
+
+/** It answered here before and now doesn't: say what to do, without the first-run popup. */
+function NotResponding() {
+  const downloads = downloadsFor(usePublishedExtension());
+  const here = downloads.find((d) => d.browser === currentBrowser)!;
+  const [hidden, setHidden] = useState(false);
+  if (hidden) return null;
+  return createPortal(
+    <div className={noteClass} role="alert" data-extension-hint="silent">
+      <span className="min-w-0 flex-1 text-pretty">
+        <span className="type-callout-emphasized text-primary">The NepTune extension isn’t responding.</span> Reload it on your
+        browser’s extensions page, then reload this page. If you removed it,{' '}
+        <a className="text-key underline-offset-2 hover:underline" href={here.href} download>
+          download it again
+        </a>
+        .
+      </span>
+      <button type="button" className={allowButton} onClick={recheckExtension}>
+        Try Again
+      </button>
+      <button type="button" className="flex-none type-callout text-secondary hover:text-primary" onClick={() => setHidden(true)} aria-label="Dismiss">
+        ✕
+      </button>
     </div>,
     document.body,
   );
