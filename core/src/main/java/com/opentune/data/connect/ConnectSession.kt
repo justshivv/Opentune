@@ -1,5 +1,6 @@
 package com.opentune.data.connect
 
+import kotlin.math.roundToInt
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.connect.ConnectMsg.Ack
 import com.opentune.data.connect.ConnectMsg.Command
@@ -46,6 +47,11 @@ internal interface ConnectPlayer {
      */
     fun playQueued(at: Int, id: String): Boolean
     fun removeQueued(at: Int, id: String): Boolean
+    /**
+     * Moves entry [from] of the queue this device last told, when it's still [id] (else the first
+     * that is), to place [to] in it. False when there's none. Older players don't move: false.
+     */
+    fun moveQueued(from: Int, to: Int, id: String): Boolean = false
     /** Loads [queue] from [index] at [pos] ms; false when none of it can play here. */
     fun load(queue: List<CTrack>, index: Int, pos: Long, playing: Boolean): Boolean
 }
@@ -394,6 +400,9 @@ internal class ConnectSession(
     }
     /** Takes entry [at] ([track]) out of [deviceId]'s Up Next. */
     fun removeOn(deviceId: String, at: Int, track: CTrack) = command(deviceId, "remove", pos = at.toLong(), track = track)
+    /** Moves entry [from] of [deviceId]'s Up Next, [track], to place [to]. */
+    fun moveOn(deviceId: String, from: Int, to: Int, track: CTrack) =
+        command(deviceId, "move", pos = from.toLong(), value = to.toFloat(), track = track)
 
     /**
      * Moves playback to [deviceId] (this device's own id pulls it here). The
@@ -605,6 +614,7 @@ internal class ConnectSession(
             "addToQueue" -> player.addToQueue(c.tracks)
             "jump" -> return player.playQueued(c.pos.toInt(), c.track?.id ?: return false)
             "remove" -> return player.removeQueued(c.pos.toInt(), c.track?.id ?: return false)
+            "move" -> return player.moveQueued(c.pos.toInt(), c.value.roundToInt(), c.track?.id ?: return false)
             else -> return false
         }
         return true

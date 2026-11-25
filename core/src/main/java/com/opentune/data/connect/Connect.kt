@@ -375,6 +375,14 @@ internal class ConnectionConnectPlayer(private val c: PlayerConnection) : Connec
         c.removeQueueItem(row(at, id) ?: return false)
         return true
     }
+    override fun moveQueued(from: Int, to: Int, id: String): Boolean {
+        val queue = c.queue.value
+        val rows = c.upNext.value.filter { queue.getOrNull(it)?.let(CTrack::of) != null }
+        val row = row(from, id) ?: return false
+        val target = rows.getOrNull(to) ?: return false
+        if (row != target) c.moveQueueItem(row, target)
+        return true
+    }
     override fun load(queue: List<CTrack>, index: Int, pos: Long, playing: Boolean): Boolean {
         if (queue.isEmpty() || index !in queue.indices) return false
         // Not yet joined to the player service (the app just opened): it would go nowhere, and the
