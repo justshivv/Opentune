@@ -78,7 +78,7 @@ function youtubeRow(state: YtAuthState | null, refresh: (state: YtAuthState) => 
     }
     who.append(el('span', 'title', state.active.name), el('span', 'detail', state.active.handle ?? 'YouTube Music'));
     action = el('button', 'action', 'Disconnect');
-    action.title = 'Stop using this account in OpenTune. You stay signed in to YouTube.';
+    action.title = 'Stop using this account in NepTune. You stay signed in to YouTube.';
     action.onclick = () => void call('yt.setConnected', { connected: false }).then(refresh);
   }
   row.append(avatar, who, action);
@@ -128,7 +128,7 @@ function spotifyRow(state: SpotifyAuthState | null): HTMLLIElement {
     action = button(
       'Disconnect',
       () => void call('spotify.setConnected', { connected: false }).then(setSpotify),
-      'Stop using this account in OpenTune. You stay signed in to Spotify.',
+      'Stop using this account in NepTune. You stay signed in to Spotify.',
     );
   }
   row.append(avatarOf(state.user?.avatarUrl), who, action);

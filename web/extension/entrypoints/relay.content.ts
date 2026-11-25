@@ -36,7 +36,7 @@ export default defineContentScript({
         return false;
       }
     };
-    const GONE = 'OpenTune Extension was updated or reloaded. Reload this page to reconnect to it.';
+    const GONE = 'The NepTune extension was updated or reloaded. Reload this page to reconnect to it.';
     let port: Browser.runtime.Port | null = null;
     let retry: ReturnType<typeof setTimeout> | undefined;
 

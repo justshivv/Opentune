@@ -13,7 +13,7 @@ const STORE_BUILD = process.env.OPENTUNE_STORE_BUILD === '1';
  */
 const DISCORD_PRESENCE = process.env.DISCORD_PRESENCE ? process.env.DISCORD_PRESENCE === '1' : !STORE_BUILD;
 const DISCORD_ORIGINS = ['https://discord.com/*'];
-/** OpenTune's own Discord application, for cover images and buttons; empty leaves both to plain links. */
+/** NepTune's own Discord application, for cover images and buttons; empty leaves both to plain links. */
 const DISCORD_APP_ID = (process.env.DISCORD_APP_ID ?? '').trim();
 if (DISCORD_APP_ID && !/^[0-9]{17,20}$/.test(DISCORD_APP_ID)) throw new Error('DISCORD_APP_ID must be a Discord application id');
 
@@ -30,8 +30,8 @@ export default defineConfig({
     },
   }),
   manifest: ({ browser }) => ({
-    name: 'OpenTune',
-    description: 'Connects the OpenTune web player to YouTube Music, Spotify and Discord.',
+    name: 'NepTune',
+    description: 'Connects the NepTune web player to YouTube Music, Spotify and Discord.',
     homepage_url: 'https://justshivv.github.io/Opentune/player/',
     // `cookies` reads the YouTube session for signed-in requests (phase 5);
     // the cookies themselves never leave the extension (lib/ytAuth.ts).

@@ -131,7 +131,7 @@ async function readWebPlayer(): Promise<WebPlayer> {
   const secret = secretsIn(bundle)[0];
   const found = Object.fromEntries(OPERATIONS.map((op) => [op, queryHashIn(bundle, op) ?? queryHashIn(searchChunk, op)]));
   const complete = !!secret && !!clientVersion && OPERATIONS.every((op) => found[op]);
-  if (!complete) console.warn('OpenTune: Spotify web player read partially', { clientVersion: !!clientVersion, secret: secret?.version, found });
+  if (!complete) console.warn('NepTune: Spotify web player read partially', { clientVersion: !!clientVersion, secret: secret?.version, found });
   return {
     clientVersion: clientVersion || '1.2.77.0',
     secret: secret ?? KNOWN_SECRET,

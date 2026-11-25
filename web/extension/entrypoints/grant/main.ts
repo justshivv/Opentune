@@ -7,9 +7,9 @@ import './style.css';
 const query = new URLSearchParams(location.search);
 const origins = (query.get('origins') ?? '').split(',').filter(Boolean).map(o => publicHttps(o).origin);
 if (query.get('kind') === 'addons') {
-  document.title = 'OpenTune: audio add-ons';
+  document.title = 'NepTune: audio add-ons';
   document.querySelector('h1')!.textContent = origins.length > 1 ? 'Allow audio add-ons' : 'Allow this audio add-on';
-  document.getElementById('why')!.textContent = 'These add-ons don’t let web pages ask them directly, so the OpenTune web player asks through the extension. Your browser will ask you to confirm.';
+  document.getElementById('why')!.textContent = 'These add-ons don’t let web pages ask them directly, so the NepTune web player asks through the extension. Your browser will ask you to confirm.';
 }
 const list = document.getElementById('hosts')!;
 for (const origin of origins) {
@@ -21,7 +21,7 @@ for (const origin of origins) {
 const status = document.getElementById('status')!;
 document.getElementById('allow')!.addEventListener('click', async () => {
   const granted = await browser.permissions.request({ origins: origins.map((o) => `${o}/*`) }).catch(() => false);
-  status.textContent = granted ? 'Done. You can close this tab and go back to OpenTune.' : 'Not allowed. Those sources stay off.';
+  status.textContent = granted ? 'Done. You can close this tab and go back to NepTune.' : 'Not allowed. Those sources stay off.';
   if (granted) setTimeout(() => window.close(), 1200);
 });
 
