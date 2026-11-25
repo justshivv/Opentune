@@ -364,7 +364,8 @@
     background-color: rgba(var(--keyColor-rgb), 0.3);
   }
 
-  /* No focus ring, for the mouse or the keyboard: the user asked for the key-colour box to go. */
+  /* No key-colour focus box for the mouse or touch: the user asked for it to go. Keyboard
+     use gets a quiet ring instead (opentune.css, [data-keyboard]), so focus can still be seen. */
   :focus,
   :focus-visible {
     outline: none;

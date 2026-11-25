@@ -75,6 +75,7 @@ export default function ConnectSettingsPage() {
             <span className={settingsUi.rowText}>This browser’s name</span>
             <input
               className={`${field} max-w-60`}
+              aria-label="This browser’s name"
               value={name}
               maxLength={40}
               onChange={(e) => setName(e.currentTarget.value)}
@@ -102,7 +103,7 @@ export default function ConnectSettingsPage() {
         <h3 className={settingsUi.sectionHeader}>Or paste a link from your phone</h3>
         <section className={`${settingsUi.group} p-4`}>
           <div className="flex gap-2">
-            <input className={field} value={paste} placeholder="https://justshivv.github.io/Opentune/player/#/settings/devices?join=…" onChange={(e) => setPaste(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} />
+            <input className={field} aria-label="Link from your phone" value={paste} placeholder="https://justshivv.github.io/Opentune/player/#/settings/devices?join=…" onChange={(e) => setPaste(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} />
             <button className={primary} onClick={add} disabled={!paste.trim()}>Add</button>
           </div>
           {error && <p className="mt-2 type-callout text-[var(--systemRed)]">{error}</p>}

@@ -492,3 +492,7 @@
    short fade and lift, as the panel itself slides in when it opens. */
 @keyframes ot-panel-swap { from { opacity: 0; transform: translateY(10px); } }
 .ot-panel-swap { animation: ot-panel-swap .26s var(--ease-out-panel) both; }
+
+/* Where focus is, for someone using the keyboard only (lib/keyboardFocus.ts): the text colour, not the key colour. */
+:root[data-keyboard] :focus-visible { outline: 2px solid var(--systemPrimary); outline-offset: 2px; }
+:root[data-keyboard] :is(input, textarea, select):focus-visible { outline-offset: 0; }
