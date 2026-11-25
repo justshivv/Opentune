@@ -1003,17 +1003,11 @@ private fun VideoControls(
                         "Lyrics",
                         onClick = { onTouch(); onLyrics(!lyricsOpen) },
                     )
-                    Spacer(Modifier.width(4.dp))
-                    ControlIcon(
-                        ImageVector.vectorResource(AppIcons.AspectRatio),
-                        if (crop) "Fit the whole picture" else "Fill the screen",
-                        onClick = onCrop,
-                    )
                     // The extras unfold without a clip edge: their slot widens
                     // while they fade and grow in over it, and narrows as they go.
-                    // The slot fits the ambient button, and the picture in
-                    // picture one too when the player offers it.
-                    val extraTarget = if (actions.pictureInPicture != null) 96.dp else 48.dp
+                    // The slot fits the ambient and the fill and fit buttons,
+                    // and the picture in picture one too when the player offers it.
+                    val extraTarget = if (actions.pictureInPicture != null) 144.dp else 96.dp
                     val extraW by animateDpAsState(
                         targetValue = if (moreOpen) extraTarget else 0.dp,
                         animationSpec = if (animate) tween(220) else snap(),
@@ -1036,6 +1030,12 @@ private fun VideoControls(
                                             ImageVector.vectorResource(AppIcons.Ambient),
                                             "Ambient mode",
                                             onClick = onAmbient,
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        ControlIcon(
+                                            ImageVector.vectorResource(AppIcons.AspectRatio),
+                                            if (crop) "Fit the whole picture" else "Fill the screen",
+                                            onClick = onCrop,
                                         )
                                         actions.pictureInPicture?.let { pip ->
                                             Spacer(Modifier.width(4.dp))
