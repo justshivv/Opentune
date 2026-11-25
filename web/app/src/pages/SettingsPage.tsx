@@ -155,10 +155,11 @@ function SectionNav({ current }: { current: string }) {
 function youtubeText(auth: ReturnType<typeof useYtAuth>): string {
   if (auth.state === 'checking') return 'Checking…';
   if (auth.state === 'unavailable') return 'Needs the extension';
+  if (auth.state === 'error') return 'Couldn’t load your account';
   const { browserSignedIn, connected, active } = auth.auth;
   if (!browserSignedIn) return 'Not signed in';
   if (!connected) return 'Disconnected';
-  return active ? active.name : 'Signed in';
+  return active ? active.name : 'Couldn’t load your account';
 }
 
 /** The extension's state at the top: what works now, and the one thing to do next. */
