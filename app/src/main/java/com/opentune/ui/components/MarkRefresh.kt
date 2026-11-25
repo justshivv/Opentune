@@ -132,10 +132,10 @@ private fun MarkIndicator(state: PullToRefreshState, refreshing: Boolean, still:
             }
         }
     }
-    val t = if (refreshing && !still) {
-        val v by rememberInfiniteTransition(label = "refresh").animateFloat(0f, 1f, infiniteRepeatable(tween(1_100, easing = LinearEasing), RepeatMode.Restart), label = "sway")
-        v
-    } else 0f
+    // Read while drawing, so the sway redraws the mark without composing it on each frame.
+    val swayClock = if (refreshing && !still) {
+        rememberInfiniteTransition(label = "refresh").animateFloat(0f, 1f, infiniteRepeatable(tween(1_100, easing = LinearEasing), RepeatMode.Restart), label = "sway")
+    } else null
     Canvas(
         modifier
             .windowInsetsPadding(WindowInsets.statusBars)
@@ -157,6 +157,7 @@ private fun MarkIndicator(state: PullToRefreshState, refreshing: Boolean, still:
         val s = minOf(size.width / mw, size.height / mh)
         val ox = (size.width - mw * s) / 2f - MARK_LEFT * s
         val oy = (size.height - mh * s) / 2f - MARK_TOP * s
+        val t = swayClock?.value ?: 0f
         val fill = if (refreshing) 1f else state.distanceFraction.coerceIn(0f, 1f)
         // While loading, it sways as a wave runs through it.
         val sway = if (refreshing && !still) 1f + 0.12f * sin(2f * PI.toFloat() * t) else 1f

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -126,10 +127,15 @@ internal fun SpeedDialSection(
             // between Speed dial and Quick picks; ease the height when paging.
             val visibleCount = (shown.size - pager.currentPage * PER_PAGE).coerceIn(1, PER_PAGE)
             val rows = (visibleCount + 2) / 3
-            val pageHeight by animateDpAsState(tile * rows + GAP * (rows - 1), label = "speed-dial-height")
+            // Read while laying out, not composing: the pager isn't composed again on each frame.
+            val pageHeight = animateDpAsState(tile * rows + GAP * (rows - 1), label = "speed-dial-height")
             HorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxWidth().height(pageHeight),
+                modifier = Modifier.fillMaxWidth().layout { measurable, constraints ->
+                    val h = pageHeight.value.roundToPx().coerceAtLeast(0)
+                    val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                    layout(placeable.width, h) { placeable.place(0, 0) }
+                },
                 contentPadding = PaddingValues(horizontal = SIDE),
                 pageSpacing = SIDE,
                 verticalAlignment = Alignment.Top,
