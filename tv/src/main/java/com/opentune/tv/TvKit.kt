@@ -179,7 +179,11 @@ class TvFocusState internal constructor(
     var focused by mutableStateOf(false)
         internal set
 
-    /** Focused, or under the phone remote's cursor: either way it is drawn as focused. */
+    /**
+     * Focused, or under the phone remote's cursor: either way it takes the lighter fill. Only the
+     * focus wears the ring ([focused]), so the cursor resting on one thing and the focus on
+     * another never look like two focused things.
+     */
     val lit: Boolean get() = focused || hover.value
 }
 
@@ -215,7 +219,9 @@ fun rememberTvFocus(focusKey: String? = null, entryFocus: Boolean = false, reque
 /**
  * Makes this element the focus target for [state]: the remote's arrows land on it, OK (or a
  * click from the phone's cursor) calls [onClick], a long press of OK calls [onLongClick].
- * It draws nothing; draw the focus from [TvFocusState.lit].
+ * A click from the cursor also moves the focus here, so the ring follows what was clicked
+ * instead of staying on whatever the remote last reached.
+ * It draws nothing; draw the fill from [TvFocusState.lit] and the ring from [TvFocusState.focused].
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -228,6 +234,8 @@ fun Modifier.tvFocusTarget(
     onFocused: () -> Unit = {},
 ): Modifier {
     val memory = LocalPageMemory.current
+    val click: () -> Unit = { if (!state.focused) runCatching { state.requester.requestFocus() }; onClick() }
+    val longClick: (() -> Unit)? = onLongClick?.let { long -> { if (!state.focused) runCatching { state.requester.requestFocus() }; long() } }
     return this
         .focusRequester(state.requester)
         .onFocusChanged { f ->
@@ -240,11 +248,11 @@ fun Modifier.tvFocusTarget(
             }
         }
         .then(
-            if (onLongClick != null) Modifier.combinedClickable(
+            if (longClick != null) Modifier.combinedClickable(
                 interactionSource = state.interactions, indication = null, enabled = enabled, role = role,
-                onLongClick = onLongClick, onClick = onClick,
+                onLongClick = longClick, onClick = click,
             )
-            else Modifier.clickable(interactionSource = state.interactions, indication = null, enabled = enabled, role = role, onClick = onClick),
+            else Modifier.clickable(interactionSource = state.interactions, indication = null, enabled = enabled, role = role, onClick = click),
         )
 }
 
@@ -277,7 +285,7 @@ fun TvSurface(
     Box(
         modifier
             .then(if (grow != null) Modifier.zIndex(if (lit) 1f else 0f).graphicsLayer { val s = grow.value; scaleX = s; scaleY = s } else Modifier)
-            .tvFocusRing(lit && ring, shape)
+            .tvFocusRing(focus.focused && ring, shape)
             .clip(shape)
             .background(if (lit) focusedContainer else container, shape)
             .tvFocusTarget(focus, onClick, onLongClick, role, onFocused = onFocused),
@@ -352,7 +360,7 @@ fun TvCard(
         Cover(
             imageUrl,
             Modifier.graphicsLayer { scaleX = grow; scaleY = grow }
-                .tvFocusRing(lit, kind.shape)
+                .tvFocusRing(focus.focused, kind.shape)
                 .size(kind.width, kind.coverHeight),
             kind.shape,
         )

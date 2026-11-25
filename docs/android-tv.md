@@ -35,10 +35,13 @@ Album pages and Now Playing take a still tint from the cover; every other page i
   the focus on the item you left from, scrolled as it was.
 - On Now Playing, focus starts on Play/Pause. Up reaches the seek bar, where
   Left and Right move ten seconds. The row of buttons holds shuffle, previous, play,
-  next, repeat, like, lyrics and queue.
+  next, repeat, like, lyrics and queue. Pressing Lyrics or Queue again puts that panel
+  away and the cover slides to the middle.
 - Play/Pause, Next, Previous, Fast-forward and Rewind keys work on the player, and in
   the background through the media session.
 - Back goes up one page, then to Home, and from Home leaves the app.
+- With the phone remote's cursor, a click moves the focus ring to what was clicked. Something
+  under the cursor gets a lighter fill but no ring, so only one thing ever wears the ring.
 
 ## Signing in
 

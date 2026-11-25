@@ -141,7 +141,7 @@ fun TvIconCard(
     Column(modifier.width(TvSizes.CardSquare).tvFocusTarget(focus, onClick)) {
         Box(
             Modifier.graphicsLayer { scaleX = grow; scaleY = grow }
-                .tvFocusRing(lit, TvShapes.Card)
+                .tvFocusRing(focus.focused, TvShapes.Card)
                 .size(TvSizes.CardSquare)
                 .clip(TvShapes.Card)
                 .background(color),

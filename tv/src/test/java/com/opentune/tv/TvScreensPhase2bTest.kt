@@ -243,6 +243,50 @@ class TvScreensPhase2bTest {
         compose.onAllNodes(hasText(title) and isFocused()).assertCountEquals(1)
     }
 
+
+    /** Lyrics and Queue each put their panel away when pressed again: the cover alone, in the middle. */
+    @Test fun pressingLyricsOrQueueAgainPutsThePanelAway() {
+        usePlayer(flowOf(words))
+        playing(2, at = 70_000)
+        show { TvShell(nav) }
+        setPosition(70_000)
+        val lyrics = compose.onNodeWithContentDescription("Lyrics")
+        lyrics.requestFocus()
+        compose.waitForIdle()
+        compose.onNodeWithText("And the last line of all").assertExists()
+        lyrics.performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.waitForIdle()
+        compose.onNodeWithText("And the last line of all").assertDoesNotExist()
+        lyrics.assertIsFocused()
+        save("tv-nowplaying-cover-alone")
+        lyrics.performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.waitForIdle()
+        compose.onNodeWithText("And the last line of all").assertExists()
+        lyrics.assertIsFocused()
+
+        val queue = compose.onNodeWithContentDescription("Queue")
+        queue.requestFocus(); compose.waitForIdle()
+        queue.performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.waitForIdle()
+        focusedQueueRow("Small Hours")
+        queue.requestFocus(); compose.waitForIdle()
+        queue.performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Small Hours").assertDoesNotExist()
+        queue.assertIsFocused()
+    }
+
+    /** A click from the phone's cursor moves the focus to what it clicked, so only one thing wears the ring. */
+    @Test fun aCursorClickMovesTheFocusToWhatItClicked() {
+        usePlayer(flowOf(words))
+        playing(2, at = 70_000)
+        show { TvShell(nav) }
+        compose.onNodeWithContentDescription("Play").assertIsFocused()
+        compose.onNodeWithContentDescription("Next").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Next").assertIsFocused()
+    }
+
     // ---- Plumbing ----
 
     /** Sets one of the player connection's private flows, as the service would. */

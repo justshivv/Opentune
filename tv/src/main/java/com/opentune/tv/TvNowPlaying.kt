@@ -1,6 +1,9 @@
 package com.opentune.tv
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -8,16 +11,15 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -58,6 +60,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -65,7 +69,6 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.contentDescription
@@ -89,10 +92,14 @@ import com.opentune.playback.dolbyName
  *
  * Focus starts on Play/Pause. Up reaches the seek bar (Left and Right move ten seconds), and from
  * there the queue when it is showing. Queue moves the focus onto the playing song in it, and Back
- * from the queue returns to the Queue button.
+ * from the queue returns to the Queue button. Pressing Lyrics or Queue again while it shows puts
+ * the panel away: the cover slides to the middle, the one movement on this screen, done once.
  */
 
-private enum class Pane { Lyrics, Queue }
+private enum class Pane { None, Lyrics, Queue }
+
+/** How long the cover takes to slide to the middle and back. */
+private const val COVER_SLIDE_MS = 320
 
 /** How far the seek bar and the Rewind and Fast-forward keys move. */
 private const val SEEK_STEP_MS = 10_000L
@@ -129,23 +136,37 @@ private fun PlayerBody(nav: TvNav, song: Song) {
     val queueEntry = remember { FocusRequester() }
     // Focus starts on Play/Pause: the one control most visits want.
     LaunchedEffect(Unit) { runCatching { playFocus.requestFocus() } }
+    // The panel last shown stays drawn while it fades away, then goes.
+    var shown by rememberSaveable { mutableStateOf(Pane.Lyrics) }
+    if (pane != Pane.None) shown = pane
+    val alone by animateFloatAsState(
+        if (pane == Pane.None) 1f else 0f, tween(COVER_SLIDE_MS, easing = FastOutSlowInEasing), label = "coverAlone",
+    )
 
     Column(
         Modifier.fillMaxSize()
             .padding(horizontal = TvSafe.Horizontal, vertical = TvSafe.Vertical)
             .onPreviewKeyEvent { e -> mediaKey(e, p, SEEK_STEP_MS) },
     ) {
-        Row(Modifier.weight(1f).fillMaxWidth()) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             // As tall as the space allows and square: its size is set by the screen, never by the image.
-            Cover(song.thumbnailUrl, Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true), TvShapes.Card, px = TvArt.Large)
-            Spacer(Modifier.width(TvSpace.XXL))
-            Column(Modifier.weight(1f).fillMaxHeight()) {
+            val side = minOf(maxHeight, maxWidth)
+            val middle = (maxWidth - side) / 2
+            // Moved by translation alone, so the slide redraws one layer and lays nothing out again.
+            Cover(
+                song.thumbnailUrl,
+                Modifier.size(side).graphicsLayer { translationX = middle.toPx() * alone },
+                TvShapes.Card, px = TvArt.Large,
+            )
+            if (alone < 1f) Column(
+                Modifier.fillMaxSize().padding(start = side + TvSpace.XXL).graphicsLayer { alpha = 1f - alone },
+            ) {
                 SongHeading(p, song)
                 Spacer(Modifier.height(TvSpace.L))
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    when (pane) {
-                        Pane.Lyrics -> LyricsPane(p)
+                    when (if (pane == Pane.None) shown else pane) {
                         Pane.Queue -> QueuePane(nav, queueEntry, queueJumps, onBack = { runCatching { queueButton.requestFocus() } })
+                        else -> LyricsPane(p)
                     }
                 }
             }
@@ -155,8 +176,9 @@ private fun PlayerBody(nav: TvNav, song: Song) {
         Spacer(Modifier.height(TvSpace.M))
         Controls(
             p, song, pane, playFocus, queueButton,
-            onLyrics = { pane = Pane.Lyrics },
-            onQueue = { pane = Pane.Queue; queueJumps++ },
+            // Pressed again while its panel shows, each puts the panel away; the focus stays on it.
+            onLyrics = { pane = if (pane == Pane.Lyrics) Pane.None else Pane.Lyrics },
+            onQueue = { if (pane == Pane.Queue) pane = Pane.None else { pane = Pane.Queue; queueJumps++ } },
         )
     }
 }
@@ -199,7 +221,7 @@ private val FORMAT_LINE_HEIGHT = 30.dp
 
 /**
  * The buttons: shuffle, previous, play/pause, next and repeat in the middle; like, lyrics and the
- * queue at the right. Lyrics and Queue show which pane is up.
+ * queue at the right. Lyrics and Queue show which pane is up, and put it away when pressed again.
  */
 @Composable
 private fun Controls(
@@ -294,6 +316,9 @@ internal fun SeekBar(
     modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
+    // A cursor's tap or drag takes the focus too, so the ring is where the viewer is working.
+    val self = remember { FocusRequester() }
+    fun take() { if (!focused) runCatching { self.requestFocus() } }
     // Like every button, it takes the focus only from the remote's keys, never in touch mode: so
     // the screen's first focus can't land here ahead of Play.
     val keys = LocalInputModeManager.current.inputMode == InputMode.Keyboard
@@ -309,8 +334,9 @@ internal fun SeekBar(
         Box(
             modifier.fillMaxWidth().height(SEEK_HEIGHT)
                 // A cursor can click or drag along it, as well as the arrows nudging it.
-                .pointerInput(duration) { detectTapGestures { pos -> seekAt(pos.x, size.width) } }
-                .pointerInput(duration) { detectHorizontalDragGestures { change, _ -> seekAt(change.position.x, size.width) } }
+                .pointerInput(duration) { detectTapGestures { pos -> take(); seekAt(pos.x, size.width) } }
+                .pointerInput(duration) { detectHorizontalDragGestures { change, _ -> take(); seekAt(change.position.x, size.width) } }
+                .focusRequester(self)
                 .tvFocusRing(focused, TvShapes.Pill)
                 .background(if (focused) TvColors.SurfaceHigh else Color.Transparent, TvShapes.Pill)
                 .onFocusChanged { focused = it.isFocused }
