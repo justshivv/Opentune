@@ -7,4 +7,9 @@ public final class SystemClock {
     public static long elapsedRealtime() {
         return System.nanoTime() / 1_000_000L;
     }
+
+    /** The same monotonic clock; the desktop has no deep sleep to leave out. */
+    public static long uptimeMillis() {
+        return System.nanoTime() / 1_000_000L;
+    }
 }

@@ -52,6 +52,8 @@ fun main(args: Array<String>) {
     SecretVault.start()
     // The shared settings and music server, as the phone starts them.
     AppSettings.init(appContext)
+    com.opentune.data.lyrics.LyricsDisk.init(appContext)
+    com.opentune.data.tips.Tips.init(appContext)
     // A setting changed in the last moment before closing is written on its way out.
     Runtime.getRuntime().addShutdownHook(Thread { AppSettings.flush() })
     Subsonic.init(appContext)

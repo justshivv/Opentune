@@ -52,6 +52,9 @@ val sharedFromCore = listOf(
     "com/opentune/data/covers/ArtistSignatures.kt",
     // Lyrics from every source the phone asks, without the romanizer (Android's ICU).
     "com/opentune/data/lyrics/LyricsRepository.kt",
+    // Lyrics kept between launches, and the one-time tips (the dock's Search orb points one out).
+    "com/opentune/data/lyrics/LyricsDisk.kt",
+    "com/opentune/data/tips/Tips.kt",
     "com/opentune/data/lyrics/PodcastTranscripts.kt",
     "com/opentune/data/lyrics/LyricsTranslator.kt",
     "com/opentune/data/lyrics/LyricsQuality.kt",
@@ -106,6 +109,7 @@ val sharedFromApp = listOf(
     "com/opentune/ui/player/PlayerIcons.kt",
     "com/opentune/ui/components/FocusRing.kt",
     "com/opentune/ui/components/Motion.kt",
+    "com/opentune/ui/components/Tips.kt",
     // Text and Icon as the shared files call them, translated through Tr (a desktop stand-in in src/shim).
     "com/opentune/ui/theme/AppText.kt",
 )
