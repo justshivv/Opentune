@@ -10,6 +10,8 @@ The web player extends the existing web application, using the current Android a
 - Compact icon and quality text centered under the seek bar. A FLAC search result does not change the quality label; the active engine must first load that file.
 - Quick picks, a small history shortcut, playlist and Made for you links, varied feed shelves and a refresh action that reloads the home feed.
 - Source toggles and visible drag handles, plus keyboard arrow reordering and explicit Move up/down actions.
+- Loudness normalization (Settings › Playback, on by default) from YouTube's own loudness measurement, at the phone's Normal level. An audio element can't play above full volume, so the browser turns loud songs down but doesn't lift quiet ones, and has no Quiet/Loud levels. JioSaavn streams keep the YouTube measurement; lossless add-on files play untouched, as on Android.
+- A focus ring for keyboard use only (Tab or the arrow keys); mouse and touch don't show it.
 - Existing monthly community invitations and GitHub/Discord links remain in place.
 
 ## Platform differences

@@ -208,9 +208,10 @@ export default function SettingsPage() {
   const connectView = useConnect((s) => s.view);
   const autoplay = usePlayer((s) => s.autoplay);
   const crossfadeSec = usePlayer((s) => s.crossfadeSec);
+  const normalize = usePlayer((s) => s.normalize);
   const shareHistory = useHistorySettings((s) => s.share);
   const setShareHistory = useHistorySettings((s) => s.setShare);
-  const { setAutoplay, setCrossfade } = usePlayer.getState();
+  const { setAutoplay, setCrossfade, setNormalize } = usePlayer.getState();
   const [lyrics, setLyrics] = useState(false);
   const sources = useAddons((st) => st.sources.filter((a) => a.enabled && !a.ownerOff).length);
   const jioSaavn = useAddons((st) => st.jioSaavn);
@@ -259,6 +260,12 @@ export default function SettingsPage() {
                   ))}
                 </select>
               </label>
+              <Toggle
+                label="Loudness normalization"
+                detail="Turn down songs mastered louder than YouTube’s reference level, so the volume stays even from song to song."
+                checked={normalize}
+                onChange={setNormalize}
+              />
             </section>
           </Section>
 

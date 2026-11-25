@@ -240,7 +240,9 @@ export class YouTubeEngine {
     await player.load(url, at, mime); this.checkCurrent(generation);
     if (playing) await this.audio.play();
     await this.firstAudio(generation); this.checkCurrent(generation);
-    this.addonTrack = { ...track, client, format, loudnessDb: null };
+    // JioSaavn's AAC is the same master YouTube measured, so its loudness still holds; a lossless
+    // file plays untouched, as on the phone.
+    this.addonTrack = { ...track, client, format, loudnessDb: client === 'JIOSAAVN' ? track.loudnessDb : null };
     this.onRecovered(this.addonTrack);
     return true;
   }
