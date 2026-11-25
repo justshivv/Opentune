@@ -1306,6 +1306,9 @@ fun CollectionScreen(
                         }
                         var shownCount by remember { androidx.compose.runtime.mutableIntStateOf(COLLECTION_PAGE_SIZE) }
                         val paged = shown.take(shownCount)
+                        // Keyed by the song (and which copy of it), not its place: sorting or a song
+                        // taken out moved every place, and each row was then made again from nothing.
+                        val pagedKeys = remember(paged) { com.opentune.ui.library.songKeys(paged) }
                         LazyColumn(state = listState, overscrollEffect = band, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else PaddingValues(bottom = contentPadding.calculateBottomPadding()), modifier = Modifier.fillMaxSize().playlistSearchResults(search)) {
                             if (!searching) item(key = "header") {
                                 if (c == null) {
@@ -1380,7 +1383,7 @@ fun CollectionScreen(
                             if (c == null) {
                                 items(8) { SongRowPlaceholder() }
                             } else {
-                                itemsIndexed(paged, key = { i, song -> "$i:${song.videoId}" }) { i, song ->
+                                itemsIndexed(paged, key = { i, _ -> pagedKeys[i] }) { i, song ->
                                     SongListItem(
                                         song = song,
                                         onClick = { actions.playAll(shown, i, false, c.title) },

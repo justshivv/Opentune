@@ -100,6 +100,7 @@ import com.opentune.ui.components.SheetButton
 import com.opentune.ui.components.glass
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
 
@@ -150,6 +151,15 @@ fun QueuePane(
             order.addAll(upNext)
         }
     }
+    // Each row's key is its song and which copy of it this is, not its place in the queue: a
+    // drop or a removal moves every place after it, and keyed by place, each of those rows
+    // was dropped and made afresh, blinking out and back in, just as the drop landed.
+    val rowKeys = remember(queue) { com.opentune.ui.library.songKeys(queue) }
+    // The dropped row settles from where the finger left it into its place, rather than
+    // jumping the last part of a row.
+    val settleScope = androidx.compose.runtime.rememberCoroutineScope()
+    val settle = remember { androidx.compose.animation.core.Animatable(0f) }
+    var settlingKey by remember { mutableStateOf<String?>(null) }
     val list = rememberLazyListState()
     val canDrag = !shuffle
 
@@ -182,7 +192,7 @@ fun QueuePane(
                     )
                 }
             }
-            if (playedOpen) itemsIndexed(played, key = { _, index -> "p$index:${queue.getOrNull(index)?.videoId}" }) { _, index ->
+            if (playedOpen) itemsIndexed(played, key = { _, index -> "p" + rowKeys.getOrElse(index) { "$index" } }) { _, index ->
                 val song = queue.getOrNull(index) ?: return@itemsIndexed
                 Box(Modifier.animateItem().graphicsLayer { alpha = 0.7f }) {
                     QueueRow(song, isCurrent = false, isPlaying = false, handle = false, onClick = { onPlayIndex(index) }, onRemove = { onRemoveIndex(index) })
@@ -216,19 +226,23 @@ fun QueuePane(
                 }
             }
         }
-        itemsIndexed(order, key = { _, index -> "q$index:${queue.getOrNull(index)?.videoId}" }) { pos, index ->
+        itemsIndexed(order, key = { _, index -> "q" + rowKeys.getOrElse(index) { "$index" } }) { pos, index ->
             val song = queue.getOrNull(index) ?: return@itemsIndexed
             val isDragged = dragging == index
+            val rowKey = rowKeys.getOrElse(index) { "$index" }
+            val settling = settlingKey == rowKey
+            val currentRowKey by rememberUpdatedState(rowKey)
             val lift by animateFloatAsState(if (isDragged) 1.03f else 1f, label = "lift")
             Box(
                 Modifier
-                    .zIndex(if (isDragged) 1f else 0f)
+                    .zIndex(if (isDragged || settling) 1f else 0f)
                     .graphicsLayer {
-                        translationY = if (isDragged) dragOffset else 0f
+                        translationY = if (isDragged) dragOffset else if (settlingKey == rowKey) settle.value else 0f
                         scaleX = lift
                         scaleY = lift
                     }
-                    .then(if (isDragged) Modifier else Modifier.animateItem())
+                    // Held or settling, the row is placed by the drag and the settle alone.
+                    .then(if (isDragged || settling) Modifier else Modifier.animateItem())
                     .then(
                         if (!canDrag) Modifier else Modifier.pointerInput(index) {
                             detectDragGesturesAfterLongPress(
@@ -247,8 +261,22 @@ fun QueuePane(
                                         if (move != null) currentOnMove(move.first, move.second)
                                         else { order.clear(); order.addAll(currentUpNext) }
                                     }
+                                    // From where the finger let go into the row's place.
+                                    val left = dragOffset
+                                    val key = currentRowKey
+                                    if (left != 0f) settlingKey = key
                                     dragging = null
                                     dragOffset = 0f
+                                    // Undispatched, so the row is at [left] in the same frame the drag lets go of it.
+                                    if (left != 0f) settleScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                                        settle.snapTo(left)
+                                        settlingKey = key
+                                        try {
+                                            settle.animateTo(0f, spring(dampingRatio = 1f, stiffness = 700f))
+                                        } finally {
+                                            if (settlingKey == key) settlingKey = null
+                                        }
+                                    }
                                 },
                                 onDragCancel = {
                                     order.clear(); order.addAll(currentUpNext)
