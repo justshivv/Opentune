@@ -12,7 +12,7 @@ import com.opentune.data.remote.PrefsStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
-    /** What was asked of the TV's voice search ("play … on OpenTune"), until Search picks it up. */
+    /** What was asked of the TV's voice search ("play … on NepTune"), until Search picks it up. */
     private val voice = MutableStateFlow<String?>(null)
     private lateinit var remote: TvRemote
 

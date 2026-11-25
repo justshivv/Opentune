@@ -65,7 +65,7 @@ internal fun searchKey(query: String) = "search:" + query.trim().lowercase()
 @Composable
 fun SearchScreen(nav: TvNav) {
     val memory = LocalPageMemory.current
-    // A spoken search ("play … on OpenTune") arrives typed in, without the keyboard.
+    // A spoken search ("play … on NepTune") arrives typed in, without the keyboard.
     var query by rememberSaveable { mutableStateOf(nav.pendingSearch.orEmpty()) }
     val q = query.trim()
     var attempt by remember { mutableIntStateOf(0) }

@@ -1,13 +1,13 @@
 # OpenTune for Android TV and Google TV
 
-OpenTune for TV is an app of its own (`tv/` in the repository), built for a remote
+The TV app, named NepTune on the TV, is an app of its own (`tv/` in the repository), built for a remote
 and a screen across the room. It is not the phone app: the phone APK no longer
 shows up in a TV's apps row. Both run on the same shared code (`core/`), so
 YouTube Music, lyrics, the library, history and the player service behave the same.
 
 Install `OpenTune-TV-<version>.apk` from the
 [releases](https://github.com/justshivv/Opentune/releases) page, then open
-OpenTune from the TV's apps row. The package is `com.opentune.tv`, so it installs
+NepTune from the TV's apps row. The package is `com.opentune.tv`, so it installs
 beside the phone app on the same device without replacing it.
 
 ## What's in it
@@ -45,7 +45,7 @@ Album pages and Now Playing take a still tint from the cover; every other page i
 Typing a password with a remote is no fun, so the TV is signed in from a phone:
 
 1. On the TV, open Settings, then Account, and choose Sign in. A code comes up.
-2. On a phone with OpenTune, signed in to YouTube Music, open Settings, then Link a
+2. On a phone with NepTune, signed in to YouTube Music, open Settings, then Link a
    device, then TV, and scan the code. Both must be on the same Wi-Fi.
 3. Approve on the phone. The session goes straight from the phone to the TV over the
    local network, encrypted, and the code stops working after two minutes.
@@ -54,7 +54,7 @@ The phone and the TV each keep their own local library.
 
 ## Using your phone as a remote
 
-A phone with OpenTune can steer the TV app over the home Wi-Fi: a trackpad that moves a
+A phone with NepTune can steer the TV app over the home Wi-Fi: a trackpad that moves a
 cursor on the TV's screen, or a pad of buttons, switched with one tap.
 
 **Pairing, once.** On the TV, open Settings, then Pair a phone, and a code comes up. On the
@@ -74,10 +74,10 @@ Settings on the TV lists the paired phones, each with Remove.
 play/pause, volume, mute and a keyboard that sends a search to the TV are always at the bottom.
 The phone shows what is playing and how far along it is.
 
-**What it can't do.** The cursor and clicks work inside OpenTune on the TV, not across the whole
-TV; the TV's own home screen and other apps need the TV's remote. It works while OpenTune is
-open on the TV: if the TV has gone to another app, open OpenTune there first. Volume changes
-OpenTune's stream, which a TV that fixes its volume ignores.
+**What it can't do.** The cursor and clicks work inside NepTune on the TV, not across the whole
+TV; the TV's own home screen and other apps need the TV's remote. It works while NepTune is
+open on the TV: if the TV has gone to another app, open NepTune there first. Volume changes
+NepTune's stream, which a TV that fixes its volume ignores.
 
 **How it is kept private.** Pairing gives each phone a key of its own, made on the TV and sent
 only inside the code's one-time exchange. Every message afterwards is encrypted and tied to its

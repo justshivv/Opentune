@@ -272,7 +272,7 @@ class TvRemote(private val context: Context, val phones: PairedPhones) {
 
     /** What this TV is called to a phone: what the owner named it in the TV's settings, else its model. */
     val name: String = (Settings.Global.getString(context.contentResolver, "device_name")?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL)
-        .let { "OpenTune on $it" }.take(60)
+        .let { "NepTune on $it" }.take(60)
 
     fun start() {
         if (host != null) return

@@ -167,7 +167,7 @@ fun SettingsScreen(nav: TvNav) {
         item(key = "about:title") { TvSectionTitle("About") }
         item(key = "about") {
             TvRowButton(
-                "OpenTune for TV", {}, Modifier.safeSides(),
+                "NepTune for TV", {}, Modifier.safeSides(),
                 icon = Icons.Rounded.Info, value = com.opentune.core.BuildConfig.VERSION_NAME, focusKey = "about",
             )
         }
