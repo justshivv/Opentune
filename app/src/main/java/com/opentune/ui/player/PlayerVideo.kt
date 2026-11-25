@@ -226,6 +226,10 @@ internal fun VideoCoverPane(
     modifier: Modifier = Modifier,
     /** Where the box sits in the root, each time it's laid out. */
     onBox: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    /** Sends the picture into a small window over other apps, when offered. */
+    onPictureInPicture: (() -> Unit)? = null,
+    /** Opens the picture on the whole screen, when offered. */
+    onFullScreen: (() -> Unit)? = null,
     videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val target = if (showVideo && aspect > 0f) aspect else 1f
@@ -270,11 +274,41 @@ internal fun VideoCoverPane(
                     androidx.compose.ui.graphics.RectangleShape,
                 )
                 if (showVideo) videoSurface()
+                // Over the picture, in its bottom corners: the whole screen
+                // always, and the small window only while the picture plays
+                // (a paused picture in a small window is a frozen window).
+                // They grow and shrink with the box itself.
+                if (showVideo && aspect > 0f && (onPictureInPicture != null || onFullScreen != null)) {
+                    val buttonScale = (minOf(w, h) / 190f).coerceIn(0.85f, 1.3f)
+                    if (isPlaying && onPictureInPicture != null) Box(
+                        Modifier.align(Alignment.BottomStart).padding(10.dp),
+                    ) {
+                        PaneButton(buttonScale) {
+                            PictureInPictureButton(onPictureInPicture, tint = Color.White)
+                        }
+                    }
+                    if (onFullScreen != null) Box(
+                        Modifier.align(Alignment.BottomEnd).padding(10.dp),
+                    ) {
+                        PaneButton(buttonScale) {
+                            FullScreenButton(onFullScreen, tint = Color.White)
+                        }
+                    }
+                }
             }
         }
     }
 }
-
+/** A round dark chip under one of the pane's own buttons, scaled with the box. */
+@Composable
+private fun PaneButton(scale: Float, content: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .background(Color.Black.copy(alpha = 0.45f), androidx.compose.foundation.shape.CircleShape),
+        contentAlignment = Alignment.Center,
+    ) { content() }
+}
 /** A picture's shape, width over height as it is shown, or 0 while unknown. */
 @OptIn(markerClass = [UnstableApi::class])
 internal fun videoAspect(size: VideoSize): Float {

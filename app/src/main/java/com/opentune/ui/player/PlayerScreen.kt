@@ -1455,6 +1455,8 @@ fun PlayerLayout(
                                                         // Only its place at rest: not scaled down under the lists, nor carried by a finger.
                                                         if (!hidden && !flight.active && coverLift == 0f && dragOffset == 0f) videoBoxAt[0] = box
                                                     },
+                                                    onPictureInPicture = actions.pictureInPicture.takeIf { PictureInPicture.buttonShown(state.videoMode, it != null) },
+                                                    onFullScreen = openFullScreen,
                                                     videoSurface = inlineVideo,
                                                 )
 
@@ -1572,21 +1574,8 @@ fun PlayerLayout(
                                                 },
                                             isEpisode = isEpisode
                                         )
-                                        // Across from it while the video plays: the video in a small window over other apps.
-                                        val pip = actions.pictureInPicture
-                                        if (pip != null && PictureInPicture.buttonShown(state.videoMode, true)) PictureInPictureButton(
-                                            pip,
-                                            Modifier.align(Alignment.CenterStart).graphicsLayer {
-                                                alpha = if (flight.active) 0f else 1f
-                                            },
-                                        )
-                                        // Beside the switch while the video shows: the video on the whole screen.
-                                        if (openFullScreen != null) FullScreenButton(
-                                            openFullScreen,
-                                            Modifier.align(Alignment.CenterEnd).graphicsLayer {
-                                                alpha = if (flight.active) 0f else 1f
-                                            },
-                                        )
+                                        // The small window and the whole screen ride on the
+                                        // picture itself now, in the cover pane.
                                     }
                                 }
                                 Spacer(Modifier.height(16.dp))

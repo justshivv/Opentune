@@ -154,7 +154,7 @@ internal object AppIcons {
     val PersonOff = R.drawable.symbol_person_off_rounded
     val PhoneAndroid = R.drawable.symbol_mobile
     /** Picture-in-picture: the music video in a small window over other apps. */
-    val PictureInPicture = R.drawable.symbol_picture_in_picture_rounded
+    val PictureInPicture = R.drawable.symbol_picture_in_picture_alt_rounded
     val PlayArrow = R.drawable.symbol_play_arrow_rounded
     val PlayCircle = R.drawable.symbol_play_circle_rounded
     val PlaylistAdd = R.drawable.symbol_playlist_add_rounded
