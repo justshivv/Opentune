@@ -127,6 +127,8 @@ class TvRemoteInput(
             is RemoteMessage.Scroll -> scroll(message.dx, message.dy)
             is RemoteMessage.Key -> key(message.key, message.repeat)
             is RemoteMessage.Text -> text(message.text)
+            // Into the field with the focus; Enter with no field focused any more searches, as Text does.
+            is RemoteMessage.Edit -> if (nav.remote?.edit(message.text, message.submit) != true && message.submit) text(message.text)
             is RemoteMessage.Cursor -> if (message.shown) pointer.show(width, height) else { release(); pointer.hide() }
             else -> Unit
         }
@@ -303,6 +305,48 @@ class TvRemote(private val context: Context, val phones: PairedPhones) {
     fun cancelInvite() { host?.cancelInvite() }
 
     fun push(now: RemoteMessage.Now) { host?.push(now) }
+
+    // ---- The text field with the focus, for a phone to type into ----
+
+    /** What a phone's typing goes into: set by the field that has the focus, on the main thread. */
+    private var editor: FieldEditor? = null
+
+    /** A text field on screen: takes what a phone types ([submit] for Enter). */
+    fun interface FieldEditor { fun edit(text: String, submit: Boolean) }
+
+    private val _field = MutableStateFlow(RemoteMessage.Field(focused = false))
+    /** What the phones were last told about the focused text field. */
+    val field: StateFlow<RemoteMessage.Field> = _field.asStateFlow()
+
+    private fun tell(state: RemoteMessage.Field) {
+        _field.value = state
+        host?.field(state)
+    }
+
+    /** [editor]'s field got the focus, holding [text]: connected phones open their keyboards on it. */
+    fun fieldFocused(editor: FieldEditor, text: String, hint: String?) {
+        this.editor = editor
+        tell(RemoteMessage.Field(focused = true, text = text, hint = hint))
+    }
+
+    /** What's in [editor]'s field changed on the TV itself (not from a phone, which knows already). */
+    fun fieldChanged(editor: FieldEditor, text: String, hint: String?) {
+        if (this.editor === editor) tell(RemoteMessage.Field(focused = true, text = text, hint = hint))
+    }
+
+    /** [editor]'s field lost the focus, or its page went: the phones close their keyboards. */
+    fun fieldLeft(editor: FieldEditor) {
+        if (this.editor !== editor) return
+        this.editor = null
+        tell(RemoteMessage.Field(focused = false))
+    }
+
+    /** A phone's typing, into the field with the focus; false when no field has it. */
+    fun edit(text: String, submit: Boolean): Boolean {
+        val e = editor ?: return false
+        e.edit(text.take(200), submit)
+        return true
+    }
 
     /** Takes a phone's access away and cuts it off. */
     fun forget(phone: PairedPhone) {

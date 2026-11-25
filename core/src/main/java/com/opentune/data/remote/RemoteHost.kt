@@ -65,6 +65,16 @@ class RemoteHost(
 
     fun cancelInvite() { invite = null }
 
+    /** The text field with the focus now, as last told to the phones; a phone that connects hears it too. */
+    @Volatile private var field = RemoteMessage.Field(focused = false)
+
+    /** Tells the phones a text field got (or lost) the focus, or what's in it now; nothing when that hasn't changed. */
+    fun field(state: RemoteMessage.Field) {
+        val next = state.copy(text = state.text.take(MAX_FIELD_TEXT), hint = state.hint?.take(MAX_FIELD_TEXT))
+        synchronized(this) { if (next == field) return; field = next }
+        push(next)
+    }
+
     /** Sends [message] to every phone connected. */
     fun push(message: RemoteMessage) {
         if (controllers.isEmpty()) return
@@ -125,11 +135,14 @@ class RemoteHost(
             socket.soTimeout = IDLE_MS
             controller = Controller(phone.id, hello.name.take(40).ifBlank { phone.name }, socket, channel)
                 .also { controllers += it; onControllers(controllers.map { c -> c.name }) }
+            // A field already has the focus: this phone opens its keyboard too. (Through the sender, in order with what's pushed.)
+            // Read when it goes, so a change meanwhile (pushed through the same sender) can't arrive before it.
+            runCatching { sender.execute { field.takeIf { it.focused }?.let { f -> runCatching { channel.send(f) } } } }
             while (!closed) {
                 when (val m = channel.receive()) {
                     null, is RemoteMessage.Ping, is RemoteMessage.Hello -> Unit
                     // Only a TV says these; a phone that does is wrong, and ignored.
-                    is RemoteMessage.Welcome, is RemoteMessage.Now, is RemoteMessage.PairGranted, is RemoteMessage.PairRequest -> Unit
+                    is RemoteMessage.Welcome, is RemoteMessage.Now, is RemoteMessage.PairGranted, is RemoteMessage.PairRequest, is RemoteMessage.Field -> Unit
                     else -> onMessage(m)
                 }
             }
@@ -154,5 +167,7 @@ class RemoteHost(
         const val HANDSHAKE_MS = 4_000
         /** A phone pings every few seconds; this long without a word and it is gone. */
         const val IDLE_MS = 30_000
+        /** As much of a field as goes to the phone: what the TV's search takes. */
+        const val MAX_FIELD_TEXT = 200
     }
 }

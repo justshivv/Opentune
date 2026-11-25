@@ -43,6 +43,13 @@ class TvRemoteViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<RemoteClient.State> = client.state
     val now: StateFlow<RemoteMessage.Now?> = client.now
 
+    /** The keyboard for the TV's text field with the focus: opens and closes as the TV says. */
+    val keyboard = RemoteKeyboard(client::send)
+
+    init {
+        viewModelScope.launch { client.field.collect(keyboard::onField) }
+    }
+
     private val _pairing = MutableStateFlow<Pairing>(Pairing.Idle)
     val pairing: StateFlow<Pairing> = _pairing.asStateFlow()
 

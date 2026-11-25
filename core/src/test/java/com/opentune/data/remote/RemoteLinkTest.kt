@@ -266,11 +266,90 @@ class RemoteLinkTest {
             RemoteMessage.Hello("a"), RemoteMessage.Ping(5), RemoteMessage.Move(1.5f, -2f), RemoteMessage.Click(true), RemoteMessage.Press(true),
             RemoteMessage.Scroll(0f, 9f), RemoteMessage.Key(RemoteKey.VOLUME_UP, repeat = true), RemoteMessage.Text("é 😀"), RemoteMessage.Cursor(false),
             RemoteMessage.Welcome("tv"), RemoteMessage.Now("t", null, null, true, 1, 2, 3), RemoteMessage.PairRequest("p"), RemoteMessage.PairGranted("i", "k", "t"),
+            RemoteMessage.Field(true, "pink", "Search"), RemoteMessage.Field(false), RemoteMessage.Edit("é 😀"), RemoteMessage.Edit("abba", submit = true),
         ).forEach { assertEquals(it, RemoteCodec.decode(RemoteCodec.encode(it))) }
+        // As they go on the wire, which an older app reads as a type it doesn't know.
+        assertEquals("""{"t":"field","focused":true,"text":"ab"}""", RemoteCodec.encode(RemoteMessage.Field(true, "ab")))
+        assertEquals("""{"t":"edit","text":"ab","submit":true}""", RemoteCodec.encode(RemoteMessage.Edit("ab", true)))
+        assertEquals(RemoteMessage.Field(focused = false), RemoteCodec.decode("""{"t":"field","focused":false}"""))
         assertNull(RemoteCodec.decode("""{"t":"teleport","x":1}"""))
         assertNull(RemoteCodec.decode("not json"))
         // A newer app's extra fields don't break an older one.
         assertEquals(RemoteMessage.Click(), RemoteCodec.decode("""{"t":"click","hands":2}"""))
+    }
+
+    @Test fun theTvTellsThePhoneWhenAFieldHasTheFocusAndThePhoneTypesIntoIt() {
+        val c = client()
+        val tv = pairedTv()
+        connected(c, tv)
+        assertNull(c.field.value)
+        host.field(RemoteMessage.Field(focused = true, text = "pink", hint = "Search songs, albums, artists"))
+        await("focused") { c.field.value == RemoteMessage.Field(true, "pink", "Search songs, albums, artists") }
+        c.send(RemoteMessage.Edit("pink floyd"))
+        c.send(RemoteMessage.Edit("pink floyd", submit = true))
+        await("typed") { heard.size == 2 }
+        assertEquals(listOf(RemoteMessage.Edit("pink floyd"), RemoteMessage.Edit("pink floyd", submit = true)), heard.toList())
+        // A phone that connects while the field has the focus hears so at once.
+        val late = client("Second phone")
+        connected(late, late.pair(host.createInvite()))
+        await("told on connecting") { late.field.value?.focused == true }
+        host.field(RemoteMessage.Field(focused = false))
+        await("left") { c.field.value?.focused == false && late.field.value?.focused == false }
+        // Gone when the phone lets go of the TV.
+        c.disconnect()
+        assertNull(c.field.value)
+    }
+
+    @Test fun aFieldIsOnlyToldWhenItChangesAndIsCappedInLength() {
+        val c = client()
+        connected(c, pairedTv())
+        val long = "x".repeat(500)
+        host.field(RemoteMessage.Field(true, long))
+        await("focused") { c.field.value?.focused == true }
+        assertEquals(200, c.field.value!!.text.length)
+    }
+
+    @Test fun anOlderPhoneSkipsMessagesItDoesntKnowAndStaysConnected() {
+        // A TV as a newer version would be, saying something this phone has never heard of.
+        java.net.ServerSocket(0).use { server ->
+            val tvSide = Thread {
+                server.accept().use { s ->
+                    val input = java.io.DataInputStream(s.getInputStream())
+                    val header = ByteArray(RemoteHandshake.HEADER_SIZE).also(input::readFully)
+                    val (_, id) = RemoteHandshake.parse(header)!!
+                    val key = PairingCrypto.decode(phones.find(SecureChannel.hex(id))!!.key)
+                    val nonce = ByteArray(RemoteHandshake.NONCE_BYTES).also(SecureChannel.random::nextBytes)
+                    s.getOutputStream().apply { write(nonce); flush() }
+                    val channel = SecureChannel(s.getInputStream(), s.getOutputStream(), key, nonce, "s2c", "c2s")
+                    channel.send(RemoteMessage.Welcome("Future TV"))
+                    channel.receive()
+                    channel.sendText("""{"t":"hologram","depth":3}""")
+                    channel.send(RemoteMessage.Now("Echoes"))
+                    Thread.sleep(1_000)
+                }
+            }.apply { isDaemon = true; start() }
+            val c = client()
+            val tv = pairedTv()
+            c.connect(tv, listOf("127.0.0.1" to server.localPort))
+            await("still connected, and heard what came after") { c.now.value?.title == "Echoes" }
+            assertTrue(c.state.value is RemoteClient.State.Connected)
+            tvSide.join(3_000)
+        }
+    }
+
+    @Test fun anOlderTvSkipsMessagesItDoesntKnowAndStaysConnected() {
+        val tv = pairedTv()
+        val socket = Socket("127.0.0.1", host.port)
+        socket.getOutputStream().write(RemoteHandshake.header(RemoteHandshake.CONTROL, SecureChannel.unhex(tv.id)))
+        val nonce = ByteArray(RemoteHandshake.NONCE_BYTES).also { java.io.DataInputStream(socket.getInputStream()).readFully(it) }
+        val channel = SecureChannel(socket.getInputStream(), socket.getOutputStream(), PairingCrypto.decode(tv.key), nonce, "c2s", "s2c")
+        assertTrue(channel.receive() is RemoteMessage.Welcome)
+        channel.send(RemoteMessage.Hello("raw"))
+        // What a newer phone might say, then a click: the click still lands.
+        channel.sendText("""{"t":"hologram","depth":3}""")
+        channel.send(RemoteMessage.Click())
+        await("the click") { heard.any { it is RemoteMessage.Click } }
+        socket.close()
     }
 
     @Test fun pairingsSurviveARestart() {

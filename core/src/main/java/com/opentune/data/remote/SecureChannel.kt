@@ -32,9 +32,12 @@ internal class SecureChannel(
 
     private fun purpose(direction: String, seq: Long) = "remote/$direction/${hex(nonce)}/$seq"
 
+    fun send(message: RemoteMessage) = sendText(RemoteCodec.encode(message))
+
+    /** A message as its text: also how a test plays a newer app's message this one doesn't know. */
     @Synchronized
-    fun send(message: RemoteMessage) {
-        val packet = PairingCrypto.seal(key, RemoteCodec.encode(message).toByteArray(UTF_8), purpose(outgoing, sent++))
+    internal fun sendText(text: String) {
+        val packet = PairingCrypto.seal(key, text.toByteArray(UTF_8), purpose(outgoing, sent++))
         out.writeInt(packet.size)
         out.write(packet)
         out.flush()

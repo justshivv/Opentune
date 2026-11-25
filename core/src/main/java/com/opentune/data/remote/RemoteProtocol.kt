@@ -60,6 +60,13 @@ sealed interface RemoteMessage {
     /** Show or hide the cursor (shown when the trackpad opens, hidden when the buttons do). */
     @Serializable @SerialName("cursor") data class Cursor(val shown: Boolean) : RemoteMessage
 
+    /**
+     * What is in the text field on the TV that has the focus now, typed on the phone: the whole
+     * of it each time, so the last one sent is what the field holds. [submit] runs it (Enter).
+     * Only sent after the TV said a field has the focus ([Field]), which an older TV never does.
+     */
+    @Serializable @SerialName("edit") data class Edit(val text: String, val submit: Boolean = false) : RemoteMessage
+
     // ---- From the TV ----
 
     /** The TV's answer to a connection that holds the right key. */
@@ -76,6 +83,15 @@ sealed interface RemoteMessage {
         val durationMs: Long = 0,
         val volume: Int = 0,
     ) : RemoteMessage
+
+    /**
+     * A text field on the TV got the focus ([focused], with the [text] in it and its [hint]), or
+     * no field has it any more. Sent when that changes, when the field's text changes on the TV
+     * itself, and to a phone that connects while a field has the focus. An older phone doesn't
+     * know it and skips it (an unknown message is read as nothing, not an error).
+     */
+    @Serializable @SerialName("field")
+    data class Field(val focused: Boolean, val text: String = "", val hint: String? = null) : RemoteMessage
 
     // ---- Pairing, only ever sent under a one-time invite's token ----
 

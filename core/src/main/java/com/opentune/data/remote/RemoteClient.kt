@@ -32,6 +32,9 @@ class RemoteClient(
     private val _now = MutableStateFlow<RemoteMessage.Now?>(null)
     /** What the TV is playing, as it last said. */
     val now: StateFlow<RemoteMessage.Now?> = _now.asStateFlow()
+    private val _field = MutableStateFlow<RemoteMessage.Field?>(null)
+    /** The TV's text field with the focus, as it last said; null while not connected, or from a TV that never says. */
+    val field: StateFlow<RemoteMessage.Field?> = _field.asStateFlow()
 
     @Volatile private var session: Session? = null
 
@@ -42,6 +45,7 @@ class RemoteClient(
     fun connect(tv: PairedTv, where: List<Pair<String, Int>>, onReached: (String, Int) -> Unit = { _, _ -> }) {
         disconnect()
         _now.value = null
+        _field.value = null
         _state.value = State.Connecting(tv.name)
         val s = Session()
         session = s
@@ -54,6 +58,7 @@ class RemoteClient(
     fun disconnect() {
         session?.stop()
         session = null
+        _field.value = null
         if (_state.value !is State.Failed) _state.value = State.Idle
     }
 
@@ -91,10 +96,12 @@ class RemoteClient(
                     while (!stopped) {
                         when (val m = o.channel.receive()) {
                             is RemoteMessage.Now -> _now.value = m
+                            is RemoteMessage.Field -> if (!stopped) _field.value = m
+                            // Anything else, and what a newer TV says that this phone doesn't know (null), is skipped.
                             else -> Unit
                         }
                     }
-                } finally { writer.interrupt() }
+                } finally { writer.interrupt(); if (session === this) _field.value = null }
             } catch (_: Exception) {
                 if (!stopped) _state.value = State.Failed(tv.name, com.opentune.i18n.Tr.f("Lost the connection to {0}.", tv.name))
             } finally {
