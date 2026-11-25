@@ -2163,7 +2163,7 @@ private fun settingsSections(
                         summary = "Show the current lyric on the player in every theme", icon = ImageVector.vectorResource(AppIcons.Lyrics))
                 },
                 Entry("Comments button", "comments youtube button pill remove hide") {
-                    ToggleRow("Comments button", ui.commentsButton, { v -> AppSettings.updateUi { it.copy(commentsButton = v) } }, summary = "Adds a comments button to the player's pill", icon = ImageVector.vectorResource(AppIcons.ChatBubbleOutline))
+                    ToggleRow("Comments button", ui.commentsButton, { v -> AppSettings.updateUi { it.copy(commentsButton = v) } }, summary = "Adds a comments button to the player's pill", icon = ImageVector.vectorResource(AppIcons.Chat))
                 },
                 Entry("Hide song status", "playing from") {
                     ToggleRow("Hide song status", ui.hideSongStatus, { v -> AppSettings.updateUi { it.copy(hideSongStatus = v) } }, summary = "Hides the \"Playing from\" line in the player", icon = ImageVector.vectorResource(AppIcons.VisibilityOff))

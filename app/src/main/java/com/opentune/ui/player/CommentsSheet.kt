@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -80,6 +81,37 @@ internal fun CommentsSheet(
     open: suspend (String) -> SongComments.Thread? = { SongComments.open(it) },
     pageOf: suspend (String) -> SongComments.Page? = { SongComments.page(it) },
 ) {
+    // The card's subtitle follows the thread the content loads.
+    var fromVideo by remember(song.videoId) { mutableStateOf(false) }
+    FloatingCard(
+        onDismiss = onDismiss,
+        title = "Comments",
+        icon = ImageVector.vectorResource(AppIcons.Chat),
+        subtitle = if (fromVideo) "From the music video on YouTube" else "From YouTube",
+        expandable = true,
+        // Start halfway; the handle grows the comments to the full available screen.
+        startExpanded = false,
+        fitContent = false,
+        // Pulled up (or scrolled), it takes over the page; pulled down it goes back to half, then closes.
+        fullFraction = 1f,
+    ) {
+        CommentsContent(song, open, pageOf, onFromVideo = { fromVideo = it })
+    }
+}
+
+/**
+ * The comments themselves — the list, its replies and the box to add one — with no
+ * sheet around them, so the comments sheet and the full screen's side panel show
+ * the same thing. Lives in a column scope; the list takes the room left over.
+ */
+@Composable
+internal fun ColumnScope.CommentsContent(
+    song: Song,
+    open: suspend (String) -> SongComments.Thread? = { SongComments.open(it) },
+    pageOf: suspend (String) -> SongComments.Page? = { SongComments.page(it) },
+    /** Told where the comments come from once the thread lands. */
+    onFromVideo: (Boolean) -> Unit = {},
+) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
@@ -99,6 +131,7 @@ internal fun CommentsSheet(
     LaunchedEffect(song.videoId) {
         val t = open(song.videoId)
         thread = t
+        onFromVideo(t?.fromVideo == true)
         if (t == null) { failed = true; loading = false; return@LaunchedEffect }
         val first = t.first
         if (first != null) {
@@ -204,89 +237,73 @@ internal fun CommentsSheet(
         )
     }
 
-    FloatingCard(
-        onDismiss = onDismiss,
-        title = "Comments",
-        icon = ImageVector.vectorResource(AppIcons.ChatBubbleOutline),
-        subtitle = when {
-            thread?.fromVideo == true -> "From the music video on YouTube"
-            else -> "From YouTube"
-        },
-        expandable = true,
-        // Start halfway; the handle grows the comments to the full available screen.
-        startExpanded = false,
-        fitContent = false,
-        // Pulled up (or scrolled), it takes over the page; pulled down it goes back to half, then closes.
-        fullFraction = 1f,
-    ) {
-        when {
-            loading -> Box(Modifier.fillMaxWidth().weight(1f), Alignment.Center) { CircularProgressIndicator() }
-            failed -> Note("Comments didn't load. Check the connection and try again.", Modifier.weight(1f))
-            thread?.first == null -> Note("Comments are turned off for this song on YouTube.", Modifier.weight(1f))
-            comments.isEmpty() -> Note("No comments yet.", Modifier.weight(1f))
-            else -> LazyColumn(state = list, modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                comments.forEach { c ->
-                    item(key = c.id) { row(c, null)() }
-                    val r = replies[c.id]
-                    if (r != null && r.open) {
-                        items(r.list, key = { "${c.id}/${it.id}" }) { reply ->
-                            Box(Modifier.padding(start = 48.dp)) { row(reply, c.id)() }
+    when {
+        loading -> Box(Modifier.fillMaxWidth().weight(1f), Alignment.Center) { CircularProgressIndicator() }
+        failed -> Note("Comments didn't load. Check the connection and try again.", Modifier.weight(1f))
+        thread?.first == null -> Note("Comments are turned off for this song on YouTube.", Modifier.weight(1f))
+        comments.isEmpty() -> Note("No comments yet.", Modifier.weight(1f))
+        else -> LazyColumn(state = list, modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            comments.forEach { c ->
+                item(key = c.id) { row(c, null)() }
+                val r = replies[c.id]
+                if (r != null && r.open) {
+                    items(r.list, key = { "${c.id}/${it.id}" }) { reply ->
+                        Box(Modifier.padding(start = 48.dp)) { row(reply, c.id)() }
+                    }
+                    when {
+                        r.loading -> item(key = "${c.id}/loading") {
+                            Box(Modifier.fillMaxWidth().padding(start = 48.dp), Alignment.CenterStart) {
+                                CircularProgressIndicator(Modifier.padding(start = 12.dp).size(18.dp), strokeWidth = 2.dp)
+                            }
                         }
-                        when {
-                            r.loading -> item(key = "${c.id}/loading") {
-                                Box(Modifier.fillMaxWidth().padding(start = 48.dp), Alignment.CenterStart) {
-                                    CircularProgressIndicator(Modifier.padding(start = 12.dp).size(18.dp), strokeWidth = 2.dp)
-                                }
-                            }
-                            r.next != null -> item(key = "${c.id}/more") {
-                                TextButton(onClick = { loadReplies(c) }, modifier = Modifier.padding(start = 40.dp)) { Text("Show more replies") }
-                            }
+                        r.next != null -> item(key = "${c.id}/more") {
+                            TextButton(onClick = { loadReplies(c) }, modifier = Modifier.padding(start = 40.dp)) { Text("Show more replies") }
                         }
                     }
                 }
-                if (next != null) item(key = "more") {
-                    Box(Modifier.fillMaxWidth().padding(12.dp), Alignment.Center) { CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) }
-                }
+            }
+            if (next != null) item(key = "more") {
+                Box(Modifier.fillMaxWidth().padding(12.dp), Alignment.Center) { CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) }
             }
         }
-        // Signed in, the box is always there; YouTube says with its first page whether it takes
-        // comments on this video, and if it didn't, sending says so rather than the box being missing.
-        when {
-            signedIn && thread?.first != null -> {
-                val target = replyingTo
-                Composer(
-                    replyingTo = target?.to,
-                    onCancelReply = { replyingTo = null },
-                    onPost = { text ->
-                        if (target != null) {
-                            val params = target.to.replyParams
-                            if (params == null) "YouTube isn't taking replies to this comment from here"
-                            else {
-                                val r = SongComments.reply(params, text)
-                                r.onSuccess { posted ->
-                                    replyingTo = null
-                                    val parent = comments.firstOrNull { it.id == target.threadId }
-                                    val thr = replies.getOrPut(target.threadId) { Replies(parent?.repliesToken) }
-                                    thr.open = true
-                                    if (posted != null) thr.list.add(0, posted)
-                                }
-                                r.exceptionOrNull()?.message ?: if (r.isFailure) "YouTube didn't take the reply" else null
+    }
+    // Signed in, the box is always there; YouTube says with its first page whether it takes
+    // comments on this video, and if it didn't, sending says so rather than the box being missing.
+    when {
+        signedIn && thread?.first != null -> {
+            val target = replyingTo
+            Composer(
+                replyingTo = target?.to,
+                onCancelReply = { replyingTo = null },
+                onPost = { text ->
+                    if (target != null) {
+                        val params = target.to.replyParams
+                        if (params == null) "YouTube isn't taking replies to this comment from here"
+                        else {
+                            val r = SongComments.reply(params, text)
+                            r.onSuccess { posted ->
+                                replyingTo = null
+                                val parent = comments.firstOrNull { it.id == target.threadId }
+                                val thr = replies.getOrPut(target.threadId) { Replies(parent?.repliesToken) }
+                                thr.open = true
+                                if (posted != null) thr.list.add(0, posted)
                             }
-                        } else {
-                            val params = createParams
-                            if (params == null) "YouTube isn't taking comments on this video from here"
-                            else {
-                                val r = SongComments.post(params, text)
-                                r.onSuccess { posted -> if (posted != null) comments.add(0, posted) }
-                                r.exceptionOrNull()?.message ?: if (r.isFailure) "YouTube didn't take the comment" else null
-                            }
+                            r.exceptionOrNull()?.message ?: if (r.isFailure) "YouTube didn't take the reply" else null
                         }
-                    },
-                    scope = scope,
-                )
-            }
-            !signedIn && thread?.first != null -> Note("Sign in with YouTube Music to like, reply to and add comments.")
+                    } else {
+                        val params = createParams
+                        if (params == null) "YouTube isn't taking comments on this video from here"
+                        else {
+                            val r = SongComments.post(params, text)
+                            r.onSuccess { posted -> if (posted != null) comments.add(0, posted) }
+                            r.exceptionOrNull()?.message ?: if (r.isFailure) "YouTube didn't take the comment" else null
+                        }
+                    }
+                },
+                scope = scope,
+            )
         }
+        !signedIn && thread?.first != null -> Note("Sign in with YouTube Music to like, reply to and add comments.")
     }
 }
 
