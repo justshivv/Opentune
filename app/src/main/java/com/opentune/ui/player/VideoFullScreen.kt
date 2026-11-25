@@ -1011,8 +1011,11 @@ private fun VideoControls(
                     )
                     // The extras unfold without a clip edge: their slot widens
                     // while they fade and grow in over it, and narrows as they go.
+                    // The slot fits the ambient button, and the picture in
+                    // picture one too when the player offers it.
+                    val extraTarget = if (actions.pictureInPicture != null) 96.dp else 48.dp
                     val extraW by animateDpAsState(
-                        targetValue = if (moreOpen) 48.dp else 0.dp,
+                        targetValue = if (moreOpen) extraTarget else 0.dp,
                         animationSpec = if (animate) tween(220) else snap(),
                         label = "moreWidth",
                     )
@@ -1022,17 +1025,27 @@ private fun VideoControls(
                                 Spacer(Modifier.width(4.dp))
                                 Box(
                                     Modifier.graphicsLayer {
-                                        val f = (extraW / 48.dp).coerceIn(0f, 1f)
+                                        val f = (extraW / extraTarget).coerceIn(0f, 1f)
                                         alpha = f
                                         scaleX = 0.8f + 0.2f * f
                                         scaleY = 0.8f + 0.2f * f
                                     }
                                 ) {
-                                    ControlIcon(
-                                        ImageVector.vectorResource(AppIcons.Ambient),
-                                        "Ambient mode",
-                                        onClick = onAmbient,
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        ControlIcon(
+                                            ImageVector.vectorResource(AppIcons.Ambient),
+                                            "Ambient mode",
+                                            onClick = onAmbient,
+                                        )
+                                        actions.pictureInPicture?.let { pip ->
+                                            Spacer(Modifier.width(4.dp))
+                                            ControlIcon(
+                                                ImageVector.vectorResource(AppIcons.PictureInPicture),
+                                                "Picture in picture",
+                                                onClick = { onTouch(); pip() },
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
