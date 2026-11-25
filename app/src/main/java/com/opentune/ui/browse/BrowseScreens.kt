@@ -300,7 +300,7 @@ internal fun HeaderBackdrop(
     if (url.isNullOrBlank()) return
     val background = into
     Box(modifier.clipToBounds().fadeOutAtFoot()) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceBlur) {
             Artwork(
                 url,
                 Modifier.matchParentSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f; alpha = 0.85f }.blur(70.dp),
