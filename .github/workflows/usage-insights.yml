@@ -1,0 +1,28 @@
+name: Usage API query report
+# Read-only: lists the usage database's queries by rows read over the last days, from
+# Cloudflare's analytics. It runs no query against the database itself.
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/crossfade-automix]
+    paths: [".github/workflows/usage-insights.yml"]
+permissions:
+  contents: read
+jobs:
+  insights:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Queries by rows read
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          for period in 1d 7d; do
+            echo "=== $period, by total rows read"
+            npx --yes wrangler@4 d1 insights opentune-usage --timePeriod $period --sort-type sum --sort-by reads --limit 15 --json || true
+          done
+          echo "=== 1d, by number of runs"
+          npx --yes wrangler@4 d1 insights opentune-usage --timePeriod 1d --sort-type sum --sort-by count --limit 15 --json || true
