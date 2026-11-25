@@ -257,7 +257,7 @@ test('public counts are aggregate only and match the dashboard figures',async()=
   assert.equal(counts.daily,2);
   assert.equal(counts.monthly,2);
   // No per-installation or version detail leaks out.
-  assert.deepEqual(Object.keys(counts).sort(),['asOf','daily','installations','monthly','timeZone','weekly']);
+  assert.deepEqual(Object.keys(counts).sort(),['asOf','daily','installations','monthly','timeZone','weekly','yesterday']);
 });
 
 test('public counts include current apps (India time) and older ones (UTC), each installation once',async()=>{
@@ -378,4 +378,89 @@ test('the period splits its active installations into new and returning, each co
   assert.deepEqual({...result.split}, {newInstallations:2, returningInstallations:1, newPlays:9, returningPlays:2});
   assert.equal(result.split.newInstallations + result.split.returningInstallations, result.totals.active);
   assert.equal(result.split.newPlays + result.split.returningPlays, result.totals.plays);
+});
+
+const { sharedCounts, countDay } = await import('./worker.mjs');
+test('summary tables built from existing history match a full count, and running the schema again changes nothing', async () => {
+  const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
+  const before = schema.slice(0, schema.indexOf('-- Summaries kept'));
+  const sql = new DatabaseSync(':memory:'); sql.exec(before);
+  const add = (table, inst, day, version, plays) => sql.prepare(`INSERT INTO ${table} VALUES(?,?,?,?,?)`).run(inst, day, version, plays, 'x');
+  add('activity', id, '2026-09-28', '0.4.2', 3);                     // a Monday
+  add('activity', id, '2026-10-04', '0.4.2', 1);                     // the Sunday of that week
+  add('activity_ist', id, '2026-10-09', '1.0.1', 2);
+  add('activity_ist', id.replace(/1$/, '2'), '2026-10-05', '1.0.1', 5);
+  sql.exec(schema); sql.exec(schema);
+  const one = q => sql.prepare(q).get();
+  assert.deepEqual({...one('SELECT installations, plays FROM totals')}, {installations: 2, plays: 11});
+  assert.equal(one(`SELECT first_day FROM installations WHERE installation='${id}'`).first_day, '2026-09-28');
+  assert.equal(one("SELECT COUNT(*) AS n FROM active_weeks WHERE week='2026-09-28'").n, 1);
+  assert.equal(one("SELECT COUNT(*) AS n FROM active_weeks WHERE week='2026-10-05'").n, 2);
+  assert.equal(one("SELECT COUNT(*) AS n FROM active_months WHERE month='2026-10'").n, 2);
+  assert.equal(one("SELECT last_day FROM versions_seen WHERE version='1.0.1'").last_day, '2026-10-09');
+});
+
+test('reports keep the summary tables in step with the activity they record', async () => {
+  const db = database();
+  await ingest(db, {installationId:id, days:[{day:'2026-10-05',version:'1.0.1',plays:2,timeZone:'Asia/Kolkata'}]}, now);
+  await ingest(db, {installationId:id, days:[{day:'2026-10-05',version:'1.0.1',plays:6,timeZone:'Asia/Kolkata'}]}, now);
+  await ingest(db, {installationId:id, days:[{day:'2026-10-09',version:'0.4.2',plays:1}]}, now);
+  await ingest(db, {installationId:id.replace(/1$/, '2'), days:[{day:'2026-10-11',version:'1.0.1',plays:1,timeZone:'Asia/Kolkata'}]}, new Date('2026-10-11T12:00:00Z'));
+  const s = await summary(db, now);
+  assert.equal(s.totals.installs, 2); assert.equal(s.totals.plays, 8); assert.equal(s.totals.since, '2026-10-05');
+  assert.deepEqual(s.versions.map(v => [v.version, v.installations]), [['1.0.1', 2], ['0.4.2', 1]]);
+  // 2026-10-11 is a Sunday: the same week as the 5th and the 9th.
+  const counts = await publicCounts(db, new Date('2026-10-11T12:00:00Z'));
+  assert.deepEqual([counts.installations, counts.daily, counts.weekly, counts.monthly], [2, 1, 2, 2]);
+});
+
+test('the shared public copy is counted once a day, after 06:00 India time', async () => {
+  const db = database();
+  const report = (n, day) => ingest(db, {installationId:id.replace(/1$/, String(n)), days:[{day,version:'1.0.1',plays:1,timeZone:'Asia/Kolkata'}]}, new Date('2026-10-10T12:00:00Z'));
+  await report(1, '2026-10-09');
+  const morning = Date.parse('2026-10-10T01:00:00Z');                         // 06:30 IST on the 10th
+  assert.equal((await sharedCounts(db, 'Asia/Kolkata', morning)).yesterday, 1);
+  await report(2, '2026-10-09');                                              // a late report for the 9th
+  // The rest of the day every instance gets the saved copy without counting again.
+  assert.equal((await sharedCounts(db, 'Asia/Kolkata', Date.parse('2026-10-10T23:59:00Z'))).yesterday, 1);
+  // Before 06:00 IST on the 11th it's still the 10th's copy.
+  assert.equal((await sharedCounts(db, 'Asia/Kolkata', Date.parse('2026-10-11T00:20:00Z'))).yesterday, 1);
+  // After it, counted again: the 10th, which nobody listened on.
+  const next = await sharedCounts(db, 'Asia/Kolkata', Date.parse('2026-10-11T00:31:00Z'));
+  assert.equal(next.yesterday, 0); assert.equal(next.installations, 2);
+  assert.equal(countDay(Date.parse('2026-10-11T00:29:00Z'), 'Asia/Kolkata'), '2026-10-10');
+});
+
+test('the yesterday badge shows the whole of the day before', async () => {
+  const shield = badge({yesterday: 1234, daily: 5}, new URLSearchParams('metric=yesterday&label=listening%20yesterday'));
+  assert.equal(shield.message, '1.2k'); assert.equal(shield.label, 'listening yesterday'); assert.equal(shield.cacheSeconds, 3600);
+});
+
+const { housekeeping, KEEP_DAYS } = await import('./worker.mjs');
+test('a day row counts an installation once, even when it updates that day, and keeps its plays', async () => {
+  const db = database();
+  await ingest(db, body(3, '0.4.2'), now);
+  await ingest(db, body(2, '0.4.3'), now);                         // updated mid-day: same installation
+  await ingest(db, body(5, '0.4.2'), now);                         // more plays on the first version
+  await ingest(db, {...body(1), installationId: id.replace(/1$/, '2')}, now);
+  const s = await summary(db, now);
+  assert.deepEqual({...s.today}, {active: 2, plays: 8});
+  assert.deepEqual(s.daily.map(d => [d.day, d.active, d.plays]), [['2026-10-09', 2, 8]]);
+});
+
+test('the nightly clean-up drops rows past the retention but keeps the lifetime and daily figures', async () => {
+  const db = database();
+  const old = '2025-01-01';
+  await db.prepare('INSERT INTO activity_ist VALUES(?,?,?,?,?)').bind(id, old, '0.4.0', 7, 'x').run();
+  await ingest(db, {installationId:id, days:[{day:'2026-10-09',version:'1.0.1',plays:2,timeZone:'Asia/Kolkata'}]}, now);
+  const done = await housekeeping(db, now);
+  assert.equal(done.removed, 1);
+  assert.equal(KEEP_DAYS, 400);
+  const s = await summary(db, now, 'Asia/Kolkata');
+  assert.equal(s.totals.installs, 1); assert.equal(s.totals.plays, 9);
+  assert.equal(s.totals.since, old);                                // the daily row outlives the detail
+  const [{results: left}] = await db.batch([db.prepare('SELECT COUNT(*) AS n FROM activity_ist').bind()]);
+  assert.equal(left[0].n, 1);
+  // Running it again finds nothing more to remove.
+  assert.equal((await housekeeping(db, now)).removed, 0);
 });
