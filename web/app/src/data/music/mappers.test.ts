@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { YTMusic } from 'youtubei.js';
-import { mapAlbum, mapArtist, mapCategories, mapHome, mapPlaylist, mapSearch, mapShelves, mapSuggestions } from './mappers';
+import { clean, mapAlbum, mapArtist, mapCategories, mapHome, mapPlaylist, mapSearch, mapShelves, mapSuggestions } from './mappers';
 
 // Real responses captured by web/scripts/capture-fixtures.mjs (prompt §0:
 // parsers are tested against what YouTube actually sends). YouTube.js parses
@@ -128,5 +128,13 @@ describe('categories', () => {
     expect(tile.title).not.toBe('');
     expect(tile.color).toMatch(/^rgb\(/);
     expect(tile.link.browseId).toBe('FEmusic_moods_and_genres_category');
+  });
+});
+
+describe('titles', () => {
+  it('drops the placeholder YouTube leaves for an inline picture', () => {
+    expect(clean('Paper Lanterns (Live Session)\uFFFC')).toBe('Paper Lanterns (Live Session)');
+    expect(clean('Quiet \uFFFC Harbour')).toBe('Quiet Harbour');
+    expect(clean('  Plain title ')).toBe('Plain title');
   });
 });

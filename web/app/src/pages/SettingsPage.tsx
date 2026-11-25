@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { LogoMark } from '@/components/icons/LogoMark';
 import { config } from '@/config';
+import { isMobileBrowser } from '@/lib/platform';
 import { useRemoteConfig } from '@/config/remote';
 import { useAddons } from '@/addons/client';
 import { useDiscord } from '@/extension/useDiscord';
@@ -165,6 +166,8 @@ function ExtensionCard() {
   const extension = useExtension();
   const yt = useYtAuth();
   const present = extension.state === 'present';
+  // A phone browser can't install the extension: the app is the one thing to do next there.
+  const phone = !present && isMobileBrowser();
   return (
     <section className="ot-set-hero" aria-label="NepTune Extension">
       <LogoMark size={26} className="ot-set-mark" />
@@ -173,12 +176,20 @@ function ExtensionCard() {
         <p className="type-body-tall text-secondary">
           {present
             ? `Version ${extension.extension.info.version} · YouTube Music: ${youtubeText(yt)}`
-            : 'Install the extension to play YouTube Music, sign in, and use Spotify and Discord.'}
+            : phone
+              ? 'Phone browsers can’t run the extension this page plays through. The Android app plays YouTube Music, with your library, lyrics and add-ons.'
+              : 'Install the extension to play YouTube Music, sign in, and use Spotify and Discord.'}
         </p>
       </div>
-      <PrefetchLink to="/extension" className={present ? 'ot-set-hero-button ot-quiet' : 'ot-set-hero-button'}>
-        {present ? 'Manage' : 'Get the extension'}
-      </PrefetchLink>
+      {phone ? (
+        <a href={config.androidAppUrl} target="_blank" rel="noreferrer" className="ot-set-hero-button">
+          Get the app
+        </a>
+      ) : (
+        <PrefetchLink to="/extension" className={present ? 'ot-set-hero-button ot-quiet' : 'ot-set-hero-button'}>
+          {present ? 'Manage' : 'Get the extension'}
+        </PrefetchLink>
+      )}
     </section>
   );
 }

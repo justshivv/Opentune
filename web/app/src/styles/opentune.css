@@ -205,7 +205,8 @@
 }
 @media (max-width: 483px) {
   :root { --body-gutter: 22px; --mobile-top-bar-height: 48px; }
-  .ot-mobile-dock { position: absolute; z-index: 9900; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; right: 12px; display: grid; gap: 10px; pointer-events: none; }
+  /* One column no wider than the screen: a long title in the mini player truncates instead of widening the dock past the edge. */
+  .ot-mobile-dock { position: absolute; z-index: 9900; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; right: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; pointer-events: none; }
   .ot-mobile-dock > * { pointer-events: auto; }
   .ot-mini { display: flex; align-items: center; padding: 9px; gap: 4px; border-radius: 28px; }
   .ot-mini > button:not(:first-child) { width: 42px; height: 44px; display: grid; place-items: center; }

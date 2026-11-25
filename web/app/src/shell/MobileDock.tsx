@@ -10,6 +10,8 @@ const TABS = [[Home, '/home', 'Home'], [Compass, '/new', 'Explore'], [Library, '
 export function MobileDock() {
   const track = usePlayer(s => s.nowPlaying);
   const playing = usePlayer(s => s.status === 'playing' || s.status === 'buffering');
+  // Why it stopped, in place of the artist, as the desktop player bar says it; the play button tries again.
+  const error = usePlayer(s => (s.status === 'error' ? s.error : null));
   const { togglePlay, next } = usePlayer.getState();
   const { pathname } = useLocation();
   const mini = useLiquidGlass<HTMLElement>(20, 20);
@@ -19,7 +21,7 @@ export function MobileDock() {
     {track && <section ref={mini} className="ot-mini glass-pill" aria-label="Mini player" data-player-origin>
       <button className="ot-mini-track" onClick={() => useUi.getState().setFullScreen(true)} aria-label={`Open player: ${track.title}`}>
         {track.artworkUrl && <img src={sizedArtwork(track.artworkUrl, 96)} alt="" data-cover-origin />}
-        <span key={track.videoId} className="ot-swap-in"><strong>{track.title}</strong><small>{track.artist}</small></span>
+        <span key={track.videoId} className="ot-swap-in"><strong>{track.title}</strong><small>{error ?? track.artist}</small></span>
       </button>
       <button className="ot-press" aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay}>{playing ? <PauseIcon size={26} /> : <PlayIcon size={26} />}</button>
       <button className="ot-press" aria-label="Next" onClick={next}><ForwardIcon size={24} /></button>

@@ -27,8 +27,14 @@ type AnyNode = { type: string } & Record<string, unknown>;
 type Thumb = { url: string; width: number; height: number };
 type TextLike = { text?: string; runs?: { text: string; bold?: boolean }[] } | undefined | null;
 
+/**
+ * YouTube marks an inline image in a title (an emoji drawn as a picture, a badge) with U+FFFC,
+ * which fonts draw as a boxed "OBJ" glyph or a blank gap; the picture itself never comes with it.
+ */
+export const clean = (value: string): string => value.replace(/\s*\uFFFC/g, '').trim();
+
 const text = (value: TextLike | string | undefined): string =>
-  typeof value === 'string' ? value : (value?.text ?? '').trim();
+  clean(typeof value === 'string' ? value : (value?.text ?? ''));
 
 function largest(thumbs: Thumb[] | undefined | null): string | null {
   if (!thumbs?.length) return null;
@@ -105,7 +111,7 @@ export function mapResponsiveItem(node: YTNodes.MusicResponsiveListItem): MusicI
   const kind = kindOf(node.item_type, id);
   const artists = artistsOf(node.artists ?? node.authors ?? (node.author ? [node.author] : undefined));
   const album: AlbumRef | null = node.album ? { name: node.album.name, id: node.album.id ?? null } : null;
-  const title = (kind === 'artist' ? node.name : undefined) ?? node.title ?? node.name ?? '';
+  const title = clean((kind === 'artist' ? node.name : undefined) ?? node.title ?? node.name ?? '');
   return {
     kind,
     id,
@@ -156,7 +162,7 @@ export function mapTrack(node: unknown): Track | null {
     .find((t) => /\b(plays|views)$/i.test(t));
   return {
     videoId: n.id,
-    title: n.title ?? '',
+    title: clean(n.title ?? ''),
     artists: artistsOf(n.artists ?? n.authors),
     album: n.album ? { name: n.album.name, id: n.album.id ?? null } : null,
     durationSec: n.duration?.seconds ?? null,
