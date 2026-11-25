@@ -12,7 +12,7 @@ const button = document.getElementById('connect') as HTMLButtonElement;
 const forPhone = new URLSearchParams(location.search).get('for') === 'phone';
 if (forPhone) {
   document.querySelector('main > p:not(.warning)')!.textContent =
-    'To show what you play, the extension talks to Discord with the session your phone hands it. Allow it to reach discord.com, then go back to OpenTune and scan the code with your phone.';
+    'To show what you play, the extension talks to Discord with the session your phone hands it. Allow it to reach discord.com, then go back to NepTune and scan the code with your phone.';
   button.textContent = 'Allow discord.com';
 }
 
@@ -23,7 +23,7 @@ button.addEventListener('click', async () => {
     return;
   }
   if (forPhone) {
-    status.textContent = 'Allowed. Go back to OpenTune and make the code.';
+    status.textContent = 'Allowed. Go back to NepTune and make the code.';
     setTimeout(() => window.close(), 1500);
     return;
   }

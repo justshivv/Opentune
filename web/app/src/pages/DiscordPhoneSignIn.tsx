@@ -39,7 +39,7 @@ export function DiscordPhoneSignIn() {
           {state === null && (
             <>
               <p className="type-body-emphasized text-primary">Use the Discord sign-in on your phone</p>
-              <p className="mt-1 type-callout text-secondary">If OpenTune on your phone is signed in to Discord, scan a code with it and approve there. No discord.com tab needed.</p>
+              <p className="mt-1 type-callout text-secondary">If NepTune on your phone is signed in to Discord, scan a code with it and approve there. No discord.com tab needed.</p>
               <button className={`${primary} mt-3`} onClick={again}>Show the code</button>
             </>
           )}
@@ -58,7 +58,7 @@ export function DiscordPhoneSignIn() {
             <>
               <p className="type-body-emphasized text-primary">Scan this with your phone</p>
               <p className="mt-1 type-callout text-secondary">
-                With the phone’s camera, or in OpenTune: Settings › Link a device › Computer › Open the camera. Approve on the phone. The code lasts two minutes.
+                With the phone’s camera, or in NepTune: Settings › Link a device › Computer › Open the camera. Approve on the phone. The code lasts two minutes.
               </p>
             </>
           )}

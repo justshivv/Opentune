@@ -305,8 +305,14 @@ h2 {
 
 /* ---- Footer ------------------------------------------------------------------- */
 
+/* Pinned to the bottom: with many hosts allowed the popup scrolls, and the button stays in reach. */
 .footer {
-  margin-top: 16px;
+  position: sticky;
+  bottom: 0;
+  margin: 16px -14px -12px;
+  padding: 10px 14px 12px;
+  background: var(--bg);
+  border-top: 1px solid var(--divider);
 }
 
 #updates {

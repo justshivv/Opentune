@@ -120,7 +120,7 @@ export class HttpError extends Error {
 }
 export async function addSource(raw: string): Promise<void> {
   const url = endpoint(raw, 'manifest.json');
-  if (isRetiredSource(url)) throw new Error('OpenTune no longer offers this source');
+  if (isRetiredSource(url)) throw new Error('NepTune no longer offers this source');
   const manifest = manifestOf(await fetchJson(url));
   const { sources, update } = useAddons.getState();
   if (sources.filter(s => !s.admin).length >= 20) throw new Error('Up to 20 sources can be added');
