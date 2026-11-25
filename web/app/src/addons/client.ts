@@ -1,3 +1,4 @@
+import { JIOSAAVN_ORIGIN } from './jiosaavn';
 import { create } from 'zustand';
 import { currentConfig } from '@/config/remote';
 import { endpoint, flacInfo, manifestOf, matches, publicHttps, qualityParams, type Addon, type CatalogTrack, type Recording } from '@opentune/shared/addons';
@@ -58,6 +59,8 @@ const corsBlocked = new Map<string, number>();
 const CORS_RETRY_MS = 10 * 60_000;
 /** Servers that have answered this page directly: a later failure there is the network or the server, never CORS. */
 const corsOk = new Set<string>();
+/** Servers known never to let a page read them (JioSaavn's catalog API): straight to the extension, never a blocked request first. */
+const NO_CORS_ORIGINS = new Set([JIOSAAVN_ORIGIN]);
 /** The extension's refusal for a host it hasn't been allowed to reach. */
 const isPermission = (error: unknown) => error instanceof BridgeCallError && error.code === 'permission';
 export async function fetchJson(url: string): Promise<unknown> {
@@ -68,7 +71,7 @@ export async function fetchJson(url: string): Promise<unknown> {
   const job = (async () => {
     let status: number, text: string, retryAfter = '';
     try {
-      if ((corsBlocked.get(origin) ?? 0) > Date.now()) throw new TypeError('Blocked by CORS');
+      if (NO_CORS_ORIGINS.has(origin) || (corsBlocked.get(origin) ?? 0) > Date.now()) throw new TypeError('Blocked by CORS');
       const headers = await verificationHeaders(url);
       const r = await fetch(url, { headers, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(currentConfig().data.network.timeoutMs) });
       status = r.status;

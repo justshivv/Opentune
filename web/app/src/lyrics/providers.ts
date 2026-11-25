@@ -528,9 +528,12 @@ export async function lrclib(q: LyricsQuery): Promise<Parsed | null> {
   const title = lrclibClean(q.title);
   const artist = lrclibClean(q.artist);
   const secs = Math.floor(q.durationMs / 1000);
-  const exact = json<{ syncedLyrics?: string }>(
-    await lyricsGet(urlWith('https://lrclib.net/api/get', { track_name: title, artist_name: artist, duration: secs })),
-  )?.syncedLyrics;
+  // /api/get needs the length (it answers 400 to duration=0): unknown, it goes straight to the search.
+  const exact = secs
+    ? json<{ syncedLyrics?: string }>(
+        await lyricsGet(urlWith('https://lrclib.net/api/get', { track_name: title, artist_name: artist, duration: secs })),
+      )?.syncedLyrics
+    : undefined;
   let synced = exact;
   if (!synced) {
     const hits = json<{ syncedLyrics?: string; duration?: number }[]>(await lyricsGet(urlWith('https://lrclib.net/api/search', { track_name: title, artist_name: artist })));

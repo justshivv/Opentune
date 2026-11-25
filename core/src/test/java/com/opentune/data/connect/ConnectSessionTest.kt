@@ -102,6 +102,13 @@ class ConnectSessionTest {
             queue = queue.filterIndexed { j, _ -> j != i }
             return true
         }
+        override fun moveQueued(from: Int, to: Int, id: String): Boolean {
+            val i = at(from, id) ?: return false
+            if (to !in queue.indices) return false
+            calls += "move $i $to"
+            queue = queue.toMutableList().apply { add(to, removeAt(i)) }
+            return true
+        }
         override fun load(queue: List<CTrack>, index: Int, pos: Long, playing: Boolean): Boolean {
             calls += "load ${queue.size} $index $pos $playing"
             if (!playable) return false
@@ -325,6 +332,16 @@ class ConnectSessionTest {
         // b still shows p first; r is entry 2 there, and is found by its id.
         onLoop { b.session.jumpOn("a", 2, track('r')) }
         eventually("r plays") { a.player.track?.id?.first() == 'r' }
+    }
+
+    @Test fun upNextIsReorderedFromAnotherDevice() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        eventually("connected") { a.others() == setOf("b") }
+        onLoop { a.player.track = track('x'); a.player.queue = listOf(track('p'), track('q'), track('r')); a.player.playing = true; a.session.localChanged() }
+        eventually("b sees a's queue") { b.view.value.controlling?.state?.queue?.size == 3 }
+        onLoop { b.session.moveOn("a", 0, 2, track('p')) }
+        eventually("p moved to the end") { a.player.queue.map { it.id.first() } == listOf('q', 'r', 'p') }
     }
 
     @Test fun aControllerMovesPlaybackBetweenTwoOthersOrToItself() {

@@ -158,6 +158,18 @@ function chromeRuntime(): ChromeRuntimeLike | null {
   return typeof runtime?.sendMessage === 'function' ? (runtime as ChromeRuntimeLike) : null;
 }
 
+/**
+ * Chrome's answer when no listener took the message: the worker is starting
+ * (or restarting) and hasn't registered its listeners yet, or the extension
+ * isn't there. The message was never delivered, so sending it again is safe.
+ */
+export function isNotDelivered(message: string | undefined): boolean {
+  return !!message && /could not establish connection|receiving end does not exist/i.test(message);
+}
+
+/** Pauses before re-sending an undelivered message: a waking worker is usually up within these. */
+export const UNDELIVERED_RETRY_MS: readonly number[] = [100, 250, 500];
+
 export function externalBridge(extensionId: string): Bridge | null {
   const runtime = chromeRuntime();
   if (!runtime || !extensionId) return null;
@@ -166,20 +178,37 @@ export function externalBridge(extensionId: string): Bridge | null {
     call(method, params, options) {
       const request = envelope(method, params);
       return withDeadline(options, (settle) => {
-        runtime.sendMessage(extensionId, request, (response) => {
-          // Reading lastError is what tells Chrome the failure was handled.
-          const failure = runtime.lastError?.message;
-          if (failure) return settle({ error: new BridgeCallError('unavailable', failure) });
-          if (!isBridgeResponse(response) || response.id !== request.id) {
-            return settle({ error: new BridgeCallError('protocol', 'Malformed response from the extension') });
-          }
+        let retry: ReturnType<typeof setTimeout> | undefined;
+        let attempt = 0;
+        const send = () => {
           try {
-            settle({ value: unwrap(response as BridgeResponse<typeof method>) });
+            runtime.sendMessage(extensionId, request, (response) => {
+              // Reading lastError is what tells Chrome the failure was handled.
+              const failure = runtime.lastError?.message;
+              if (failure) {
+                const pause = UNDELIVERED_RETRY_MS[attempt++];
+                if (isNotDelivered(failure) && pause !== undefined) {
+                  retry = setTimeout(send, pause);
+                  return;
+                }
+                return settle({ error: new BridgeCallError('unavailable', failure) });
+              }
+              if (!isBridgeResponse(response) || response.id !== request.id) {
+                return settle({ error: new BridgeCallError('protocol', 'Malformed response from the extension') });
+              }
+              try {
+                settle({ value: unwrap(response as BridgeResponse<typeof method>) });
+              } catch (error) {
+                settle({ error });
+              }
+            });
           } catch (error) {
-            settle({ error });
+            // An id Chrome won't take, or a context that has gone: never left as an unhandled rejection.
+            settle({ error: new BridgeCallError('unavailable', error instanceof Error ? error.message : String(error)) });
           }
-        });
-        return () => {};
+        };
+        send();
+        return () => clearTimeout(retry);
       });
     },
     subscribe(listener) {

@@ -2,7 +2,9 @@ import { Suspense, useRef, useState } from 'react';
 import { lazyRecovering } from '@/lib/staleBuild';
 import { useUi, type SidePanel as Panel } from '@/state/ui';
 import { motionAllowed } from './playerMorph';
+import { useControlling } from '@/connect/connect';
 import { DevicesPanel } from '@/connect/DevicesPanel';
+import { RemoteUpNext } from '@/connect/RemoteUpNext';
 import { UpNext } from './UpNext';
 
 // am-lyrics is large; it loads the first time the panel opens (prompt §3).
@@ -13,6 +15,8 @@ export function SidePanel() {
   const panel = useUi((s) => s.sidePanel);
   // Hidden under the full-screen player, which has its own lyrics: one am-lyrics at a time.
   const fullScreen = useUi((s) => s.fullScreen);
+  // Playing on another device (Connect): its Up Next, edited there.
+  const remote = useControlling();
   // The panel last shown stays on screen while it slides back out, rather than vanishing.
   const [shown, setShown] = useState<Panel>(panel);
   if (panel && panel !== shown) setShown(panel);
@@ -44,7 +48,7 @@ export function SidePanel() {
     >
       <div key={shown} className={`flex min-h-0 flex-1 flex-col ${swapped ? 'ot-panel-swap' : ''}`}>
         {shown === 'up-next' ? (
-          <UpNext />
+          remote ? <RemoteUpNext device={remote} /> : <UpNext />
         ) : shown === 'devices' ? (
           <DevicesPanel />
         ) : (

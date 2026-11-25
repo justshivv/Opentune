@@ -1,22 +1,8 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { create } from 'zustand';
+import { useToast } from './toastStore';
 
-interface ToastState {
-  message: string | null;
-  /** Bumped on every show, so the same message twice still shows twice. */
-  serial: number;
-  show: (message: string) => void;
-}
-
-/** A short confirmation at the bottom of the window ("Added to queue"), also read out by screen readers. */
-export const useToast = create<ToastState>((set) => ({
-  message: null,
-  serial: 0,
-  show: (message) => set((s) => ({ message, serial: s.serial + 1 })),
-}));
-
-export const toast = (message: string) => useToast.getState().show(message);
+export { toast, useToast } from './toastStore';
 
 export function Toaster() {
   const message = useToast((s) => s.message);
