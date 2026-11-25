@@ -59,17 +59,21 @@ internal fun rememberEchoPhase(running: Boolean, periodMillis: Int): State<Float
 internal fun EchoGlowBackground(
     running: Boolean,
     modifier: Modifier = Modifier,
-    /** The lights' colours, the cover's own where known; the scheme's otherwise. */
-    lights: List<Color>? = null,
-    /** What they glow over. */
-    base: Color? = null,
+    /**
+     * The lights' colours, the cover's own where known; the scheme's otherwise. Read while
+     * drawing, so they can ease to a new song's without composing this again.
+     */
+    lights: (() -> List<Color>)? = null,
+    /** What they glow over, read while drawing too. */
+    base: (() -> Color)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val colors = lights?.takeIf { it.isNotEmpty() } ?: listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.inversePrimary)
+    val fallback = listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.inversePrimary)
     // A slow turn, so the light drifts rather than sweeps.
     val phase = rememberEchoPhase(running, 32_000)
     val strength = if (scheme.surface.luminance() > 0.5f) 0.25f else 0.55f
     Canvas(modifier) {
+        val colors = lights?.invoke()?.takeIf { it.isNotEmpty() } ?: fallback
         val p = phase.value
         fun color(index: Int): Color {
             val at = index + p * colors.size
@@ -78,7 +82,7 @@ internal fun EchoGlowBackground(
         }
         fun oscillate(min: Float, max: Float, offset: Float): Float =
             min + (max - min) * ((sin(2f * PI.toFloat() * (p + offset)) + 1f) / 2f)
-        drawRect(base ?: scheme.surface)
+        drawRect(base?.invoke() ?: scheme.surface)
         // Soft falloffs in their own colour: a straight fade to transparent black left a dark rim.
         drawRect(Brush.radialGradient(
             *com.opentune.ui.components.glowStops(color(0), strength, shape = 1.6f),

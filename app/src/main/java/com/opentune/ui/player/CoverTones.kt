@@ -7,6 +7,8 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -48,21 +50,37 @@ internal fun coverTones(palette: List<Color>, scheme: ColorScheme): CoverTones {
     )
 }
 
+/**
+ * A cover's tones easing from one song's to the next: [target] is where they're going,
+ * [now] where they are, to be read while drawing. Read while composing instead, the
+ * player's whole backdrop was composed again on every frame of the fade.
+ */
+@Stable
+internal class FadingCoverTones(
+    val target: CoverTones,
+    private val deep: State<Color>,
+    private val second: State<Color>,
+    private val base: State<Color>,
+    private val lights: List<State<Color>>,
+) {
+    fun now(): CoverTones = CoverTones(deep.value, second.value, base.value, lights.map { it.value })
+}
+
 /** [coverTones] for the cover at [artworkUrl], easing from one song's to the next. */
 @Composable
-internal fun rememberCoverTones(artworkUrl: String?): CoverTones {
+internal fun rememberCoverTones(artworkUrl: String?): FadingCoverTones {
     val palette = com.opentune.ui.theme.rememberArtworkPalette(artworkUrl, keepLast = true)
     val scheme = MaterialTheme.colorScheme
     val target = remember(palette, scheme) { coverTones(palette, scheme) }
     val spec = tween<Color>(900)
-    val deep by animateColorAsState(target.deep, spec, label = "coverDeep")
-    val second by animateColorAsState(target.second, spec, label = "coverSecond")
-    val base by animateColorAsState(target.base, spec, label = "coverBase")
-    val l0 by animateColorAsState(target.lights[0], spec, label = "coverLight0")
-    val l1 by animateColorAsState(target.lights[1], spec, label = "coverLight1")
-    val l2 by animateColorAsState(target.lights[2], spec, label = "coverLight2")
-    val l3 by animateColorAsState(target.lights[3], spec, label = "coverLight3")
-    return CoverTones(deep, second, base, listOf(l0, l1, l2, l3))
+    val deep = animateColorAsState(target.deep, spec, label = "coverDeep")
+    val second = animateColorAsState(target.second, spec, label = "coverSecond")
+    val base = animateColorAsState(target.base, spec, label = "coverBase")
+    val l0 = animateColorAsState(target.lights[0], spec, label = "coverLight0")
+    val l1 = animateColorAsState(target.lights[1], spec, label = "coverLight1")
+    val l2 = animateColorAsState(target.lights[2], spec, label = "coverLight2")
+    val l3 = animateColorAsState(target.lights[3], spec, label = "coverLight3")
+    return remember(target) { FadingCoverTones(target, deep, second, base, listOf(l0, l1, l2, l3)) }
 }
 
 /** How light each is, on HCT's 0 (black) to 100 (white) scale. */
