@@ -38,7 +38,7 @@ function push(level: LogLevel, message: string, about: string | null) {
   }));
   const tag = about ? `[${about}] ` : '';
   const out = level === 'error' ? console.error : level === 'warn' ? console.warn : console.debug;
-  out(`OpenTune ${tag}${message}`);
+  out(`NepTune ${tag}${message}`);
 }
 
 export const trackLog = {

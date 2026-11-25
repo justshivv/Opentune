@@ -11,9 +11,9 @@ export function MobileTopBar() {
       <button className="grid size-11 place-items-center rounded-full" aria-label="Open menu" onClick={() => setDrawerOpen(true)}>
         <Menu size={22} strokeWidth={2} />
       </button>
-      <PrefetchLink to="/home" className="inline-flex items-center gap-1.5 justify-self-center type-[700_16px/20px]" aria-label="OpenTune, Home">
+      <PrefetchLink to="/home" className="inline-flex items-center gap-1.5 justify-self-center type-[700_16px/20px]" aria-label="NepTune, Home">
         <LogoMark size={20} className="text-primary" />
-        <span>OpenTune</span>
+        <span>NepTune</span>
       </PrefetchLink>
       <span className="w-11" />
     </header>

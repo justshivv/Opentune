@@ -12,7 +12,7 @@ export const stateStyles = {
 export function NeedsExtension({ what = 'YouTube Music' }: { what?: string }) {
   return (
     <div className={stateStyles.state}>
-      <p className={stateStyles.title}>Browse {what} with the OpenTune extension</p>
+      <p className={stateStyles.title}>Browse {what} with the NepTune extension</p>
       <p className={stateStyles.detail}>
         The extension lets this page reach YouTube Music from your own browser. Addons and lyrics work without it.
       </p>

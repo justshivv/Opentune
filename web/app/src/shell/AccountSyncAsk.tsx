@@ -23,7 +23,7 @@ export function AccountSyncAsk() {
       >
         <h2 id="account-sync-title" className="type-title-2-emphasized">Find your devices through YouTube?</h2>
         <p className="mt-1.5 type-body text-secondary text-pretty">
-          OpenTune keeps a private playlist in your YouTube account that holds a key, so your devices find each other.
+          NepTune keeps a private playlist in your YouTube account that holds a key, so your devices find each other.
         </p>
         <div className="mt-5 flex gap-2">
           <button type="button" className={secondary} onClick={() => setAccountSync(false)}>Not now</button>

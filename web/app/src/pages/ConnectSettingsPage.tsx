@@ -49,7 +49,7 @@ export default function ConnectSettingsPage() {
   const qr = useMemo(() => (link ? renderSVG(link.app, { ecc: 'M', border: 0, pixelSize: 4, blackColor: '#000', whiteColor: '#fff' }) : null), [link]);
 
   const add = () => {
-    if (!joinGroup(paste)) return setError('That isn’t a devices link. Copy it from OpenTune on your phone: Settings › Link a device › Your devices.');
+    if (!joinGroup(paste)) return setError('That isn’t a devices link. Copy it from NepTune on your phone: Settings › Link a device › Your devices.');
     setError('');
     setPaste('');
   };
@@ -90,7 +90,7 @@ export default function ConnectSettingsPage() {
           <div className="min-w-56 flex-1">
             <p className="type-body-emphasized text-primary">Scan this with your phone</p>
             <p className="mt-1 type-callout text-secondary">
-              With the phone’s camera, or in OpenTune: Settings › Link a device › In your browser › Your devices › Scan a code.
+              With the phone’s camera, or in NepTune: Settings › Link a device › In your browser › Your devices › Scan a code.
             </p>
             <button className={`${secondary} mt-3 inline-flex items-center gap-2`} onClick={copy} disabled={!link}>
               {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -136,7 +136,7 @@ export default function ConnectSettingsPage() {
           </section>
         ) : null}
         {view && !view.devices.length && (
-          <p className={settingsUi.footer}>{view.relays ? 'Open OpenTune on your phone and it shows up here.' : 'Connecting…'}</p>
+          <p className={settingsUi.footer}>{view.relays ? 'Open NepTune on your phone and it shows up here.' : 'Connecting…'}</p>
         )}
 
         <section className={`${settingsUi.group} mt-5 p-4`}>

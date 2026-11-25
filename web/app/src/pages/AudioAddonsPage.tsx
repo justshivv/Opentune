@@ -42,7 +42,7 @@ export default function AudioAddonsPage() {
   return <div className={settingsUi.centered}>
     <PageHeader title="Audio sources" back={{ to: '/settings', label: 'Settings' }} />
     <div className={settingsUi.body}>
-      <p className="mx-4 mb-5 max-w-[64ch] type-body-reduced text-secondary text-pretty">Your sources, in your order. OpenTune looks for the same recording on each and plays the highest measured FLAC quality; equal quality keeps your order. Sources marked “Added by admin” are published by OpenTune, and you can turn them off or move them like your own.</p>
+      <p className="mx-4 mb-5 max-w-[64ch] type-body-reduced text-secondary text-pretty">Your sources, in your order. NepTune looks for the same recording on each and plays the highest measured FLAC quality; equal quality keeps your order. Sources marked “Added by admin” are published by NepTune, and you can turn them off or move them like your own.</p>
       {sources.some(source => isOfficialAddon(source.url)) && <AddonVerification />}
       {waiting.length > 0 && <div className="ot-access mb-5" role="status">
         <p><strong>{waiting.length === 1 ? `${waiting[0]!.name} needs your OK` : `${waiting.length} sources need your OK`}</strong>
@@ -53,7 +53,7 @@ export default function AudioAddonsPage() {
       <h2 className={settingsUi.sectionHeader}>Lossless add-ons</h2>
       <section className={settingsUi.group} aria-label="Source priority">
         <SourceList />
-        {sources.length === 0 && <p className="border-b-[0.5px] border-divider px-4 py-[13px] type-body-tall text-secondary">No add-ons yet. Add one by its URL below, or wait for the ones OpenTune publishes.</p>}
+        {sources.length === 0 && <p className="border-b-[0.5px] border-divider px-4 py-[13px] type-body-tall text-secondary">No add-ons yet. Add one by its URL below, or wait for the ones NepTune publishes.</p>}
         <div className={settingsUi.integration}>
           <span className={settingsUi.integrationIcon} style={{ backgroundColor: '#fff', color: '#ff0033' }}><SiYoutubemusic size={15} /></span>
           <span className={settingsUi.rowText}>
@@ -102,7 +102,7 @@ export default function AudioAddonsPage() {
       <p className={settingsUi.footer}>The web player plays direct FLAC from servers that allow it. Sources that need a verified lossless output are skipped, because a browser can’t confirm that route, and segmented add-on playback is in the Android app only.</p>
       <p className="mx-4 mt-4">
         <a href="https://justshivv.github.io/Opentune/addons/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 type-body-emphasized text-key hover:underline">
-          Build an OpenTune add-on <ArrowUpRight size={14} />
+          Build a NepTune add-on <ArrowUpRight size={14} />
         </a>
       </p>
     </div>

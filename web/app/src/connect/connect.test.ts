@@ -602,4 +602,12 @@ describe('the group kept in the YouTube account', () => {
     expect(pick({ contents: [item('OpenTune Connect fans', 'VLPL9'), item('OpenTune Connect', 'VLPL123')] })).toBe('VLPL123');
     expect(pick({ contents: [item('Liked Music', 'VLLM')] })).toBeNull();
   });
+
+  it('also finds the playlist a phone app made after the rename to NepTune', async () => {
+    const { pick, TITLE } = await import('./accountSync');
+    const item = (title: string, id: string) => ({ musicTwoRowItemRenderer: { title: { runs: [{ text: title, navigationEndpoint: { browseEndpoint: { browseId: id } } }] } } });
+    expect(pick({ contents: [item('NepTune Connect', 'VLPL456')] })).toBe('VLPL456');
+    // The web player still makes it under the name released phone apps look for.
+    expect(TITLE).toBe('OpenTune Connect');
+  });
 });

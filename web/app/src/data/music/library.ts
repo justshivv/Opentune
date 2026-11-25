@@ -23,5 +23,11 @@ export function isLibrarySection(value: string): value is LibrarySection {
 /** YouTube's "Liked Music" auto-playlist. */
 export const LIKED_MUSIC_PLAYLIST = 'LM';
 
-/** The playlist Connect keeps its secret in (connect/accountSync.ts): never shown in the library. */
+/**
+ * The playlist Connect keeps its secret in (connect/accountSync.ts): never shown in the library.
+ * It keeps the name from before the rename to NepTune, because released phone apps look for it by
+ * this exact name; a phone app built after the rename makes "NepTune Connect", which counts too.
+ */
 export const CONNECT_PLAYLIST_TITLE = 'OpenTune Connect';
+export const CONNECT_PLAYLIST_TITLES: readonly string[] = [CONNECT_PLAYLIST_TITLE, 'NepTune Connect'];
+export const isConnectPlaylistTitle = (title: string) => CONNECT_PLAYLIST_TITLES.includes(title);

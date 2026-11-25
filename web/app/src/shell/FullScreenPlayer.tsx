@@ -320,7 +320,7 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
         ? <MeshBackdrop artworkUrl={nowPlaying.artworkUrl} playing={playing && appearance.motion} />
         : <div className={`ot-player-backdrop ot-${appearance.playerBackground}`} style={{ '--cover-color': coverColor?.background ?? '#463231' } as React.CSSProperties} aria-hidden="true" />}
       <div className="ot-playing-from" data-morph-fade>
-        {remote ? <>Playing on<br /><strong>{remote.name || 'another device'}</strong></> : <>Playing from<br /><strong>OpenTune</strong></>}
+        {remote ? <>Playing on<br /><strong>{remote.name || 'another device'}</strong></> : <>Playing from<br /><strong>NepTune</strong></>}
       </div>
       {theater && (
         <div className="absolute inset-0 animate-fade-in bg-black">

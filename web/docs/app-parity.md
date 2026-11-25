@@ -1,4 +1,4 @@
-# OpenTune web and Android
+# NepTune web and Android
 
 The web player extends the existing web application, using the current Android app as the design reference. It keeps account integration, search, albums, playlists, library, queue editing, lyrics, Listen Together and browser extension playback.
 

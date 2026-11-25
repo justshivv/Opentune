@@ -58,7 +58,7 @@ export default function ExtensionPage() {
 
   return (
     <div className={settingsUi.centered}>
-      <PageHeader title="OpenTune Extension" back={{ to: '/settings', label: 'Settings' }} />
+      <PageHeader title="NepTune Extension" back={{ to: '/settings', label: 'Settings' }} />
       <div className={settingsUi.body}>
         <section className={settingsUi.group} aria-live="polite">
           <div className={settingsUi.row}>

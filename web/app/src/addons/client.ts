@@ -86,7 +86,7 @@ export async function fetchJson(url: string): Promise<unknown> {
       // the network or an error page: those are said as they are, not as a missing permission.
       if (!(error instanceof TypeError)) throw error instanceof DOMException && error.name === 'TimeoutError' ? new Error('timed out (the server is slow or waking up)') : error;
       if (corsOk.has(origin)) throw new Error("couldn't be reached (network error)");
-      const bridge = getBridge(); if (!bridge) throw new Error("doesn't let browsers ask it directly; the OpenTune extension can");
+      const bridge = getBridge(); if (!bridge) throw new Error("doesn't let browsers ask it directly; the NepTune extension can");
       corsBlocked.set(origin, Date.now() + CORS_RETRY_MS);
       const r = await bridge.call('addon.fetch', { url }); status = r.status; text = r.body; retryAfter = r.headers['retry-after'] ?? '';
     }
@@ -128,7 +128,7 @@ export async function addSource(raw: string): Promise<void> {
   update([...sources, { id: crypto.randomUUID(), name: manifest.name, url, enabled: true }]);
 }
 export async function allowSource(raw: string): Promise<void> {
-  const bridge = getBridge(); if (!bridge) throw new Error('Install the OpenTune extension first');
+  const bridge = getBridge(); if (!bridge) throw new Error('Install the NepTune extension first');
   await bridge.call('addon.requestPermission', { url: publicHttps(raw).href });
 }
 /** Whether the extension may reach [origin] for add-ons and JioSaavn, or null without the extension. */
@@ -138,7 +138,7 @@ export const hostAllowed = (origin: string): Promise<boolean | null> => {
 };
 /** Asks for every one of these sources' hosts on one extension page (an older extension asks for the first). */
 export async function allowSources(sources: Addon[]): Promise<void> {
-  const bridge = getBridge(); if (!bridge) throw new Error('Install the OpenTune extension first');
+  const bridge = getBridge(); if (!bridge) throw new Error('Install the NepTune extension first');
   const [first, ...rest] = sources.map(s => publicHttps(s.url).href);
   if (first) await bridge.call('addon.requestPermission', { url: first, urls: rest });
 }

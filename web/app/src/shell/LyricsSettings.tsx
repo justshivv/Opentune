@@ -99,7 +99,7 @@ export function LyricsSettings({ onClose }: { onClose: () => void }) {
 
           <h3 className={section}>Extension access</h3>
           {granted === null ? (
-            <p className={note}>KuGou, Musixmatch, Genius and PaxSenix need the OpenTune extension.</p>
+            <p className={note}>KuGou, Musixmatch, Genius and PaxSenix need the NepTune extension.</p>
           ) : missing.length ? (
             <div className="flex items-center gap-3">
               <p className={note}>
