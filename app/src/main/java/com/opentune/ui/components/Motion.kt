@@ -14,6 +14,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 /**
+ * Whether the system has animations removed (Developer options' animation scales at off, or
+ * Accessibility's "Remove animations"). Compose's own animations then finish at once; the
+ * app's loops that run on every frame (moving backdrops and covers, spinning designs) are
+ * held still for it as they are for Settings' Reduce animation.
+ */
+fun systemAnimationsRemoved(): Boolean = !android.animation.ValueAnimator.areAnimatorsEnabled()
+
+/**
  * A click that sinks a little under the finger and springs back, the way
  * iOS tiles do. Use on cards and tiles; list rows keep their ripple.
  */
