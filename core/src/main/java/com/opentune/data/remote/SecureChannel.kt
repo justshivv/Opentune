@@ -87,10 +87,12 @@ internal object RemoteHandshake {
     val HEADER_SIZE = MAGIC.size + 1 + ID_BYTES
 }
 
-/** Which addresses the remote will talk to: the home network, and only it. */
+/** Which addresses the remote will talk to: the home network, and only it (see [com.opentune.data.account.Lan]). */
 internal object HomeNetwork {
     /** Tests run both ends on this machine, so they may allow its own address. */
-    @Volatile var allowLoopback = false
+    var allowLoopback: Boolean
+        get() = com.opentune.data.account.Lan.allowLoopback
+        set(value) { com.opentune.data.account.Lan.allowLoopback = value }
 
-    fun accepts(host: String): Boolean = PairingCrypto.privateHost(host) || (allowLoopback && host == "127.0.0.1")
+    fun accepts(host: String): Boolean = com.opentune.data.account.Lan.accepts(host)
 }

@@ -21,7 +21,14 @@ import com.opentune.data.model.Song
 
 @Composable
 fun HomeScreen(nav: TvNav) {
-    val (state, retry) = rememberLoad("home") { MusicRepository.home() }
+    // Kept per account: signing in (or out) loads the account's own Home, not the one kept from before.
+    val accounts by com.opentune.data.account.AccountStore.accounts.collectAsState()
+    val active = accounts.firstOrNull { it.active }?.id
+    val (state, retry) = rememberLoad(if (active == null) "home" else "home:$active") {
+        if (homeLoadedFor != UNLOADED && active != homeLoadedFor) MusicRepository.refreshHomeRecommendations()
+        homeLoadedFor = active
+        MusicRepository.home()
+    }
     val more by MusicRepository.homeMore.collectAsState()
     val records by History.records.collectAsState()
     val recents = remember(records) { History.recents(records, 16).distinctBy { it.videoId } }
@@ -30,6 +37,10 @@ fun HomeScreen(nav: TvNav) {
         onSong = { nav.play(it, "Home") }, onItem = { nav.openShelfItem(it, "Home") },
     )
 }
+
+/** The account Home was last loaded for, so a change of account drops the shelves made for the one before. */
+private var homeLoadedFor: String? = UNLOADED
+private const val UNLOADED = "\u0000"
 
 /**
  * Home: the songs played last ("Listen again"), then YouTube Music's shelves. The recents come

@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.opentune.data.account.AccountStore
 import com.opentune.data.account.PairingExtras
+import com.opentune.data.account.PairingFailed
 import com.opentune.data.account.PairingReceiver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -133,7 +134,7 @@ private fun SignInWithPhone(onClose: () -> Unit) {
             // through the Discord app on this computer, which needs no token.
             val current = withContext(Dispatchers.IO) { PairingReceiver(take = setOf(PairingExtras.LASTFM)) }
             receiver = current
-            status = "On your phone, open OpenTune, go to Settings, then Link a device, then TV, and scan this code. Approve it on the phone, where you can sign this computer in to Last.fm too. Both must be on the same Wi-Fi; the code lasts two minutes."
+            status = "On your phone, open NepTune, go to Settings, then Link a device, then Computer, and scan this code. Approve it on the phone, where you can sign this computer in to Last.fm too. Both must be on the same network; the code lasts two minutes. This computer is at ${current.offer.host}."
             var lastFm = false
             withContext(Dispatchers.IO) {
                 current.receive(extras = { shared ->
@@ -148,8 +149,14 @@ private fun SignInWithPhone(onClose: () -> Unit) {
             throw e
         } catch (e: Exception) {
             failed = true
-            status = if (e.message?.contains("same Wi-Fi") == true) "Connect this computer and your phone to the same Wi-Fi network."
-            else "That code ran out, or the phone couldn't reach this computer. Make a new one."
+            status = when ((e as? PairingFailed)?.reason) {
+                PairingFailed.Reason.NO_NETWORK -> "This computer isn't on a home network. Connect it to Wi-Fi or Ethernet, then make a new code."
+                PairingFailed.Reason.WRONG_CODE -> "A phone reached this computer, but with an older code. Make a new code and scan the one on the screen."
+                PairingFailed.Reason.BAD_SESSION -> "A phone reached this computer, but its YouTube Music sign-in wasn't complete. Sign out and in again on the phone, then make a new code."
+                PairingFailed.Reason.TOO_MANY_TRIES -> "Too many connections that weren't your phone. The code was closed to be safe. Make a new one."
+                PairingFailed.Reason.STOPPED -> "The code was closed. Make a new one."
+                else -> "No phone reached this computer in two minutes. Make a new code. If the phone said it couldn't reach the computer, connect both to the same network, and allow NepTune through this computer's firewall for private networks."
+            }
         } finally {
             receiver?.close(); receiver = null
         }

@@ -48,9 +48,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.opentune.data.account.AccountStore
+import com.opentune.data.account.PairingFailed
 import com.opentune.data.account.PairingReceiver
 import com.opentune.data.model.Account
+import com.opentune.data.remote.LanNetworks
 import com.opentune.data.remote.RemoteInvite
+import com.opentune.i18n.Tr
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
 import kotlinx.coroutines.CancellationException
@@ -271,9 +274,12 @@ private fun PairPhonePanel(remote: TvRemote, onClose: () -> Unit) {
     val done = phones.size > before
 
     DisposableEffect(Unit) { onDispose { remote.cancelInvite() } }
+    var at by remember { mutableStateOf("") }
     LaunchedEffect(attempt) {
         problem = null; waiting = true
-        link = runCatching { remote.invite().link }.onFailure { problem = it.message }.getOrNull()
+        link = runCatching { remote.invite().also { at = it.host }.link }
+            .onFailure { problem = "This TV isn't connected to a home network. Connect it to Wi-Fi or Ethernet, then make a new code." }
+            .getOrNull()
         waiting = false
         // The code runs out after two minutes; say so instead of leaving a dead one up.
         if (link != null) { delay(RemoteInvite.LIFETIME_MS); link = null }
@@ -287,7 +293,10 @@ private fun PairPhonePanel(remote: TvRemote, onClose: () -> Unit) {
             problem != null -> problem!!
             waiting -> "Preparing a private connection…"
             link == null -> "That code ran out. Make a new one."
-            else -> "On your phone, open NepTune, then Settings, Link a device, TV, Control this TV, and scan this code. Both must be on the same Wi-Fi. It lasts two minutes."
+            else -> Tr.f(
+                "On your phone, open NepTune, then Settings, Link a device, TV, Control the TV, and scan this code. Both must be on the same Wi-Fi. It lasts two minutes. This TV is at {0}.",
+                at,
+            )
         },
         link = link,
         state = when {
@@ -313,23 +322,27 @@ private fun SignInPanel(onClose: () -> Unit) {
     var state by remember { mutableStateOf(CodeState.Waiting) }
     val signedIn by AccountStore.signedIn.collectAsState()
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     DisposableEffect(attempt) { onDispose { receiver?.close() } }
     LaunchedEffect(attempt) {
         receiver = null; state = CodeState.Waiting
         status = "Preparing a private connection…"
         try {
-            val current = withContext(Dispatchers.IO) { PairingReceiver() }
+            // Listens on Wi-Fi and Ethernet both; the code names the one the TV uses first, and the others for newer phones.
+            val current = withContext(Dispatchers.IO) { PairingReceiver(addresses = { LanNetworks.ownAddresses(context) }) }
             receiver = current
             state = CodeState.Ready
-            status = "On your phone, open NepTune, go to Settings, then Link a device, then TV, and scan this code. Both must be on the same Wi-Fi. It lasts two minutes."
+            status = Tr.f(
+                "On your phone, open NepTune, go to Settings, then Link a device, then TV, and scan this code. Both must be on the same Wi-Fi. It lasts two minutes. This TV is at {0}.",
+                current.offer.host,
+            )
             withContext(Dispatchers.IO) { current.receive { cookie -> AccountStore.signIn(cookie); true } }
             state = CodeState.Done
             status = "Signed in. Your YouTube Music account is on this TV."
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) {
             state = CodeState.Expired
-            status = if (e.message?.contains("same Wi-Fi") == true) "Connect this TV and your phone to the same Wi-Fi network."
-            else "That code ran out, or the phone couldn't reach this TV. Make a new one."
+            status = signInProblem(e)
         } finally { receiver?.close(); receiver = null }
     }
     LaunchedEffect(signedIn, state) { if (state == CodeState.Done && signedIn) { delay(1_800); onClose() } }
@@ -342,4 +355,15 @@ private fun SignInPanel(onClose: () -> Unit) {
         onNewCode = { attempt++ },
         onClose = onClose,
     )
+}
+
+/** What the TV says when its sign-in code ended without a sign-in. */
+internal fun signInProblem(e: Throwable): String = when ((e as? PairingFailed)?.reason) {
+    PairingFailed.Reason.NO_NETWORK -> "This TV isn't connected to a home network. Connect it to Wi-Fi or Ethernet, then make a new code."
+    PairingFailed.Reason.WRONG_CODE -> "A phone reached this TV, but with an older code. Make a new code and scan the one on the screen."
+    PairingFailed.Reason.BAD_SESSION -> "A phone reached this TV, but its YouTube Music sign-in wasn't complete. Sign out and in again on the phone, then make a new code."
+    PairingFailed.Reason.TOO_MANY_TRIES -> "Too many connections that weren't your phone. The code was closed to be safe. Make a new one."
+    PairingFailed.Reason.STOPPED -> "The code was closed. Make a new one."
+    // Expired, or anything else: no phone got through in time.
+    else -> "No phone reached this TV in two minutes. Make a new code. If the phone said it couldn't reach the TV, connect both to the same Wi-Fi (not a guest network)."
 }

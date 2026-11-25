@@ -1,5 +1,6 @@
 package com.opentune.data.remote
 
+import com.opentune.data.account.Lan
 import com.opentune.data.account.PairingCrypto
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -14,7 +15,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * The phone's end: pairs with a TV once, then connects to it whenever the remote is open.
  * Everything here blocks or runs on threads of its own; call [pair] off the main thread.
  */
-class RemoteClient(private val phoneName: () -> String) : AutoCloseable {
+class RemoteClient(
+    /** Makes the sockets to the TV: on a phone, ones held to its Wi-Fi rather than mobile data or a VPN. */
+    private val sockets: Lan.Sockets = Lan.Sockets.PLAIN,
+    private val phoneName: () -> String,
+) : AutoCloseable {
     sealed interface State {
         data object Idle : State
         data class Connecting(val tv: String) : State
@@ -117,46 +122,89 @@ class RemoteClient(private val phoneName: () -> String) : AutoCloseable {
     /** Connects, and checks the TV holds the key by opening its first frame. */
     private fun open(host: String, port: Int, mode: Int, id: ByteArray, key: ByteArray): Opened {
         require(HomeNetwork.accepts(host) && port in 1024..65535) { "not on the home network" }
-        val socket = Socket()
-        try {
-            socket.connect(InetSocketAddress(host, port), CONNECT_MS)
-            socket.tcpNoDelay = true
-            socket.soTimeout = HANDSHAKE_MS
-            socket.getOutputStream().apply { write(RemoteHandshake.header(mode, id)); flush() }
-            // A TV that doesn't know this id hangs up without a word.
-            val nonce = ByteArray(RemoteHandshake.NONCE_BYTES).also {
-                try { java.io.DataInputStream(socket.getInputStream()).readFully(it) } catch (e: java.io.EOFException) { throw AuthFailure(refused = true) }
+        var last: Exception? = null
+        // A link-local address read from elsewhere is tried on each of this phone's interfaces.
+        for (address in Lan.resolve(host)) {
+            val socket = sockets.socket(address)
+            try {
+                socket.connect(InetSocketAddress(address, port), CONNECT_MS)
+                return handshake(socket, mode, id, key)
+            } catch (e: AuthFailure) {
+                runCatching { socket.close() }
+                throw e
+            } catch (e: Exception) {
+                runCatching { socket.close() }
+                last = e
             }
-            val channel = SecureChannel(socket.getInputStream(), socket.getOutputStream(), key, nonce, outgoing = "c2s", incoming = "s2c")
-            val welcome = try { channel.receive() } catch (e: java.security.GeneralSecurityException) { throw AuthFailure(refused = false) }
-            return Opened(socket, channel, (welcome as? RemoteMessage.Welcome)?.tv ?: throw AuthFailure(refused = false))
-        } catch (e: Throwable) {
-            runCatching { socket.close() }
-            throw e
         }
+        throw last ?: IOException("no address")
+    }
+
+    /** Says who this phone is on a connected [socket], and checks the TV holds the key by opening its first frame. */
+    private fun handshake(socket: Socket, mode: Int, id: ByteArray, key: ByteArray): Opened {
+        socket.tcpNoDelay = true
+        socket.soTimeout = HANDSHAKE_MS
+        socket.getOutputStream().apply { write(RemoteHandshake.header(mode, id)); flush() }
+        // A TV that doesn't know this id hangs up without a word.
+        val nonce = ByteArray(RemoteHandshake.NONCE_BYTES).also {
+            try { java.io.DataInputStream(socket.getInputStream()).readFully(it) } catch (e: java.io.EOFException) { throw AuthFailure(refused = true) }
+        }
+        val channel = SecureChannel(socket.getInputStream(), socket.getOutputStream(), key, nonce, outgoing = "c2s", incoming = "s2c")
+        val welcome = try { channel.receive() } catch (e: java.security.GeneralSecurityException) { throw AuthFailure(refused = false) }
+        return Opened(socket, channel, (welcome as? RemoteMessage.Welcome)?.tv ?: throw AuthFailure(refused = false))
     }
 
     /**
      * Pairs with the TV that showed [invite]: proves this phone saw its screen, and receives a
-     * key of its own. Returns the TV to keep. Throws when the TV can't be reached, the code has
-     * run out or someone else used it first.
+     * key of its own. Returns the TV to keep. Tries the code's address and [also] (where this
+     * phone has seen that same TV announce itself) at once. Throws [PairFailed] when the TV
+     * can't be reached, the code has run out or someone else used it first.
      */
-    fun pair(invite: RemoteInvite): PairedTv {
-        check(invite.valid()) { "That code has run out. Make a new one on the TV." }
-        val o = try { open(invite.host, invite.port, RemoteHandshake.PAIR, invite.id, invite.token) }
-        catch (e: AuthFailure) {
-            throw IOException(if (e.refused) "The TV doesn't take that code any more. Make a new one on the TV." else "That isn't the TV that showed the code.")
+    fun pair(invite: RemoteInvite, also: List<Pair<String, Int>> = emptyList()): PairedTv {
+        if (!invite.valid()) throw PairFailed(PairFailed.Reason.EXPIRED)
+        val targets = (listOf(invite.host to invite.port) + also)
+            .filter { (h, p) -> HomeNetwork.accepts(h) && p in 1024..65535 }.distinct()
+            .flatMap { (h, p) -> Lan.resolve(h).map { InetSocketAddress(it, p) } }.distinct()
+        if (targets.isEmpty()) throw PairFailed(PairFailed.Reason.OFF_NETWORK)
+        try {
+            return Lan.reach(targets, sockets, CONNECT_MS) { socket ->
+                val o = handshake(socket, RemoteHandshake.PAIR, invite.id, invite.token)
+                o.channel.send(RemoteMessage.PairRequest(phoneName()))
+                val granted = o.channel.receive() as? RemoteMessage.PairGranted ?: throw PairFailed(PairFailed.Reason.USED)
+                val at = socket.inetAddress?.let(Lan::text) ?: invite.host
+                PairedTv(granted.tvId, o.tv, granted.id, granted.key, at, socket.port)
+            }
+        } catch (e: Lan.Unreached) {
+            val auth = e.rejected as? AuthFailure
+            throw PairFailed(
+                when {
+                    auth != null && auth.refused -> PairFailed.Reason.USED_OR_EXPIRED
+                    auth != null -> PairFailed.Reason.WRONG_TV
+                    e.rejected is PairFailed -> (e.rejected as PairFailed).reason
+                    e.rejected is java.net.SocketTimeoutException -> PairFailed.Reason.NO_ANSWER
+                    e.rejected != null -> PairFailed.Reason.USED
+                    e.refused -> PairFailed.Reason.NOT_LISTENING
+                    else -> PairFailed.Reason.NO_ANSWER
+                },
+            )
         }
-        catch (e: IOException) { throw IOException("Couldn't reach the TV. Keep both on the same Wi-Fi, with NepTune open on the TV.") }
-        o.socket.use {
-            o.channel.send(RemoteMessage.PairRequest(phoneName()))
-            val granted = o.channel.receive() as? RemoteMessage.PairGranted ?: throw IOException("The TV didn't accept the code. It may have been used already.")
-            return PairedTv(granted.tvId, o.tv, granted.id, granted.key, invite.host, invite.port)
+    }
+
+    /** Why pairing didn't work; [message] is what the phone says (translated where it's shown). */
+    class PairFailed(val reason: Reason) : IOException(reason.text) {
+        enum class Reason(val text: String) {
+            EXPIRED("That code has run out. Make a new one on the TV."),
+            OFF_NETWORK("The TV's address in that code isn't on your home network."),
+            USED_OR_EXPIRED("The TV doesn't take that code any more. Make a new one on the TV."),
+            WRONG_TV("That isn't the TV that showed the code."),
+            USED("The TV didn't accept the code. It may have been used already."),
+            NOT_LISTENING("The TV is on this network, but NepTune isn't waiting for a phone there. Open NepTune on the TV and make a new code."),
+            NO_ANSWER("The TV didn't answer. Check the phone and the TV are on the same Wi-Fi, not a guest network, and that NepTune is open on the TV."),
         }
     }
 
     private companion object {
-        const val CONNECT_MS = 3_500
+        const val CONNECT_MS = 5_000
         const val HANDSHAKE_MS = 4_000
         const val IDLE_MS = 30_000
         const val PING_MS = 8_000L

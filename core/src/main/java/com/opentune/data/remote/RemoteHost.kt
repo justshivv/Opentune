@@ -1,10 +1,9 @@
 package com.opentune.data.remote
 
+import com.opentune.data.account.Lan
 import com.opentune.data.account.PairingCrypto
 import java.io.DataInputStream
 import java.io.IOException
-import java.net.Inet4Address
-import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
@@ -13,13 +12,11 @@ import java.util.concurrent.RejectedExecutionException
 
 /** This device's address on the home network, if it has one. */
 object LocalNetwork {
-    fun privateAddress(): String? = runCatching {
-        NetworkInterface.getNetworkInterfaces().toList().asSequence()
-            .filter { it.isUp && !it.isLoopback && !it.isVirtual }
-            .flatMap { it.inetAddresses.toList().asSequence() }
-            .firstOrNull { it is Inet4Address && PairingCrypto.privateHost(it.hostAddress.orEmpty()) }
-            ?.hostAddress
-    }.getOrNull()
+    /**
+     * The one to put in a code: Wi-Fi or Ethernet rather than Wi-Fi Direct, a VPN or a
+     * container's, and one every phone reads (see [Lan.order] and [Lan.primary]).
+     */
+    fun privateAddress(): String? = runCatching { Lan.primary(Lan.addresses()) }.getOrNull()
 }
 
 /**
@@ -36,6 +33,8 @@ class RemoteHost(
     private val onControllers: (List<String>) -> Unit = {},
     private val address: () -> String? = LocalNetwork::privateAddress,
     port: Int = RemoteProtocol.DEFAULT_PORT,
+    /** This TV's steady clock, which times an invite's two minutes. */
+    private val steady: () -> Long = Lan::steadyMs,
 ) : AutoCloseable {
     private class Controller(val phoneId: String, val name: String, val socket: Socket, val channel: SecureChannel)
 
@@ -61,7 +60,7 @@ class RemoteHost(
     /** A new invite, to show as a QR code; it replaces any earlier one. */
     fun createInvite(): RemoteInvite {
         val host = address() ?: error("Connect this TV to your home network first.")
-        return RemoteInvite.create(host, port, phones.tvId, tvName()).also { invite = it }
+        return RemoteInvite.create(host, port, phones.tvId, tvName(), steady = steady()).also { invite = it }
     }
 
     fun cancelInvite() { invite = null }
@@ -101,7 +100,7 @@ class RemoteHost(
             val id = SecureChannel.hex(idBytes)
             val pairing = mode == RemoteHandshake.PAIR
             val offer = invite
-            val key = if (pairing) offer?.takeIf { it.valid() && SecureChannel.hex(it.id) == id }?.token
+            val key = if (pairing) offer?.takeIf { it.valid(steady()) && SecureChannel.hex(it.id) == id }?.token
             else phones.find(id)?.key?.let(PairingCrypto::decode)
             // An unknown id gets nothing, not even a nonce, so the TV tells a stranger no more than it must.
             key ?: return

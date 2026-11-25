@@ -92,13 +92,22 @@ fun LinkDeviceScreen(
     var casting by remember { mutableStateOf(false) }
     var scanning by remember { mutableStateOf(false) }
     // The TV's code read here goes the same way as one scanned with the phone's camera app:
-    // a sign-in code asks to approve, any other OpenTune link opens.
+    // a sign-in code asks to approve, the TV's pair-a-phone code goes to the remote, any other
+    // NepTune link opens.
     if (scanning) com.opentune.ui.account.QrScannerDialog(onDismiss = { scanning = false }) { text ->
         scanning = false
-        val view = Intent(Intent.ACTION_VIEW, text.toUri())
-        if (!com.opentune.ui.account.PairingLinks.receive(view)) {
-            if (com.opentune.ui.Links.parse(text) != null || text.startsWith("opentune://")) com.opentune.ui.Links.receive(view)
-            else Pills.error("That isn't a NepTune code", context)
+        val view = Intent(Intent.ACTION_VIEW, text.trim().toUri())
+        when (com.opentune.data.remote.ScannedCode.of(text)) {
+            com.opentune.data.remote.ScannedCode.SIGN_IN, com.opentune.data.remote.ScannedCode.WEB_SIGN_IN -> com.opentune.ui.account.PairingLinks.receive(view)
+            com.opentune.data.remote.ScannedCode.REMOTE -> {
+                Pills.info("That's the TV's code for using this phone as a remote. Pairing it as a remote now.", context)
+                com.opentune.ui.remote.RemoteCodes.pending.value = text.trim()
+                onRemote()
+            }
+            com.opentune.data.remote.ScannedCode.OTHER_NEPTUNE -> com.opentune.ui.Links.receive(view)
+            com.opentune.data.remote.ScannedCode.NOT_NEPTUNE ->
+                if (com.opentune.ui.Links.parse(text) != null) com.opentune.ui.Links.receive(view)
+                else Pills.error("That isn't a NepTune code. On the TV, open Settings, then Account, and choose Sign in to show one.", context)
         }
     }
     val signedIn by AccountStore.signedIn.collectAsState()
@@ -142,7 +151,16 @@ fun LinkDeviceScreen(
                 Column(Modifier.padding(top = 20.dp)) {
                     when (shown) {
                         LinkTarget.TV -> TvSteps(signedIn, onSignIn, ::camera, ::open, ::share, onRemote)
-                        LinkTarget.COMPUTER -> DeviceCard(
+                        LinkTarget.COMPUTER -> {
+                        DeviceCard(
+                            "NepTune for computer",
+                            "Sign the computer app in with this phone's YouTube Music account. On the computer, open Settings, then Accounts & integrations, and choose Sign in with your phone.",
+                            compact = true,
+                        ) {
+                            if (signedIn) Buttons({ SheetButton("Scan its code", onClick = ::camera, icon = ImageVector.vectorResource(AppIcons.CameraAlt), tone = SheetTone.Primary) })
+                            else Buttons({ SheetButton("Sign in on this phone first", onClick = onSignIn, tone = SheetTone.Primary) })
+                        }
+                        DeviceCard(
                             "In your browser",
                             "Browse, search and listen on a computer. Your library there stays in that browser.",
                         ) {
@@ -169,6 +187,7 @@ fun LinkDeviceScreen(
                                 Buttons({ SheetButton("Your devices", onClick = onConnect, icon = ImageVector.vectorResource(AppIcons.Devices), tone = SheetTone.Primary) })
                             }
                             Note(ImageVector.vectorResource(AppIcons.Lock), "Your library and settings there stay in that browser.")
+                        }
                         }
                         LinkTarget.SPEAKER -> DeviceCard(
                             "On a speaker or smart TV",

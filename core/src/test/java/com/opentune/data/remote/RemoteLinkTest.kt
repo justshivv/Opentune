@@ -8,6 +8,7 @@ import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -170,11 +171,88 @@ class RemoteLinkTest {
         assertNotNull(parsed)
         assertEquals(invite.host, parsed!!.host); assertEquals(invite.port, parsed.port); assertEquals(invite.tvId, parsed.tvId)
         assertEquals("Living room", parsed.tvName)
-        assertNull(RemoteInvite.parse(invite.link.dropLast(6)))
+        assertNull(RemoteInvite.parse(invite.link.dropLast(40)))
         assertNull(RemoteInvite.parse("opentune://remote/#"))
         assertNull(RemoteInvite.parse("https://example.com"))
-        // Run out.
-        assertNull(RemoteInvite.parse(invite.link, now = System.currentTimeMillis() + 10 * 60_000))
+        // Run out, by the phone's own clock from when it read the code.
+        val read = RemoteInvite.parse(invite.link, steady = 0)!!
+        assertTrue(read.valid(steady = RemoteInvite.LIFETIME_MS - 1))
+        assertFalse(read.valid(steady = RemoteInvite.LIFETIME_MS))
+    }
+
+    private fun inviteLink(host: String, expires: Long) =
+        "opentune://remote/#" + PairingCrypto.encode(
+            "1|$host|47731|abcd|${PairingCrypto.encode("TV".toByteArray())}|0011223344556677|${PairingCrypto.encode(ByteArray(32))}|$expires".toByteArray(),
+        )
+
+    @Test fun aTvClockThatIsOffDoesntMakeACodeUnreadable() {
+        val phone = System.currentTimeMillis()
+        // The TV a minute ahead of the phone, then five minutes behind: both fresh codes all the same.
+        for (tv in listOf(phone + 60_000, phone - 300_000)) {
+            val read = RemoteInvite.read(inviteLink("192.168.1.20", tv + RemoteInvite.LIFETIME_MS))
+            assertTrue("$tv", read is RemoteInvite.Read.Invite)
+            assertTrue((read as RemoteInvite.Read.Invite).invite.valid())
+        }
+    }
+
+    @Test fun eachKindOfBadCodeIsToldApart() {
+        val later = System.currentTimeMillis() + 60_000
+        assertEquals(RemoteInvite.Read.OffNetwork("8.8.8.8"), RemoteInvite.read(inviteLink("8.8.8.8", later)))
+        assertEquals(RemoteInvite.Read.Damaged, RemoteInvite.read(inviteLink("192.168.1.20", later).let { it.substring(0, it.length - 40) }))
+        assertEquals(RemoteInvite.Read.NotAnInvite, RemoteInvite.read("opentune://pair/#abc"))
+        assertEquals(RemoteInvite.Read.NotAnInvite, RemoteInvite.read("hello"))
+        // Addresses a home network really hands out.
+        for (host in listOf("10.1.2.3", "172.20.0.4", "100.70.1.2", "169.254.7.8", "fd00::20")) {
+            assertTrue(host, RemoteInvite.read(inviteLink(host, later)) is RemoteInvite.Read.Invite)
+        }
+    }
+
+    @Test fun eitherScannerKnowsTheOtherCode() {
+        val signIn = com.opentune.data.account.PairingOffer.create("192.168.1.20", 40000)
+        assertEquals(ScannedCode.SIGN_IN, ScannedCode.of(signIn.link))
+        assertEquals(ScannedCode.SIGN_IN, ScannedCode.of("https://justshivv.github.io/Opentune/pair/#abc"))
+        assertEquals(ScannedCode.WEB_SIGN_IN, ScannedCode.of("opentune://pair/web#abc"))
+        assertEquals(ScannedCode.REMOTE, ScannedCode.of(host.createInvite().link))
+        assertEquals(ScannedCode.OTHER_NEPTUNE, ScannedCode.of("opentune://together/ABCD"))
+        assertEquals(ScannedCode.NOT_NEPTUNE, ScannedCode.of("https://example.com"))
+        // The sign-in code isn't a pairing code for the remote, and the other way round.
+        assertEquals(RemoteInvite.Read.NotAnInvite, RemoteInvite.read(signIn.link))
+        assertTrue(runCatching { com.opentune.data.account.PairingOffer.parse(host.createInvite().link.substringAfter('#')) }.isFailure)
+    }
+
+    @Test fun theTvStopsTakingItsCodeAfterTwoMinutesByItsOwnClock() {
+        var now = 0L
+        val tv = RemoteHost(PairedPhones(MemoryStorage()), { "Den" }, { }, address = { "127.0.0.1" }, port = 0, steady = { now })
+        try {
+            val invite = RemoteInvite.parse(tv.createInvite().link)!!
+            now = RemoteInvite.LIFETIME_MS
+            val e = runCatching { client().pair(invite) }.exceptionOrNull() as RemoteClient.PairFailed
+            assertEquals(RemoteClient.PairFailed.Reason.USED_OR_EXPIRED, e.reason)
+        } finally { tv.close() }
+    }
+
+    @Test fun pairingFallsBackToWhereTheTvAnnouncedItself() {
+        // The code names an address that doesn't answer; the TV announced itself at another.
+        val good = host.createInvite()
+        val elsewhere = RemoteInvite.parse(
+            "opentune://remote/#" + PairingCrypto.encode(
+                "1|10.255.255.1|${host.port}|${good.tvId}|${PairingCrypto.encode("Living room".toByteArray())}|${SecureChannel.hex(good.id)}|${PairingCrypto.encode(good.token)}|${good.expires}".toByteArray(),
+            ),
+        )!!
+        val tv = client().pair(elsewhere, also = listOf("127.0.0.1" to host.port))
+        assertEquals(phones.tvId, tv.tvId)
+        assertEquals("127.0.0.1", tv.host)
+    }
+
+    @Test fun nothingListeningIsToldFromNoAnswer() {
+        val port = java.net.ServerSocket(0).use { it.localPort }
+        val invite = RemoteInvite.parse(
+            "opentune://remote/#" + PairingCrypto.encode(
+                "1|127.0.0.1|$port|t|${PairingCrypto.encode("TV".toByteArray())}|0011223344556677|${PairingCrypto.encode(ByteArray(32))}|1".toByteArray(),
+            ),
+        )!!
+        val e = runCatching { client().pair(invite) }.exceptionOrNull() as RemoteClient.PairFailed
+        assertEquals(RemoteClient.PairFailed.Reason.NOT_LISTENING, e.reason)
     }
 
     @Test fun anInviteNeverPointsOffTheHomeNetwork() {

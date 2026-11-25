@@ -138,9 +138,19 @@ private fun TvPicker(vm: TvRemoteViewModel, contentPadding: PaddingValues, onBac
     var scanning by remember { mutableStateOf(false) }
     var forgetting by remember { mutableStateOf<PairedTv?>(null) }
 
+    // A code read elsewhere (Link a device, the camera app) for this page.
+    val handed by RemoteCodes.pending.collectAsState()
+    LaunchedEffect(handed) { handed?.let { RemoteCodes.pending.value = null; vm.pair(it) } }
     if (scanning) QrScannerDialog(onDismiss = { scanning = false }) { text ->
         scanning = false
-        if (!vm.pair(text)) Pills.error("That isn't a code from NepTune on a TV", context)
+        when (com.opentune.data.remote.ScannedCode.of(text)) {
+            // The TV's sign-in code, scanned here: it goes to signing the TV in, which asks to approve.
+            com.opentune.data.remote.ScannedCode.SIGN_IN, com.opentune.data.remote.ScannedCode.WEB_SIGN_IN -> {
+                com.opentune.ui.account.PairingLinks.receive(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(text.trim())))
+                Pills.info("That was the TV's sign-in code, so it's signing the TV in. To use this phone as a remote, scan the code under the TV's Settings, Pair a phone.", context)
+            }
+            else -> if (!vm.pair(text)) Pills.error("That isn't a code from NepTune on a TV. On the TV, open Settings, then Pair a phone, and scan the code it shows.", context)
+        }
     }
     forgetting?.let { tv ->
         AlertDialog(

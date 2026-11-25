@@ -75,6 +75,8 @@ val sharedFromCore = listOf(
     // The YouTube Music account, signed in from the phone over the home Wi-Fi as the TV is.
     "com/opentune/data/account/AccountStore.kt",
     "com/opentune/data/account/SessionPairing.kt",
+    // Which of this computer's addresses the code shows, and reaching a phone on the home network.
+    "com/opentune/data/account/Lan.kt",
     // Listen together: the room protocol as the phone and the web player speak it.
     "com/opentune/data/together/Nostr.kt",
     "com/opentune/data/together/Messages.kt",

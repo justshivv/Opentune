@@ -280,6 +280,8 @@ class TvRemote(private val context: Context, val phones: PairedPhones) {
             phones, { name },
             onMessage = { m -> main.post { deliver(m) } },
             onControllers = { _controllers.value = it; if (it.isEmpty()) main.post { input?.release() } },
+            // The TV's Wi-Fi or Ethernet address, not its Wi-Fi Direct one (kept up for screen mirroring) or a VPN's.
+            address = { com.opentune.data.account.Lan.primary(com.opentune.data.remote.LanNetworks.ownAddresses(context)) },
         ).also { advertiser.start(name, it.port, phones.tvId) }
     }
 
