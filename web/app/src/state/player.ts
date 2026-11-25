@@ -48,6 +48,8 @@ interface Settings {
   volume: number;
   muted: boolean;
   crossfadeSec: number;
+  /** Turn down songs YouTube measured as louder than its reference level (Android: Loudness normalization). */
+  normalize: boolean;
 }
 
 interface PlayerState extends Settings {
@@ -86,12 +88,13 @@ interface PlayerState extends Settings {
   setVolume: (volume: number) => void;
   toggleMute: () => void;
   setCrossfade: (seconds: number) => void;
+  setNormalize: (on: boolean) => void;
 }
 
 // ---- Settings, kept across visits ---------------------------------------------------
 
 const SETTINGS_KEY = 'opentune:player';
-const DEFAULT_SETTINGS: Settings = { shuffle: false, repeat: 'off', autoplay: true, volume: 1, muted: false, crossfadeSec: 0 };
+const DEFAULT_SETTINGS: Settings = { shuffle: false, repeat: 'off', autoplay: true, volume: 1, muted: false, crossfadeSec: 0, normalize: true };
 
 function loadSettings(): Settings {
   try {
@@ -102,8 +105,8 @@ function loadSettings(): Settings {
 }
 
 function saveSettings(state: Settings) {
-  const { shuffle, repeat, autoplay, volume, muted, crossfadeSec } = state;
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ shuffle, repeat, autoplay, volume, muted, crossfadeSec }));
+  const { shuffle, repeat, autoplay, volume, muted, crossfadeSec, normalize } = state;
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ shuffle, repeat, autoplay, volume, muted, crossfadeSec, normalize }));
 }
 
 // ---- Decks: two engines, so a crossfade can play the next track under this one ------------
@@ -113,6 +116,8 @@ interface Deck {
   audio: HTMLAudioElement;
   /** The crossfade's share of the volume, 0–1. */
   gain: number;
+  /** YouTube's loudness measurement for the track this deck plays, in dB over its reference; null when unknown. */
+  loudnessDb: number | null;
 }
 
 let decks: Deck[] | null = null;
@@ -136,7 +141,7 @@ function getDecks(): Promise<Deck[]> {
       // is fetched with CORS (prompt §6, the Web Audio caveat).
       audio.crossOrigin = 'anonymous';
       const engine = new YouTubeEngine(audio);
-      const deck: Deck = { engine, audio, gain: 1 };
+      const deck: Deck = { engine, audio, gain: 1, loudnessDb: null };
       engine.onFatal = (videoId, message) => {
         if (decks?.[active] !== deck) return;
         trackLog.e(`stopped: ${message}`, videoId);
@@ -148,6 +153,7 @@ function getDecks(): Promise<Deck[]> {
         // video's own ("Doja Cat - Woman" by "dojacatVEVO") would replace them.
         const { queue, index } = usePlayer.getState();
         const entry = queue[index];
+        setLoudness(deck, track);
         applyTrack(track, entry?.track.videoId === track.videoId ? entry.track : undefined);
       };
       bindElement(deck, n);
@@ -161,9 +167,28 @@ function getDecks(): Promise<Deck[]> {
   return decksPromise;
 }
 
+/**
+ * The volume factor that brings a song YouTube measured at [loudnessDb] down to its reference
+ * level, as the phone's Loudness normalization does at its Normal level. An audio element can't
+ * go over full volume, so a quiet song is left as it is rather than lifted.
+ */
+export function normalizationGain(loudnessDb: number | null, on: boolean): number {
+  if (!on || loudnessDb == null || !Number.isFinite(loudnessDb) || loudnessDb <= 0) return 1;
+  return 10 ** (-loudnessDb / 20);
+}
+
 function applyVolumes() {
-  const { volume, muted } = usePlayer.getState();
-  for (const deck of decks ?? []) deck.audio.volume = muted ? 0 : Math.min(1, Math.max(0, volume * deck.gain));
+  const { volume, muted, normalize } = usePlayer.getState();
+  for (const deck of decks ?? []) {
+    const level = volume * deck.gain * normalizationGain(deck.loudnessDb, normalize);
+    deck.audio.volume = muted ? 0 : Math.min(1, Math.max(0, level));
+  }
+}
+
+/** Notes the measured loudness of what [deck] now plays (none for add-on and JioSaavn files) and applies it. */
+function setLoudness(deck: Deck, track: LoadedTrack) {
+  deck.loudnessDb = track.loudnessDb;
+  applyVolumes();
 }
 
 function extensionReady(): boolean {
@@ -244,8 +269,15 @@ let canonical: Map<string, number> | null = null;
 const SESSION_KEY = 'opentune:session';
 /** Where the restored track was left, until it is played again. */
 let resumeSec = 0;
-/** The restored track's place, for the seek line before anything has loaded. */
+/** The restored track's place, for the seek line before anything has loaded; while one loads, where it starts. */
 export const resumePosition = () => resumeSec;
+/**
+ * The track being loaded, until its stream is in the audio element: where it
+ * starts (seconds) and whether it plays then. Meanwhile the element still has
+ * the last track's time in it, which isn't this one's.
+ */
+let loading: { startSec: number; plays: boolean } | null = null;
+export const loadingTrack = () => loading;
 
 interface SavedSession {
   queue: QueueEntry[];
@@ -507,6 +539,12 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
     set({ crossfadeSec });
     saveSettings(get());
   },
+
+  setNormalize(normalize) {
+    set({ normalize });
+    applyVolumes();
+    saveSettings(get());
+  },
 }));
 
 // The queue is saved as it changes, and the place in the track every so often and on leaving.
@@ -552,13 +590,15 @@ async function startAt(at: number, { startSec = 0, auto = false, autoplay = true
   const token = ++loadToken;
   // Where this load starts; kept if it fails, so Try Again starts there too.
   resumeSec = startSec;
+  loading = { startSec, plays: autoplay };
 
   if (!extensionReady()) {
+    loading = null;
     usePlayer.setState({
       index: at,
       nowPlaying: { ...hintOf(entry.track), title: entry.track.title || 'Can’t play this here yet' },
       status: 'error',
-      error: 'YouTube playback needs the OpenTune extension.',
+      error: 'YouTube playback needs the NepTune extension.',
     });
     return;
   }
@@ -574,11 +614,14 @@ async function startAt(at: number, { startSec = 0, auto = false, autoplay = true
     const track = await deck.engine.load(entry.track.videoId, { startSec, autoplay, hint: searchHintOf(entry.track) });
     if (token !== loadToken) return;
     resumeSec = 0;
+    loading = null;
+    setLoudness(deck, track);
     applyTrack(track, entry.track);
     if (!autoplay) usePlayer.setState({ status: 'paused' });
     afterTrackStarted();
   } catch (error) {
     if (token !== loadToken || (error instanceof Error && error.name === 'SupersededError')) return;
+    loading = null;
     const message = error instanceof Error ? error.message : String(error);
     usePlayer.setState({ status: 'error', error: message });
     // A track the player reached on its own that can't play is skipped, as on the phone.
@@ -774,6 +817,7 @@ function maybeCrossfade() {
       // The new track is the one playing now, as far as everything else knows.
       active = 1 - active;
       usePlayer.setState((s) => ({ queue: plan.queue, index: plan.index, deck: s.deck + 1, status: 'playing' }));
+      setLoudness(to, track);
       applyTrack(track, entry.track);
       afterTrackStarted();
 

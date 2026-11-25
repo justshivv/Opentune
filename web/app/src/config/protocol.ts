@@ -6,13 +6,25 @@ export type ConfigData = {
   banners: { id: string; enabled: boolean; title: string; body: string; action: string; url: string; platforms: string[] }[];
   playlists: { id: string; title: string; browseId: string; artwork: string }[];
   sources: { id: string; name: string; url: string; enabled: boolean }[] | null;
-  links: { github: string; discord: string; web: string; tv: string };
+  links: { github: string; discord: string; web: string; tv: string } & Partial<Record<OptionalLink, string>>;
   network: { timeoutMs: number; retries: number }; communityPrompts: boolean;
 };
 export type AppConfig = { revision: number; expiresAt: number; data: ConfigData };
+/**
+ * Links shown only when the dashboard sets them, each on the sites it may point to (null:
+ * any public HTTPS page). The same table as the dashboard's and the Android app's.
+ */
+export const optionalLinks = {
+  website: null, privacy: null,
+  donate: ['ko-fi.com', 'buymeacoffee.com', 'paypal.me', 'paypal.com', 'github.com', 'liberapay.com', 'patreon.com', 'opencollective.com'],
+  x: ['x.com', 'twitter.com'], instagram: ['instagram.com'], youtube: ['youtube.com', 'youtu.be'],
+  telegram: ['t.me', 'telegram.me'], reddit: ['reddit.com'],
+} as const satisfies Record<string, readonly string[] | null>;
+export type OptionalLink = keyof typeof optionalLinks;
+export const socialLinks = ['x', 'instagram', 'youtube', 'telegram', 'reddit'] as const satisfies readonly OptionalLink[];
 export const defaults = (): AppConfig => ({ revision: 0, expiresAt: Infinity, data: {
   sections: sectionIds.map(id => ({ id, enabled: true, title: '' })), banners: [], playlists: [], sources: null,
-  links: { github: 'https://github.com/justshivv/Opentune', discord: 'https://discord.gg/6udrCVh5n', web: 'https://justshivv.github.io/Opentune/player/', tv: 'https://justshivv.github.io/Opentune/' },
+  links: { github: 'https://github.com/justshivv/Opentune', discord: 'https://discord.gg/aqGA9ekG2H', web: 'https://justshivv.github.io/Opentune/player/', tv: 'https://justshivv.github.io/Opentune/' },
   network: { timeoutMs: 8000, retries: 2 }, communityPrompts: true,
 } });
 function check(value: unknown): asserts value { if (!value) throw new Error('Invalid configuration'); }
@@ -31,6 +43,17 @@ export function validateData(value: unknown): ConfigData {
   if (d.sources !== null) { list(d.sources, 20); ids(d.sources); for (const s of d.sources) { text(s.name, 80); url(s.url); check(typeof s.enabled === 'boolean'); } }
   check(d.links && typeof d.links === 'object'); const links = d.links as Record<string, unknown>;
   check(url(links.github).hostname === 'github.com' && ['discord.gg', 'discord.com'].includes(url(links.discord).hostname)); url(links.web); url(links.tv);
+  // An optional link that's empty, off its own site or not public is dropped, not the whole configuration.
+  for (const [key, hosts] of Object.entries(optionalLinks) as [OptionalLink, readonly string[] | null][]) {
+    const value = links[key];
+    delete links[key];
+    if (typeof value !== 'string' || !value.trim()) continue;
+    try {
+      const u = url(value.trim());
+      if (hosts && !hosts.some(h => u.hostname === h || u.hostname === 'www.' + h)) continue;
+      links[key] = u.href;
+    } catch { /* left out */ }
+  }
   check(d.network && typeof d.network === 'object'); const n = d.network as Record<string, unknown>;
   check(Number.isInteger(n.timeoutMs) && Number(n.timeoutMs) >= 4000 && Number(n.timeoutMs) <= 20000 && Number.isInteger(n.retries) && Number(n.retries) >= 0 && Number(n.retries) <= 2 && typeof d.communityPrompts === 'boolean');
   return d as ConfigData;

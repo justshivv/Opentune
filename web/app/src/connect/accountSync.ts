@@ -1,5 +1,5 @@
 import { createPlaylist } from '@/data/music/api';
-import { CONNECT_PLAYLIST_TITLE } from '@/data/music/library';
+import { CONNECT_PLAYLIST_TITLE, isConnectPlaylistTitle } from '@/data/music/library';
 import { getSignedInnertube } from '@/playback/youtube/innertube';
 import { ConnectGroup } from './group';
 
@@ -13,7 +13,7 @@ const PREFIX = 'opentune-connect:v1:';
 const SECRET = /opentune-connect:v1:([A-Za-z0-9_-]{43})/;
 
 export const description = (group: ConnectGroup) =>
-  `Lets your OpenTune devices find each other. Keep it private; deleting it only stops them joining by themselves.\n${PREFIX}${group.encoded}`;
+  `Lets your NepTune devices find each other. Keep it private; deleting it only stops them joining by themselves.\n${PREFIX}${group.encoded}`;
 
 /** The secret in any text from the playlist's page, or null. */
 export const secretIn = (text: string): string | null => SECRET.exec(text)?.[1] ?? null;
@@ -28,14 +28,14 @@ const browseIdOf = (v: unknown): string | null => {
   return typeof id === 'string' ? id : null;
 };
 
-/** The id of the playlist named [TITLE] in a library page's JSON, or null. */
+/** The id of the playlist named [TITLE] (or its post-rename name) in a library page's JSON, or null. */
 export function pick(page: unknown): string | null {
   const stack: unknown[] = [page];
   while (stack.length) {
     const node = stack.pop();
     if (!node || typeof node !== 'object') continue;
     const o = node as Json;
-    if (o.title && textOf(o.title) === TITLE) {
+    if (o.title && isConnectPlaylistTitle(textOf(o.title))) {
       const runs = (o.title as { runs?: unknown[] }).runs ?? [];
       const id = browseIdOf(o) ?? runs.map(browseIdOf).find(Boolean) ?? null;
       if (id) return id;

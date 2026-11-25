@@ -14,7 +14,7 @@ export const LIKED_ID = 'liked';
 
 function bridge() {
   const b = getBridge();
-  if (!b) throw new Error('The OpenTune extension is not installed');
+  if (!b) throw new Error('The NepTune extension is not installed');
   return b;
 }
 

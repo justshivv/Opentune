@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import type { Track } from '@/data/music/types';
-import { getAudio, partyPlayer, setConnectHooks, usePlayer } from '@/state/player';
+import { getAudio, loadingTrack, partyPlayer, setConnectHooks, usePlayer } from '@/state/player';
 import { toRoomTrack } from '@/together/room';
 import { qualityLabel } from '@/shell/quality';
 import { ConnectGroup } from './group';
 import type { CTrack } from './messages';
-import { ConnectSession, controllingOf, type ConnectPlayer, type ConnectView, type Device, type Snapshot } from './session';
+import { ConnectSession, controllingOf, meant, type ConnectPlayer, type ConnectView, type Device, type Snapshot } from './session';
 
 /**
  * Connect on the web: this browser is one of the person's devices, sees what
@@ -122,21 +122,26 @@ function queuedRow(at: number, id: string): number | null {
   return rows.find((r) => queue[r]!.track.videoId === id) ?? null;
 }
 
-const webPlayer: ConnectPlayer = {
+export const webPlayer: ConnectPlayer = {
   snapshot(): Snapshot | null {
     const { queue, index, nowPlaying, volume, shuffle, repeat, status } = usePlayer.getState();
     if (!nowPlaying) return null;
     const entry = queue[index];
     const track = toCTrack(entry?.track);
     const audio = getAudio();
+    // A song loading (a skip, a handover): the audio element still holds the last song, its
+    // time and its play state, which went out as the new song's. The others showed the old
+    // song's place running on under the new one's name until it started; and a handover's
+    // song, loading, read as paused, so the device that handed it over kept the music.
+    const starting = loadingTrack();
     return {
       track,
       private: !track,
       // Moving, not just meant to: other devices run this one's clock on from its last report
       // while it says it's playing, so a stall said as playing ran their timestamp ahead of it.
-      playing: !!audio && !audio.paused && !audio.seeking && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA,
-      wants: !!audio && !audio.paused,
-      pos: Math.max(0, (audio?.currentTime ?? 0) * 1000),
+      playing: !starting && !!audio && !audio.paused && !audio.seeking && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA,
+      wants: starting ? starting.plays : !!audio && !audio.paused,
+      pos: starting ? starting.startSec * 1000 : Math.max(0, (audio?.currentTime ?? 0) * 1000),
       queue: queue.slice(index + 1).map((e) => toCTrack(e.track)).filter((t): t is CTrack => !!t),
       volume,
       shuffle,
@@ -210,7 +215,15 @@ let starting: Promise<void> = Promise.resolve();
 
 const notice = (template: string, name: string) => useConnect.setState({ notice: { text: template.replace('{0}', name), at: Date.now() } });
 
+/**
+ * When this browser last took the music, kept across sessions: Connect
+ * starting over (a group joined, the switch flipped) isn't taking it.
+ * Counted as taking it, a paused browser became the device shown everywhere.
+ */
+let took = 0;
+
 function stop(): void {
+  if (session) took = session.tookAt;
   session?.stop();
   session = null;
   unsubscribe?.();
@@ -233,7 +246,7 @@ function restart(): void {
     if (!saved.enabled) return;
     const s = new ConnectSession(group, saved.id, saved.name, 'web', webPlayer, (view) => {
       if (session === s) useConnect.setState({ view });
-    }, notice, undefined, undefined, undefined, (secret) => joinGroup(secret, false), former);
+    }, notice, undefined, undefined, undefined, (secret) => joinGroup(secret, false), former, took);
     session = s;
     s.start();
     // The player changing (a song, play/pause, the queue) goes out a moment after it settles.
@@ -269,7 +282,8 @@ export function initConnect(): void {
       const target = controllingOf(useConnect.getState().view);
       if (!s || !target || applying) return false;
       switch (control.kind) {
-        case 'toggle': return s.intercept(target.state?.playing ? 'pause' : 'play');
+        // By what it's meant to do: one stalled to load is playing, and Pause pauses it.
+        case 'toggle': return s.intercept(meant(target.state) ? 'pause' : 'play');
         case 'next': return s.intercept('next');
         case 'previous': return s.intercept('previous');
         case 'seek': return s.intercept('seek', Math.round(control.ms));
@@ -287,6 +301,10 @@ export function initConnect(): void {
     },
   });
   addEventListener('pagehide', () => session?.stop());
+  // Back from the browser's back-forward cache: the session stopped on the way out, and stayed stopped.
+  addEventListener('pageshow', (e: PageTransitionEvent) => {
+    if (e.persisted) restart();
+  });
   restart();
   void syncAccount();
 }
@@ -351,6 +369,7 @@ export function joinGroup(text: string, bring = true): boolean {
   if (!raw) return false;
   if (raw !== useConnect.getState().saved.secret) {
     if (bring && session) {
+      took = session.tookAt;
       session.stop(raw);
       session = null;
     }

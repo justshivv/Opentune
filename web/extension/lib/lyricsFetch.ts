@@ -1,6 +1,9 @@
 import type { HttpRequest, HttpResponse } from '@opentune/shared/bridge';
 
+import { lyricHeaders } from './hostPolicy';
+import { fetchWithDeadline, MB, serialise } from './http';
 import { LYRIC_ORIGINS, patternOf } from './lyricHosts';
+import { openExtensionPage } from './pages';
 
 export { LYRIC_ORIGINS, patternOf };
 
@@ -8,11 +11,12 @@ export class LyricsPermissionError extends Error {
   readonly code = 'permission';
 }
 
-function toBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(binary);
-}
+/** Apple Music's and Musixmatch's pages and scripts are read for their tokens; those run to a few MB. */
+const MAX_RESPONSE = 16 * MB;
+/** Just under the page's own deadline for a lyric call (15 s), so the page hears why rather than a timeout. */
+const TIMEOUT_MS = 14_000;
+
+const isLyricOrigin = (origin: string) => (LYRIC_ORIGINS as readonly string[]).includes(origin);
 
 /** Headers some hosts need that a fetch may not set, applied to the extension's own requests (tabId -1). */
 const RULES = [
@@ -54,45 +58,47 @@ function installRules(): Promise<void> {
 
 /** Which of [origins] the user has granted. */
 export async function grantedOrigins(origins: string[]): Promise<string[]> {
-  const known = origins.filter((o) => (LYRIC_ORIGINS as readonly string[]).includes(o));
+  const known = [...new Set(origins)].filter(isLyricOrigin);
   const answers = await Promise.all(known.map((o) => browser.permissions.contains({ origins: [patternOf(o)] })));
   return known.filter((_, i) => answers[i]);
 }
 
 /** Opens the extension's page that asks for [origins]; the browser only prompts after a click there. */
 export async function requestOrigins(origins: string[]): Promise<void> {
-  const known = origins.filter((o) => (LYRIC_ORIGINS as readonly string[]).includes(o));
+  const known = [...new Set(origins)].filter(isLyricOrigin);
   if (!known.length) return;
-  const url = browser.runtime.getURL(`/grant.html?origins=${encodeURIComponent(known.join(','))}`);
-  await browser.tabs.create({ url });
+  await openExtensionPage(`/grant.html?origins=${encodeURIComponent(known.join(','))}`);
 }
 
+/**
+ * A request to a lyric provider the user allowed: no cookies, only the
+ * headers lyric hosts need, 14 s and 16 MB at most, and redirects only
+ * between lyric hosts.
+ */
 export async function lyricsFetch(request: HttpRequest): Promise<HttpResponse> {
   const url = new URL(request.url);
-  if (!(LYRIC_ORIGINS as readonly string[]).includes(url.origin)) {
+  if (url.protocol !== 'https:' || !isLyricOrigin(url.origin)) {
     throw Object.assign(new Error(`lyrics.fetch doesn't serve ${url.origin}`), { code: 'forbidden' });
   }
   if (!(await browser.permissions.contains({ origins: [patternOf(url.origin)] }))) {
-    throw new LyricsPermissionError(`OpenTune needs permission to reach ${url.host} for lyrics.`);
+    throw new LyricsPermissionError(`NepTune needs permission to reach ${url.host} for lyrics.`);
   }
   await installRules();
-  const response = await fetch(url, {
+  const response = await fetchWithDeadline(url, {
     method: request.method ?? 'GET',
-    headers: request.headers ?? {},
+    headers: lyricHeaders(request.headers),
     ...(request.body !== undefined && { body: request.body }),
     credentials: 'omit',
-    signal: AbortSignal.timeout(15_000),
+    referrerPolicy: 'no-referrer',
+    timeoutMs: TIMEOUT_MS,
   });
-  const headers: Record<string, string> = {};
-  response.headers.forEach((value, key) => (headers[key] = value));
-  const type = response.headers.get('content-type') ?? '';
-  const textual = /json|text|javascript|xml|html/.test(type) || !type;
-  return {
-    status: response.status,
-    headers,
-    url: response.url,
-    bodyEncoding: textual ? 'text' : 'base64',
-    body: textual ? await response.text() : toBase64(new Uint8Array(await response.arrayBuffer())),
-  };
+  // A redirect may move within a provider's hosts, never off them.
+  const landed = response.url ? new URL(response.url).origin : url.origin;
+  if (!isLyricOrigin(landed)) {
+    await response.body?.cancel().catch(() => undefined);
+    throw Object.assign(new Error(`${url.host} redirected to ${new URL(response.url).host}, which isn't a lyric source`), {
+      code: 'forbidden',
+    });
+  }
+  return serialise(response, MAX_RESPONSE);
 }
-

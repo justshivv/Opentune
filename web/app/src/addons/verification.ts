@@ -59,7 +59,7 @@ export function needsVerification(url: string): boolean {
 export async function verificationHeaders(url: string): Promise<Record<string, string>> {
   if (!needsVerification(url)) return {};
   const value = await stored();
-  if (!value || value.expires <= Date.now() + value.offset) throw new Error('Open Settings › Audio sources and verify this browser with the official OpenTune app');
+  if (!value || value.expires <= Date.now() + value.offset) throw new Error('Open Settings › Audio sources and verify this browser with the official NepTune app');
   const time = String(Date.now() + value.offset), nonce = b64(crypto.getRandomValues(new Uint8Array(24))), u = new URL(url);
   const message = ['OpenTune-Addon-v1', value.session, time, nonce, 'GET', u.pathname + u.search, await hash('')].join('\n');
   const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, value.key, bytes(message));

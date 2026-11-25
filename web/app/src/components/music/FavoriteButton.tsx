@@ -6,6 +6,8 @@ interface FavoriteButtonProps {
   videoId: string | null;
   className?: string;
   size?: number;
+  /** The filled star's colour (the cover's, in the player); else the text colour. */
+  likedColor?: string;
 }
 
 /**
@@ -13,7 +15,7 @@ interface FavoriteButtonProps {
  * Liked Music). Only shown signed in; the state is read from the track's
  * watch page, as YouTube's own player reads it.
  */
-export function FavoriteButton({ videoId, className, size = 18 }: FavoriteButtonProps) {
+export function FavoriteButton({ videoId, className, size = 18, likedColor }: FavoriteButtonProps) {
   const signedIn = useSignedIn();
   const status = useLikeStatus(videoId);
   const setLiked = useSetLiked();
@@ -27,6 +29,7 @@ export function FavoriteButton({ videoId, className, size = 18 }: FavoriteButton
       aria-label={liked ? 'Unfavorite' : 'Favorite'}
       aria-pressed={liked}
       data-burst={bursts > 0 || undefined}
+      style={liked && likedColor ? { color: likedColor } : undefined}
       disabled={status.isPending}
       onClick={(event) => {
         event.stopPropagation();

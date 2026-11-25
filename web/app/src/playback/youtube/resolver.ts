@@ -95,6 +95,8 @@ export function unplayableReason(videoId: string, signed = false): string | null
   return knownVerdict(videoId, signed)?.reason ?? null;
 }
 
+const LIVE_REASON = 'Live streams don’t play in the web player yet.';
+
 function rememberUnplayable(videoId: string, signed: boolean, reason: string, ageGated: boolean) {
   if (unplayable.size > MAX_REMEMBERED) unplayable.clear();
   unplayable.set(keyOf(videoId, signed), { reason, at: Date.now(), ageGated });
@@ -230,6 +232,12 @@ export async function resolvePlayer(
       const ms = Math.round(performance.now() - started);
       const streaming = info.streaming_data;
       const playable = !!streaming?.server_abr_streaming_url || !!streaming?.adaptive_formats.some((f) => f.has_audio && !f.has_video);
+      // A live stream answers OK, but only with HLS/DASH manifests this player doesn't build on;
+      // every client gives the same answer, so say so plainly rather than the library's error.
+      if (status === 'OK' && info.basic_info.is_live) {
+        rememberUnplayable(videoId, signed, LIVE_REASON, false);
+        throw new UnplayableError(LIVE_REASON);
+      }
       if (status === 'OK' && playable) {
         trackLog.d(`${client}${signed ? ' (signed in)' : ''} answered OK in ${ms}ms`, videoId);
         return { videoId, client, info, yt, signed };
@@ -243,6 +251,7 @@ export async function resolvePlayer(
       }
       excludeClient(videoId, client, `${status}: ${reason} (${ms}ms)`, signed);
     } catch (error) {
+      if (error instanceof UnplayableError) throw error;
       lastReason = String(error);
       excludeClient(videoId, client, `request failed: ${String(error)}`, signed);
     }

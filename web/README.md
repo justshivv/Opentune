@@ -1,8 +1,10 @@
-# OpenTune web preview
+# NepTune web preview
 
 This extends an existing GPL-3.0 React player and WXT browser extension, named with its commit in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). It reuses that implementation rather than rebuilding the web app. Upstream design/research notes are preserved under `docs/` with their original attribution.
 
-OpenTune changes include branding, GitHub/Discord community links, URL audio add-ons, measured direct-FLAC validation, background quality upgrades, a separate extension identity, and GitHub Pages routing under `/Opentune/player/`. Chrome and Firefox extensions use the same protocol. Google/Spotify session cookies remain inside the extension; the player receives metadata and request results.
+NepTune changes include branding, GitHub/Discord community links, URL audio add-ons, measured direct-FLAC validation, background quality upgrades, a separate extension identity, and GitHub Pages routing under `/Opentune/player/`. Chrome and Firefox extensions use the same protocol. Google/Spotify session cookies remain inside the extension; the player receives metadata and request results.
+
+NepTune was called OpenTune. Names a person sees say NepTune; names that existing installs, links and the other apps depend on keep the old spelling: the `@opentune/*` package names, `opentune:*` storage keys, the `opentune://` links, the `/Opentune/player/` path and repository URLs, `OPENTUNE_*` variables, the extension's id and download file names, and the "OpenTune Connect" playlist the phone app looks for.
 
 ## Build
 
@@ -29,7 +31,7 @@ This browser preview supports **direct FLAC with CORS-enabled media**. Android a
 
 ## Known platform limits
 
-- Browser playback requires the OpenTune extension. It is not yet published to browser stores; install a preview package in developer mode. Firefox release installation requires Mozilla signing; temporary loading is suitable for testing.
+- Browser playback requires the NepTune extension. It is not yet published to browser stores; install a preview package in developer mode. Firefox release installation requires Mozilla signing; temporary loading is suitable for testing.
 - Native phone-to-TV QR sign-in is implemented in the Android app, using encrypted local-network pairing. It is not a web OAuth substitute and is not available in the JavaFX desktop or Wear UI.
 - Android uses Nostr rooms; the inherited browser room protocol is different. Browser rooms require a separately configured compatible server. No upstream public server is silently selected, and cross-platform room interoperability is not claimed.
 - Discord community links work normally. Upstream optional Discord account automation is disabled by default at build time.

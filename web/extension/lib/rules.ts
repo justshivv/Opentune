@@ -98,6 +98,17 @@ const EXTENSION_MUSIC_FETCH_RULE_ID = 101;
 /** s.youtube.com, where the play-reporting pings go, as YouTube Music's own. */
 const EXTENSION_STATS_FETCH_RULE_ID = 102;
 
+let extensionFetchRule: Promise<void> | null = null;
+
+/** installExtensionFetchRule, once per worker: yt.fetch and the signed requests share it (and its retry after a failure). */
+export function ensureExtensionFetchRule(): Promise<void> {
+  extensionFetchRule ??= installExtensionFetchRule().catch((error: unknown) => {
+    extensionFetchRule = null;
+    throw error;
+  });
+  return extensionFetchRule;
+}
+
 export async function installExtensionFetchRule(): Promise<void> {
   const own = (id: number, host: string, origin: string): Rule => ({
     id,

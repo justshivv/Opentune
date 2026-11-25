@@ -131,7 +131,7 @@ export function AccountButton({ compact = false }: { compact?: boolean }) {
               connect.mutate(false);
             }}
           >
-            Disconnect from OpenTune
+            Disconnect from NepTune
           </MenuItem>
         </Menu>
       )}

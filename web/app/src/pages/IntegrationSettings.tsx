@@ -128,7 +128,7 @@ export function DiscordIntegration() {
 
 function discordText(status: DiscordStatus): string {
   if (status.state === 'checking') return 'Checking…';
-  if (status.state === 'unavailable') return 'Needs the OpenTune extension';
+  if (status.state === 'unavailable') return 'Needs the NepTune extension';
   const { available, connected, enabled, user, gateway, problem } = status.discord;
   if (!available) return 'Update the extension to 0.1.4 or later';
   if (!connected || !user) return 'Not connected';
@@ -213,7 +213,7 @@ export function DiscordSettings() {
               <span>Name</span>
               <input
                 className={settingsUi.input}
-                placeholder="OpenTune"
+                placeholder="NepTune"
                 value={options.activityName}
                 onChange={(e) => set({ activityName: e.currentTarget.value })}
               />
@@ -251,13 +251,13 @@ export function DiscordSettings() {
                 />
               </label>
             )}
-            <Toggle label="OpenTune button" checked={options.button2Visible} onChange={(v) => set({ button2Visible: v })} />
+            <Toggle label="NepTune button" checked={options.button2Visible} onChange={(v) => set({ button2Visible: v })} />
             {options.button2Visible && (
               <label className={settingsUi.controlRow}>
-                <span>OpenTune button text</span>
+                <span>NepTune button text</span>
                 <input
                   className={settingsUi.input}
-                  placeholder="Visit OpenTune"
+                  placeholder="Visit NepTune"
                   maxLength={32}
                   value={options.button2Text}
                   onChange={(e) => set({ button2Text: e.currentTarget.value })}
@@ -270,7 +270,7 @@ export function DiscordSettings() {
       <p className={settingsUi.footer}>
         This uses your Discord account’s own token, which Discord’s terms don’t allow. Button text can use {'{song_name}'},{' '}
         {'{artist_name}'} and {'{album_name}'}, up to 32 characters: Discord drops a card with a longer label. A web address as the
-        OpenTune button’s text makes the button open it.
+        NepTune button’s text makes the button open it.
       </p>
     </>
   );

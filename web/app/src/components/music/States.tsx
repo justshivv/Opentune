@@ -1,4 +1,6 @@
 import { PrefetchLink } from '@/components/PrefetchLink';
+import { config } from '@/config';
+import { isMobileBrowser } from '@/lib/platform';
 
 /** A page-sized message, centred: also the Spotify page's sign-in invitation. */
 export const stateStyles = {
@@ -8,11 +10,27 @@ export const stateStyles = {
   button: 'mt-3 inline-flex h-8 items-center rounded-pill bg-key-bg px-4 type-body-emphasized text-white',
 };
 
-/** In place of a YouTube page when the extension isn't installed (prompt §1): an invitation, not an error. */
+/**
+ * In place of a YouTube page when the extension isn't installed (prompt §1): an invitation, not an error.
+ * A phone browser can't install it, so there it points at the Android app, as the shell's banner does.
+ */
 export function NeedsExtension({ what = 'YouTube Music' }: { what?: string }) {
+  if (isMobileBrowser()) {
+    return (
+      <div className={stateStyles.state}>
+        <p className={stateStyles.title}>Browse {what} in the NepTune app</p>
+        <p className={stateStyles.detail}>
+          This page reaches YouTube Music through the NepTune extension, which phone browsers can’t run. The Android app has everything.
+        </p>
+        <a href={config.androidAppUrl} target="_blank" rel="noreferrer" className={stateStyles.button}>
+          Get the App
+        </a>
+      </div>
+    );
+  }
   return (
     <div className={stateStyles.state}>
-      <p className={stateStyles.title}>Browse {what} with the OpenTune extension</p>
+      <p className={stateStyles.title}>Browse {what} with the NepTune extension</p>
       <p className={stateStyles.detail}>
         The extension lets this page reach YouTube Music from your own browser. Addons and lyrics work without it.
       </p>

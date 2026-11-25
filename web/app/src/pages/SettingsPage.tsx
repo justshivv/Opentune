@@ -1,4 +1,5 @@
-import { ArrowUpRight, AudioLines, ChevronRight, Info, Mic2, MonitorSmartphone, Palette, Play, Plug, Smartphone, Tv, Users, Wrench, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, AudioLines, ChevronRight, Globe, Heart, Info, Lock, Mic2, MonitorSmartphone, Palette, Play, Plug, Smartphone, Tv, Users, Wrench, type LucideIcon } from 'lucide-react';
+import { socialLinks } from '@/config/protocol';
 import { Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { lazyRecovering } from '@/lib/staleBuild';
 import { MdOutlineExtension } from 'react-icons/md';
@@ -7,6 +8,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { LogoMark } from '@/components/icons/LogoMark';
 import { config } from '@/config';
+import { isMobileBrowser } from '@/lib/platform';
 import { useRemoteConfig } from '@/config/remote';
 import { useAddons } from '@/addons/client';
 import { useDiscord } from '@/extension/useDiscord';
@@ -164,20 +166,30 @@ function ExtensionCard() {
   const extension = useExtension();
   const yt = useYtAuth();
   const present = extension.state === 'present';
+  // A phone browser can't install the extension: the app is the one thing to do next there.
+  const phone = !present && isMobileBrowser();
   return (
-    <section className="ot-set-hero" aria-label="OpenTune Extension">
+    <section className="ot-set-hero" aria-label="NepTune Extension">
       <LogoMark size={26} className="ot-set-mark" />
       <div className="ot-set-hero-text">
-        <p className="type-title-3-emphasized">{present ? 'Extension connected' : 'OpenTune on the web'}</p>
+        <p className="type-title-3-emphasized">{present ? 'Extension connected' : 'NepTune on the web'}</p>
         <p className="type-body-tall text-secondary">
           {present
             ? `Version ${extension.extension.info.version} · YouTube Music: ${youtubeText(yt)}`
-            : 'Install the extension to play YouTube Music, sign in, and use Spotify and Discord.'}
+            : phone
+              ? 'Phone browsers can’t run the extension this page plays through. The Android app plays YouTube Music, with your library, lyrics and add-ons.'
+              : 'Install the extension to play YouTube Music, sign in, and use Spotify and Discord.'}
         </p>
       </div>
-      <PrefetchLink to="/extension" className={present ? 'ot-set-hero-button ot-quiet' : 'ot-set-hero-button'}>
-        {present ? 'Manage' : 'Get the extension'}
-      </PrefetchLink>
+      {phone ? (
+        <a href={config.androidAppUrl} target="_blank" rel="noreferrer" className="ot-set-hero-button">
+          Get the app
+        </a>
+      ) : (
+        <PrefetchLink to="/extension" className={present ? 'ot-set-hero-button ot-quiet' : 'ot-set-hero-button'}>
+          {present ? 'Manage' : 'Get the extension'}
+        </PrefetchLink>
+      )}
     </section>
   );
 }
@@ -196,9 +208,10 @@ export default function SettingsPage() {
   const connectView = useConnect((s) => s.view);
   const autoplay = usePlayer((s) => s.autoplay);
   const crossfadeSec = usePlayer((s) => s.crossfadeSec);
+  const normalize = usePlayer((s) => s.normalize);
   const shareHistory = useHistorySettings((s) => s.share);
   const setShareHistory = useHistorySettings((s) => s.setShare);
-  const { setAutoplay, setCrossfade } = usePlayer.getState();
+  const { setAutoplay, setCrossfade, setNormalize } = usePlayer.getState();
   const [lyrics, setLyrics] = useState(false);
   const sources = useAddons((st) => st.sources.filter((a) => a.enabled && !a.ownerOff).length);
   const jioSaavn = useAddons((st) => st.jioSaavn);
@@ -247,6 +260,12 @@ export default function SettingsPage() {
                   ))}
                 </select>
               </label>
+              <Toggle
+                label="Loudness normalization"
+                detail="Turn down songs mastered louder than YouTube’s reference level, so the volume stays even from song to song."
+                checked={normalize}
+                onChange={setNormalize}
+              />
             </section>
           </Section>
 
@@ -289,7 +308,7 @@ export default function SettingsPage() {
               <LinkRow
                 to="/extension"
                 icon={<Glyph Icon={MdOutlineExtension} color="#636366" />}
-                title="OpenTune Extension"
+                title="NepTune Extension"
                 value={present ? `v${extension.extension.info.version}` : 'Not installed'}
               />
             </section>
@@ -298,7 +317,7 @@ export default function SettingsPage() {
                 label="Share listening activity to YouTube"
                 detail={
                   present && !extension.extension.info.capabilities.includes('yt.stats')
-                    ? 'Update the OpenTune extension to share: this version can’t send plays to YouTube.'
+                    ? 'Update the NepTune extension to share: this version can’t send plays to YouTube.'
                     : 'Songs you play here go to your YouTube Music history and shape its recommendations.'
                 }
                 checked={shareHistory}
@@ -342,13 +361,20 @@ export default function SettingsPage() {
 
           <Section id="about" title="About">
             <section className={settingsUi.group}>
-              <ExternalRow href={config.androidAppUrl} icon={<Glyph Icon={Smartphone} color="#2fa84f" />} title="OpenTune for Android" value="Download" />
-              <ExternalRow href={links.tv} icon={<Glyph Icon={Tv} color="#3478f6" />} title="OpenTune on TV" />
+              <ExternalRow href={config.androidAppUrl} icon={<Glyph Icon={Smartphone} color="#2fa84f" />} title="NepTune for Android" value="Download" />
+              <ExternalRow href={links.tv} icon={<Glyph Icon={Tv} color="#3478f6" />} title="NepTune on TV" />
               <ExternalRow href="https://justshivv.github.io/Opentune/addons/" icon={<Glyph Icon={Wrench} color="#e5483a" />} title="Build an add-on" />
               <ExternalRow href={links.github} icon={<Glyph Icon={SiGithub} color="#24292f" />} title="Source code" value="GitHub" />
               <ExternalRow href={links.discord} icon={<Glyph Icon={SiDiscord} color="#5865f2" />} title="Community" value="Discord" />
+              {/* The website, social accounts, donation page and privacy policy, each only when the dashboard sets it. */}
+              {links.website && <ExternalRow href={links.website} icon={<Glyph Icon={Globe} color="#2f7d6d" />} title="Website" />}
+              {socialLinks.map((key) => links[key] && (
+                <ExternalRow key={key} href={links[key]!} icon={<Glyph Icon={ArrowUpRight} color="#55575e" />} title={SOCIAL_NAMES[key]} />
+              ))}
+              {links.donate && <ExternalRow href={links.donate} icon={<Glyph Icon={Heart} color="#e0457b" />} title="Donate" />}
+              {links.privacy && <ExternalRow href={links.privacy} icon={<Glyph Icon={Lock} color="#55575e" />} title="Privacy policy" />}
             </section>
-            <p className={settingsUi.footer}>OpenTune is free and open source. Report bugs, suggest features and share the add-ons you build.</p>
+            <p className={settingsUi.footer}>NepTune is free and open source. Report bugs, suggest features and share the add-ons you build.</p>
           </Section>
         </div>
       </div>
@@ -361,3 +387,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+const SOCIAL_NAMES: Record<(typeof socialLinks)[number], string> = { x: 'X', instagram: 'Instagram', youtube: 'YouTube', telegram: 'Telegram', reddit: 'Reddit' };

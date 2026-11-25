@@ -186,11 +186,11 @@ export function Sidebar() {
         aria-label="Main"
       >
         <div className="ot-side-top mt-2 flex h-18 items-center justify-between pr-3 pl-7">
-          <PrefetchLink to="/home" className="ot-side-wordmark inline-flex items-center gap-2 rounded-[6px]" aria-label="OpenTune, Home" onClick={close}>
+          <PrefetchLink to="/home" className="ot-side-wordmark inline-flex items-center gap-2 rounded-[6px]" aria-label="NepTune, Home" onClick={close}>
             {/* The wave alone, no tile: white on dark, it follows the label colour so it stays visible in light.
                 Folded, it stays as the rail's mark, and turns into the unfold button under the pointer. */}
             <LogoMark size={26} bare className="ot-side-mark flex-none text-primary" />
-            <span className="ot-side-wordmark-text type-[700_19px/24px] tracking-[-0.01em]">OpenTune</span>
+            <span className="ot-side-wordmark-text type-[700_19px/24px] tracking-[-0.01em]">NepTune</span>
           </PrefetchLink>
           {/* Folds the sidebar to a rail of icons and back. Phones have the drawer instead. */}
           <button
@@ -209,12 +209,12 @@ export function Sidebar() {
           {spotifySignedIn && <SpotifyNav onNavigate={close} />}
         </div>
         <div className="ot-side-bottom flex flex-col gap-2 pt-3 pr-3 pb-5 pl-5">
-          <PrefetchNavLink to="/extension" className={`${item} relative`} onClick={close} title={tip('OpenTune Extension')}>
+          <PrefetchNavLink to="/extension" className={`${item} relative`} onClick={close} title={tip('NepTune Extension')}>
             {/* Chrome's own toolbar glyph for extensions (Material "extension"). */}
             <span className={icon}>
               <MdOutlineExtension size={18} />
             </span>
-            <span className={navLabel}>OpenTune Extension</span>
+            <span className={navLabel}>NepTune Extension</span>
             {update.state === 'available' && (
               <span className="ot-side-badge ml-auto rounded-[10px] bg-key px-[7px] py-0.5 type-subhead-emphasized text-white" title={`Version ${update.latest.version} is available`}>
                 Update

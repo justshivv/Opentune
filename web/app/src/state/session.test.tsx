@@ -104,3 +104,21 @@ it('starts the next song from zero, not where the restored one was left', async 
   await vi.waitFor(() => expect(usePlayer.getState().nowPlaying?.title).toBe('Two'));
   expect(resumePosition()).toBe(0);
 });
+
+it('turns loud songs down to the reference level and leaves quiet ones alone', async () => {
+  const { normalizationGain } = await import('./player');
+  expect(normalizationGain(6, true)).toBeCloseTo(0.501, 3);
+  expect(normalizationGain(0, true)).toBe(1);
+  expect(normalizationGain(-4, true)).toBe(1);
+  expect(normalizationGain(null, true)).toBe(1);
+  expect(normalizationGain(6, false)).toBe(1);
+});
+
+it('keeps loudness normalization on by default and remembers turning it off', async () => {
+  const first = await import('./player');
+  expect(first.usePlayer.getState().normalize).toBe(true);
+  first.usePlayer.getState().setNormalize(false);
+  vi.resetModules();
+  const second = await import('./player');
+  expect(second.usePlayer.getState().normalize).toBe(false);
+});

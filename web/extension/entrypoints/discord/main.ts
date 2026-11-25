@@ -7,10 +7,24 @@ import { connectFromTab, DISCORD_ORIGINS } from '../../lib/discord';
 const status = document.getElementById('status')!;
 const button = document.getElementById('connect') as HTMLButtonElement;
 
+// Opened by discord.allowAccess, for signing in with the phone: only discord.com is asked for
+// here, as the phone hands the session over itself and no tab is read.
+const forPhone = new URLSearchParams(location.search).get('for') === 'phone';
+if (forPhone) {
+  document.querySelector('main > p:not(.warning)')!.textContent =
+    'To show what you play, the extension talks to Discord with the session your phone hands it. Allow it to reach discord.com, then go back to NepTune and scan the code with your phone.';
+  button.textContent = 'Allow discord.com';
+}
+
 button.addEventListener('click', async () => {
   const granted = await browser.permissions.request({ origins: DISCORD_ORIGINS }).catch(() => false);
   if (!granted) {
     status.textContent = 'Not allowed. Discord stays off.';
+    return;
+  }
+  if (forPhone) {
+    status.textContent = 'Allowed. Go back to NepTune and make the code.';
+    setTimeout(() => window.close(), 1500);
     return;
   }
   button.disabled = true;

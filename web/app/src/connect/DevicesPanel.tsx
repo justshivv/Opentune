@@ -47,7 +47,7 @@ export function DevicesPanel() {
               </button>
             ))}
             {!view.devices.length && (
-              <p className="px-2.5 py-2 type-callout text-secondary">{view.relays ? 'Open OpenTune on your phone to see it here.' : 'Connecting…'}</p>
+              <p className="px-2.5 py-2 type-callout text-secondary">{view.relays ? 'Open NepTune on your phone to see it here.' : 'Connecting…'}</p>
             )}
           </>
         )}

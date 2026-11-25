@@ -2,7 +2,7 @@ import type { YTMusic, YTNodes } from 'youtubei.js/web';
 import type { Candidate } from '@/playback/queue/builder';
 import { getInnertube, getMusicClient, getSignedInnertube } from '@/playback/youtube/innertube';
 import { isExactArtistMatch, normalizedArtistName } from '@/lib/artistCredits';
-import { CONNECT_PLAYLIST_TITLE, LIBRARY_SECTIONS, LIKED_MUSIC_PLAYLIST, type LibrarySection } from './library';
+import { isConnectPlaylistTitle, LIBRARY_SECTIONS, LIKED_MUSIC_PLAYLIST, type LibrarySection } from './library';
 import {
   mapAlbum,
   mapArtist,
@@ -201,8 +201,8 @@ const emptyPage = (title: string): BrowsePage => ({ title, shelves: [], grid: []
 /** Connect's playlist is only a place for its secret: left out of the library. */
 const withoutConnect = (page: BrowsePage): BrowsePage => ({
   ...page,
-  grid: page.grid.filter((item) => item.title !== CONNECT_PLAYLIST_TITLE),
-  shelves: page.shelves.map((shelf) => ({ ...shelf, items: shelf.items.filter((item) => item.title !== CONNECT_PLAYLIST_TITLE) })),
+  grid: page.grid.filter((item) => !isConnectPlaylistTitle(item.title)),
+  shelves: page.shelves.map((shelf) => ({ ...shelf, items: shelf.items.filter((item) => !isConnectPlaylistTitle(item.title)) })),
 });
 
 async function libraryContinuation(token: string, title: string): Promise<Paged<BrowsePage>> {

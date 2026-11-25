@@ -89,7 +89,7 @@
 @keyframes ot-wave-travel { to { -webkit-mask-position: 28px 50%; mask-position: 28px 50%; } }
 
 /* The favourite star pops and throws sparks when it's turned on. */
-.ot-fav { position: relative; }
+.ot-fav { position: relative; transition: color 0.9s ease; }
 .ot-fav[data-burst][aria-pressed='true'] svg { animation: ot-pop 0.5s var(--ot-ease-settle); }
 .ot-burst { position: absolute; inset: 0; pointer-events: none; }
 .ot-burst i { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: var(--ot-key-on-dark); animation: ot-spark 0.6s var(--ot-ease-emph) forwards; }

@@ -28,8 +28,8 @@ declare const __DISCORD_APP_ID__: string;
  */
 
 /**
- * OpenTune's own Discord application, from the build (DISCORD_APP_ID). Empty
- * in a build without one: the card still goes up named OpenTune, with the
+ * NepTune's own Discord application, from the build (DISCORD_APP_ID). Empty
+ * in a build without one: the card still goes up named NepTune, with the
  * cover as a plain link and no application behind its buttons.
  */
 export const APPLICATION_ID: string = __DISCORD_APP_ID__;
@@ -37,8 +37,8 @@ const GATEWAY = 'wss://gateway.discord.gg/?v=9&encoding=json';
 const API = 'https://discord.com/api/v9';
 const PROJECT_URL = 'https://github.com/justshivv/Opentune';
 const DEFAULT_BUTTON_1 = 'Listen on YouTube Music';
-const DEFAULT_BUTTON_2 = 'Visit OpenTune';
-const APP_NAME = 'OpenTune';
+const DEFAULT_BUTTON_2 = 'Visit NepTune';
+const APP_NAME = 'NepTune';
 
 const INITIAL_RECONNECT_MS = 1_000;
 const MAX_RECONNECT_MS = 60_000;
@@ -207,7 +207,7 @@ export class Gateway {
       try {
         this.onMessage(JSON.parse(String(event.data)) as Payload);
       } catch (error) {
-        console.warn('OpenTune: Discord gateway payload', error);
+        console.warn('NepTune: Discord gateway payload', error);
       }
     };
     socket.onclose = (event) => {
@@ -252,7 +252,7 @@ export class Gateway {
   }
 
   private drop(why: string): void {
-    console.info(`OpenTune: Discord gateway dropped (${why})`);
+    console.info(`NepTune: Discord gateway dropped (${why})`);
     this.ready = false;
     this.socket?.close();
   }
@@ -534,7 +534,7 @@ export async function setPresence(track: DiscordNowPlaying | null, options: Disc
   await ensureGateway(held.token).sendActivity(presence);
 }
 
-/** Every OpenTune page has gone: nobody is playing, so the card comes down with the socket. */
+/** Every NepTune page has gone: nobody is playing, so the card comes down with the socket. */
 export function allPagesClosed(): void {
   gateway?.clearActivity();
   idleTimer = setTimeout(closeGateway, 2_000);
@@ -560,6 +560,17 @@ export async function disconnect(): Promise<DiscordState> {
 // ---- Connecting an account ------------------------------------------------------
 
 export const DISCORD_ORIGINS = ['https://discord.com/*'];
+
+/** Keeps [token] once Discord confirms whose it is (the phone's, handed over by discordPhone.ts). */
+export async function keepToken(token: string): Promise<DiscordState> {
+  const user = await userInfo(token);
+  closeGateway();
+  gatewayStatus = 'off';
+  gatewayProblem = null;
+  await browser.storage.local.set({ [ACCOUNT_KEY]: { token, user } satisfies Account, [ENABLED_KEY]: true });
+  await announce();
+  return discordState();
+}
 
 /** Opens the extension's connect page: the permission prompt only follows a click there. */
 export async function openConnectPage(): Promise<void> {

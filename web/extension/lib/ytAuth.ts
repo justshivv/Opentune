@@ -1,5 +1,6 @@
 import type { YtAccount, YtAuthState, YtChannel } from '@opentune/shared/bridge';
-import { installExtensionFetchRule } from './rules';
+import { fetchWithDeadline } from './http';
+import { ensureExtensionFetchRule } from './rules';
 
 /**
  * YouTube Music sign-in (prompt §5.3): the user's own browser session, used
@@ -107,8 +108,6 @@ export class SignedOutError extends Error {
   readonly code = 'unauthenticated';
 }
 
-let ruleReady: Promise<void> | null = null;
-
 /**
  * A request made as [identity], signed for [signAs] when that isn't the URL's
  * own origin. The browser attaches the cookies; the
@@ -117,17 +116,20 @@ let ruleReady: Promise<void> | null = null;
  */
 export async function signedFetch(
   url: string,
-  init: { method?: string; headers?: Record<string, string>; body?: BodyInit | null },
+  init: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: BodyInit | null | undefined;
+    /** InnerTube never redirects; a redirect off it is refused rather than followed with the session. */
+    redirect?: RequestRedirect;
+    timeoutMs?: number;
+  },
   identity: Identity,
   signAs?: string,
 ): Promise<Response> {
   const cookies = await signingCookies();
   if (!cookies.size) throw new SignedOutError('The browser is not signed in to YouTube.');
-  ruleReady ??= installExtensionFetchRule().catch((error: unknown) => {
-    ruleReady = null;
-    throw error;
-  });
-  await ruleReady;
+  await ensureExtensionFetchRule();
 
   const origin = signAs ?? new URL(url).origin;
   const headers = new Headers(init.headers);
@@ -136,7 +138,14 @@ export async function signedFetch(
   headers.set('X-Origin', origin);
   if (identity.pageId) headers.set('X-Goog-PageId', identity.pageId);
   else headers.delete('X-Goog-PageId');
-  return fetch(url, { method: init.method ?? 'GET', headers, body: init.body ?? null, credentials: 'include' });
+  return fetchWithDeadline(url, {
+    method: init.method ?? 'GET',
+    headers,
+    body: init.body ?? null,
+    credentials: 'include',
+    redirect: init.redirect ?? 'error',
+    timeoutMs: init.timeoutMs ?? 15_000,
+  });
 }
 
 async function musicApi(endpoint: string, identity: Identity): Promise<unknown> {
@@ -242,9 +251,6 @@ function parseChannels(root: unknown, authUser: string): StoredChannel[] {
   return channels;
 }
 
-/** What went wrong reading the accounts, in words the popup can show; null when it worked. */
-let problem: string | null = null;
-
 /** Why a response has no account in it, read from what Google says about the session. */
 function describeEmpty(endpoint: string, body: unknown): string {
   // responseContext.serviceTrackingParams carries GFEEDBACK's `logged_in`
@@ -301,7 +307,12 @@ async function readLogin(authUser: string): Promise<{ account: StoredAccount | n
  */
 async function webSession(): Promise<{ index: string | null; loggedIn: boolean | null }> {
   try {
-    const response = await signedFetch(`${MUSIC_ORIGIN}/`, { headers: { Accept: 'text/html' } }, { authUser: '0', pageId: null });
+    // The page may send a visitor through consent.youtube.com first; that answer just has no SESSION_INDEX.
+    const response = await signedFetch(
+      `${MUSIC_ORIGIN}/`,
+      { headers: { Accept: 'text/html' }, redirect: 'follow' },
+      { authUser: '0', pageId: null },
+    );
     const html = await response.text();
     const loggedIn = /"LOGGED_IN":(true|false)/.exec(html)?.[1];
     return { index: /"SESSION_INDEX":"?(\d+)/.exec(html)?.[1] ?? null, loggedIn: loggedIn ? loggedIn === 'true' : null };
@@ -314,8 +325,8 @@ async function webSession(): Promise<{ index: string | null; loggedIn: boolean |
 const COOKIES_NOT_SENT =
   "the browser didn't send your YouTube session with the extension's requests. Open music.youtube.com in a tab, check you're signed in there, then retry. If it still fails, allow cookies for youtube.com in the browser's privacy settings (Brave Shields, Edge tracking prevention)";
 
-async function readAccounts(): Promise<{ list: StoredAccount[]; webIndex: string | null }> {
-  problem = null;
+async function readAccounts(): Promise<Accounts> {
+  let problem: string | null = null;
   const [results, web] = await Promise.all([
     Promise.all(Array.from({ length: MAX_LOGINS }, (_, i) => readLogin(String(i)))),
     webSession(),
@@ -333,9 +344,9 @@ async function readAccounts(): Promise<{ list: StoredAccount[]; webIndex: string
   if (!list.length) {
     const why = results[Number(webIndex ?? 0)]?.why ?? results[0]?.why ?? 'no signed-in Google account found';
     problem = web.loggedIn === false ? COOKIES_NOT_SENT : why;
-    console.warn(`OpenTune: no YouTube account found: ${why}`);
+    console.warn(`NepTune: no YouTube account found: ${why}`);
   }
-  return { list, webIndex };
+  return { list, webIndex, problem };
 }
 
 // ---- State --------------------------------------------------------------------
@@ -344,25 +355,61 @@ interface Accounts {
   list: StoredAccount[];
   /** The login YouTube Music's own page uses, the default choice. */
   webIndex: string | null;
+  /** What went wrong reading the accounts, in words the popup can show; null when it worked. */
+  problem: string | null;
 }
 
+/**
+ * The list is read with a request per login (about twenty in all), so it is
+ * kept in `storage.session` as well as here: the worker is stopped after half
+ * a minute idle, and the next request shouldn't read every login again. That
+ * storage is memory only, cleared with the browser session, and holds names,
+ * pictures and login indices, never cookies.
+ */
+const CACHE_KEY = 'yt.accounts';
 let cache: (Accounts & { at: number }) | null = null;
-let reading: Promise<Accounts> | null = null;
+let reading: { promise: Promise<Accounts>; generation: number } | null = null;
+/** Bumped by every invalidation, so a read that started before one doesn't store its stale answer. */
+let generation = 0;
+
+async function storedCache(): Promise<(Accounts & { at: number }) | null> {
+  try {
+    return ((await browser.storage.session.get(CACHE_KEY))[CACHE_KEY] as (Accounts & { at: number }) | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 async function accounts(refresh: boolean): Promise<Accounts> {
-  if (!refresh && cache && Date.now() - cache.at < ACCOUNTS_TTL_MS) return cache;
-  reading ??= readAccounts()
-    .then((read) => {
-      cache = { ...read, at: Date.now() };
-      return read;
-    })
-    .finally(() => (reading = null));
-  return reading;
+  if (!refresh) {
+    const started = generation;
+    const held = cache ?? (await storedCache());
+    if (held && generation === started && Date.now() - held.at < ACCOUNTS_TTL_MS) return (cache = held);
+  }
+  // Callers share one read, unless it began before the last invalidation.
+  if (!reading || reading.generation !== generation) {
+    const started = generation;
+    const promise: Promise<Accounts> = readAccounts()
+      .then((read) => {
+        if (generation === started) {
+          cache = { ...read, at: Date.now() };
+          void browser.storage.session.set({ [CACHE_KEY]: cache }).catch(() => undefined);
+        }
+        return read;
+      })
+      .finally(() => {
+        if (reading?.promise === promise) reading = null;
+      });
+    reading = { promise, generation: started };
+  }
+  return reading.promise;
 }
 
 /** Forgets the account list, after a sign-in or sign-out in the browser. */
 export function invalidateAccounts(): void {
+  generation++;
   cache = null;
+  void browser.storage.session.remove(CACHE_KEY).catch(() => undefined);
 }
 
 export function isSessionCookie(cookie: { name: string; domain: string }): boolean {
@@ -397,7 +444,7 @@ export async function authState(refresh = false): Promise<YtAuthState> {
     browserSignedIn,
     connected: true,
     signedIn: active !== null,
-    problem: active ? null : problem,
+    problem: active ? null : read.problem,
     accounts: list.map((a) => ({ ...a, channels: a.channels.map(publicChannel) })),
     active: active && { ...publicChannel(active), authUser: active.authUser },
   };

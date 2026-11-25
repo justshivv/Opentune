@@ -215,16 +215,16 @@ function GateDialog(props: GateProps) {
         <p className="mt-1.5 type-body text-secondary text-pretty">
           {allDone
             ? 'The extension is connected and can reach your lyric providers and audio add-ons.'
-            : 'The OpenTune extension does the work a web page isn’t allowed to: playback, sign-in, lyrics from most providers and lossless add-ons. Finish these steps to start listening.'}
+            : 'The NepTune extension does the work a web page isn’t allowed to: playback, sign-in, lyrics from most providers and lossless add-ons. Finish these steps to start listening.'}
         </p>
 
         <ol className="mt-3 divide-y-[0.5px] divide-divider" aria-live="polite">
           <Step
             n={1}
-            title="Install the OpenTune extension"
+            title="Install the NepTune extension"
             detail={
               safari
-                ? 'Safari can’t run it. Open OpenTune in Chrome, Edge, Brave or Firefox.'
+                ? 'Safari can’t run it. Open NepTune in Chrome, Edge, Brave or Firefox.'
                 : 'This page notices it on its own once it’s loaded.'
             }
             state={extensionStep}

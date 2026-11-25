@@ -3,13 +3,19 @@ import { currentConfig } from '@/config/remote';
 import { endpoint, flacInfo, manifestOf, matches, publicHttps, qualityParams, type Addon, type CatalogTrack, type Recording } from '@opentune/shared/addons';
 import { BridgeCallError } from '@opentune/shared/bridge';
 import { getBridge } from '@/extension/bridge';
-import { fetchPublished, mergeCatalog } from './catalog';
+import { fetchPublished, isRetiredSource, mergeCatalog } from './catalog';
 import { askHost } from './hostAccess';
 import { needsVerification, verificationHeaders } from './verification';
 const KEY = 'opentune:audio-addons';
 const SAAVN_KEY = 'opentune:jiosaavn';
 /** Twenty of the listener's own and twenty published ones at most. */
 function read(): Addon[] { try { const v = JSON.parse(localStorage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v.filter(x => typeof x?.url === 'string' && typeof x?.name === 'string').slice(0, 40) : []; } catch { return []; } }
+/** The saved list without the retired Monochrome sources, written back once when one was there. */
+function readSources(): Addon[] {
+  const saved = read(), kept = saved.filter(s => !isRetiredSource(s.url));
+  if (kept.length !== saved.length) try { localStorage.setItem(KEY, JSON.stringify(kept)); } catch { /* Dropped again next time. */ }
+  return kept;
+}
 function readSaavn(): boolean { try { return localStorage.getItem(SAAVN_KEY) !== 'false'; } catch { return true; } }
 export const useAddons = create<{
   sources: Addon[]; update: (sources: Addon[]) => void; status: string; checkingVideoId: string | null;
@@ -18,7 +24,7 @@ export const useAddons = create<{
   /** Sources whose host the extension hasn't been allowed to reach yet, by id. */
   locked: string[];
 }>(set => ({
-  sources: read(), status: '', checkingVideoId: null, locked: [],
+  sources: readSources(), status: '', checkingVideoId: null, locked: [],
   update: sources => { try { localStorage.setItem(KEY, JSON.stringify(sources)); } catch { /* Kept for this session. */ } set({ sources }); },
   jioSaavn: readSaavn(),
   setJioSaavn: jioSaavn => { try { localStorage.setItem(SAAVN_KEY, String(jioSaavn)); } catch { /* Kept for this session. */ } set({ jioSaavn }); },
@@ -80,7 +86,7 @@ export async function fetchJson(url: string): Promise<unknown> {
       // the network or an error page: those are said as they are, not as a missing permission.
       if (!(error instanceof TypeError)) throw error instanceof DOMException && error.name === 'TimeoutError' ? new Error('timed out (the server is slow or waking up)') : error;
       if (corsOk.has(origin)) throw new Error("couldn't be reached (network error)");
-      const bridge = getBridge(); if (!bridge) throw new Error("doesn't let browsers ask it directly; the OpenTune extension can");
+      const bridge = getBridge(); if (!bridge) throw new Error("doesn't let browsers ask it directly; the NepTune extension can");
       corsBlocked.set(origin, Date.now() + CORS_RETRY_MS);
       const r = await bridge.call('addon.fetch', { url }); status = r.status; text = r.body; retryAfter = r.headers['retry-after'] ?? '';
     }
@@ -114,6 +120,7 @@ export class HttpError extends Error {
 }
 export async function addSource(raw: string): Promise<void> {
   const url = endpoint(raw, 'manifest.json');
+  if (isRetiredSource(url)) throw new Error('NepTune no longer offers this source');
   const manifest = manifestOf(await fetchJson(url));
   const { sources, update } = useAddons.getState();
   if (sources.filter(s => !s.admin).length >= 20) throw new Error('Up to 20 sources can be added');
@@ -121,7 +128,7 @@ export async function addSource(raw: string): Promise<void> {
   update([...sources, { id: crypto.randomUUID(), name: manifest.name, url, enabled: true }]);
 }
 export async function allowSource(raw: string): Promise<void> {
-  const bridge = getBridge(); if (!bridge) throw new Error('Install the OpenTune extension first');
+  const bridge = getBridge(); if (!bridge) throw new Error('Install the NepTune extension first');
   await bridge.call('addon.requestPermission', { url: publicHttps(raw).href });
 }
 /** Whether the extension may reach [origin] for add-ons and JioSaavn, or null without the extension. */
@@ -131,7 +138,7 @@ export const hostAllowed = (origin: string): Promise<boolean | null> => {
 };
 /** Asks for every one of these sources' hosts on one extension page (an older extension asks for the first). */
 export async function allowSources(sources: Addon[]): Promise<void> {
-  const bridge = getBridge(); if (!bridge) throw new Error('Install the OpenTune extension first');
+  const bridge = getBridge(); if (!bridge) throw new Error('Install the NepTune extension first');
   const [first, ...rest] = sources.map(s => publicHttps(s.url).href);
   if (first) await bridge.call('addon.requestPermission', { url: first, urls: rest });
 }

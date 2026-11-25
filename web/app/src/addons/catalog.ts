@@ -9,6 +9,19 @@ const REFRESH_MS = 15 * 60_000;
 
 export type Published = { id: string; name: string; url: string; enabled?: boolean };
 
+/** OpenTune's own servers. Their /monochrome/ manifest, and the root one that aliases it, are no longer offered. */
+const OWN_HOSTS = ['addon-opentune.rethinknow.in', 'opentune-lossless-addon.create-a-new-site-with-sites.workers.dev'];
+
+/** A Monochrome source saved before it was removed: dropped from the list, so songs play from the others. */
+export function isRetiredSource(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && OWN_HOSTS.includes(u.hostname) && (u.pathname === '/monochrome/manifest.json' || u.pathname === '/manifest.json');
+  } catch {
+    return false;
+  }
+}
+
 /** The published list, checked: at most 20 sources, each with a plain id, a name and a public HTTPS manifest. */
 export function publishedOf(value: unknown): Published[] {
   const list = (value as { sources?: unknown })?.sources;
@@ -31,7 +44,7 @@ export function publishedOf(value: unknown): Published[] {
  * and address, and goes when it's no longer published; a new one joins at the end, on.
  */
 export function mergeCatalog(local: Addon[], published: Published[]): Addon[] {
-  const incoming = new Map(published.map((p) => [`admin:${p.id}`, p]));
+  const incoming = new Map(published.filter((p) => !isRetiredSource(p.url)).map((p) => [`admin:${p.id}`, p]));
   const kept = local.flatMap((source) => {
     if (!source.admin) return [source];
     const update = incoming.get(source.id);

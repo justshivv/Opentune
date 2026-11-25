@@ -26,14 +26,14 @@ export default function SpotifyPage() {
     return (
       <>
         <PageHeader title="Spotify" />
-        <EmptyState title="Update the extension" detail="This version of the OpenTune extension doesn’t include Spotify yet." />
+        <EmptyState title="Update the extension" detail="This version of the NepTune extension doesn’t include Spotify yet." />
       </>
     );
   }
   const state = auth.auth;
   if (!state.signedIn) {
     const [title, detail, action] = !state.browserSignedIn
-      ? ['Sign in to Spotify', 'OpenTune uses the Spotify account this browser is signed in to, through the extension.', 'Sign In']
+      ? ['Sign in to Spotify', 'NepTune uses the Spotify account this browser is signed in to, through the extension.', 'Sign In']
       : !state.connected
         ? ['Spotify is disconnected', 'You’re signed in to Spotify in this browser. Connect to see your playlists here.', 'Connect']
         : ['Couldn’t read your Spotify account', state.problem ?? 'Spotify didn’t answer.', 'Try Again'];

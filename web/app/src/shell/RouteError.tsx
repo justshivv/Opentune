@@ -19,7 +19,7 @@ export function RouteError() {
   return (
     <main className="grid h-full min-h-dvh place-items-center bg-(--pageBG,transparent) px-6 text-center" role="alert">
       <div className="max-w-[440px]">
-        <h1 className="type-title-1-emphasized">{reloading ? 'Updating OpenTune…' : stale ? 'OpenTune was updated' : 'Something went wrong'}</h1>
+        <h1 className="type-title-1-emphasized">{reloading ? 'Updating NepTune…' : stale ? 'NepTune was updated' : 'Something went wrong'}</h1>
         <p className="mt-2 type-body text-secondary">
           {reloading
             ? 'A newer version came out while this tab was open. Loading it now.'

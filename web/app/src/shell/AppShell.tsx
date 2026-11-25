@@ -163,8 +163,8 @@ export function AppShell() {
   if (mobile) {
     banner = (
       <Banner
-        title="OpenTune is better in the app."
-        detail="Phone browsers can’t run the OpenTune extension. The Android app has everything."
+        title="NepTune is better in the app."
+        detail="Phone browsers can’t run the NepTune extension. The Android app has everything."
         action={
           <a className={bannerButtonClass} href={config.androidAppUrl} target="_blank" rel="noreferrer">
             Get the App
@@ -175,7 +175,7 @@ export function AppShell() {
   } else if (extension.state === 'missing' && !bannerDismissed && !locked) {
     banner = (
       <Banner
-        title="Play YouTube Music with the OpenTune extension."
+        title="Play YouTube Music with the NepTune extension."
         detail="Playback, YouTube Music sign-in, Spotify and Discord need the extension. Addons and lyrics work without it."
         action={
           <PrefetchLink className={bannerButtonClass} to="/extension">
@@ -196,7 +196,7 @@ export function AppShell() {
         detail={
           discord
             ? 'Talk to other listeners, swap add-ons, report bugs and hear about new features first.'
-            : 'OpenTune is free and open source. A star on GitHub helps more listeners find it.'
+            : 'NepTune is free and open source. A star on GitHub helps more listeners find it.'
         }
         action={
           <span className="flex items-center gap-3">

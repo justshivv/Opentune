@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createHashRouter, RouterProvider } from 'react-router';
+import { installKeyboardFocus } from '@/lib/keyboardFocus';
 import { queryClient } from '@/lib/queryClient';
 import { installStaleBuildRecovery } from '@/lib/staleBuild';
 import { routes } from '@/routes';
@@ -10,6 +11,7 @@ import { useAppearance } from '@/state/appearance';
 import '@/styles/global.css';
 
 installStaleBuildRecovery();
+installKeyboardFocus();
 const router = createHashRouter(routes);
 
 

@@ -33,7 +33,7 @@ export function AppearanceSettings() {
           checked={a.liquidGlass && liquidGlassSupported()}
           onChange={(liquidGlass) => a.update({ liquidGlass })}
         />
-        <Toggle label="Colors from artwork" detail="Let the playing song color OpenTune." checked={a.artworkColors} onChange={(artworkColors) => a.update({ artworkColors })} />
+        <Toggle label="Colors from artwork" detail="Let the playing song color NepTune." checked={a.artworkColors} onChange={(artworkColors) => a.update({ artworkColors })} />
         <fieldset className="ot-accent-picker hairline-[16px]">
           <legend>
             Accent color

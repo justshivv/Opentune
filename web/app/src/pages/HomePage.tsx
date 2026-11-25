@@ -111,7 +111,7 @@ export default function HomePage() {
           // Closed until a playlist is added that wasn't there when it was closed.
           case 'featured-playlists': return showsPlaylists(featuredIds, closedPlaylists) && <ShelfView key={section.id} shelf={{
             title: title('From the community'), strapline: null, layout: 'square', seeAll: null,
-            items: runtime.playlists.map(p => ({ kind: 'playlist', id: p.browseId, title: p.title, subtitle: 'OpenTune picks', artists: [], album: null, thumbnail: p.artwork || null, wide: false, durationSec: null, explicit: false })),
+            items: runtime.playlists.map(p => ({ kind: 'playlist', id: p.browseId, title: p.title, subtitle: 'NepTune picks', artists: [], album: null, thumbnail: p.artwork || null, wide: false, durationSec: null, explicit: false })),
           }} action={<button className="ot-circle-button ot-shelf-close" aria-label="Dismiss featured playlists" onClick={() => dismissPlaylists(featuredIds)}><X size={16} strokeWidth={2.4} /></button>} />;
           case 'recommendations': return <Fragment key={section.id}>{section.title && <h2 className="mx-5 type-title-2-emphasized">{section.title}</h2>}<Shelves shelves={arranged.shelves} /></Fragment>;
           // These shelves are native-only until their web counterparts are implemented.

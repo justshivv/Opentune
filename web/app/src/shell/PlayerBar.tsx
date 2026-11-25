@@ -20,6 +20,7 @@ import { useUi } from '@/state/ui';
 import { useLiquidGlass } from '@/lib/liquidGlass';
 import { Lcd } from './Lcd';
 import { useControlling } from '@/connect/connect';
+import { meant } from '@/connect/session';
 import { RemoteLcd } from '@/connect/RemoteLcd';
 
 // A soft fill on hover and a little give when pressed, as the full player's buttons have.
@@ -95,7 +96,7 @@ export function PlayerBar() {
   const hasTrack = usePlayer((s) => s.nowPlaying !== null) || !!remote;
   const videoId = usePlayer((s) => s.nowPlaying?.videoId ?? null);
   const playingHere = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
-  const playing = remote ? !!remote.state?.playing : playingHere;
+  const playing = remote ? meant(remote.state) : playingHere;
   const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0)) || !!remote;
   const localShuffle = usePlayer((s) => s.shuffle);
   const localRepeat = usePlayer((s) => s.repeat);
