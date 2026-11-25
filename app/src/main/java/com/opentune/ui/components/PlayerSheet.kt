@@ -119,11 +119,12 @@ fun PlayerSheet(
                 val w = size.width
                 val h = size.height
                 if (w <= 0f || h <= 0f) return@graphicsLayer
-                val mini = PlayerMorph.miniBar?.translate(0f, -pageTop)
+                val pageY = pageTop()
+                val mini = PlayerMorph.miniBar?.translate(0f, -pageY)
                     ?: Rect(w * 0.04f, h - fallbackLift - fallbackHeight, w * 0.96f, h - fallbackLift)
                 miniTop[0] = mini.top
                 val k = p().coerceIn(0f, 1f)
-                val card = PlayerMorph.cardFrom?.translate(0f, -pageTop)
+                val card = PlayerMorph.cardFrom?.translate(0f, -pageY)
                 val from = card ?: Rect(0f, 0f, w, h)
                 fun lerp(a: Float, b: Float) = a + (b - a) * k
                 val left = lerp(mini.left, from.left)
