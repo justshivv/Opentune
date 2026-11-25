@@ -30,6 +30,8 @@ export interface ConnectPlayer {
    */
   playQueued(at: number, id: string): boolean;
   removeQueued(at: number, id: string): boolean;
+  /** Moves Up Next's entry [from] ([id]) to [to]; false when it isn't there. Optional: added after the others. */
+  moveQueued?(from: number, to: number, id: string): boolean;
   /** Loads [queue] from [index] at [pos] ms; false when none of it can play here. */
   load(queue: CTrack[], index: number, pos: number, playing: boolean): boolean;
   /** True while this device can't start sound by itself (a browser tab nobody has clicked in yet). */
@@ -378,9 +380,55 @@ export class ConnectSession {
     this.command(deviceId, 'jump', { pos: at, track, onAck: (ack) => { if (!ack.ok && before) this.undoGuess(before, before.state); } });
   }
 
+  /** [deviceId]'s Up Next shown changed at once by [edit], until it reports; back as it was if it refuses. */
+  private editQueueShown(deviceId: string, edit: (queue: CTrack[]) => CTrack[] | null): { target: Device; shown: StateMsg } | null {
+    const target = this.devices.get(deviceId);
+    const shown = target?.state;
+    if (!target || !shown) return null;
+    const queue = edit(shown.queue ?? []);
+    if (!queue) return null;
+    this.setDevice({ ...target, state: { ...shown, queue }, receivedAt: target.receivedAt });
+    return { target, shown };
+  }
+
   /** Takes entry [at] ([track]) out of [deviceId]'s Up Next. */
-  removeOn(deviceId: string, at: number, track: CTrack): void {
-    this.command(deviceId, 'remove', { pos: at, track });
+  removeOn(deviceId: string, at: number, track: CTrack, onRefused?: (reason: string | null) => void): void {
+    const before = this.editQueueShown(deviceId, (queue) => (queue[at]?.id === track.id ? queue.filter((_, i) => i !== at) : null));
+    this.command(deviceId, 'remove', {
+      pos: at,
+      track,
+      onAck: (ack) => {
+        if (ack.ok) return;
+        if (before) this.undoGuess(before.target, before.shown);
+        onRefused?.(ack.reason ?? null);
+      },
+    });
+  }
+
+  /**
+   * Moves entry [from] ([track]) of [deviceId]'s Up Next to [to]: shown at
+   * once, put back if the device refuses. `move` carries [from] in `pos` and
+   * [to] in `value`; a device too old to know it answers the ack with ok
+   * false, as for any action it doesn't know, and nothing else changes.
+   */
+  moveOn(deviceId: string, from: number, to: number, track: CTrack, onRefused?: (reason: string | null) => void): void {
+    const before = this.editQueueShown(deviceId, (queue) => {
+      if (queue[from]?.id !== track.id || to < 0 || to >= queue.length || to === from) return null;
+      const next = [...queue];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item!);
+      return next;
+    });
+    this.command(deviceId, 'move', {
+      pos: from,
+      value: to,
+      track,
+      onAck: (ack) => {
+        if (ack.ok) return;
+        if (before) this.undoGuess(before.target, before.shown);
+        onRefused?.(ack.reason ?? null);
+      },
+    });
   }
 
   /** Moves playback to [deviceId]; this device's own id pulls it here. */
@@ -647,6 +695,7 @@ export class ConnectSession {
       case 'addToQueue': this.player.addToQueue(c.tracks ?? []); return true;
       case 'jump': return !!c.track && this.player.playQueued(c.pos ?? 0, c.track.id);
       case 'remove': return !!c.track && this.player.removeQueued(c.pos ?? 0, c.track.id);
+      case 'move': return !!c.track && !!this.player.moveQueued?.(c.pos ?? 0, Math.round(c.value ?? 0), c.track.id);
       default: return false;
     }
   }

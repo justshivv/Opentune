@@ -31,6 +31,22 @@ function eventOf(value: unknown): NostrEvent | null {
  * is handed on once, so a room keeps working while any one relay does.
  * Dropped connections come back with growing pauses.
  */
+/**
+ * Relays that failed this many times in a row without ever opening are left
+ * alone for the rest of the session, by every pool (Connect, Listen Together,
+ * phone sign-in): each attempt is an error in the console, and the others
+ * carry the messages anyway.
+ */
+export const GIVE_UP_AFTER = 4;
+const failures = new Map<string, number>();
+const everOpened = new Set<string>();
+export const isDeadRelay = (url: string) => !everOpened.has(url) && (failures.get(url) ?? 0) >= GIVE_UP_AFTER;
+/** For tests. */
+export function resetRelayHealth(): void {
+  failures.clear();
+  everOpened.clear();
+}
+
 export class RelayPool {
   private sockets = new Map<string, WebSocket>();
   private open = new Set<string>();
@@ -50,7 +66,7 @@ export class RelayPool {
   }
 
   private connect(url: string, backoff: number): void {
-    if (this.closed) return;
+    if (this.closed || isDeadRelay(url)) return;
     let ws: WebSocket;
     try {
       ws = new WebSocket(url);
@@ -60,6 +76,8 @@ export class RelayPool {
     this.sockets.set(url, ws);
     ws.onopen = () => {
       backoff = 2_000;
+      failures.delete(url);
+      everOpened.add(url);
       this.open.add(url);
       this.onConnected(this.open.size);
       ws.send(JSON.stringify(['REQ', 'room', this.filter]));
@@ -67,12 +85,13 @@ export class RelayPool {
     ws.onmessage = (m) => this.handle(typeof m.data === 'string' ? m.data : '');
     ws.onclose = () => {
       if (this.open.delete(url)) this.onConnected(this.open.size);
+      else failures.set(url, (failures.get(url) ?? 0) + 1);
       this.retry(url, backoff);
     };
   }
 
   private retry(url: string, backoff: number): void {
-    if (this.closed) return;
+    if (this.closed || isDeadRelay(url)) return;
     const timer = setTimeout(() => {
       this.timers.delete(timer);
       this.connect(url, Math.min(backoff * 2, 60_000));

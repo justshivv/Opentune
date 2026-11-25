@@ -13,7 +13,9 @@ interface FavoriteButtonProps {
 /**
  * Apple's Favorite star, backed by YouTube Music's like (a liked song joins
  * Liked Music). Only shown signed in; the state is read from the track's
- * watch page, as YouTube's own player reads it.
+ * watch page, as YouTube's own player reads it. Liking needs only the video
+ * id, so the star never waits for that read: it turns at once (useSetLiked
+ * is optimistic) and turns back, with a message, if YouTube refuses.
  */
 export function FavoriteButton({ videoId, className, size = 18, likedColor }: FavoriteButtonProps) {
   const signedIn = useSignedIn();
@@ -30,7 +32,6 @@ export function FavoriteButton({ videoId, className, size = 18, likedColor }: Fa
       aria-pressed={liked}
       data-burst={bursts > 0 || undefined}
       style={liked && likedColor ? { color: likedColor } : undefined}
-      disabled={status.isPending}
       onClick={(event) => {
         event.stopPropagation();
         if (!liked) setBursts((n) => n + 1);

@@ -10,6 +10,9 @@ const pill =
   'self-start rounded-[16px] bg-key-bg px-3.5 py-[5px] type-[600_13px/18px] text-white hover:brightness-[1.08] disabled:opacity-60';
 // The folded sidebar's version: the same action as a round icon, its words in the tooltip.
 const roundPill = 'grid size-8 place-items-center self-center rounded-full bg-key-bg text-white hover:brightness-[1.08] disabled:opacity-60';
+// A failed read: the same shape, quieter, since nothing is wrong with the user's sign-in.
+const quietPill = 'self-start rounded-[16px] bg-quinary px-3.5 py-[5px] text-start type-[600_13px/18px] text-primary hover:bg-quaternary disabled:opacity-60';
+const quietRound = 'grid size-8 place-items-center self-center rounded-full bg-quinary text-primary hover:bg-quaternary disabled:opacity-60';
 const avatar = 'inline-grid flex-none place-items-center rounded-full bg-quinary object-cover type-[600_11px/1] text-secondary';
 
 function Avatar({ src, name, size }: { src: string | null; name: string; size: number }) {
@@ -19,6 +22,26 @@ function Avatar({ src, name, size }: { src: string | null; name: string; size: n
     <span className={avatar} style={{ width: size, height: size }} aria-hidden="true">
       {name.slice(0, 1).toUpperCase()}
     </span>
+  );
+}
+
+/**
+ * One calm line when the account couldn't be read after the automatic
+ * retries, with the one thing to do about it. Never a toast.
+ */
+function RetryAccount({ compact, why, refresh }: { compact: boolean; why: string | null; refresh: ReturnType<typeof useRefreshYtAuth> }) {
+  const label = refresh.isPending ? 'Loading your account…' : 'Couldn’t load your account. Retry';
+  return (
+    <button
+      className={compact ? quietRound : quietPill}
+      title={compact ? label : (why ?? undefined)}
+      aria-label={compact ? label : undefined}
+      onClick={() => refresh.mutate()}
+      disabled={refresh.isPending}
+      data-account-state="failed"
+    >
+      {compact ? <RotateCw size={16} strokeWidth={2.2} /> : label}
+    </button>
   );
 }
 
@@ -38,7 +61,29 @@ export function AccountButton({ compact = false }: { compact?: boolean }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const close = useCallback(() => setAnchor(null), []);
 
-  if (status.state !== 'ready') return null;
+  if (status.state === 'unavailable') return null;
+  if (status.state === 'checking') {
+    // The account from last time, shown at once while the extension reads it again.
+    const last = status.lastKnown;
+    if (!last) return null;
+    return (
+      <span
+        className={
+          compact
+            ? 'grid size-8 place-items-center self-center opacity-70'
+            : 'flex w-full min-w-0 items-center gap-2 px-1 py-1.5 type-body-reduced text-secondary'
+        }
+        title="Connecting to your Google account…"
+        aria-label={compact ? `Account: ${last.name}, connecting` : undefined}
+        aria-busy="true"
+        data-account-state="connecting"
+      >
+        <Avatar src={last.avatarUrl} name={last.name} size={compact ? 28 : 24} />
+        {!compact && <span className="min-w-0 flex-1 truncate">{last.name}</span>}
+      </span>
+    );
+  }
+  if (status.state === 'error') return <RetryAccount compact={compact} why={status.message} refresh={refresh} />;
   const { auth } = status;
 
   if (!auth.browserSignedIn) {
@@ -57,19 +102,8 @@ export function AccountButton({ compact = false }: { compact?: boolean }) {
     );
   }
   if (!auth.active) {
-    // Signed in to the browser, but the account couldn't be read (the reason is on the Extension page).
-    const label = refresh.isPending ? 'Reading account…' : 'Retry YouTube Sign-In';
-    return (
-      <button
-        className={compact ? roundPill : pill}
-        title={compact ? label : (auth.problem ?? undefined)}
-        aria-label={compact ? label : undefined}
-        onClick={() => refresh.mutate()}
-        disabled={refresh.isPending}
-      >
-        {compact ? <RotateCw size={16} strokeWidth={2.2} /> : label}
-      </button>
-    );
+    // Signed in to the browser, but the account couldn't be read, retries included (the reason is on the Extension page).
+    return <RetryAccount compact={compact} why={auth.problem} refresh={refresh} />;
   }
   const active = auth.active;
   const multiple = auth.accounts.flatMap((a) => a.channels).length > 1;

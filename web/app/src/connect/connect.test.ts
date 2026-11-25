@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { toHex } from '@/together/crypto';
 import type { NostrEvent } from '@/together/nostr';
 import type { TransportFactory } from '@/together/session';
@@ -87,7 +87,7 @@ function bus(connectMs = 0, chaos?: { group?: ConnectGroup; rule: Rule }): Trans
 const fast: Timings = { presenceMs: 200, goneMs: 700, stateMs: 100, commandMs: 400, transferMs: 400, tickMs: 20 };
 const track = (c: string): CTrack => ({ id: c.repeat(11), title: `Song ${c}`, artist: 'Artist' });
 
-function fakePlayer(playable = true) {
+function fakePlayer(playable = true, canMove = true) {
   // [stalled]: meant to play, but stalled to load and not moving.
   const s = { track: null as CTrack | null, queue: [] as CTrack[], playing: false, stalled: false, pos: 0, volume: 1, calls: [] as string[], needsTap: false };
   const player: ConnectPlayer = {
@@ -119,6 +119,17 @@ function fakePlayer(playable = true) {
       s.queue = s.queue.filter((_, j) => j !== i);
       return true;
     },
+    ...(canMove && {
+      moveQueued: (from: number, to: number, id: string) => {
+        if (s.queue[from]?.id !== id || to < 0 || to >= s.queue.length) return false;
+        s.calls.push(`move ${from} ${to}`);
+        const next = [...s.queue];
+        const [t] = next.splice(from, 1);
+        next.splice(to, 0, t!);
+        s.queue = next;
+        return true;
+      },
+    }),
     load: (queue, index, pos, playing) => {
       s.calls.push(`load ${queue.length}`);
       if (!playable) return false;
@@ -138,14 +149,14 @@ async function eventually(what: string, check: () => boolean, ms = 3_000): Promi
   throw new Error(`never: ${what}`);
 }
 
-async function devices(...names: [string, string, boolean?][]) {
+async function devices(...names: [string, string, boolean?, boolean?][]) {
   return devicesWith(fast, bus(), ...names);
 }
 
-async function devicesWith(timings: Timings, transport: TransportFactory, ...names: [string, string, boolean?][]) {
+async function devicesWith(timings: Timings, transport: TransportFactory, ...names: [string, string, boolean?, boolean?][]) {
   const group = await ConnectGroup.generate();
-  return names.map(([id, name, playable]) => {
-    const { s, player } = fakePlayer(playable ?? true);
+  return names.map(([id, name, playable, canMove]) => {
+    const { s, player } = fakePlayer(playable ?? true, canMove ?? true);
     const d = { id, s, view: null as ConnectView | null, notices: [] as string[], movedTo: [] as string[], session: null as unknown as ConnectSession };
     d.session = new ConnectSession(group, id, name, 'web', player, (v) => { d.view = v; }, (t, n) => d.notices.push(t.replace('{0}', n)), timings, transport, undefined, (secret) => d.movedTo.push(secret));
     d.session.start();
@@ -239,6 +250,41 @@ describe('sessions', () => {
     // b may still show p first; r is entry 2 there, and is found by its id.
     b!.session.jumpOn('a', 2, track('r'));
     await eventually('r plays', () => a!.s.track?.id[0] === 'r');
+    a!.session.stop(); b!.session.stop();
+  });
+
+  it('reorders the Up Next of another device with `move`, shown at once', async () => {
+    const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
+    a!.s.queue = [track('p'), track('q'), track('r')];
+    play(a!, track('x'));
+    await eventually('b sees the queue', () => b!.view?.devices[0]?.state?.queue?.length === 3);
+    const sent = vi.spyOn(b!.session as unknown as { send: (m: ConnectMsg) => void }, 'send');
+    const refused = vi.fn();
+    b!.session.moveOn('a', 0, 2, track('p'), refused);
+    // Shown in its new place before the phone answers.
+    expect(b!.view!.devices[0]!.state!.queue!.map((t) => t.id[0]).join('')).toBe('qrp');
+    // The command as the phone reads it: from in `pos` (left out when 0, as for every command), to in `value`.
+    const command = sent.mock.calls.map(([m]) => m).find((m) => m.type === 'command');
+    expect(command).toMatchObject({ type: 'command', to: 'a', action: 'move', value: 2, track: track('p') });
+    expect(decode(encode(command!))).toEqual(command);
+    await eventually('moved there', () => a!.s.queue.map((t) => t.id[0]).join('') === 'qrp');
+    expect(a!.s.calls).toContain('move 0 2');
+    await eventually('answered', () => b!.view!.pending.length === 0);
+    expect(refused).not.toHaveBeenCalled();
+    a!.session.stop(); b!.session.stop();
+  });
+
+  it('puts the order back, and says so, when the other device can\'t reorder (an older app)', async () => {
+    const [a, b] = await devices(['a', 'Phone', true, false], ['b', 'Chrome']);
+    a!.s.queue = [track('p'), track('q'), track('r')];
+    play(a!, track('x'));
+    await eventually('b sees the queue', () => b!.view?.devices[0]?.state?.queue?.length === 3);
+    const refused = vi.fn();
+    b!.session.moveOn('a', 2, 0, track('r'), refused);
+    expect(b!.view!.devices[0]!.state!.queue!.map((t) => t.id[0]).join('')).toBe('rpq');
+    await eventually('refused', () => refused.mock.calls.length === 1);
+    expect(b!.view!.devices[0]!.state!.queue!.map((t) => t.id[0]).join('')).toBe('pqr');
+    expect(a!.s.queue.map((t) => t.id[0]).join('')).toBe('pqr');
     a!.session.stop(); b!.session.stop();
   });
 

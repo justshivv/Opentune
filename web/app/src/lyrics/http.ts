@@ -27,6 +27,31 @@ export const LYRIC_EXTENSION_ORIGINS = [
   'https://unison.boidu.dev',
 ];
 
+/**
+ * Hosts that never let this site read their answers (no CORS for its
+ * origin): asked through the extension only, and skipped quietly without
+ * it, instead of a blocked request and a console error on every song.
+ */
+export const EXTENSION_ONLY_ORIGINS = new Set(['https://lyrics-api.boidu.dev', 'https://lyrics.paxsenix.org', 'https://api.paxsenix.org']);
+/** Hosts whose direct request the browser blocked this session: the extension from then on. */
+const corsBlocked = new Set<string>();
+/** Hosts that answered 429, until when: not asked again before then. */
+const coolingUntil = new Map<string, number>();
+/** How long a 429 without Retry-After keeps a host out. */
+const COOL_DOWN_MS = 5 * 60_000;
+
+function coolDown(origin: string, retryAfter: string | null | undefined): void {
+  const seconds = Number(retryAfter);
+  const ms = Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, 30 * 60_000) : COOL_DOWN_MS;
+  coolingUntil.set(origin, Date.now() + ms);
+}
+
+/** For tests: forgets what this session learned about the hosts. */
+export function resetLyricHosts(): void {
+  corsBlocked.clear();
+  coolingUntil.clear();
+}
+
 const DIRECT_TIMEOUT_MS = 6000;
 const EXTENSION_TIMEOUT_MS = 15_000;
 
@@ -81,6 +106,7 @@ async function viaExtension(url: string, headers: Record<string, string> | undef
       { url, ...(headers && { headers }) },
       { timeoutMs: EXTENSION_TIMEOUT_MS },
     );
+    if (response.status === 429) coolDown(new URL(url).origin, response.headers['retry-after']);
     if (response.status < 200 || response.status >= 300) return null;
     return response.bodyEncoding === 'base64' ? new TextDecoder().decode(Uint8Array.from(atob(response.body), (c) => c.charCodeAt(0))) : response.body;
   } catch (error) {
@@ -96,17 +122,23 @@ async function viaExtension(url: string, headers: Record<string, string> | undef
 }
 
 export async function lyricsGet(url: string, { route = 'direct', headers, patient }: GetOptions = {}): Promise<string | null> {
-  if (route === 'extension') return viaExtension(url, headers);
+  const origin = new URL(url).origin;
+  if ((coolingUntil.get(origin) ?? 0) > Date.now()) return null;
+  if (route === 'extension' || EXTENSION_ONLY_ORIGINS.has(origin) || corsBlocked.has(origin)) return viaExtension(url, headers);
   try {
     const response = await fetch(url, {
       headers: { Accept: 'application/json, text/plain, */*', ...headers },
       signal: AbortSignal.timeout(patient ? EXTENSION_TIMEOUT_MS : DIRECT_TIMEOUT_MS),
       referrerPolicy: 'no-referrer',
     });
+    if (response.status === 429) coolDown(origin, response.headers.get('retry-after'));
     return response.ok ? await response.text() : null;
   } catch (error) {
     // A CORS refusal looks like a network error from here; the extension isn't bound by it.
-    if (error instanceof TypeError) return viaExtension(url, headers);
+    if (error instanceof TypeError) {
+      corsBlocked.add(origin);
+      return viaExtension(url, headers);
+    }
     return null;
   }
 }

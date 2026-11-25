@@ -1,8 +1,9 @@
-import { ArrowDown, ArrowUp, Infinity as InfinityIcon, ListStart, Moon, MoreHorizontal, X } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { ArrowDown, ArrowUp, GripVertical, Infinity as InfinityIcon, ListStart, Moon, MoreHorizontal, Shuffle, X } from 'lucide-react';
+import { useCallback, useState, type CSSProperties } from 'react';
 import { Menu, MenuHeader, MenuItem, MenuSeparator } from '@/components/Menu';
 import { Artwork } from '@/components/music/Artwork';
 import { formatDuration } from '@/components/music/links';
+import { useReorder, type Reorder } from '@/components/music/reorder';
 import { toast } from '@/components/Toast';
 import { autoplaySectionStart, upcomingUserQueueIndices, type QueueEntry } from '@/playback/queue/timeline';
 import { CROSSFADE_CHOICES, usePlayer } from '@/state/player';
@@ -12,14 +13,23 @@ import { SLEEP_CHOICES, sleepLabel, useSleepTimer } from '@/state/sleepTimer';
 const square = 'grid size-7 place-items-center rounded-[6px] text-secondary transition-colors duration-150 hover:bg-quinary aria-pressed:text-key';
 const list = 'flex flex-col';
 
-/** A row: 55px, [art] 40px [title] 1fr [right] 40px, gap 12px, radius 6px; a key-colour line where a drag would drop. */
+export const ROW_HEIGHT = 55;
+
+/** Up Next's row: 55px, [handle] 16px [art] 40px [title] 1fr [right] 40px, gap 12px, radius 6px. */
+export const rowClass =
+  'group/row relative grid h-[55px] grid-cols-[16px_40px_minmax(0,1fr)_40px] items-center gap-x-2.5 rounded-row ps-1 pe-2.5 hover:bg-quinary data-dragging:bg-thick-material data-dragging:shadow-glass';
+
+/** The drag handle: grab it with the mouse or a finger, or focus it and use the arrow keys. */
+export const handleClass =
+  'grid h-10 w-4 cursor-grab touch-none place-items-center rounded-[4px] text-tertiary opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-key active:cursor-grabbing data-dragging:opacity-100 [@media(hover:none)]:opacity-100';
+
 function Row({
   entry,
   at,
   first,
   last,
-  onDragStart,
-  onDropAt,
+  handle,
+  style,
   dragging,
 }: {
   entry: QueueEntry;
@@ -27,38 +37,20 @@ function Row({
   /** The first and last upcoming rows: nothing to move above or below them. */
   first: boolean;
   last: boolean;
-  onDragStart: (at: number) => void;
-  onDropAt: (at: number) => void;
+  handle: ReturnType<Reorder['handleProps']>;
+  style: CSSProperties | undefined;
   dragging: boolean;
 }) {
   const { jumpTo, removeAt, playNext, move } = usePlayer.getState();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const [over, setOver] = useState(false);
   const close = useCallback(() => setAnchor(null), []);
   const { track } = entry;
 
   return (
-    <li
-      className="group/row relative grid h-[55px] grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-x-3 rounded-row px-2.5 transition-[background-color,opacity] duration-150 ease-out hover:bg-quinary hover:duration-0 data-dragging:opacity-40 data-over:before:absolute data-over:before:inset-x-2.5 data-over:before:-top-px data-over:before:border-t-2 data-over:before:border-t-key"
-      data-over={over || undefined}
-      data-dragging={dragging || undefined}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = 'move';
-        onDragStart(at);
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        onDropAt(at);
-      }}
-      onDoubleClick={() => jumpTo(at)}
-    >
+    <li className={rowClass} style={style} data-dragging={dragging || undefined} onDoubleClick={() => jumpTo(at)}>
+      <button type="button" className={handleClass} data-dragging={dragging || undefined} {...handle}>
+        <GripVertical size={14} />
+      </button>
       <div className="relative size-10">
         <Artwork src={track.thumbnail} displayWidth={40} radius="var(--radius-artwork-small)" />
         {/* The ✕ over the artwork's top-left, on hover. */}
@@ -124,6 +116,29 @@ function Row({
   );
 }
 
+/** One run of rows (before AutoPlay's section, or in it): dragging stays within it. */
+function Section({ items, firstAt, lastAt }: { items: { entry: QueueEntry; at: number }[]; firstAt: number; lastAt: number }) {
+  const move = usePlayer((s) => s.move);
+  const onMove = useCallback((from: number, to: number) => move(items[from]!.at, items[to]!.at), [items, move]);
+  const reorder = useReorder({ count: items.length, rowHeight: ROW_HEIGHT, onMove });
+  return (
+    <ol className={list}>
+      {items.map(({ entry, at }, i) => (
+        <Row
+          key={entry.entryId}
+          entry={entry}
+          at={at}
+          first={at === firstAt}
+          last={at === lastAt}
+          dragging={reorder.isDragging(i)}
+          style={reorder.rowStyle(i)}
+          handle={reorder.handleProps(i, `Reorder ${entry.track.title}. Use the arrow keys to move it.`)}
+        />
+      ))}
+    </ol>
+  );
+}
+
 /** Apple's Up Next (report §7), over the three-tier queue: what's next, then AutoPlay's section. */
 export function UpNext() {
   const queue = usePlayer((s) => s.queue);
@@ -131,11 +146,11 @@ export function UpNext() {
   const autoplay = usePlayer((s) => s.autoplay);
   const repeat = usePlayer((s) => s.repeat);
   const crossfadeSec = usePlayer((s) => s.crossfadeSec);
-  const { clearUpNext, setAutoplay, setCrossfade, move } = usePlayer.getState();
+  const { clearUpNext, setAutoplay, setCrossfade, toggleShuffle } = usePlayer.getState();
   const sleep = useSleepTimer();
   const sleeping = sleepLabel(sleep.endsAt, sleep.endOfSong);
+  const shuffle = usePlayer((s) => s.shuffle);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
   const close = useCallback(() => setAnchor(null), []);
 
   const tiers = queue.map((e) => e.tier);
@@ -148,27 +163,23 @@ export function UpNext() {
 
   const firstAt = upcoming[0]?.at ?? -1;
   const lastAt = upcoming[upcoming.length - 1]?.at ?? -1;
-  const rows = (items: typeof upcoming) =>
-    items.map(({ entry, at }) => (
-      <Row
-        key={entry.entryId}
-        entry={entry}
-        at={at}
-        first={at === firstAt}
-        last={at === lastAt}
-        dragging={dragFrom === at}
-        onDragStart={setDragFrom}
-        onDropAt={(to) => {
-          if (dragFrom !== null) move(dragFrom, to);
-          setDragFrom(null);
-        }}
-      />
-    ));
+  const rows = (items: typeof upcoming) => <Section items={items} firstAt={firstAt} lastAt={lastAt} />;
 
   return (
     <>
       <div className="flex items-center gap-1.5 px-5 pt-[23px] pb-3">
         <h3 className="flex-1 type-title-2-emphasized">Up Next</h3>
+        {upcoming.length > 1 && (
+          <button
+            className={square}
+            aria-label="Shuffle"
+            title={shuffle ? 'Shuffle is on: Up Next is in shuffled order' : 'Shuffle Up Next'}
+            aria-pressed={shuffle}
+            onClick={toggleShuffle}
+          >
+            <Shuffle size={15} strokeWidth={2.2} />
+          </button>
+        )}
         {canClear && (
           <button className="mr-1 type-title-3 text-key" onClick={clearUpNext}>
             Clear
@@ -230,14 +241,14 @@ export function UpNext() {
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-[120px]">
-          <ol className={list}>{rows(beforeAutoplay)}</ol>
+          {rows(beforeAutoplay)}
           {afterAutoplay.length > 0 && (
             <>
               <h4 className="mx-2.5 mt-[18px] mb-0.5 flex items-center gap-1.5 type-callout-emphasized">
                 <InfinityIcon size={14} strokeWidth={2.4} /> AutoPlay
               </h4>
               <p className="mx-2.5 mb-2 type-callout text-secondary">Similar music, from YouTube Music’s radio.</p>
-              <ol className={list}>{rows(afterAutoplay)}</ol>
+              {rows(afterAutoplay)}
             </>
           )}
         </div>

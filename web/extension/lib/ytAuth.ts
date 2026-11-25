@@ -1,5 +1,16 @@
 import type { YtAccount, YtAuthState, YtChannel } from '@opentune/shared/bridge';
-import { fetchWithDeadline } from './http';
+import {
+  freshness,
+  HttpStatusError,
+  isTransient,
+  mapPool,
+  mergeLogins,
+  parseRetryAfter,
+  ttlFor,
+  withRetry,
+  type LoginOutcome,
+} from './accountRead';
+import { fetchWithDeadline, NetworkError } from './http';
 import { ensureExtensionFetchRule } from './rules';
 
 /**
@@ -30,8 +41,15 @@ const WEB_REMIX_VERSION = '1.20251006.03.00';
  * and 4 signed in, with 0 and 3 expired (account_menu answers 403 for those).
  */
 const MAX_LOGINS = 10;
-/** Accounts rarely change; a cookie change clears this at once anyway. */
-const ACCOUNTS_TTL_MS = 10 * 60_000;
+/**
+ * The indices are read a few at a time, not all at once: eleven signed
+ * requests in one burst is what YouTube answers slowly or with 429.
+ */
+const CONCURRENCY = 3;
+/** The whole read, every index and its channels, ends by then; what hasn't answered counts as failed. */
+const READ_BUDGET_MS = 20_000;
+/** One request's own deadline, inside the read's: generous, for slow networks. */
+const REQUEST_TIMEOUT_MS = 12_000;
 
 // ---- Preferences --------------------------------------------------------------
 
@@ -148,7 +166,12 @@ export async function signedFetch(
   });
 }
 
-async function musicApi(endpoint: string, identity: Identity): Promise<unknown> {
+/** A request's deadline: its own, cut to what is left of the read's. */
+function timeoutWithin(deadline: number): number {
+  return Math.max(1000, Math.min(REQUEST_TIMEOUT_MS, deadline - Date.now()));
+}
+
+async function musicApi(endpoint: string, identity: Identity, timeoutMs = REQUEST_TIMEOUT_MS): Promise<unknown> {
   const response = await signedFetch(
     `${MUSIC_ORIGIN}/youtubei/v1/${endpoint}?prettyPrint=false`,
     {
@@ -161,10 +184,11 @@ async function musicApi(endpoint: string, identity: Identity): Promise<unknown> 
       body: JSON.stringify({
         context: { client: { clientName: 'WEB_REMIX', clientVersion: WEB_REMIX_VERSION, hl: 'en', gl: 'US' }, user: {} },
       }),
+      timeoutMs,
     },
     identity,
   );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) throw new HttpStatusError(response.status, parseRetryAfter(response.headers.get('retry-after')));
   return response.json();
 }
 
@@ -265,20 +289,29 @@ function describeEmpty(endpoint: string, body: unknown): string {
 }
 
 /**
- * One login, or null with the reason when that index isn't signed in.
- * Only `account_menu` decides: `accounts_list` answers even for an expired
- * index (with another login's channels), which once made a dead login look
- * like the active one.
+ * One login: its account, 'none' when YouTube says no login is at that index,
+ * or 'failed' when YouTube didn't give a usable answer (slow, busy, out of
+ * reach), which says nothing about the index. Only `account_menu` decides:
+ * `accounts_list` answers even for an expired index (with another login's
+ * channels), which once made a dead login look like the active one.
  */
-async function readLogin(authUser: string): Promise<{ account: StoredAccount | null; why: string | null }> {
+async function readLogin(
+  authUser: string,
+  deadline: number,
+  previous: readonly StoredAccount[] | null,
+): Promise<LoginOutcome<StoredAccount>> {
   const identity = { authUser, pageId: null };
+  const call = (endpoint: string) => withRetry(() => musicApi(endpoint, identity, timeoutWithin(deadline)), { deadline });
+  if (Date.now() >= deadline) return { kind: 'failed', why: 'account_menu: no time left for this login', retryAfterMs: null };
   let header: Json | undefined;
   try {
-    const menu = await musicApi('account/account_menu', identity);
+    const menu = await call('account/account_menu');
     header = renderers(menu, 'activeAccountHeaderRenderer')[0];
-    if (!header) return { account: null, why: describeEmpty('account_menu', menu) };
+    if (!header) return { kind: 'none', why: describeEmpty('account_menu', menu) };
   } catch (error) {
-    return { account: null, why: `account_menu: ${error instanceof Error ? error.message : String(error)}` };
+    const why = `account_menu: ${error instanceof Error ? error.message : String(error)}`;
+    if (!isTransient(error)) return { kind: 'none', why };
+    return { kind: 'failed', why, retryAfterMs: error instanceof HttpStatusError ? error.retryAfterMs : null };
   }
 
   const name = text(header.accountName) || 'YouTube Music';
@@ -287,16 +320,18 @@ async function readLogin(authUser: string): Promise<{ account: StoredAccount | n
   const avatarUrl = photo(header);
   let channels: StoredChannel[] = [];
   try {
-    channels = parseChannels(await musicApi('account/accounts_list', identity), authUser);
+    channels = parseChannels(await call('account/accounts_list'), authUser);
   } catch {
-    // The switcher isn't answered for every account; the login's own channel always exists.
+    // The switcher isn't answered for every account. When it failed only for
+    // now, the channels read last time are kept, so a chosen brand channel isn't lost.
+    channels = previous?.find((a) => a.authUser === authUser && (a.email ?? a.name) === (email ?? name))?.channels ?? [];
   }
   if (!channels.length) {
     channels = [
       { id: channelId(authUser, null), name, handle: handle ?? email, avatarUrl, brand: false, authUser, pageId: null, selectedOnWeb: true },
     ];
   }
-  return { account: { authUser, name, email, avatarUrl, channels }, why: null };
+  return { kind: 'account', account: { authUser, name, email, avatarUrl, channels } };
 }
 
 /**
@@ -305,12 +340,12 @@ async function readLogin(authUser: string): Promise<{ account: StoredAccount | n
  * which may be a login that has expired. The same page says whether YouTube
  * saw a session on the request at all (`LOGGED_IN`).
  */
-async function webSession(): Promise<{ index: string | null; loggedIn: boolean | null }> {
+async function webSession(deadline: number): Promise<{ index: string | null; loggedIn: boolean | null }> {
   try {
     // The page may send a visitor through consent.youtube.com first; that answer just has no SESSION_INDEX.
     const response = await signedFetch(
       `${MUSIC_ORIGIN}/`,
-      { headers: { Accept: 'text/html' }, redirect: 'follow' },
+      { headers: { Accept: 'text/html' }, redirect: 'follow', timeoutMs: timeoutWithin(deadline) },
       { authUser: '0', pageId: null },
     );
     const html = await response.text();
@@ -325,28 +360,29 @@ async function webSession(): Promise<{ index: string | null; loggedIn: boolean |
 const COOKIES_NOT_SENT =
   "the browser didn't send your YouTube session with the extension's requests. Open music.youtube.com in a tab, check you're signed in there, then retry. If it still fails, allow cookies for youtube.com in the browser's privacy settings (Brave Shields, Edge tracking prevention)";
 
-async function readAccounts(): Promise<Accounts> {
-  let problem: string | null = null;
-  const [results, web] = await Promise.all([
-    Promise.all(Array.from({ length: MAX_LOGINS }, (_, i) => readLogin(String(i)))),
-    webSession(),
+async function readAccounts(previous: Accounts | null): Promise<Accounts> {
+  const deadline = Date.now() + READ_BUDGET_MS;
+  const indices = Array.from({ length: MAX_LOGINS }, (_, i) => String(i));
+  const [outcomes, web] = await Promise.all([
+    mapPool(indices, CONCURRENCY, (index) => readLogin(index, deadline, previous?.list ?? null)),
+    webSession(deadline),
   ]);
-  const webIndex = web.index;
-  const list: StoredAccount[] = [];
-  const seen = new Set<string>();
-  for (const { account } of results) {
-    if (!account) continue;
-    const key = account.email ?? `${account.name}|${account.channels.map((c) => c.id.split(':')[1]).join(',')}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    list.push(account);
+  const merged = mergeLogins(outcomes, previous?.list ?? null);
+  const webIndex = web.index ?? previous?.webIndex ?? null;
+  let problem: string | null = null;
+  if (!merged.list.length) {
+    if (!merged.complete) {
+      problem = `YouTube didn't answer in time (${merged.failedWhy}). NepTune will try again`;
+    } else {
+      const outcome = outcomes[Number(webIndex ?? 0)] ?? outcomes[0];
+      const why = outcome && outcome.kind !== 'account' ? outcome.why : 'no signed-in Google account found';
+      problem = web.loggedIn === false ? COOKIES_NOT_SENT : why;
+    }
+    console.warn(`NepTune: no YouTube account found: ${problem}`);
+  } else if (!merged.complete) {
+    console.warn(`NepTune: some YouTube logins didn't answer: ${merged.failedWhy}`);
   }
-  if (!list.length) {
-    const why = results[Number(webIndex ?? 0)]?.why ?? results[0]?.why ?? 'no signed-in Google account found';
-    problem = web.loggedIn === false ? COOKIES_NOT_SENT : why;
-    console.warn(`NepTune: no YouTube account found: ${why}`);
-  }
-  return { list, webIndex, problem };
+  return { list: merged.list, webIndex, problem, complete: merged.complete, retryAfterMs: merged.retryAfterMs };
 }
 
 // ---- State --------------------------------------------------------------------
@@ -357,7 +393,13 @@ interface Accounts {
   webIndex: string | null;
   /** What went wrong reading the accounts, in words the popup can show; null when it worked. */
   problem: string | null;
+  /** Every login index answered; false when some were slow or refused for now. */
+  complete: boolean;
+  /** How long YouTube asked to wait before the next read, when it said. */
+  retryAfterMs: number | null;
 }
+
+type HeldAccounts = Accounts & { at: number; until: number };
 
 /**
  * The list is read with a request per login (about twenty in all), so it is
@@ -365,34 +407,45 @@ interface Accounts {
  * a minute idle, and the next request shouldn't read every login again. That
  * storage is memory only, cleared with the browser session, and holds names,
  * pictures and login indices, never cookies.
+ *
+ * A full read is kept ten minutes, a partial one a minute and a failed one
+ * seconds (accountRead.ts, ttlFor). Once old, a list with accounts in it is
+ * still answered from while a new read runs behind it; a failure never is.
  */
 const CACHE_KEY = 'yt.accounts';
-let cache: (Accounts & { at: number }) | null = null;
+let cache: HeldAccounts | null = null;
 let reading: { promise: Promise<Accounts>; generation: number } | null = null;
 /** Bumped by every invalidation, so a read that started before one doesn't store its stale answer. */
 let generation = 0;
+/** Told when a read made behind a stale answer changes what the page should show. */
+let onChanged: (() => void) | null = null;
 
-async function storedCache(): Promise<(Accounts & { at: number }) | null> {
+export function onAccountsChanged(listener: () => void): void {
+  onChanged = listener;
+}
+
+async function storedCache(): Promise<HeldAccounts | null> {
   try {
-    return ((await browser.storage.session.get(CACHE_KEY))[CACHE_KEY] as (Accounts & { at: number }) | undefined) ?? null;
+    const held = (await browser.storage.session.get(CACHE_KEY))[CACHE_KEY] as Partial<HeldAccounts> | undefined;
+    if (!held || !Array.isArray(held.list) || typeof held.at !== 'number') return null;
+    // 0.2.0 kept neither `complete` nor `until`: a list it stored counts as complete, an empty one as expired.
+    return { webIndex: null, problem: null, complete: held.list.length > 0, retryAfterMs: null, until: 0, ...held } as HeldAccounts;
   } catch {
     return null;
   }
 }
 
-async function accounts(refresh: boolean): Promise<Accounts> {
-  if (!refresh) {
-    const started = generation;
-    const held = cache ?? (await storedCache());
-    if (held && generation === started && Date.now() - held.at < ACCOUNTS_TTL_MS) return (cache = held);
-  }
+const summary = (read: Accounts) => JSON.stringify(read.list.map((a) => [a.authUser, a.name, a.channels.map((c) => c.id)]));
+
+function startRead(): Promise<Accounts> {
   // Callers share one read, unless it began before the last invalidation.
   if (!reading || reading.generation !== generation) {
     const started = generation;
-    const promise: Promise<Accounts> = readAccounts()
+    const promise: Promise<Accounts> = readAccounts(cache)
       .then((read) => {
         if (generation === started) {
-          cache = { ...read, at: Date.now() };
+          const at = Date.now();
+          cache = { ...read, at, until: at + ttlFor(read) };
           void browser.storage.session.set({ [CACHE_KEY]: cache }).catch(() => undefined);
         }
         return read;
@@ -403,6 +456,29 @@ async function accounts(refresh: boolean): Promise<Accounts> {
     reading = { promise, generation: started };
   }
   return reading.promise;
+}
+
+async function accounts(refresh: boolean): Promise<Accounts> {
+  const started = generation;
+  // A worker that was stopped starts from what the last one stored.
+  if (!cache) {
+    const held = await storedCache();
+    if (generation === started && !cache) cache = held;
+  }
+  if (!refresh && cache && generation === started) {
+    const held = cache;
+    const state = freshness(held);
+    if (state === 'fresh') return held;
+    if (state === 'usable') {
+      void startRead()
+        .then((read) => {
+          if (summary(read) !== summary(held)) onChanged?.();
+        })
+        .catch(() => undefined);
+      return held;
+    }
+  }
+  return startRead();
 }
 
 /** Forgets the account list, after a sign-in or sign-out in the browser. */
@@ -447,6 +523,7 @@ export async function authState(refresh = false): Promise<YtAuthState> {
     problem: active ? null : read.problem,
     accounts: list.map((a) => ({ ...a, channels: a.channels.map(publicChannel) })),
     active: active && { ...publicChannel(active), authUser: active.authUser },
+    ...(!active && { retryable: !read.complete, retryAfterMs: read.retryAfterMs }),
   };
 }
 
@@ -454,7 +531,10 @@ export async function authState(refresh = false): Promise<YtAuthState> {
 export async function activeIdentity(): Promise<Identity | null> {
   const prefs = await loadPrefs();
   if (!prefs.connected || (await signingSecret()) === null) return null;
-  const active = chooseChannel(await accounts(false), prefs.selectedChannelId);
+  const read = await accounts(false);
+  const active = chooseChannel(read, prefs.selectedChannelId);
+  // Not "signed out": YouTube didn't answer the account read, and asking again soon may work.
+  if (!active && !read.complete) throw new NetworkError(`Couldn't read your Google account just now: ${read.problem}`);
   return active && { authUser: active.authUser, pageId: active.pageId };
 }
 

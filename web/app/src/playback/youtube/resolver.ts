@@ -105,7 +105,7 @@ function rememberUnplayable(videoId: string, signed: boolean, reason: string, ag
 
 /** Records that [client] failed [videoId], so the next walk skips it for a while. */
 export function excludeClient(videoId: string, client: PlayerClientName, why: string, signed = false) {
-  trackLog.w(`${client}${signed ? ' (signed in)' : ''} refused: ${why}; skipping it for this track`, videoId);
+  trackLog.d(`${client}${signed ? ' (signed in)' : ''} refused: ${why}; skipping it for this track`, videoId);
   const key = keyOf(videoId, signed);
   let entries = excluded.get(key);
   if (!entries) {

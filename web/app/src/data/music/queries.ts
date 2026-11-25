@@ -10,9 +10,11 @@ import { useEffect, useState } from 'react';
 import type { DetectedExtension } from '@opentune/shared/bridge';
 import { extensionQueryKey, useExtension } from '@/extension/useExtension';
 import { useYtAuth, ytAuthSnapshot } from '@/extension/useYtAuth';
+import { toast } from '@/components/toastStore';
 import { queryClient } from '@/lib/queryClient';
 import {
   addToPlaylist,
+  createPlaylist,
   fetchAlbum,
   fetchArtist,
   fetchBrowse,
@@ -199,13 +201,31 @@ export function useLibraryPlaylists() {
 
 const likeKey = (videoId: string) => ['music', 'like', videoId] as const;
 
+/** How long a menu waits on YouTube before it says so and offers Try Again. */
+export const MENU_TIMEOUT_MS = 12_000;
+
+/** [promise], or a rejection with [message] once [ms] pass: a menu must never wait forever. */
+export function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Whether a song is liked, for the menu's Favorite label. Liking itself needs
+ * only the video id, so nothing waits on this: until it answers (or if it
+ * doesn't), Favorite reads as not liked yet.
+ */
 export function useLikeStatus(videoId: string | null) {
   const signedIn = useSignedIn();
   return useQuery({
     queryKey: likeKey(videoId ?? ''),
-    queryFn: () => fetchLikeStatus(videoId!),
+    queryFn: () => withTimeout(fetchLikeStatus(videoId!), MENU_TIMEOUT_MS, 'YouTube Music didn’t answer'),
     enabled: signedIn && !!videoId,
     staleTime: 5 * 60_000,
+    retry: false,
   });
 }
 
@@ -213,12 +233,18 @@ export function useLikeStatus(videoId: string | null) {
 export function useSetLiked() {
   return useMutation({
     mutationFn: ({ videoId, liked }: { videoId: string; liked: boolean }) => setTrackLiked(videoId, liked),
-    onMutate: ({ videoId, liked }) => {
+    onMutate: async ({ videoId, liked }) => {
+      // A status read still on its way would land on top of the new state.
+      await queryClient.cancelQueries({ queryKey: likeKey(videoId) });
       const previous = queryClient.getQueryData<LikeStatus>(likeKey(videoId));
       queryClient.setQueryData<LikeStatus>(likeKey(videoId), liked ? 'LIKE' : 'INDIFFERENT');
       return { previous };
     },
-    onError: (_error, { videoId }, context) => queryClient.setQueryData(likeKey(videoId), context?.previous),
+    onError: (_error, { videoId, liked }, context) => {
+      // Back to what was shown: the known status, or the opposite of what was asked when none was known yet.
+      queryClient.setQueryData<LikeStatus>(likeKey(videoId), context?.previous ?? (liked ? 'INDIFFERENT' : 'LIKE'));
+      toast(liked ? 'Couldn’t add it to Favorites. Try again.' : 'Couldn’t remove it from Favorites. Try again.');
+    },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['music', 'library', 'songs'] });
       void queryClient.invalidateQueries({ queryKey: ['music', 'playlist', LIKED_MUSIC_PLAYLIST] });
@@ -249,13 +275,31 @@ export function useSetListSaved() {
   });
 }
 
+/**
+ * The account's playlists, for Add to Playlist. One list for every song (what
+ * is read doesn't depend on the song), so after the first menu it opens from
+ * the cache at once and refreshes behind. Bounded by MENU_TIMEOUT_MS.
+ */
+export const playlistOptionsKey = ['music', 'playlist-options'] as const;
 export function usePlaylistOptions(videoId: string, enabled: boolean) {
   const signedIn = useSignedIn();
   return useQuery({
-    queryKey: ['music', 'playlist-options', videoId],
-    queryFn: () => fetchPlaylistOptions(videoId),
+    queryKey: playlistOptionsKey,
+    queryFn: () => withTimeout(fetchPlaylistOptions(videoId), MENU_TIMEOUT_MS, 'YouTube Music didn’t answer in time'),
     enabled: signedIn && enabled,
-    staleTime: 0,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/** A new playlist holding one song, from the Add to Playlist menu. */
+export function useCreatePlaylistWith() {
+  return useMutation({
+    mutationFn: ({ title, videoId }: { title: string; videoId: string }) => createPlaylist(title, [videoId]),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: playlistOptionsKey });
+      void queryClient.invalidateQueries({ queryKey: ['music', 'library'] });
+    },
   });
 }
 
