@@ -7,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -44,21 +45,31 @@ fun AmbientLights(
     /** Spread over the whole area, softer and with no wash, for behind the lyrics. */
     field: Boolean = false,
 ) {
-    // Each colour eases into the next song's rather than jumping.
-    val shown = colors.take(GLOWS).let { if (it.size < GLOWS) it + List(GLOWS - it.size) { i -> it[i % it.size] } else it }
-        .mapIndexed { i, c -> animateColorAsState(c, tween(1_400), label = "glow$i").value }
-    DisposableEffect(animate) {
-        if (animate) AudioLevels.hold()
-        onDispose { if (animate) AudioLevels.release() }
+    // Each colour eases into the next song's rather than jumping; read while drawing, so the
+    // easing redraws the lights without composing them again on each frame.
+    val fading = colors.take(GLOWS).let { if (it.size < GLOWS) it + List(GLOWS - it.size) { i -> it[i % it.size] } else it }
+        .mapIndexed { i, c -> animateColorAsState(c, tween(1_400), label = "glow$i") }
+    // The system's "Remove animations" holds them still too, as the app's own Reduce animation does.
+    val moving = animate && android.animation.ValueAnimator.areAnimatorsEnabled()
+    DisposableEffect(moving) {
+        if (moving) AudioLevels.hold()
+        onDispose { if (moving) AudioLevels.release() }
     }
+    // On a phone that can't keep up (Lite mode, or glass gone lighter), a dozen steps a second,
+    // as the mesh backdrop takes them; and no blur where blur is turned down: the blur is worked
+    // out again over the whole area on every step, the costliest part of the lights.
+    val smooth = smoothBackdrop()
+    val blurs = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        !com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceBlur
     val time = remember { mutableFloatStateOf(0f) }
     val swell = remember { mutableFloatStateOf(0f) }
     val bright = remember { mutableFloatStateOf(if (playing) 1f else 0.6f) }
-    LaunchedEffect(animate, playing) {
-        if (!animate) return@LaunchedEffect
+    LaunchedEffect(moving, playing, smooth) {
+        if (!moving) return@LaunchedEffect
         var last = 0L
         var peak = 0.05f
         while (true) {
+            if (!smooth) kotlinx.coroutines.delay(MESH_STEP_MS)
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0.016f else ((now - last) / 1e9f).coerceIn(0f, 0.1f)
                 last = now
@@ -75,7 +86,7 @@ fun AmbientLights(
     }
     Canvas(
         modifier
-            .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Modifier.blur(40.dp, BlurredEdgeTreatment.Unbounded) else Modifier)
+            .then(if (blurs) Modifier.blur(40.dp, BlurredEdgeTreatment.Unbounded) else Modifier)
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
                 drawContent()
@@ -87,6 +98,7 @@ fun AmbientLights(
                 )
             },
     ) {
+        val shown = fading.map { it.value }
         val w = size.width
         val h = size.height
         val t = time.floatValue

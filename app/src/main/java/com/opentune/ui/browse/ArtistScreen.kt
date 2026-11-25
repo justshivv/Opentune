@@ -386,7 +386,7 @@ internal fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, lis
                 if (video != null) ArtistVideo(video, Modifier.fillMaxSize().graphicsLayer(drift))
                 // The lower part goes soft as it nears the page: a blurred copy of the
                 // photo, faded in from about halfway down, under the fade to the page.
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && video == null) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && video == null && !ui.reduceBlur) {
                     Artwork(
                         shown,
                         Modifier

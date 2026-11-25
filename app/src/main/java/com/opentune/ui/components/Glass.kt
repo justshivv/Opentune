@@ -87,8 +87,10 @@ val LocalHazeState = staticCompositionLocalOf<HazeState?> { null }
  * eases toward, and the cover's second colour glowing in from the side.
  * Provided by the page's tint wrapper, so a bar frosted over the page can
  * paint the same backdrop instead of guessing from one flat colour.
+ * Compared by its colours: it's handed down as a fixed value, and a new
+ * but equal one would build the whole page again.
  */
-class PageWash(val tint: Color, val base: Color, val glow: Color)
+data class PageWash(val tint: Color, val base: Color, val glow: Color)
 
 val LocalPageWash = staticCompositionLocalOf<PageWash?> { null }
 

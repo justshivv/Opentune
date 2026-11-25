@@ -336,7 +336,7 @@ private fun SongMenuPage(
         val dark = colors.background.luminance() < 0.5f
         // Solid, whatever the theme's surfaces are, so the player never shows through.
         val base = colors.background.compositeOver(if (dark) Color.Black else Color.White)
-        val canBlur = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        val canBlur = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && !com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceBlur
         // Pulled down by its bar (or by the list once it's at its top), the page follows the
         // finger; let go far enough or fast enough and it slides away, else it springs back.
         var drag by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }

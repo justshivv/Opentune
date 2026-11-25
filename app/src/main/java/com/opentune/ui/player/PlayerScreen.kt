@@ -250,7 +250,12 @@ fun PlayerScreen(
     val queue by vm.queue.collectAsState()
     val currentIndex by vm.currentIndex.collectAsState()
     val upNext by vm.upNext.collectAsState()
-    val ui by AppSettings.ui.collectAsState()
+    val settingsUi by AppSettings.ui.collectAsState()
+    // With the system's animations removed, the player holds still as with Reduce animation:
+    // its backdrops, covers and designs move on loops of their own, which the system's
+    // setting doesn't reach.
+    val stillSystem = com.opentune.ui.components.systemAnimationsRemoved()
+    val ui = remember(settingsUi, stillSystem) { if (stillSystem && !settingsUi.reduceAnimation) settingsUi.copy(reduceAnimation = true) else settingsUi }
     val shown = current
     val source by vm.source.collectAsState()
     val audioFormat by vm.audioFormat.collectAsState()

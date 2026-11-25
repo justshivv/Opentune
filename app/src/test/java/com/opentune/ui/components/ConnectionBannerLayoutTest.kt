@@ -64,6 +64,36 @@ class ConnectionBannerLayoutTest {
         assertEquals(initial, compose.onNodeWithTag("heading").fetchSemanticsNode().boundsInRoot.top, 1f)
     }
 
+    /** The page moves with the notice by being placed lower; it isn't composed again on each frame of the slide. */
+    @Test fun pageIsNotComposedAgainWhileTheNoticeSlides() {
+        val visible = mutableStateOf(false)
+        val composed = intArrayOf(0)
+        var reader: () -> Float = { -1f }
+        compose.setContent {
+            MaterialTheme {
+                ConnectionNoticeLayout(true, visible.value, modifier = Modifier.fillMaxSize(), statusInsets = WindowInsets(0)) {
+                    androidx.compose.runtime.SideEffect { composed[0]++ }
+                    reader = LocalPageTopOffset.current
+                    Text("Page", Modifier.testTag("page"))
+                }
+            }
+        }
+        compose.waitForIdle()
+        val before = composed[0]
+        val offsets = mutableListOf<Float>()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { visible.value = true }
+        repeat(30) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            offsets += reader()
+        }
+        assertTrue("the page was composed ${composed[0] - before} times while the notice slid in", composed[0] - before <= 1)
+        // What the page reads of its own offset (while drawing) still follows the notice in.
+        assertTrue("offsets: $offsets", offsets.distinct().size > 3 && offsets.last() > 0f)
+        assertEquals(offsets.last(), compose.onNodeWithTag("page").fetchSemanticsNode().boundsInRoot.top, 1f)
+    }
+
     @Test fun reducedMotionStillReservesSpaceForOfflineNotice() {
         compose.setContent {
             MaterialTheme {

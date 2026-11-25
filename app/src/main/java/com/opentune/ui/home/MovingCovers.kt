@@ -184,8 +184,10 @@ internal fun rememberMovingCovers(rtl: Boolean, covered: Boolean): MovingCovers 
     val metered = rememberMeteredNetwork()
     val scope = rememberCoroutineScope()
     val covers = remember(rtl, scope) { MovingCovers(rtl, scope) }
-    covers.enabled = MovingCoverRules.allowed(ui.homeMovingCovers, ui.reduceAnimation, powerSave = false)
-    covers.allowed = MovingCoverRules.allowed(ui.homeMovingCovers, ui.reduceAnimation, powerSave, covered)
+    // The system's "Remove animations" holds them still too, as Reduce animation does.
+    val still = ui.reduceAnimation || com.opentune.ui.components.systemAnimationsRemoved()
+    covers.enabled = MovingCoverRules.allowed(ui.homeMovingCovers, still, powerSave = false)
+    covers.allowed = MovingCoverRules.allowed(ui.homeMovingCovers, still, powerSave, covered)
     covers.metered = metered
     return covers
 }

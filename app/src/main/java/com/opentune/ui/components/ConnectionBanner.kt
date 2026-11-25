@@ -34,8 +34,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.opentune.ui.theme.AppIcons
 
-/** Offset of the app page inside the window while a connectivity notice has reserved space. */
-internal val LocalPageTopOffset = staticCompositionLocalOf { 0f }
+/**
+ * Offset of the app page inside the window while a connectivity notice has reserved space,
+ * in pixels, read when it's needed (while drawing). A reader rather than the number itself:
+ * handed down as a number, every frame of the notice sliding in or out was a new value, and
+ * the whole page under it was built again on each of them.
+ */
+internal val LocalPageTopOffset = staticCompositionLocalOf<() -> Float> { { 0f } }
 
 /** Network changes are observed locally; no polling or analytics request is needed. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -91,6 +96,17 @@ internal fun ConnectionNoticeLayout(
     val face = if (online) { if (dark) Color(0xff183b2e) else Color(0xffc6efdf) }
         else { if (dark) Color(0xff492b30) else Color(0xffffd8dc) }
     val ink = if (dark) Color.White else Color(0xff171b19)
+    // Where the page sits, set as the notice is measured and read while drawing; the page
+    // itself is the same piece of UI each time, so it isn't built again as the notice moves.
+    val pageTop = remember { mutableFloatStateOf(0f) }
+    val readTop = remember { { pageTop.floatValue } }
+    val page: @Composable () -> Unit = remember(content) {
+        {
+            CompositionLocalProvider(LocalPageTopOffset provides readTop) {
+                Box(Modifier.fillMaxSize(), content = content)
+            }
+        }
+    }
     SubcomposeLayout(modifier.background(MaterialTheme.colorScheme.background)) { constraints ->
         val banner = subcompose("notice") {
             AnimatedVisibility(visible, Modifier.windowInsetsPadding(statusInsets.only(WindowInsetsSides.Top)),
@@ -114,13 +130,10 @@ internal fun ConnectionNoticeLayout(
         val occupied = ((banner.maxOfOrNull { it.height } ?: 0) - statusInsets.getTop(this))
             .coerceIn(0, constraints.maxHeight)
         val pageHeight = constraints.maxHeight - occupied
-        val page = subcompose("page") {
-            CompositionLocalProvider(LocalPageTopOffset provides occupied.toFloat()) {
-                Box(Modifier.fillMaxSize(), content = content)
-            }
-        }.map { it.measure(constraints.copy(minHeight = pageHeight, maxHeight = pageHeight)) }
+        pageTop.floatValue = occupied.toFloat()
+        val placed = subcompose("page", page).map { it.measure(constraints.copy(minHeight = pageHeight, maxHeight = pageHeight)) }
         layout(constraints.maxWidth, constraints.maxHeight) {
-            page.forEach { it.placeRelative(0, occupied) }
+            placed.forEach { it.placeRelative(0, occupied) }
             banner.forEach { it.placeRelative(0, 0) }
         }
     }

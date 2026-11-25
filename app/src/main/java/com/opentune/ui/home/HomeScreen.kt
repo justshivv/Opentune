@@ -759,7 +759,7 @@ private fun homeOrder(personal: List<com.opentune.data.reco.HomeLayout.Personal>
 internal fun DaylistHero(mix: com.opentune.data.history.DailyMixes.Mix, onPlay: () -> Unit) {
     val covers = mix.covers
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
-    val blurs = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+    val blurs = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && !com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceBlur
     val white = androidx.compose.ui.graphics.Color.White
     Box(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).clip(shape)
