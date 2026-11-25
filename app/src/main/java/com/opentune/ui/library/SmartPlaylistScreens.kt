@@ -358,6 +358,7 @@ internal fun SmartPlaylistPage(
 ) {
     val context = LocalContext.current
     val songs = remember(refs) { refs.orEmpty().map { it.toSong() } }
+    val keys = remember(songs) { songKeys(songs) }
     val listState = rememberLazyListState()
     val band = com.opentune.ui.components.rememberRubberBand()
     val selection = com.opentune.ui.components.rememberSongSelection()
@@ -436,7 +437,8 @@ internal fun SmartPlaylistPage(
                         // Worked out in a moment: the rows' shapes, so nothing jumps when they land.
                         refs == null -> items(8, key = { "skeleton-$it" }) { com.opentune.ui.components.SongRowPlaceholder() }
                         songs.isEmpty() -> item(key = "empty") { SmartEmpty(playlist.rules, onEdit, Modifier.animateItem()) }
-                        else -> itemsIndexed(songs, key = { _, s -> s.videoId }) { i, song ->
+                        // Keys that stay unique even if a song shows up twice.
+                        else -> itemsIndexed(songs, key = { i, _ -> keys[i] }) { i, song ->
                             SongListItem(
                                 song = song,
                                 onClick = { actions.playAll(songs, i, false, source) },
