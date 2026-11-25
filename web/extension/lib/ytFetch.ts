@@ -2,17 +2,8 @@ import type { HttpResponse, YtFetchParams } from '@opentune/shared/bridge';
 import { fetchWithDeadline, fromBase64, MB, serialise } from './http';
 import { ensureExtensionFetchRule } from './rules';
 import { activeIdentity, signedFetch, SignedOutError } from './ytAuth';
+import { ALLOWED, isAllowedSigned, isStatsPing } from './ytUrls';
 
-/** Where an anonymous `yt.fetch` may go: BotGuard, which a page can't call with YouTube's Origin. */
-const ALLOWED = [/^https:\/\/www\.youtube\.com\/api\/jnn\//];
-/** Where a signed one may go: InnerTube only, never an account or settings page. */
-const ALLOWED_SIGNED = [/^https:\/\/(music|www)\.youtube\.com\/youtubei\/v1\//];
-/**
- * The play-reporting pings a player response nominates (playbackTracking):
- * playback, watchtime and atr, GET only. They're what puts a play in the
- * account's YouTube Music history (PlaybackTracker.kt on the phone).
- */
-const STATS = /^https:\/\/(s|music|www)\.youtube\.com\/api\/stats\/(playback|watchtime|atr)(\?|$)/;
 const MUSIC_ORIGIN = 'https://music.youtube.com';
 /** Identity is the extension's to set; the page's copies of these are dropped. */
 const IDENTITY_HEADERS = ['authorization', 'cookie', 'x-goog-authuser', 'x-goog-pageid', 'x-origin', 'origin', 'referer'];
@@ -68,8 +59,8 @@ export async function ytFetch(request: YtFetchParams): Promise<HttpResponse> {
 }
 
 async function signedYtFetch(request: YtFetchParams): Promise<HttpResponse> {
-  const stats = STATS.test(request.url) && (request.method ?? 'GET') === 'GET';
-  if (!stats && !ALLOWED_SIGNED.some((pattern) => pattern.test(request.url))) throw forbidden(request.url);
+  const stats = isStatsPing(request.url, request.method);
+  if (!isAllowedSigned(request.url, request.method)) throw forbidden(request.url);
   const identity = await activeIdentity();
   if (!identity) throw new SignedOutError('Not signed in to YouTube Music.');
   const response = await signedFetch(
