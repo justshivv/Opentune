@@ -634,6 +634,8 @@ data class InterfaceSettings(
     val videoCrop: Boolean = false,
     /** The fitted full-screen video's colours glow into the black around it, YouTube's ambient mode; the button beside fit/fill sets it. */
     val videoAmbient: Boolean = false,
+    /** A playing video leaves its small box and stretches to the screen's edges after a few seconds; pausing shrinks it back into the box. */
+    val videoGrow: Boolean = false,
     /** Draw the played part of the seek bar as a moving wave. */
     val wavySeekbar: Boolean = false,
     /** The song's own wave above the seek bar, read from the audio already on the phone. */

@@ -1457,6 +1457,8 @@ fun PlayerLayout(
                                                     },
                                                     onPictureInPicture = actions.pictureInPicture.takeIf { PictureInPicture.buttonShown(state.videoMode, it != null) },
                                                     onFullScreen = openFullScreen,
+                                                    grow = state.ui.videoGrow,
+                                                    growBleed = 24.dp,
                                                     videoSurface = inlineVideo,
                                                 )
 

@@ -1110,6 +1110,9 @@ private fun settingsSections(
                 Entry("Video mode", "video music video watch song video switch player") {
                     ToggleRow("Video mode", pb.videoModeEnabled, { v -> AppSettings.updatePlayback { it.copy(videoModeEnabled = v) } }, summary = "Adds a Song / Video switch to the player", icon = ImageVector.vectorResource(AppIcons.PlayCircle), beta = true)
                 },
+                if (pb.videoModeEnabled) Entry("Grow video while playing", "video grow fill cover expand playing full") {
+                    ToggleRow("Grow video while playing", ui.videoGrow, { v -> AppSettings.updateUi { it.copy(videoGrow = v) } }, summary = "While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused", icon = ImageVector.vectorResource(AppIcons.Fullscreen), beta = true)
+                } else null,
                 if (pb.videoModeEnabled) Entry("Video quality on Wi-Fi", "music video resolution 1080p 720p hd size") {
                     NavRow("Video quality on Wi-Fi", { videoQualityDialog = true }, summary = if (!metered) "In use now" else null, icon = ImageVector.vectorResource(AppIcons.Wifi), value = com.opentune.data.innertube.VideoQuality.label(pb.wifiVideoQuality))
                 } else null,

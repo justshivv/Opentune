@@ -230,6 +230,10 @@ internal fun VideoCoverPane(
     onPictureInPicture: (() -> Unit)? = null,
     /** Opens the picture on the whole screen, when offered. */
     onFullScreen: (() -> Unit)? = null,
+    /** Lets a playing picture grow out of its box and fill the whole pane. */
+    grow: Boolean = false,
+    /** Extra width the grown picture takes on each side, out of the pane. */
+    growBleed: androidx.compose.ui.unit.Dp = 0.dp,
     videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val target = if (showVideo && aspect > 0f) aspect else 1f
@@ -245,14 +249,38 @@ internal fun VideoCoverPane(
         androidx.compose.animation.core.spring(dampingRatio = 0.62f, stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
         label = "videoBoxScale",
     )
-    val rounded = androidx.compose.foundation.shape.RoundedCornerShape(corner)
+    // With grow on, a picture that keeps playing for a few seconds fills the
+    // whole pane, the way it did before the box; a pause shrinks it back.
+    val grownState = remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(grow, isPlaying) {
+        grownState.value = if (grow && isPlaying) {
+            kotlinx.coroutines.delay(3000)
+            true
+        } else false
+    }
+    val growF by androidx.compose.animation.core.animateFloatAsState(
+        if (grownState.value) 1f else 0f,
+        if (animate) androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing) else androidx.compose.animation.core.snap(),
+        label = "videoGrow",
+    )
+    // A grown picture meets the screen's edges square; the corner goes with it.
+    val rounded = androidx.compose.foundation.shape.RoundedCornerShape(corner * (1f - growF))
     ArtworkSwipeArea(onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious, modifier = modifier) {
         BoxWithConstraints(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
             val side = minOf(maxWidth.value, maxHeight.value)
             val (w, h) = videoBoxSize(side, shape)
+            // Grown, the box takes the picture's own shape at the pane's
+            // full size, so a wide picture reaches both edges.
+            // Grown, the box takes the picture's own shape wide enough to
+            // reach the screen's edges, out of the pane's own inset.
+            val bleedW = maxWidth.value + growBleed.value * 2f
+            val (fw, fh) = if (shape >= 1f) bleedW to bleedW / shape
+            else videoBoxSize(maxOf(maxWidth.value, maxHeight.value), shape)
+            val gw = w + (fw - w) * growF
+            val gh = h + (fh - h) * growF
             Box(
                 Modifier
-                    .requiredSize(w.dp, h.dp)
+                    .requiredSize(gw.dp, gh.dp)
                     .onGloballyPositioned { c -> if (c.isAttached) onBox(c.boundsInRoot()) }
                     .graphicsLayer {
                         scaleX = scale
@@ -270,7 +298,7 @@ internal fun VideoCoverPane(
                 // The cover under the clear picture: what the box starts as, and what shows until the first frame.
                 com.opentune.ui.components.Artwork(
                     artworkUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
-                    Modifier.matchParentSize(),
+                    Modifier.matchParentSize().graphicsLayer { alpha = 1f - growF },
                     androidx.compose.ui.graphics.RectangleShape,
                 )
                 if (showVideo) videoSurface()
