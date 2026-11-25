@@ -31,8 +31,15 @@ export default defineConfig({
   }),
   manifest: ({ browser }) => ({
     name: 'NepTune',
-    description: 'Connects the NepTune web player to YouTube Music, Spotify and Discord.',
+    description: DISCORD_PRESENCE
+      ? 'Connects the NepTune web player to YouTube Music, Spotify, lyric sources and Discord.'
+      : 'Connects the NepTune web player to YouTube Music, Spotify and lyric sources.',
     homepage_url: 'https://justshivv.github.io/Opentune/player/',
+    action: { default_title: 'NepTune' },
+    // Extension pages run only their own scripts, embed nothing and can't be framed.
+    content_security_policy: {
+      extension_pages: "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+    },
     // `cookies` reads the YouTube session for signed-in requests (phase 5);
     // the cookies themselves never leave the extension (lib/ytAuth.ts).
     // `scripting` reads the Discord token from a discord.com tab, and only on
@@ -42,13 +49,12 @@ export default defineConfig({
     // and used here only, lib/spotify.ts). The site's own origins are listed
     // because header rules need host access to the initiator as well as the
     // target.
+    // `*.youtube.com` covers music., www. and s. (play reports), and the
+    // youtube.com cookies themselves, whose changes signal a sign-in or out.
     host_permissions: [
-      'https://music.youtube.com/*',
-      'https://www.youtube.com/*',
       'https://*.youtube.com/*',
       'https://*.googlevideo.com/*',
       'https://open.spotify.com/*',
-      'https://accounts.spotify.com/*',
       'https://api-partner.spotify.com/*',
       'https://clienttoken.spotify.com/*',
       'https://open.spotifycdn.com/*',
@@ -69,7 +75,9 @@ export default defineConfig({
           },
         }
       : {
-          // Chromium pages message the extension directly.
+          // storage.session, AbortSignal.any and runtime.getContexts.
+          minimum_chrome_version: '116',
+          // Chromium pages message the extension directly. No `ids`: other extensions can't.
           externally_connectable: { matches: matchPatternsFor(SITE_ORIGINS) },
           // Pins the unpacked extension's id so the page can address it
           // (scripts/gen-dev-key.mjs). The Web Store assigns its own id and

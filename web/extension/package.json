@@ -8,6 +8,7 @@
     "build": "wxt build && wxt build -b firefox",
     "zip": "wxt zip && wxt zip -b firefox",
     "typecheck": "tsc -p . && tsc -p tsconfig.node.json",
+    "test": "node --test \"lib/**/*.test.ts\"",
     "dev-key": "node scripts/gen-dev-key.mjs",
     "postinstall": "wxt prepare",
     "package": "wxt build && wxt build -b firefox && node scripts/publish-to-site.mjs",

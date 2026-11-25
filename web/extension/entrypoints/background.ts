@@ -14,48 +14,47 @@ import {
 import * as discord from '../lib/discord';
 import * as discordPhone from '../lib/discordPhone';
 import { grantedOrigins, lyricsFetch, requestOrigins } from '../lib/lyricsFetch';
+import { contacts, noteContact, portClosed, portOpened } from '../lib/players';
+import { isPopupRequest } from '../lib/popupMessages';
 import { installRules } from '../lib/rules';
+import { isOwnPage, isPlayerSender, senderOrigin } from '../lib/senders';
+import { validateParams } from '../lib/validate';
 import { authState, invalidateAccounts, isSessionCookie, selectChannel, setConnected } from '../lib/ytAuth';
 import * as spotify from '../lib/spotify';
 import { ytFetch } from '../lib/ytFetch';
 
 declare const __SITE_ORIGINS__: string[];
 
-/** Exact origins (port included) allowed to talk to the extension: the site's, and the popup's. */
-const ALLOWED_ORIGINS = new Set(__SITE_ORIGINS__);
-const OWN_ORIGIN = new URL(browser.runtime.getURL('/')).origin;
+/** Exact origins (port included) of the web player; on GitHub Pages, its path as well (lib/site.ts). */
+const SITE_ORIGINS: readonly string[] = __SITE_ORIGINS__;
+const OWN_BASE = browser.runtime.getURL('/');
+/** Error text reaching the page is cut to this; it's for display, not for carrying data. */
+const MAX_ERROR_MESSAGE = 500;
 
 /** Grows as each phase lands its methods; Discord only in builds that include it. */
 const CAPABILITIES: Capability[] = ['addon', 'yt', 'yt.auth', 'yt.stats', 'lyrics', 'spotify', ...(discord.AVAILABLE ? (['discord', 'discord.phone'] as const) : [])];
 
-function originOf(sender: Browser.runtime.MessageSender): string | null {
-  if (sender.origin) return sender.origin;
-  try {
-    return sender.url ? new URL(sender.url).origin : null;
-  } catch {
-    return null;
-  }
+/** The extension's own pages, or a page of the web player: nobody else gets an answer. */
+function allowed(sender: Browser.runtime.MessageSender): boolean {
+  return isOwnPage(sender, OWN_BASE, browser.runtime.id) || isPlayerSender(sender, SITE_ORIGINS);
 }
 
-function allowed(sender: Browser.runtime.MessageSender): boolean {
-  const origin = originOf(sender);
-  if (origin === OWN_ORIGIN && sender.id === browser.runtime.id) return true;
-  if (!origin || !ALLOWED_ORIGINS.has(origin) || !sender.url) return false;
-  const url = new URL(sender.url);
-  return origin !== 'https://justshivv.github.io' || url.pathname.startsWith('/Opentune/player/');
-}
+const PASSED_THROUGH: readonly string[] = ['forbidden', 'unauthenticated', 'permission', 'network', 'protocol', 'unsupported'];
 
 function failure(id: string, error: unknown): BridgeResponse {
-  const known = (error as { code?: string }).code;
+  const known = (error as { code?: unknown } | null)?.code;
   const code: BridgeErrorCode =
     error instanceof spotify.SpotifyAuthError
       ? 'unauthenticated'
-      : known === 'forbidden' || known === 'unauthenticated' || known === 'permission'
-      ? known
-      : error instanceof TypeError
-        ? 'network'
-        : 'internal';
-  return errorResponse(id, code, error instanceof Error ? error.message : String(error));
+      : typeof known === 'string' && PASSED_THROUGH.includes(known)
+        ? (known as BridgeErrorCode)
+        : error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')
+          ? 'network'
+          : error instanceof TypeError && /fetch|network/i.test(error.message)
+            ? 'network'
+            : 'internal';
+  const message = error instanceof Error ? error.message : String(error);
+  return errorResponse(id, code, message.length > MAX_ERROR_MESSAGE ? `${message.slice(0, MAX_ERROR_MESSAGE)}…` : message);
 }
 
 async function handle(request: BridgeRequest): Promise<BridgeResponse> {
@@ -67,6 +66,7 @@ async function handle(request: BridgeRequest): Promise<BridgeResponse> {
     );
   }
   try {
+    validateParams(request.method, request.params);
     switch (request.method) {
       case 'ping':
         return okResponse<'ping'>(request.id, {
@@ -188,11 +188,16 @@ function listener(
 ): boolean {
   if (!isBridgeRequest(message)) return false;
   if (!allowed(sender)) {
-    sendResponse(errorResponse(message.id, 'forbidden', `Origin ${originOf(sender) ?? 'unknown'} isn't allowed.`));
+    sendResponse(errorResponse(message.id.slice(0, 64), 'forbidden', `Origin ${senderOrigin(sender) ?? 'unknown'} isn't allowed.`));
     return false;
   }
+  if (message.id.length > 256) {
+    sendResponse(errorResponse(message.id.slice(0, 64), 'protocol', 'Malformed request: id is too long'));
+    return false;
+  }
+  if (isPlayerSender(sender, SITE_ORIGINS)) noteContact(sender.tab?.id);
   handle(message)
-    .catch((error: unknown) => errorResponse(message.id, 'internal', String(error)))
+    .catch((error: unknown) => failure(message.id, error))
     .then(sendResponse);
   return true; // answering asynchronously
 }
@@ -217,8 +222,12 @@ function acceptPort(port: Browser.runtime.Port): void {
     return;
   }
   ports.add(port);
+  const tabId = port.sender.tab?.id;
+  if (isPlayerSender(port.sender, SITE_ORIGINS)) portOpened(tabId);
+  // The page never sends on this port; anything it does send is ignored.
   port.onDisconnect.addListener(() => {
     ports.delete(port);
+    portClosed(tabId);
     // A hidden tab's port can drop and come back; only a lasting silence means the player is gone.
     clearTimeout(lastPortTimer);
     if (!ports.size) lastPortTimer = setTimeout(() => !ports.size && discord.allPagesClosed(), 30_000);
@@ -270,6 +279,12 @@ export default defineBackground(() => {
   // URL is the page's origin (or the popup's).
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (sender.id !== browser.runtime.id) return false;
+    // The popup's own questions, from the extension's pages only (never the relay).
+    if (isPopupRequest(message)) {
+      if (!isOwnPage(sender, OWN_BASE, browser.runtime.id)) return false;
+      contacts(message.tabIds).then(sendResponse, () => sendResponse([]));
+      return true;
+    }
     return listener(message, sender, sendResponse);
   });
   browser.runtime.onConnect.addListener((port) => {
