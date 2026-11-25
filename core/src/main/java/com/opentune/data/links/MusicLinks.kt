@@ -57,6 +57,28 @@ object MusicLinks {
         return Found(title, entity["artistName"]?.jsonPrimitive?.contentOrNull.orEmpty())
     }
 
+    /**
+     * Where else the song at [url] can be heard, by service ("spotify", "appleMusic",
+     * "tidal"…): UniTune's links for it, each an https address. Empty when UniTune
+     * doesn't know the song or can't be reached.
+     */
+    suspend fun platformLinks(url: String): Map<String, String> {
+        val body = get(UNITUNE.toHttpUrl().newBuilder().addQueryParameter("url", url).build().toString()) ?: return emptyMap()
+        return parsePlatforms(body)
+    }
+
+    /** UniTune's `linksByPlatform`, as Song.link shapes it: each platform's own page for the song. */
+    internal fun parsePlatforms(body: String): Map<String, String> {
+        val root = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull() ?: return emptyMap()
+        val links = root["linksByPlatform"] as? JsonObject ?: return emptyMap()
+        return links.mapNotNull { (platform, value) ->
+            val link = (value as? JsonObject)?.get("url")?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val parsed = runCatching { URI(link) }.getOrNull() ?: return@mapNotNull null
+            if (parsed.scheme != "https" || parsed.host.isNullOrBlank() || parsed.userInfo != null) return@mapNotNull null
+            platform to link
+        }.toMap()
+    }
+
     private suspend fun get(url: String): String? = runInterruptible(Dispatchers.IO) {
         runCatching {
             Http.client.newCall(Request.Builder().url(url).header("User-Agent", "OpenTune (+https://github.com/justshivv/Opentune)").build()).execute()

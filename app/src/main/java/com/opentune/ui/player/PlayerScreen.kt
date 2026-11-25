@@ -449,7 +449,8 @@ fun PlayerLayout(
     var showComments by remember { mutableStateOf(false) }
     var showOffset by remember { mutableStateOf(false) }
     var showLyricsSource by remember { mutableStateOf(false) }
-    var showDetails by remember { mutableStateOf(false) }
+    // The song sheet over the player: closed, open on the song, or open with About song on top.
+    var songSheet by remember { mutableStateOf(SongSheetOpen.CLOSED) }
     var showCredits by remember { mutableStateOf(false) }
     var showSignal by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -492,7 +493,7 @@ fun PlayerLayout(
     val canvasFocusable = state.ui.canvasFocus && pane == Pane.COVER && state.canvasVideo != null && state.isSounding &&
             !docked && !state.ui.reduceAnimation && state.ui.playerStyle != PlayerStyle.LYRICS_FIRST
     val focusable = lyricsFocusable || canvasFocusable
-    val sheetOpen = showMenu || showRemix || showSpeed || showSleep || showCast || showOffset || showLyricsSource || showDetails || showCredits || showSignal
+    val sheetOpen = showMenu || showRemix || showSpeed || showSleep || showCast || showOffset || showLyricsSource || songSheet != SongSheetOpen.CLOSED || showCredits || showSignal
     // The view the countdown was started on: moving from the Canvas to the lyrics brings the
     // controls back, and they go again from there after their own few seconds.
     val focusPane = remember { arrayOf(pane) }
@@ -865,6 +866,9 @@ fun PlayerLayout(
     val listsGone by remember { androidx.compose.runtime.derivedStateOf { paneProgress() <= 0.001f } }
     val listsFull by remember { androidx.compose.runtime.derivedStateOf { paneProgress() >= 0.999f } }
 
+    // A tap on the song's title or artists, anywhere in the player, opens the song sheet.
+    val openSongSheet = remember { { songSheet = SongSheetOpen.SONG } }
+    CompositionLocalProvider(LocalSongSheet provides openSongSheet) {
     PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl, keepLast = true), settings = theme, neutral = apple) {
         // "Playing from", whose room it is, or the remix pill.
         val statusLine: @Composable () -> Unit = {
@@ -2422,10 +2426,11 @@ fun PlayerLayout(
                     ) { close(); showComments = true }
                 },
                 tools = { close ->
+                    // Genre, release, the song's story and where else it is: About song, over the song sheet.
                     MenuRow(
                         ImageVector.vectorResource(AppIcons.Info),
-                        "Track details"
-                    ) { close(); showDetails = true }
+                        "About song"
+                    ) { close(); songSheet = SongSheetOpen.ABOUT }
                     if (!current.videoId.startsWith("local:")) MenuRow(
                         ImageVector.vectorResource(
                             AppIcons.People
@@ -2512,16 +2517,40 @@ fun PlayerLayout(
             current,
             state.durationMs,
             onDismiss = { showLyricsSource = false })
-        if (showDetails) TrackDetailsDialog(
-            current,
-            state.durationMs,
-            onDismiss = { showDetails = false })
+        if (songSheet != SongSheetOpen.CLOSED) {
+            val menu = LocalSongMenu.current
+            val uri = androidx.compose.ui.platform.LocalUriHandler.current
+            val online = com.opentune.data.isYouTubeId(current.videoId)
+            val sheetActions = remember(current, menu, online) {
+                SongSheetActions(
+                    openArtist = menu?.viewArtistNamed?.takeIf { online }?.let { open -> { name: String -> open(current, name) } },
+                    openAlbum = when {
+                        menu == null || !online -> null
+                        current.albumId != null -> ({ menu.openAlbum(current.albumId!!) })
+                        menu.viewAlbum != null -> ({ menu.viewAlbum.invoke(current) })
+                        else -> null
+                    },
+                    streamInfo = { showSignal = true },
+                    allCredits = if (online) ({ showCredits = true }) else null,
+                    openUrl = { url -> runCatching { uri.openUri(url) } },
+                )
+            }
+            SongInfoSheets(
+                current,
+                rememberSongInfo(current, state.durationMs),
+                sheetActions,
+                onDismiss = { songSheet = SongSheetOpen.CLOSED },
+                durationMs = state.durationMs,
+                startOnAbout = songSheet == SongSheetOpen.ABOUT,
+            )
+        }
         if (showCredits) CreditsSheet(current, onDismiss = { showCredits = false })
         if (showSignal) SignalPathDialog(
             state.audioFormat,
             onDismiss = { showSignal = false },
             song = current
         )
+    }
     }
 }
 
@@ -2607,10 +2636,13 @@ private fun RowScope.TitleRow(
     // The Poster layout: the title heavy, who it's by in spaced capitals, the menu in clear glass.
     val poster = com.opentune.ui.components.posterLayout()
     Column(Modifier.weight(1f)) {
-        // Tapping the title opens its album, and the artist opens their page.
+        // In the player, a tap on the title or an artist opens the song sheet, which leads on to
+        // the album and each artist. Elsewhere the title opens its album, and the artist their page.
         val menu = LocalSongMenu.current
+        val songSheet = LocalSongSheet.current
         // Its album id when the song carries one, else the album is looked up on the tap.
         val openAlbum: (() -> Unit)? = when {
+            songSheet != null -> songSheet
             menu == null || song.videoId.startsWith("local:") -> null
             song.albumId != null -> ({ menu.openAlbum(song.albumId!!) })
             menu.viewAlbum != null -> ({ menu.viewAlbum.invoke(song) })
@@ -2620,7 +2652,7 @@ private fun RowScope.TitleRow(
             song.title,
             Modifier.fillMaxWidth().then(
                 if (openAlbum != null) Modifier.clickable(
-                    onClickLabel = "Open album",
+                    onClickLabel = if (songSheet != null) "Song info" else "Open album",
                     onClick = openAlbum
                 ) else Modifier
             ),
@@ -2635,8 +2667,9 @@ private fun RowScope.TitleRow(
                 else -> MaterialTheme.typography.headlineSmall
             },
         )
-        // Each artist's name opens their own page.
-        val named = menu?.viewArtistNamed?.takeIf { !song.videoId.startsWith("local:") }
+        // Each artist's name opens their own page; in the player, the whole line opens the song sheet.
+        val named = menu?.viewArtistNamed?.takeIf { !song.videoId.startsWith("local:") && songSheet == null }
+        val sheetTap = if (songSheet != null) Modifier.clickable(onClickLabel = "Song info", onClick = songSheet) else Modifier
         if (poster && !compact) {
             // In capitals; a tapped name is matched back to how the song spells it.
             com.opentune.ui.components.ArtistLinks(
@@ -2658,7 +2691,7 @@ private fun RowScope.TitleRow(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp).then(sheetTap),
             )
         } else com.opentune.ui.components.ArtistLinks(
             song.artist,
@@ -2666,6 +2699,7 @@ private fun RowScope.TitleRow(
             explicit = song.isExplicit == true,
             style = if (apple) MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             else MaterialTheme.typography.titleMedium,
+            modifier = sheetTap,
         )
     }
     Spacer(Modifier.width(10.dp))

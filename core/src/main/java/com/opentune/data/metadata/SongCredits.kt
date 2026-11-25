@@ -165,10 +165,27 @@ object SongCreditsRepository {
     suspend fun lookup(videoId: String): SongCredits? = lock.withLock {
         if (videoId.startsWith("local:")) return@withLock null
         if (answers.containsKey(videoId)) return@withLock answers[videoId]
-        val description = synchronized(descriptions) { descriptions[videoId] } ?: fetchDescription(videoId)
+        val description = descriptionOf(videoId)
         val credits = description?.let(::parse)
         answers[videoId] = credits
         credits
+    }
+
+    /**
+     * The whole description of [videoId] as YouTube has it ("Provided to YouTube by …" for a
+     * label's song): null when there is none. Kept, so the credits and the song sheet share
+     * one request. Throws when YouTube couldn't be asked.
+     */
+    suspend fun description(videoId: String): String? = lock.withLock {
+        if (videoId.startsWith("local:")) return@withLock null
+        descriptionOf(videoId)
+    }
+
+    private suspend fun descriptionOf(videoId: String): String? {
+        synchronized(descriptions) { descriptions[videoId] }?.let { return it }
+        val text = fetchDescription(videoId)?.takeIf { it.isNotBlank() } ?: return null
+        synchronized(descriptions) { descriptions[videoId] = text }
+        return text
     }
 
     private suspend fun fetchDescription(videoId: String): String? {

@@ -94,6 +94,13 @@ The settings icons are Google's [Material Symbols](https://fonts.google.com/icon
 in the Rounded style, licensed under the Apache License 2.0. In the app they
 are the `symbol_*` vector drawables, listed in `ui/theme/AppIcons.kt`.
 
+## Simple Icons
+
+The music service marks in the song sheet's "Also available on" (`ic_apple_music`,
+`ic_tidal`, `ic_amazon_music`, `ic_soundcloud`, `ic_youtube_music`) are paths from
+[Simple Icons](https://simpleicons.org), released under CC0 1.0. The marks
+themselves are their owners' trademarks and are used only to link to the song there.
+
 ## Desktop app libraries
 
 The desktop app bundles these libraries, each under its own licence:

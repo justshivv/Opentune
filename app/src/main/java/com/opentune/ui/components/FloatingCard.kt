@@ -890,7 +890,7 @@ fun SheetButton(
  */
 @Suppress("DEPRECATION")
 @Composable
-private fun TransparentSheetNavBar() {
+internal fun TransparentSheetNavBar() {
     val view = LocalView.current
     DisposableEffect(view) {
         val window = (view.parent as? DialogWindowProvider)?.window
@@ -971,8 +971,8 @@ private val SHEET_MAX_WIDTH = 640.dp
 
 private const val EXIT_MS = 200L
 /** The Solid sheet style's fills: neutral, with nothing of the page's colour in them. */
-private val PLAIN_DARK = Color(0xFF161616)
-private val PLAIN_LIGHT = Color(0xFFF7F7F7)
+internal val PLAIN_DARK = Color(0xFF161616)
+internal val PLAIN_LIGHT = Color(0xFFF7F7F7)
 private const val KEPT_MS = 120L
 /** The longest a card waits for the blur behind it before rising without it. */
 private const val FROST_WAIT_MS = 180L

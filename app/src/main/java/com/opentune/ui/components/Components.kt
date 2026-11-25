@@ -190,6 +190,10 @@ fun SubtitleLine(
 /** Between the names in a line of artists: commas, "&", " x ", "and", "feat.", "ft.", "with". */
 private val ARTIST_JOINS = Regex("""\s*,\s*|\s+&\s+|\s+x\s+|\s+and\s+|\s+(?:feat\.?|ft\.?|featuring|with)\s+""", RegexOption.IGNORE_CASE)
 
+/** The names in a line of artists, cut where [ArtistLinks] makes each one its own link. */
+internal fun artistNamesIn(artists: String): List<String> =
+    artists.split(ARTIST_JOINS).map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+
 /** A link that looks like the text around it in every state. */
 private val PLAIN_LINK = androidx.compose.ui.text.TextLinkStyles(
     style = androidx.compose.ui.text.SpanStyle(),

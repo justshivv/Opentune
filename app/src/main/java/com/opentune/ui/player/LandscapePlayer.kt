@@ -176,9 +176,13 @@ internal fun LandscapePlayer(
                             Spacer(Modifier.width(4.dp))
                             Icon(outputRoute.icon, null, Modifier.size(14.dp), tint = scheme.primary)
                         }
-                        Text(song.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        // The title and the artist — album line open the song sheet, as on the upright player.
+                        val songSheet = LocalSongSheet.current
+                        val sheetTap = if (songSheet != null) Modifier.clickable(onClickLabel = "Song info", onClick = songSheet) else Modifier
+                        Text(song.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = sheetTap)
                         Text(
                             listOfNotNull(song.artist.takeIf { it.isNotBlank() }, song.albumName?.takeIf { it.isNotBlank() }).joinToString(" — "),
+                            modifier = sheetTap,
                             style = MaterialTheme.typography.titleMedium,
                             color = scheme.primary,
                             maxLines = 1,

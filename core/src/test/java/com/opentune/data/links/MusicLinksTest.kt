@@ -20,6 +20,21 @@ class MusicLinksTest {
         assertNull(MusicLinks.parseUniTune("""{"statusCode":404}"""))
     }
 
+    @Test fun readsWhereElseASongIs() {
+        val body = """{"linksByPlatform":{
+            "spotify":{"url":"https://open.spotify.com/track/1","entityUniqueId":"SPOTIFY_SONG::1"},
+            "tidal":{"url":"https://tidal.com/browse/track/2"},
+            "deezer":{"url":"http://www.deezer.com/track/3"},
+            "appleMusic":{"url":"https://user:pw@music.apple.com/x"},
+            "soundcloud":{}}}"""
+        assertEquals(
+            mapOf("spotify" to "https://open.spotify.com/track/1", "tidal" to "https://tidal.com/browse/track/2"),
+            MusicLinks.parsePlatforms(body),
+        )
+        assertEquals(emptyMap<String, String>(), MusicLinks.parsePlatforms("""{"statusCode":404}"""))
+        assertEquals(emptyMap<String, String>(), MusicLinks.parsePlatforms("not json"))
+    }
+
     @Test fun readsDeezerSearch() {
         val body = """{"data":[{"id":3135556,"title":"Harder, Better, Faster, Stronger","isrc":"GBDUW0000059","duration":226,"artist":{"name":"Daft Punk"},"album":{"cover_xl":"https://e/x.jpg"}}]}"""
         assertEquals(Deezer.Track(3135556, "Harder, Better, Faster, Stronger", "Daft Punk", 226, "GBDUW0000059", "https://e/x.jpg"), Deezer.parseSearch(body).single())

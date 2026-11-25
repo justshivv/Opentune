@@ -176,6 +176,44 @@ object LastFm {
         }
     }
 
+    /** A song's write-up on Last.fm: its listeners' wiki summary, and the page it's from. */
+    data class Wiki(val text: String, val url: String)
+
+    /**
+     * The Last.fm wiki summary for [title] by [artist] (track.getInfo, which needs only the
+     * application key the app already has; no sign-in). Null when there's no key, no
+     * write-up, or Last.fm can't be reached.
+     */
+    suspend fun trackWiki(artist: String, title: String): Wiki? = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val key = apiKey.ifBlank { com.opentune.core.BuildConfig.LASTFM_API_KEY }
+        if (key.isBlank() || artist.isBlank() || title.isBlank()) return@withContext null
+        val url = okhttp3.HttpUrl.Builder().scheme("https").host("ws.audioscrobbler.com").addPathSegment("2.0").addPathSegment("")
+            .addQueryParameter("method", "track.getInfo").addQueryParameter("api_key", key)
+            .addQueryParameter("artist", primaryArtist(artist)).addQueryParameter("track", title)
+            .addQueryParameter("format", "json").build()
+        runCatching {
+            Http.client.newCall(Request.Builder().url(url).build()).execute().use { r ->
+                if (r.isSuccessful) parseWiki(r.body?.string().orEmpty()) else null
+            }
+        }.onFailure { Log.w(TAG, "track info failed", it) }.getOrNull()
+    }
+
+    /** The wiki summary in a track.getInfo answer, as plain text without Last.fm's own "Read more" link. */
+    internal fun parseWiki(body: String): Wiki? {
+        val track = runCatching { json.parseToJsonElement(body).jsonObject["track"]?.jsonObject }.getOrNull() ?: return null
+        val wiki = track["wiki"] as? JsonObject ?: return null
+        val summary = (wiki["summary"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
+        val text = summary
+            .replace(Regex("""<a\s[^>]*>\s*Read more on Last\.fm\s*</a>\.?""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("<[^>]+>"), "")
+            .replace("&quot;", "\"").replace("&amp;", "&").replace("&#39;", "'").replace("&lt;", "<").replace("&gt;", ">")
+            .trim()
+        if (text.length < 40) return null
+        val page = (track["url"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+            ?.takeIf { it.startsWith("https://www.last.fm/") } ?: return null
+        return Wiki(text, page)
+    }
+
     /** The first of "A, B & C": Last.fm matches better on the main artist. */
     private fun primaryArtist(artist: String): String =
         artist.split(", ", " & ", " x ", " feat. ", " ft. ").first().trim().ifEmpty { artist }
