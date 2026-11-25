@@ -100,6 +100,8 @@ internal fun LandscapePlayer(
     videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
     /** Opens the video on the whole screen; null hides the button. */
     onFullScreen: (() -> Unit)? = null,
+    /** Sends the video into a small window over other apps; null hides the button. */
+    onPictureInPicture: (() -> Unit)? = null,
 ) {
     val song = state.song
     val scheme = MaterialTheme.colorScheme
@@ -131,6 +133,12 @@ internal fun LandscapePlayer(
                 if (onFullScreen != null) FullScreenButton(
                     onFullScreen,
                     Modifier.align(Alignment.BottomEnd).padding(8.dp)
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f), CircleShape),
+                    tint = androidx.compose.ui.graphics.Color.White,
+                )
+                if (onPictureInPicture != null) PictureInPictureButton(
+                    onPictureInPicture,
+                    Modifier.align(Alignment.BottomStart).padding(8.dp)
                         .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f), CircleShape),
                     tint = androidx.compose.ui.graphics.Color.White,
                 )

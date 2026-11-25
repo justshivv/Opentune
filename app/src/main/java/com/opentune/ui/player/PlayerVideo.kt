@@ -20,13 +20,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,7 +41,9 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import com.opentune.i18n.Tr
 import com.opentune.playback.PlayerConnection
+import com.opentune.data.model.artworkAt
 import com.opentune.ui.theme.Text
+import kotlin.math.roundToInt
 
 /**
  * The player screen's one picture output: a single texture view, moved
@@ -163,9 +171,107 @@ internal fun VideoSurface(output: VideoOutput, size: VideoSize?, modifier: Modif
         AndroidView(
             // The one view, taken from wherever it was last shown.
             factory = { (view.parent as? ViewGroup)?.removeView(view); view },
-            modifier = Modifier.requiredSize(fit.first, fit.second),
+            modifier = Modifier
+                .requiredSize(fit.first, fit.second)
+                // Where the picture is seen (cut to the box), for the small window to grow out of.
+                .onGloballyPositioned { c ->
+                    if (PictureInPicture.active.value || !c.isAttached) return@onGloballyPositioned
+                    val b = c.boundsInWindow()
+                    PictureInPicture.report(android.graphics.Rect(b.left.roundToInt(), b.top.roundToInt(), b.right.roundToInt(), b.bottom.roundToInt()))
+                },
             update = { v -> size?.let { fitVideo(v, it) } },
         )
+    }
+}
+
+/**
+ * The size of the box the music video shows in, in the cover's place, at [shape] (width
+ * over height: the picture's own, or 1 for the cover's square it eases from). The box
+ * keeps inside the cover's square of side [side]: a wide picture as wide as the cover, a
+ * tall one as tall, centred on the cover's middle, so it never runs past where the cover
+ * sat and nothing around it moves.
+ */
+internal fun videoBoxSize(side: Float, shape: Float): Pair<Float, Float> {
+    if (!shape.isFinite() || shape <= 0f) return side to side
+    return if (shape >= 1f) side to side / shape else side * shape to side
+}
+
+/** How long the box takes to change between the cover's square and the picture's shape. */
+internal const val VIDEO_BOX_MS = 380
+
+/**
+ * The music video in the cover's place, at its own shape inside a box with the cover's
+ * rounded corners, inset from the screen's edges as the cover is. Never stretched or
+ * cropped: the box takes the picture's shape, so there are no bars either.
+ *
+ * The box starts as the cover itself, the same square in the same place with the cover
+ * drawn in it, and eases to the picture's shape once its size is known; until the first
+ * frame the cover shows through the clear picture. With [showVideo] off (going back to
+ * the song) it eases back to the square before the cover takes over.
+ *
+ * The picture is a TextureView ([VideoOutput]): drawn by the UI's own renderer, it is cut
+ * to the rounded corners like anything else, where a SurfaceView would ignore the clip.
+ */
+@Composable
+internal fun VideoCoverPane(
+    artworkUrl: String?,
+    /** The picture's width over height; 0 while unknown, which holds the cover's square. */
+    aspect: Float,
+    showVideo: Boolean,
+    corner: androidx.compose.ui.unit.Dp,
+    isPlaying: Boolean,
+    animate: Boolean,
+    onSwipeNext: () -> Unit,
+    onSwipePrevious: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** Where the box sits in the root, each time it's laid out. */
+    onBox: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
+) {
+    val target = if (showVideo && aspect > 0f) aspect else 1f
+    val shape by androidx.compose.animation.core.animateFloatAsState(
+        target,
+        if (animate) androidx.compose.animation.core.tween(VIDEO_BOX_MS, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        else androidx.compose.animation.core.snap(),
+        label = "videoBox",
+    )
+    // Smaller while paused, as the cover is, so going between the two never jumps.
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        if (isPlaying || !animate) 1f else 0.86f,
+        androidx.compose.animation.core.spring(dampingRatio = 0.62f, stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
+        label = "videoBoxScale",
+    )
+    val rounded = androidx.compose.foundation.shape.RoundedCornerShape(corner)
+    ArtworkSwipeArea(onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious, modifier = modifier) {
+        BoxWithConstraints(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+            val side = minOf(maxWidth.value, maxHeight.value)
+            val (w, h) = videoBoxSize(side, shape)
+            Box(
+                Modifier
+                    .requiredSize(w.dp, h.dp)
+                    .onGloballyPositioned { c -> if (c.isAttached) onBox(c.boundsInRoot()) }
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        // The cover's own soft shadow.
+                        shadowElevation = 16.dp.toPx()
+                        ambientShadowColor = Color.Black.copy(alpha = 0.22f)
+                        spotShadowColor = Color.Black.copy(alpha = 0.16f)
+                        this.shape = rounded
+                        clip = true
+                    }
+                    .testTag("video-cover-box"),
+                contentAlignment = Alignment.Center,
+            ) {
+                // The cover under the clear picture: what the box starts as, and what shows until the first frame.
+                com.opentune.ui.components.Artwork(
+                    artworkUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
+                    Modifier.matchParentSize(),
+                    androidx.compose.ui.graphics.RectangleShape,
+                )
+                if (showVideo) videoSurface()
+            }
+        }
     }
 }
 

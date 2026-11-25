@@ -30,10 +30,105 @@ import com.opentune.ui.Links
 import com.opentune.ui.PlayerViewModel
 import com.opentune.ui.theme.OpenTuneTheme
 import com.opentune.ui.theme.rememberArtworkSeed
+import com.opentune.ui.player.HeldInPictureInPicture
+import com.opentune.ui.player.PictureInPicture
+import com.opentune.ui.player.PictureInPictureContent
+import com.opentune.ui.player.PipHost
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PipHost {
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(com.opentune.ui.theme.AppLanguages.wrap(newBase))
+    }
+
+    /** The small window's Previous, Play or Pause, and Next; only this app's own broadcasts reach it. */
+    private val pipControls = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            if (intent.action != PictureInPicture.ACTION) return
+            when (PictureInPicture.Control.of(intent.getIntExtra(PictureInPicture.EXTRA_CONTROL, -1))) {
+                PictureInPicture.Control.PREVIOUS -> playerVm.skipPrevious()
+                PictureInPicture.Control.PLAY -> if (!playerVm.isPlaying.value) playerVm.togglePlayPause()
+                PictureInPicture.Control.PAUSE -> if (playerVm.isPlaying.value) playerVm.togglePlayPause()
+                PictureInPicture.Control.NEXT -> playerVm.skipNext()
+                null -> Unit
+            }
+        }
+    }
+
+    /** The last shape the small window was given, kept for a song without video so it doesn't jump. */
+    private var pipAspect: android.util.Rational? = null
+
+    /** What the small window would be told now: the picture's shape and place, the buttons, whether Home goes into it. */
+    private fun pipSpec(): PictureInPicture.Spec {
+        val vm = playerVm
+        val videoMode = vm.videoMode.value
+        val aspect = PictureInPicture.aspect(if (videoMode) com.opentune.ui.player.videoAspect(vm.player.videoSize.value) else 0f)
+            ?: pipAspect ?: PictureInPicture.aspect(16f / 9f)
+        pipAspect = aspect
+        val song = vm.currentSong.value
+        return PictureInPicture.Spec(
+            aspect = aspect,
+            sourceRect = PictureInPicture.bounds.value,
+            playing = vm.isPlaying.value,
+            hasNext = vm.hasNext.value,
+            autoEnter = PictureInPicture.autoEnter(
+                allowed = PictureInPicture.allowed.value,
+                videoMode = videoMode,
+                playerShowsVideo = PictureInPicture.showing.value.isNotEmpty(),
+                playing = vm.isPlaying.value,
+                inWindow = PictureInPicture.active.value,
+            ),
+            title = song?.title,
+            subtitle = song?.artist,
+        )
+    }
+
+    override fun enterPictureInPicture(): Boolean {
+        if (!PictureInPicture.isAllowed(this)) return false
+        return runCatching { enterPictureInPictureMode(PictureInPicture.params(this, pipSpec())) }
+            .onFailure { com.opentune.data.DebugLog.w("MainActivity", "Picture-in-picture refused", it) }
+            .getOrDefault(false)
+    }
+
+    /** Keeps Android told what the small window should be, as the song, its picture and its play state change. */
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    private fun watchPictureInPicture() {
+        val vm = playerVm
+        val song = kotlinx.coroutines.flow.combine(vm.videoMode, vm.isPlaying, vm.hasNext, vm.player.videoSize, vm.currentSong) { a, b, c, d, e -> listOf(a, b, c, d, e?.videoId, e?.title) }
+        val pip = kotlinx.coroutines.flow.combine(
+            PictureInPicture.allowed, PictureInPicture.active, PictureInPicture.showing,
+            // Its place moves with every frame of a drag or an easing: told once it settles.
+            PictureInPicture.bounds.debounce(PIP_BOUNDS_SETTLE_MS),
+        ) { a, b, c, d -> listOf(a, b, c.isNotEmpty(), d) }
+        lifecycleScope.launch {
+            kotlinx.coroutines.flow.combine(song, pip) { a, b -> a + b }
+                .distinctUntilChanged()
+                .collect {
+                    // Only where the window exists at all: elsewhere Android refuses the call.
+                    if (!PictureInPicture.allowed.value) return@collect
+                    runCatching { setPictureInPictureParams(PictureInPicture.params(this@MainActivity, pipSpec())) }
+                        .onFailure { com.opentune.data.DebugLog.w("MainActivity", "Couldn't update picture-in-picture", it) }
+                }
+        }
+    }
+
+    /** Home pressed: before Android 12 (which goes in on its own, see PictureInPicture.params), into the small window while a video plays in the player. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && pipSpec().autoEnter) enterPictureInPicture()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        // Out of it by expanding: the app shows again as it was. Swiped away: the activity
+        // stops as when leaving the app, and the music plays on as it does then.
+        PictureInPicture.setActive(isInPictureInPictureMode)
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(pipControls) }
+        super.onDestroy()
     }
 
     override fun onStop() {
@@ -52,6 +147,14 @@ class MainActivity : ComponentActivity() {
         java.util.Locale.setDefault(resources.configuration.locales[0])
         enableEdgeToEdge()
         com.opentune.ui.components.GlassPerformance.init(this)
+        // The small window's buttons: a receiver no other app can send to.
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, pipControls, android.content.IntentFilter(PictureInPicture.ACTION),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        PictureInPicture.setAllowed(PictureInPicture.isAllowed(this))
+        PictureInPicture.setActive(isInPictureInPictureMode)
+        watchPictureInPicture()
         // Opened afresh, not turned or restored: counts toward the tips that wait for a later launch.
         if (savedInstanceState == null) com.opentune.data.tips.Tips.opened()
         if (savedInstanceState == null) receive(intent)
@@ -73,8 +176,11 @@ class MainActivity : ComponentActivity() {
                 if (saver) preferRefreshRate(true, 60) else preferRefreshRate(ui.highRefreshRate, ui.refreshRateHz)
             }
             val song by vm.currentSong.collectAsState()
+            val inPip by PictureInPicture.active.collectAsState()
             OpenTuneTheme(theme, artworkSeed = rememberArtworkSeed(song?.thumbnailUrl)) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    // In the small window only the picture shows; the app is kept just as it was underneath.
+                    HeldInPictureInPicture(inPip, inWindow = { isInPictureInPictureMode }) {
                     androidx.compose.foundation.layout.Box {
                         // More than two releases behind, the app is only its update screen until it's updated.
                         val required by com.opentune.data.UpdateLock.required.collectAsState()
@@ -103,6 +209,17 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         com.opentune.ui.account.ConfirmPairing()
+                    }
+                    }
+                    if (inPip) {
+                        val videoMode by vm.videoMode.collectAsState()
+                        val videoSize by vm.player.videoSize.collectAsState()
+                        val output = PictureInPicture.output
+                        PictureInPictureContent(
+                            song?.thumbnailUrl,
+                            videoMode = videoMode,
+                            picture = if (output != null) ({ com.opentune.ui.player.VideoSurface(output, videoSize, Modifier.matchParentSize()) }) else null,
+                        )
                     }
                 }
             }
@@ -148,6 +265,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        // Turned on or off for the app in Settings while away.
+        PictureInPicture.setAllowed(PictureInPicture.isAllowed(this))
         com.opentune.playback.AppOnScreen.shown.value = true
         com.opentune.data.AppInUse.started.value = true
         com.opentune.ui.components.GlassPerformance.watch(this)
@@ -196,6 +315,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+/** How long the picture's place has to hold still before Android is told it (where the small window grows from). */
+private const val PIP_BOUNDS_SETTLE_MS = 150L
 
 /** Phones with less memory than this start in Lite mode: about 3 GB, the low end today. */
 private const val LITE_MEMORY_BYTES = 3_300_000_000L

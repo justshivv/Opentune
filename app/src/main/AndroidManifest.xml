@@ -83,11 +83,14 @@
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize|stateAlwaysHidden"
             android:theme="@style/Theme.OpenTune"
+            android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout">
             <!-- Turning, folding, unfolding and resizing the window are handled by the
                  Compose UI, which picks its layout from the window's size, so pages,
                  scroll positions and the player stay as they were rather than the
-                 activity starting over. -->
+                 activity starting over. The same four cover going into and out of the
+                 small picture-in-picture window (music videos only), so that doesn't
+                 start it over either. -->
             <!-- The TV home screen's row of apps. -->
             <!-- Open YouTube Music and YouTube links: songs, playlists, albums, channels.
                  Not autoVerify: these domains aren't ours, so the user picks OpenTune. -->

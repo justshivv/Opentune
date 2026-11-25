@@ -401,6 +401,10 @@ private fun VideoControls(
             VideoSeekBar(position, buffered, state.durationMs, onSeek = { onTouch(); actions.seekTo(it) }, onTouch = onTouch)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.weight(1f))
+                actions.pictureInPicture?.let { pip ->
+                    ControlIcon(ImageVector.vectorResource(AppIcons.PictureInPicture), "Picture in picture", { onTouch(); pip() })
+                    Spacer(Modifier.width(4.dp))
+                }
                 FitButton(crop, onCrop)
                 Spacer(Modifier.width(4.dp))
                 ControlIcon(ImageVector.vectorResource(AppIcons.FullscreenExit), "Exit full screen", onExit)

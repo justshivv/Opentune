@@ -191,10 +191,6 @@ fun PlayerBackdrop(
     artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
     /** Apple's animated cover for the playing song, looped over the full-screen still. */
     video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
-    /** The song's music video is showing in the full cover's place. */
-    musicVideo: Boolean = false,
-    /** The playback player's video picture, drawn in the full cover's place while [musicVideo]. */
-    videoSurface: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
@@ -259,35 +255,8 @@ fun PlayerBackdrop(
         }
         if (canvas != null && !amoled) {
             CanvasBackdrop(canvas, canvasPlaying, titleTop, canvasBehindText, Modifier.matchParentSize())
-        } else if (fullCover && musicVideo) {
-            // The music video in the full cover's place: the same span from the top
-            // and the same top shade. Its bottom dissolves the way the cover's
-            // does — the picture's own alpha fades out, anchored to where a 16:9
-            // picture's bottom falls in this span. A colour scrim here instead
-            // painted the backdrop's near-black base over the empty stretch
-            // under the picture, which read as a black band.
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible()) 1f else 0f }) {
-                val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
-                val pictureBottom = height / 2 + (maxWidth / (16f / 9f)) / 2
-                val fadeStart = ((pictureBottom - FULL_COVER_FADE * 0.6f) / height).coerceIn(0f, 1f)
-                val fadeEnd = ((pictureBottom + FULL_COVER_FADE * 0.4f) / height).coerceIn(0f, 1f)
-                Box(Modifier.fillMaxWidth().height(height)) {
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    Brush.verticalGradient(fadeStart to Color.Black, fadeEnd to Color.Transparent),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
-                    ) { videoSurface() }
-                    Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = com.opentune.ui.components.FULL_COVER_TOP_SHADE), 0.2f to Color.Transparent)))
-                }
-            }
         } else if (fullCover && !amoled) {
+            // (The music video isn't drawn here: it has its own rounded box in the cover's place; see VideoCoverPane.)
             CoverSwap(CoverShown(artworkUrl, index, songId), change) { url, motion ->
                 // The cover runs from the top down to just behind the title and
                 // fades out there into whatever backdrop is below it, with a light
