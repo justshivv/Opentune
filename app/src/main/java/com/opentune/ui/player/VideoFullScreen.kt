@@ -254,6 +254,9 @@ internal fun FullScreenVideo(
     // A pinch home from fill runs on the fit rendering under the fill scale.
     var pinchFromFill by remember { mutableStateOf(false) }
     val closePx = with(LocalDensity.current) { 120.dp.toPx() }
+    // The pull stops here: well past the close point, so the picture can
+    // be dragged far down, but never off the screen.
+    val maxPullPx = closePx * 2.5f
     // The bottom controls cluster's height (padding, the seek
     // bar's touch box, its row): a pull starting on it is the controls' own.
     val uiLook = com.opentune.data.settings.AppSettings.ui.collectAsState().value
@@ -391,7 +394,7 @@ internal fun FullScreenVideo(
                                             ) * 1.5f
                                         ) dragging = true
                                         if (dragging) {
-                                            distance = moved.y.coerceAtLeast(0f)
+                                            distance = moved.y.coerceIn(0f, maxPullPx)
                                             scope.launch { pull.snapTo(distance) }
                                             change.consume()
                                         }
