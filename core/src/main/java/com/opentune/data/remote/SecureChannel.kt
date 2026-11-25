@@ -32,9 +32,12 @@ internal class SecureChannel(
 
     private fun purpose(direction: String, seq: Long) = "remote/$direction/${hex(nonce)}/$seq"
 
+    fun send(message: RemoteMessage) = sendText(RemoteCodec.encode(message))
+
+    /** A message as its text: also how a test plays a newer app's message this one doesn't know. */
     @Synchronized
-    fun send(message: RemoteMessage) {
-        val packet = PairingCrypto.seal(key, RemoteCodec.encode(message).toByteArray(UTF_8), purpose(outgoing, sent++))
+    internal fun sendText(text: String) {
+        val packet = PairingCrypto.seal(key, text.toByteArray(UTF_8), purpose(outgoing, sent++))
         out.writeInt(packet.size)
         out.write(packet)
         out.flush()
@@ -87,10 +90,12 @@ internal object RemoteHandshake {
     val HEADER_SIZE = MAGIC.size + 1 + ID_BYTES
 }
 
-/** Which addresses the remote will talk to: the home network, and only it. */
+/** Which addresses the remote will talk to: the home network, and only it (see [com.opentune.data.account.Lan]). */
 internal object HomeNetwork {
     /** Tests run both ends on this machine, so they may allow its own address. */
-    @Volatile var allowLoopback = false
+    var allowLoopback: Boolean
+        get() = com.opentune.data.account.Lan.allowLoopback
+        set(value) { com.opentune.data.account.Lan.allowLoopback = value }
 
-    fun accepts(host: String): Boolean = PairingCrypto.privateHost(host) || (allowLoopback && host == "127.0.0.1")
+    fun accepts(host: String): Boolean = com.opentune.data.account.Lan.accepts(host)
 }

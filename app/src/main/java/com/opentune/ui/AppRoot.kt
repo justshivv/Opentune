@@ -475,6 +475,7 @@ fun AppRoot(vm: PlayerViewModel) {
             is LinkTarget.SpotifyImport -> nav.navigate("import?link=${Uri.encode(link.text)}")
             is LinkTarget.Together -> { playerOpen = false; nav.navigate("together?code=${link.code}") }
             is LinkTarget.Connect -> { playerOpen = false; nav.navigate("connect?join=${Uri.encode(link.secret)}") }
+            is LinkTarget.TvRemote -> { playerOpen = false; com.opentune.ui.remote.RemoteCodes.pending.value = link.code; nav.navigate("tv-remote") { launchSingleTop = true } }
             is LinkTarget.Recognize -> { playerOpen = false; nav.navigate("recognize?listen=true") { launchSingleTop = true } }
             is LinkTarget.Player -> playerOpen = true
             is LinkTarget.PlaySearch -> {

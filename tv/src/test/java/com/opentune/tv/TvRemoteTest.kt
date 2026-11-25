@@ -164,6 +164,45 @@ class TvRemoteTest {
         compose.onNodeWithText("Search songs, albums, artists").assertDoesNotExist()
     }
 
+    @Test fun theSearchFieldTellsThePhoneWhenItHasTheFocusAndTakesItsTyping() {
+        var modes: androidx.compose.ui.input.InputModeManager? = null
+        compose.setContent {
+            modes = androidx.compose.ui.platform.LocalInputModeManager.current
+            TvTheme { TvRoot(player, remote = remote) }
+        }
+        // As on a TV, driven by a remote's keys, where the focus shows.
+        compose.runOnIdle { modes!!.requestInputMode(androidx.compose.ui.input.InputMode.Keyboard) }
+        compose.waitForIdle()
+        assertFalse(remote.field.value.focused)
+        // Search, opened with "ab" in it: its field takes the focus, and the phone hears so.
+        compose.runOnUiThread { remote.deliver(RemoteMessage.Text("ab")) }
+        compose.waitForIdle()
+        // Picked, as the TV's remote would (the page may have put the focus on a result already).
+        compose.onNodeWithText("ab").requestFocus()
+        compose.waitUntil(3_000) { remote.field.value.focused }
+        assertEquals("ab", remote.field.value.text)
+        // Typed on the phone: into the field, and not told back.
+        compose.runOnUiThread { remote.deliver(RemoteMessage.Edit("abba gold")) }
+        compose.waitForIdle()
+        compose.onNodeWithText("abba gold").assertExists()
+        assertEquals("ab", remote.field.value.text)
+        // Leaving Search: the phone's keyboard closes.
+        compose.runOnUiThread { remote.deliver(RemoteMessage.Key(RemoteKey.HOME)) }
+        compose.waitForIdle()
+        compose.waitUntil(3_000) { !remote.field.value.focused }
+    }
+
+    @Test fun enterFromThePhoneWithNoFieldFocusedStillSearches() {
+        compose.setContent { TvTheme { TvRoot(player, remote = remote) } }
+        compose.waitForIdle()
+        compose.runOnUiThread { remote.deliver(RemoteMessage.Edit("queen", submit = true)) }
+        compose.waitForIdle()
+        compose.onNodeWithText("queen").assertExists()
+        // Typing without Enter, and no field to take it, does nothing.
+        compose.runOnUiThread { remote.deliver(RemoteMessage.Key(RemoteKey.HOME)) }
+        compose.waitForIdle()
+    }
+
     @Test fun theTvReportsWhatIsPlayingForThePhone() {
         show { Text("x") }
         val now = input.now()

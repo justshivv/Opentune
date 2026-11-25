@@ -12,7 +12,11 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -111,12 +115,52 @@ fun SearchScreen(nav: TvNav) {
         else -> null
     }
 
+    // A phone used as the remote types into the field while it has the focus: its keyboard opens
+    // when the field gets the focus and closes when it loses it or this page goes. Told on those
+    // changes only, and when the text changes here; nothing is polled.
+    val remote = nav.remote
+    var fieldFocused by remember { mutableStateOf(false) }
+    // What the phone last typed, so it isn't told back what it just said.
+    var fromPhone by remember { mutableStateOf<String?>(null) }
+    var phoneSearched by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val editor = remember {
+        TvRemote.FieldEditor { text, submit ->
+            fromPhone = text
+            query = text
+            phoneSearched = submit
+        }
+    }
+    LaunchedEffect(remote, fieldFocused) {
+        if (remote == null) return@LaunchedEffect
+        if (fieldFocused) remote.fieldFocused(editor, query, FIELD_HINT)
+        // The focus moves from the resting field to the one being typed in over a frame or two:
+        // only a field that stays without it counts as left.
+        else { delay(BLUR_MS); remote.fieldLeft(editor) }
+    }
+    DisposableEffect(remote) { onDispose { remote?.fieldLeft(editor) } }
+    LaunchedEffect(query) { if (fieldFocused && query != fromPhone) remote?.fieldChanged(editor, query, FIELD_HINT) }
+    // Enter on the phone: kept as a search, the TV's own keyboard put away, and the focus on the first result once there is one.
+    LaunchedEffect(phoneSearched, firstKey, f) {
+        if (!phoneSearched) return@LaunchedEffect
+        keyboard?.hide()
+        if (q.length < 2 || f is Load.Failed) { phoneSearched = false; return@LaunchedEffect }
+        // Only this search's results: until they're in, what's showing may be the last one's.
+        val current = f is Load.Done && (memory == null || memory.loads[searchKey(q)] === f)
+        if (!current) return@LaunchedEffect
+        keep()
+        val first = firstKey?.let { memory?.requesters?.get(it) } ?: run { phoneSearched = false; return@LaunchedEffect }
+        withFrameNanos { }
+        runCatching { first.requestFocus() }
+        phoneSearched = false
+    }
+
     TvPage(scroll = SearchScroll) {
         item(key = "field") {
             TvTextField(
-                value = query, onValueChange = { query = it },
-                placeholder = "Search songs, albums, artists",
-                modifier = Modifier.safeSides().focusProperties {
+                value = query, onValueChange = { query = it; fromPhone = null; phoneSearched = false },
+                placeholder = FIELD_HINT,
+                modifier = Modifier.safeSides().onFocusChanged { fieldFocused = it.hasFocus }.focusProperties {
                     firstKey?.let { key -> memory?.requesters?.get(key) }?.let { down = it }
                 },
                 onSubmit = keep,
@@ -204,3 +248,7 @@ private fun RecentSearches(recent: List<String>, onPick: (String) -> Unit, onCle
 private val SearchScroll = 0.16f..0.38f
 
 private const val DEBOUNCE_MS = 450L
+
+/** What the search field says when it's empty; the phone shows it too, in its own language. */
+private const val FIELD_HINT = "Search songs, albums, artists"
+private const val BLUR_MS = 200L

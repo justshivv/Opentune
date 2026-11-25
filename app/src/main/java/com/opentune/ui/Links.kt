@@ -27,6 +27,8 @@ sealed interface LinkTarget {
     data class Together(val code: String) : LinkTarget
     /** A link adding this phone to the person's devices (see Connect). */
     data class Connect(val secret: String) : LinkTarget
+    /** A TV's code for pairing this phone as its remote (opentune://remote/…). */
+    data class TvRemote(val code: String) : LinkTarget
     /** From the widget or Quick Settings tile: start listening for a song nearby. */
     data object Recognize : LinkTarget
     /** Open the app with the player up. */
@@ -102,6 +104,7 @@ object Links {
 
     /** What [text] links to, if the app can open it: the same links it takes when shared in. */
     fun targetOf(text: String?): LinkTarget? {
+        if (text != null && com.opentune.data.remote.ScannedCode.of(text) == com.opentune.data.remote.ScannedCode.REMOTE) return LinkTarget.TvRemote(text.trim())
         com.opentune.data.connect.ConnectGroup.parse(text)?.let { return LinkTarget.Connect(it.encoded) }
         com.opentune.data.together.RoomCode.find(text)?.let { return LinkTarget.Together(it.raw) }
         if (text != null && com.opentune.data.spotify.Spotify.looksLikeSpotify(text)) return LinkTarget.SpotifyImport(text)

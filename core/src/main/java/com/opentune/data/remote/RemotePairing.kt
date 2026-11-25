@@ -1,6 +1,7 @@
 package com.opentune.data.remote
 
 import android.content.Context
+import com.opentune.data.account.Lan
 import com.opentune.data.account.PairingCrypto
 import java.nio.charset.StandardCharsets.UTF_8
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,6 +100,10 @@ class PairedTvs(private val storage: RemoteStorage) {
  * What a TV shows as a QR code to pair a phone: where it is, who it is, and a one-time token
  * that the phone proves it has seen the screen with. The token opens one pairing and lasts
  * two minutes; after that the phone has a key of its own. Nothing here is a lasting secret.
+ *
+ * The two minutes are timed on each side by its own steady clock, from when the TV made the
+ * code and from when the phone read it; the TV's clock is never compared with the phone's,
+ * since a TV's is often minutes out. The TV, which holds the token, is what stops taking it.
  */
 class RemoteInvite internal constructor(
     val host: String,
@@ -107,9 +112,13 @@ class RemoteInvite internal constructor(
     val tvName: String,
     internal val id: ByteArray,
     internal val token: ByteArray,
+    /** The TV's wall clock when it runs out: written for older phones, not read for timing. */
     val expires: Long,
+    /** [Lan.steadyMs] on this side when it stops being good. */
+    private val deadline: Long,
 ) {
-    fun valid(now: Long = System.currentTimeMillis()): Boolean = expires > now && expires - now <= LIFETIME_MS + SLACK_MS
+    /** Whether the code is still good, by this side's own clock. */
+    fun valid(steady: Long = Lan.steadyMs()): Boolean = steady < deadline
 
     /** The text of the QR code. */
     val link: String
@@ -119,31 +128,86 @@ class RemoteInvite internal constructor(
             return "opentune://remote/#" + PairingCrypto.encode(body.toByteArray(UTF_8))
         }
 
+    /** What a scanned code turned out to be, for the phone to say. */
+    sealed interface Read {
+        data class Invite(val invite: RemoteInvite) : Read
+        /** Not a pairing code for the remote at all (it may be another NepTune code: see [ScannedCode]). */
+        data object NotAnInvite : Read
+        /** It starts like one, but the rest is cut off or garbled. */
+        data object Damaged : Read
+        /** A real code, but its address is not on the home network. */
+        data class OffNetwork(val host: String) : Read
+    }
+
     companion object {
         const val LIFETIME_MS = 120_000L
-        private const val SLACK_MS = 5_000L
+        private const val PREFIX = "opentune://remote/#"
 
-        fun create(host: String, port: Int, tvId: String, tvName: String, now: Long = System.currentTimeMillis()): RemoteInvite {
+        fun create(
+            host: String,
+            port: Int,
+            tvId: String,
+            tvName: String,
+            now: Long = System.currentTimeMillis(),
+            steady: Long = Lan.steadyMs(),
+        ): RemoteInvite {
             require(HomeNetwork.accepts(host) && port in 1024..65535)
             return RemoteInvite(
                 host, port, tvId, tvName,
                 ByteArray(RemoteHandshake.ID_BYTES).also(SecureChannel.random::nextBytes),
-                PairingCrypto.secret(), now + LIFETIME_MS,
+                PairingCrypto.secret(), now + LIFETIME_MS, steady + LIFETIME_MS,
             )
         }
 
-        /** The invite in a scanned [text], or null when it isn't one, has run out, or points anywhere but the home network. */
-        fun parse(text: String, now: Long = System.currentTimeMillis()): RemoteInvite? = runCatching {
-            val payload = text.trim().substringAfter("opentune://remote/#", "").ifEmpty { return null }
-            require(payload.length in 40..1024)
-            val f = String(PairingCrypto.decode(payload), UTF_8).split('|')
-            require(f.size == 8 && f[0] == "1")
-            val port = f[2].toInt()
-            require(HomeNetwork.accepts(f[1]) && port in 1024..65535)
-            val id = SecureChannel.unhex(f[5]); require(id.size == RemoteHandshake.ID_BYTES)
-            val token = PairingCrypto.decode(f[6]); require(token.size == 32)
-            RemoteInvite(f[1], port, f[3], String(PairingCrypto.decode(f[4]), UTF_8).take(60), id, token, f[7].toLong())
-                .also { require(it.valid(now)) }
-        }.getOrNull()
+        /** What [text] is; an invite gets two minutes from [steady], when it was read. */
+        fun read(text: String, steady: Long = Lan.steadyMs()): Read {
+            val payload = text.trim().substringAfter(PREFIX, "").ifEmpty { return Read.NotAnInvite }
+            return runCatching {
+                require(payload.length in 40..1024)
+                val f = String(PairingCrypto.decode(payload), UTF_8).split('|')
+                require(f.size == 8 && f[0] == "1")
+                val port = f[2].toInt()
+                require(port in 1024..65535)
+                val id = SecureChannel.unhex(f[5]); require(id.size == RemoteHandshake.ID_BYTES)
+                val token = PairingCrypto.decode(f[6]); require(token.size == 32)
+                val expires = f[7].toLong(); require(expires > 0)
+                if (!HomeNetwork.accepts(f[1])) return Read.OffNetwork(f[1])
+                Read.Invite(RemoteInvite(f[1], port, f[3], String(PairingCrypto.decode(f[4]), UTF_8).take(60), id, token, expires, steady + LIFETIME_MS))
+            }.getOrDefault(Read.Damaged)
+        }
+
+        /** The invite in a scanned [text], or null when it isn't one or points anywhere but the home network. */
+        fun parse(text: String, steady: Long = Lan.steadyMs()): RemoteInvite? = (read(text, steady) as? Read.Invite)?.invite
+    }
+}
+
+/**
+ * Which kind of NepTune code a scan read, so either of the phone's scanners can hand it to the
+ * right place: a TV shows one code to sign it in and another to pair the phone as a remote.
+ */
+enum class ScannedCode {
+    /** A device's sign-in code: opentune://pair/… (or the website's pair page). */
+    SIGN_IN,
+    /** The web player's code for this phone's other sign-ins: opentune://pair/web… */
+    WEB_SIGN_IN,
+    /** A TV's code for pairing this phone as its remote: opentune://remote/… */
+    REMOTE,
+    /** Some other NepTune link. */
+    OTHER_NEPTUNE,
+    /** Not a NepTune code. */
+    NOT_NEPTUNE;
+
+    companion object {
+        fun of(text: String): ScannedCode {
+            val t = text.trim()
+            return when {
+                t.startsWith("opentune://pair/web", ignoreCase = true) -> WEB_SIGN_IN
+                t.startsWith("opentune://pair", ignoreCase = true) -> SIGN_IN
+                t.startsWith("https://justshivv.github.io/Opentune/pair/", ignoreCase = true) -> SIGN_IN
+                t.startsWith("opentune://remote", ignoreCase = true) -> REMOTE
+                t.startsWith("opentune://", ignoreCase = true) -> OTHER_NEPTUNE
+                else -> NOT_NEPTUNE
+            }
+        }
     }
 }

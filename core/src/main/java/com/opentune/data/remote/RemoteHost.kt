@@ -1,10 +1,9 @@
 package com.opentune.data.remote
 
+import com.opentune.data.account.Lan
 import com.opentune.data.account.PairingCrypto
 import java.io.DataInputStream
 import java.io.IOException
-import java.net.Inet4Address
-import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
@@ -13,13 +12,11 @@ import java.util.concurrent.RejectedExecutionException
 
 /** This device's address on the home network, if it has one. */
 object LocalNetwork {
-    fun privateAddress(): String? = runCatching {
-        NetworkInterface.getNetworkInterfaces().toList().asSequence()
-            .filter { it.isUp && !it.isLoopback && !it.isVirtual }
-            .flatMap { it.inetAddresses.toList().asSequence() }
-            .firstOrNull { it is Inet4Address && PairingCrypto.privateHost(it.hostAddress.orEmpty()) }
-            ?.hostAddress
-    }.getOrNull()
+    /**
+     * The one to put in a code: Wi-Fi or Ethernet rather than Wi-Fi Direct, a VPN or a
+     * container's, and one every phone reads (see [Lan.order] and [Lan.primary]).
+     */
+    fun privateAddress(): String? = runCatching { Lan.primary(Lan.addresses()) }.getOrNull()
 }
 
 /**
@@ -36,6 +33,8 @@ class RemoteHost(
     private val onControllers: (List<String>) -> Unit = {},
     private val address: () -> String? = LocalNetwork::privateAddress,
     port: Int = RemoteProtocol.DEFAULT_PORT,
+    /** This TV's steady clock, which times an invite's two minutes. */
+    private val steady: () -> Long = Lan::steadyMs,
 ) : AutoCloseable {
     private class Controller(val phoneId: String, val name: String, val socket: Socket, val channel: SecureChannel)
 
@@ -61,10 +60,20 @@ class RemoteHost(
     /** A new invite, to show as a QR code; it replaces any earlier one. */
     fun createInvite(): RemoteInvite {
         val host = address() ?: error("Connect this TV to your home network first.")
-        return RemoteInvite.create(host, port, phones.tvId, tvName()).also { invite = it }
+        return RemoteInvite.create(host, port, phones.tvId, tvName(), steady = steady()).also { invite = it }
     }
 
     fun cancelInvite() { invite = null }
+
+    /** The text field with the focus now, as last told to the phones; a phone that connects hears it too. */
+    @Volatile private var field = RemoteMessage.Field(focused = false)
+
+    /** Tells the phones a text field got (or lost) the focus, or what's in it now; nothing when that hasn't changed. */
+    fun field(state: RemoteMessage.Field) {
+        val next = state.copy(text = state.text.take(MAX_FIELD_TEXT), hint = state.hint?.take(MAX_FIELD_TEXT))
+        synchronized(this) { if (next == field) return; field = next }
+        push(next)
+    }
 
     /** Sends [message] to every phone connected. */
     fun push(message: RemoteMessage) {
@@ -101,7 +110,7 @@ class RemoteHost(
             val id = SecureChannel.hex(idBytes)
             val pairing = mode == RemoteHandshake.PAIR
             val offer = invite
-            val key = if (pairing) offer?.takeIf { it.valid() && SecureChannel.hex(it.id) == id }?.token
+            val key = if (pairing) offer?.takeIf { it.valid(steady()) && SecureChannel.hex(it.id) == id }?.token
             else phones.find(id)?.key?.let(PairingCrypto::decode)
             // An unknown id gets nothing, not even a nonce, so the TV tells a stranger no more than it must.
             key ?: return
@@ -126,11 +135,14 @@ class RemoteHost(
             socket.soTimeout = IDLE_MS
             controller = Controller(phone.id, hello.name.take(40).ifBlank { phone.name }, socket, channel)
                 .also { controllers += it; onControllers(controllers.map { c -> c.name }) }
+            // A field already has the focus: this phone opens its keyboard too. (Through the sender, in order with what's pushed.)
+            // Read when it goes, so a change meanwhile (pushed through the same sender) can't arrive before it.
+            runCatching { sender.execute { field.takeIf { it.focused }?.let { f -> runCatching { channel.send(f) } } } }
             while (!closed) {
                 when (val m = channel.receive()) {
                     null, is RemoteMessage.Ping, is RemoteMessage.Hello -> Unit
                     // Only a TV says these; a phone that does is wrong, and ignored.
-                    is RemoteMessage.Welcome, is RemoteMessage.Now, is RemoteMessage.PairGranted, is RemoteMessage.PairRequest -> Unit
+                    is RemoteMessage.Welcome, is RemoteMessage.Now, is RemoteMessage.PairGranted, is RemoteMessage.PairRequest, is RemoteMessage.Field -> Unit
                     else -> onMessage(m)
                 }
             }
@@ -155,5 +167,7 @@ class RemoteHost(
         const val HANDSHAKE_MS = 4_000
         /** A phone pings every few seconds; this long without a word and it is gone. */
         const val IDLE_MS = 30_000
+        /** As much of a field as goes to the phone: what the TV's search takes. */
+        const val MAX_FIELD_TEXT = 200
     }
 }

@@ -7,6 +7,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -135,6 +139,59 @@ class TvRemoteScreenTest {
             listOf<RemoteMessage>(RemoteMessage.Key(RemoteKey.BACK), RemoteMessage.Key(RemoteKey.HOME), RemoteMessage.Key(RemoteKey.PLAY_PAUSE), RemoteMessage.Key(RemoteKey.MUTE)),
             sent,
         )
+    }
+
+    @Test fun theKeyboardOpensWhenTheTvsSearchFieldIsFocusedAndTypesIntoIt() {
+        val keyboard = RemoteKeyboard { sent += it }
+        compose.setContent {
+            MaterialTheme(darkColorScheme()) {
+                // Paused, so the progress bar's ticking doesn't keep the test from ever being idle.
+                Surface { RemotePad("OpenTune on Bravia", now.copy(playing = false), { sent += it }, PaddingValues(), onLeave = {}, keyboard = keyboard) }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertDoesNotExist()
+        // The TV's search field gets the focus, with "pink" in it.
+        compose.runOnIdle { keyboard.onField(RemoteMessage.Field(true, "pink", "Search songs, albums, artists")) }
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertExists().assertTextContains("pink")
+        sent.clear()
+        compose.onNode(hasSetTextAction()).performTextInput(" floyd")
+        compose.waitForIdle()
+        assertEquals(RemoteMessage.Edit("pink floyd"), sent.filterIsInstance<RemoteMessage.Edit>().last())
+        shot("typing")
+        compose.onNode(hasSetTextAction()).performImeAction()
+        compose.waitForIdle()
+        assertEquals(RemoteMessage.Edit("pink floyd", submit = true), sent.filterIsInstance<RemoteMessage.Edit>().last())
+        compose.onNode(hasSetTextAction()).assertDoesNotExist()
+        // Focused again, then the TV leaves Search: it opens, then closes by itself.
+        compose.runOnIdle { keyboard.onField(RemoteMessage.Field(false)); keyboard.onField(RemoteMessage.Field(true, "")) }
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertExists()
+        compose.runOnIdle { keyboard.onField(RemoteMessage.Field(false)) }
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertDoesNotExist()
+    }
+
+    @Test fun closedByHandTheTypeButtonOpensItAgainWhileTheFieldHasTheFocus() {
+        val keyboard = RemoteKeyboard { sent += it }
+        compose.setContent {
+            MaterialTheme(darkColorScheme()) {
+                Surface { RemotePad("OpenTune on Bravia", now.copy(playing = false), { sent += it }, PaddingValues(), onLeave = {}, keyboard = keyboard) }
+            }
+        }
+        compose.waitForIdle()
+        compose.runOnIdle { keyboard.onField(RemoteMessage.Field(true, "abba")) }
+        compose.onNodeWithContentDescription("Close the keyboard").performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Type").performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertExists().assertTextContains("abba")
+        compose.onNodeWithText("Search").performClick()
+        compose.waitForIdle()
+        assertEquals(RemoteMessage.Edit("abba", submit = true), sent.filterIsInstance<RemoteMessage.Edit>().single())
+        assertTrue(sent.none { it is RemoteMessage.Text })
     }
 
     @Test fun holdingAnArrowRepeatsUntilLetGo() {

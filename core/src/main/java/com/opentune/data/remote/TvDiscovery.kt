@@ -3,6 +3,7 @@ package com.opentune.data.remote
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import com.opentune.data.account.Lan
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,7 +56,11 @@ class TvDiscovery(context: Context) {
         nsd.resolveService(info, object : NsdManager.ResolveListener {
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) { done() }
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                val host = serviceInfo.host?.hostAddress
+                // Android 14 and later can resolve a TV to several addresses, IPv6 link-local
+                // among them and sometimes first; an IPv4 one is preferred, one on the home network required.
+                @Suppress("DEPRECATION")
+                val addresses = if (android.os.Build.VERSION.SDK_INT >= 34) serviceInfo.hostAddresses else listOfNotNull(serviceInfo.host)
+                val host = Lan.order(addresses.mapNotNull { a -> Lan.text(a)?.let { Lan.Local(it, "") } }).firstOrNull()
                 // Only the home network: an announcement can say anything.
                 if (host != null && HomeNetwork.accepts(host) && serviceInfo.port in 1024..65535) {
                     val tvId = serviceInfo.attributes?.get("tv")?.toString(Charsets.UTF_8)

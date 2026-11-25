@@ -15,6 +15,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.opentune.data.Pills
 import com.opentune.data.account.AccountStore
+import com.opentune.data.account.Lan
 import com.opentune.data.account.PairingExtras
 import com.opentune.data.account.PairingOffer
 import com.opentune.data.account.PairingReceiver
@@ -24,6 +25,9 @@ import com.opentune.data.account.WebShareOffer
 import com.opentune.data.discord.DiscordRpc
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.lastfm.LastFm
+import com.opentune.data.remote.LanNetworks
+import com.opentune.data.remote.TvDiscovery
+import com.opentune.i18n.Tr
 import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.components.SheetButton
 import com.opentune.ui.components.SheetTone
@@ -38,20 +42,53 @@ object PairingLinks {
     val pending = MutableStateFlow<PairingOffer?>(null)
     /** The web player's "Sign in with your phone" code, waiting for approval. */
     val pendingWeb = MutableStateFlow<WebShareOffer?>(null)
+    /** Why the last sign-in code scanned couldn't be used, until it's read. */
+    val problem = MutableStateFlow<String?>(null)
+
     fun receive(intent: Intent?): Boolean {
         val uri = intent?.data ?: return false
         val own = uri.scheme == "opentune" && uri.host == "pair"
         val site = uri.scheme == "https" && uri.host == "justshivv.github.io" && uri.path == "/Opentune/pair/"
         if (own && uri.path == "/web") {
-            pendingWeb.value = runCatching { WebShareOffer.parse(uri.fragment.orEmpty()) }.getOrNull()
+            val offer = runCatching { WebShareOffer.parse(uri.fragment.orEmpty()) }.getOrNull()
+            pendingWeb.value = offer
+            if (offer == null) problem.value = "That code from the web player has run out or didn't scan whole. Make a new one there and scan it again."
             return true
         }
         if (!own && !site) return false
-        pending.value = runCatching { PairingOffer.parse(uri.fragment.orEmpty(), take = uri.getQueryParameter("take")) }.getOrNull()
+        val read = runCatching {
+            PairingOffer.parse(uri.fragment.orEmpty(), take = uri.getQueryParameter("take"), also = uri.getQueryParameter("also"))
+        }
+        pending.value = read.getOrNull()
+        read.exceptionOrNull()?.let { e ->
+            problem.value = if (e is Lan.OffHomeNetwork) Tr.f("That code points to {0}, which isn't on your home network. Make a new code on the TV.", e.host)
+            else "That code didn't scan whole. Make a new one on the TV and scan it again, holding the phone steady."
+        }
         return true
     }
     fun dismiss() { pending.value = null }
     fun dismissWeb() { pendingWeb.value = null }
+}
+
+/** What the phone says when it couldn't sign a device in, in plain words for each reason. */
+internal fun sendProblem(e: Throwable, status: LanNetworks.Status?, host: String): String {
+    val reason = (e as? PairingSender.Failed)?.reason
+    val isolation = "If NepTune still shows the code there, your router may be keeping devices on Wi-Fi apart (AP or client isolation, common on guest networks). Turn that off, or turn on this phone's hotspot, connect the device to it and make a new code."
+    return when (reason) {
+        PairingSender.Failed.Reason.EXPIRED -> "This code has run out. Make a new one on the TV and scan it again."
+        PairingSender.Failed.Reason.EXPIRED_THERE -> "The TV says this code has run out. Make a new one on the TV and scan it again."
+        PairingSender.Failed.Reason.OFF_NETWORK -> Tr.f("That code points to {0}, which isn't on your home network. Make a new code on the TV.", host)
+        PairingSender.Failed.Reason.NOT_LISTENING -> "The TV is on this network but isn't waiting for this code any more. Make a new code on the TV and scan it again."
+        PairingSender.Failed.Reason.REJECTED -> "The TV didn't take this code. It may have been used already, or a newer code is showing. Scan the code that's on the TV now."
+        PairingSender.Failed.Reason.BAD_SESSION -> "The TV says this phone's YouTube Music sign-in isn't complete. Sign out and in again on this phone, then try again."
+        PairingSender.Failed.Reason.NO_REPLY -> "The TV got the sign-in but didn't confirm it. If the TV doesn't show your account, make a new code there and try again."
+        PairingSender.Failed.Reason.NO_ROUTE, PairingSender.Failed.Reason.NO_ANSWER, null -> when {
+            status != null && !status.onLan -> "This phone isn't on Wi-Fi. Connect it to the same Wi-Fi as the TV and try again."
+            status?.sameSubnet == false -> Tr.f("This phone and the TV are on different networks (the TV is at {0}). Connect both to the same Wi-Fi, not a guest network, and try again.", host)
+            status?.vpn == true -> Tr.f("The TV at {0} didn't answer. Turn off the VPN on this phone, or let it allow local network access, and try again.", host)
+            else -> Tr.f("The TV at {0} didn't answer.", host) + " " + Tr.t(isolation)
+        }
+    }
 }
 
 /** "Discord and Last.fm", for the kinds of sign-in named in [kinds]. */
@@ -103,12 +140,26 @@ private fun ShareChoiceRows(choices: ShareChoices, enabled: Boolean) {
 @Composable
 fun ConfirmPairing() {
     ConfirmWebShare()
+    val problem by PairingLinks.problem.collectAsState()
+    problem?.let { text ->
+        FloatingCard(onDismiss = { PairingLinks.problem.value = null }, title = "Couldn't use that code") {
+            Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(text)
+                SheetButton("OK", onClick = { PairingLinks.problem.value = null }, tone = SheetTone.Primary, closes = true)
+            }
+        }
+        return
+    }
     val offer by PairingLinks.pending.collectAsState()
     val current = offer ?: return
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+    // TVs announcing themselves on this network: if none of the code's addresses answers, the TV
+    // may still answer at the one it announced (its sign-in code listens on all of them).
+    val discovery = remember { TvDiscovery(context) }
+    DisposableEffect(discovery) { discovery.start(); onDispose { discovery.stop() } }
     val choices = rememberShareChoices(current, current.take)
     var busy by remember(current) { mutableStateOf(false) }
     var status by remember(current) { mutableStateOf<String?>(null) }
@@ -130,17 +181,25 @@ fun ConfirmPairing() {
                 busy = true; status = "Connecting securely…"
                 scope.launch {
                     try {
-                        val cookie = Innertube.cookie ?: error("No session")
+                        val cookie = Innertube.cookie?.takeIf { AccountStore.hasSession(it) }
+                        if (cookie == null) { status = "This phone's YouTube Music sign-in isn't complete. Sign out and in again on this phone, then try again."; return@launch }
                         val extras = choices.extras()
-                        val took = withContext(Dispatchers.IO) { PairingSender.send(current, cookie, extras.takeUnless { it.isEmpty }) }
+                        val announced = discovery.found.value.map { it.host }
+                        val took = withContext(Dispatchers.IO) {
+                            PairingSender.send(current, cookie, extras.takeUnless { it.isEmpty }, also = announced, sockets = LanNetworks.sockets(context))
+                        }
                         val missed = extras.kinds - took
                         when {
-                            missed.isNotEmpty() -> Pills.info(com.opentune.i18n.Tr.f("Signed in. {0} couldn't be shared: sign in to it on the device itself.", names(missed)), context)
-                            took.isNotEmpty() -> Pills.done(com.opentune.i18n.Tr.f("Signed in, with {0} too.", names(took)), context)
+                            missed.isNotEmpty() -> Pills.info(Tr.f("Signed in. {0} couldn't be shared: sign in to it on the device itself.", names(missed)), context)
+                            took.isNotEmpty() -> Pills.done(Tr.f("Signed in, with {0} too.", names(took)), context)
+                            else -> Pills.done("Signed in. Your account is on the TV now.", context)
                         }
                         status = "Your TV is signed in."; PairingLinks.dismiss()
                     } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                    catch (_: Exception) { status = "Couldn't connect. Keep both devices on the same Wi-Fi and scan a fresh code from the TV." }
+                    catch (e: Exception) {
+                        val network = withContext(Dispatchers.IO) { runCatching { LanNetworks.status(context, current.hosts) }.getOrNull() }
+                        status = sendProblem(e, network, current.host)
+                    }
                     finally { busy = false }
                 }
             })

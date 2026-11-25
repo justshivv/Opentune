@@ -120,7 +120,7 @@ fun TvRemoteScreen(
         if (connected) {
             val tvName = (state as? RemoteClient.State.Connected)?.tv ?: ""
             val now by vm.now.collectAsState()
-            RemotePad(tvName, now, vm::send, contentPadding, onLeave = { vm.disconnect() })
+            RemotePad(tvName, now, vm::send, contentPadding, onLeave = { vm.disconnect() }, keyboard = vm.keyboard)
         }
         else TvPicker(vm, contentPadding, onBack)
     }
@@ -138,9 +138,19 @@ private fun TvPicker(vm: TvRemoteViewModel, contentPadding: PaddingValues, onBac
     var scanning by remember { mutableStateOf(false) }
     var forgetting by remember { mutableStateOf<PairedTv?>(null) }
 
+    // A code read elsewhere (Link a device, the camera app) for this page.
+    val handed by RemoteCodes.pending.collectAsState()
+    LaunchedEffect(handed) { handed?.let { RemoteCodes.pending.value = null; vm.pair(it) } }
     if (scanning) QrScannerDialog(onDismiss = { scanning = false }) { text ->
         scanning = false
-        if (!vm.pair(text)) Pills.error("That isn't a code from NepTune on a TV", context)
+        when (com.opentune.data.remote.ScannedCode.of(text)) {
+            // The TV's sign-in code, scanned here: it goes to signing the TV in, which asks to approve.
+            com.opentune.data.remote.ScannedCode.SIGN_IN, com.opentune.data.remote.ScannedCode.WEB_SIGN_IN -> {
+                com.opentune.ui.account.PairingLinks.receive(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(text.trim())))
+                Pills.info("That was the TV's sign-in code, so it's signing the TV in. To use this phone as a remote, scan the code under the TV's Settings, Pair a phone.", context)
+            }
+            else -> if (!vm.pair(text)) Pills.error("That isn't a code from NepTune on a TV. On the TV, open Settings, then Pair a phone, and scan the code it shows.", context)
+        }
     }
     forgetting?.let { tv ->
         AlertDialog(
@@ -241,11 +251,20 @@ private fun BigButton(label: String, icon: ImageVector, onClick: () -> Unit, mod
 // ---- The remote ----
 
 @Composable
-internal fun RemotePad(tvName: String, now: RemoteMessage.Now?, send: (RemoteMessage) -> Unit, contentPadding: PaddingValues, onLeave: () -> Unit) {
+internal fun RemotePad(
+    tvName: String,
+    now: RemoteMessage.Now?,
+    send: (RemoteMessage) -> Unit,
+    contentPadding: PaddingValues,
+    onLeave: () -> Unit,
+    /** The keyboard for the TV's focused text field; a TV that never says has none open. */
+    keyboard: RemoteKeyboard? = null,
+) {
     val ui by AppSettings.ui.collectAsState()
     val haptics = rememberHaptics()
     var trackpad by rememberSaveable { mutableStateOf(ui.remoteStartOnTrackpad) }
     var typing by remember { mutableStateOf(false) }
+    val field by (keyboard?.state ?: remember { kotlinx.coroutines.flow.MutableStateFlow(RemoteKeyboard.State()) }).collectAsState()
     var options by remember { mutableStateOf(false) }
     var help by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
@@ -253,7 +272,8 @@ internal fun RemotePad(tvName: String, now: RemoteMessage.Now?, send: (RemoteMes
 
     // The cursor is there for the trackpad, and out of the way for the buttons.
     LaunchedEffect(trackpad) { send(RemoteMessage.Cursor(trackpad)); AppSettings.updateUi { it.copy(remoteStartOnTrackpad = trackpad) } }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // On the pad, for the volume keys; back there once the TV's keyboard closes.
+    LaunchedEffect(field.open) { if (!field.open) runCatching { focus.requestFocus() } }
 
     if (typing) TypeToTv(onSend = { text -> send(RemoteMessage.Text(text)); typing = false }, onDismiss = { typing = false })
     if (options) RemoteOptions(onDismiss = { options = false })
@@ -279,6 +299,8 @@ internal fun RemotePad(tvName: String, now: RemoteMessage.Now?, send: (RemoteMes
             },
         )
         NowStrip(now)
+        // The TV's search field has the focus: its text, here, with the keyboard up.
+        if (keyboard != null && field.open) LiveTyping(field, onType = keyboard::type, onSubmit = keyboard::submit, onDismiss = keyboard::dismiss)
         ModeSwitch(trackpad, onChange = { trackpad = it; haptics.tick() })
         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
             if (trackpad) {
@@ -291,7 +313,8 @@ internal fun RemotePad(tvName: String, now: RemoteMessage.Now?, send: (RemoteMes
                 })
             } else ButtonPad(send, haptics = { haptics.tick() })
         }
-        BottomBar(send, playing = now?.playing == true, onKeyboard = { typing = true }, tick = { haptics.tick() })
+        // Into the TV's focused field when it has one; else the older way, a search typed whole.
+        BottomBar(send, playing = now?.playing == true, onKeyboard = { if (keyboard?.open() != true) typing = true }, tick = { haptics.tick() })
     }
 }
 
@@ -508,6 +531,37 @@ internal fun TypeToTv(onSend: (String) -> Unit, onDismiss: () -> Unit) {
         confirmButton = { TextButton(enabled = text.isNotBlank(), onClick = { onSend(text.trim()) }) { Text("Search") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+/**
+ * Typing into the TV's focused field as it's typed, at the top of the remote: opens with what
+ * the field holds and the phone's keyboard up, ready; Enter (or Search) runs it on the TV.
+ */
+@Composable
+internal fun LiveTyping(state: RemoteKeyboard.State, onType: (String) -> Unit, onSubmit: () -> Unit, onDismiss: () -> Unit) {
+    var value by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(state.text, androidx.compose.ui.text.TextRange(state.text.length))) }
+    // Typed on the TV meanwhile: shown here, the cursor at its end.
+    if (state.text != value.text) value = androidx.compose.ui.text.input.TextFieldValue(state.text, androidx.compose.ui.text.TextRange(state.text.length))
+    val focus = remember { FocusRequester() }
+    val ime = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() }; ime?.show() }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedTextField(
+            value, { v -> value = v; onType(v.text) },
+            singleLine = true,
+            label = { Text("Typing on the TV") },
+            placeholder = { Text(state.hint ?: "A song, album or artist") },
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSubmit() }, onDone = { onSubmit() }, onGo = { onSubmit() }),
+            modifier = Modifier.weight(1f).focusRequester(focus),
+        )
+        TextButton(onClick = onSubmit) { Text("Search") }
+        Icon(ImageVector.vectorResource(AppIcons.Close), "Close the keyboard", Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onDismiss).padding(8.dp))
+    }
 }
 
 @Composable
