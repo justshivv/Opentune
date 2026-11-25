@@ -54,9 +54,12 @@ internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onCli
     val remote by com.opentune.data.connect.Connect.controlling.collectAsState()
     remote?.let { device -> RemoteQualityBadge(device.state?.quality, modifier); return }
     // While two songs blend, "Mixing" stands where the quality is, then gives way to it again.
-    val mix by com.opentune.playback.MixState.now.collectAsState()
+    // Only whether a blend is on: its progress changes a hundred times a second, and read
+    // here it composed the badge again on every one of them.
+    val mixState = com.opentune.playback.MixState.now.collectAsState()
+    val mixingNow by remember { androidx.compose.runtime.derivedStateOf { mixState.value != null } }
     var transition by remember { androidx.compose.runtime.mutableStateOf(false) }
-    androidx.compose.animation.Crossfade(mix != null, animationSpec = tween(450), label = "mixBadge") { mixing ->
+    androidx.compose.animation.Crossfade(mixingNow, animationSpec = tween(450), label = "mixBadge") { mixing ->
         if (mixing) MixBadge(modifier, onClick = { transition = true }) else QualityBadge(mediaId, format, onClick, modifier)
     }
     if (transition) AutomixSheet(onDismiss = { transition = false })
@@ -69,11 +72,17 @@ internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onCli
  */
 @Composable
 private fun MixBadge(modifier: Modifier, onClick: () -> Unit) {
-    val mix by com.opentune.playback.MixState.now.collectAsState()
-    val shown = remember { androidx.compose.runtime.mutableStateOf(mix ?: com.opentune.playback.MixState.Mix("Mixing", 0f)) }
-    mix?.let { shown.value = it }
+    // The blend as it was last seen, kept through the fade out once it has ended. Its progress
+    // is read only by the beam (each frame, and while drawing); composing reads only the label,
+    // which changes once a blend rather than a hundred times a second.
+    val mixState = com.opentune.playback.MixState.now.collectAsState()
+    val lastMix = remember { arrayOf(mixState.value ?: com.opentune.playback.MixState.Mix("Mixing", 0f)) }
+    val shown = remember { androidx.compose.runtime.derivedStateOf { mixState.value?.also { lastMix[0] = it } ?: lastMix[0] } }
+    val label by remember { androidx.compose.runtime.derivedStateOf { shown.value.label } }
     val colors = MaterialTheme.colorScheme
-    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+    // The system's "Remove animations" holds the beam still too.
+    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation ||
+        !android.animation.ValueAnimator.areAnimatorsEnabled()
     // The beam's place, moved on each frame by a speed that rises with the blend.
     val beam = remember { androidx.compose.runtime.mutableFloatStateOf(-0.2f) }
     androidx.compose.runtime.LaunchedEffect(still) {
@@ -94,13 +103,13 @@ private fun MixBadge(modifier: Modifier, onClick: () -> Unit) {
     androidx.compose.foundation.layout.Row(
         modifier.widthIn(max = 280.dp).fillMaxWidth().heightIn(min = 40.dp)
             .clickable(onClick = onClick)
-            .semantics { contentDescription = com.opentune.i18n.Tr.f("{0}: blending into the next song. Open the transition", shown.value.label) },
+            .semantics { contentDescription = com.opentune.i18n.Tr.f("{0}: blending into the next song. Open the transition", label) },
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
         Icon(ImageVector.vectorResource(AppIcons.AutoAwesome), null, Modifier.size(16.dp), tint = colors.primary)
         Spacer(Modifier.width(6.dp))
-        Text(shown.value.label, style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant,
+        Text(label, style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant,
             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, letterSpacing = 0.6.sp,
             modifier = Modifier.graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }.drawWithCache {
                 onDrawWithContent {
