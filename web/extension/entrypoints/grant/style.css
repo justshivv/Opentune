@@ -1,16 +1,20 @@
+/* The grant and Discord connect pages: a card on the popup's palette (../popup/style.css). */
 body {
-  width: auto;
   min-height: 100vh;
   display: grid;
   place-items: center;
+  padding: 24px 16px;
 }
 
 .card {
-  max-width: 420px;
+  max-width: 440px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   align-items: flex-start;
+  padding: 28px;
+  border-radius: 24px;
+  background: var(--surface);
 }
 
 .card img {
@@ -19,7 +23,8 @@ body {
 
 h1 {
   margin: 0;
-  font: 700 22px / 28px 'DM Sans', system-ui, sans-serif;
+  font: 700 22px / 28px var(--font);
+  letter-spacing: -0.01em;
 }
 
 p {
@@ -36,28 +41,24 @@ ul {
   line-height: 22px;
 }
 
-#allow {
-  padding: 8px 18px;
-  border: 0;
-  border-radius: 16px;
-  background: var(--key);
-  color: #fff;
-  font: 600 14px / 20px 'DM Sans', system-ui, sans-serif;
-  cursor: pointer;
-}
-
-.status:empty {
-  display: none;
-}
-
+#allow,
 #connect {
-  padding: 8px 18px;
+  padding: 9px 20px;
   border: 0;
-  border-radius: 16px;
-  background: var(--key);
+  border-radius: 999px;
+  background: var(--key-bg);
   color: #fff;
-  font: 600 14px / 20px 'DM Sans', system-ui, sans-serif;
+  font: 600 14px / 20px var(--font);
   cursor: pointer;
+}
+
+#allow:hover,
+#connect:hover {
+  background: var(--key-bg-hover);
+}
+
+#allow[hidden] {
+  display: none;
 }
 
 #connect:disabled {
@@ -65,8 +66,15 @@ ul {
   cursor: default;
 }
 
+.status {
+  color: var(--primary);
+}
+
+.status:empty {
+  display: none;
+}
+
 .warning {
   color: var(--secondary);
   font-style: italic;
 }
-

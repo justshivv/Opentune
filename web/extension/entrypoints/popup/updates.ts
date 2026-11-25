@@ -1,21 +1,23 @@
 /** Browser-managed installs can update in place. Unpacked builds still require browser approval. */
 export function mountUpdates(parent: HTMLElement): void {
   const check = document.createElement('button');
-  check.className = 'site';
+  check.type = 'button';
+  check.className = 'link';
   check.textContent = 'Check for updates';
   const status = document.createElement('p');
   status.className = 'update-status';
   status.setAttribute('role', 'status');
   const download = document.createElement('a');
-  download.className = 'site';
+  download.className = 'link';
   download.hidden = true;
   download.target = '_blank';
   download.rel = 'noreferrer';
   const manage = document.createElement('button');
-  manage.className = 'site';
+  manage.type = 'button';
+  manage.className = 'link';
   manage.textContent = 'Open extension manager';
   manage.hidden = true;
-  const firefox = navigator.userAgent.includes('Firefox/');
+  const firefox = import.meta.env.FIREFOX;
   manage.onclick = () => { void browser.tabs.create({ url: firefox ? 'about:addons' : 'chrome://extensions/' }).catch(() => {
     status.textContent = firefox ? 'Open about:addons in a new tab.' : 'Open chrome://extensions in a new tab.';
   }); };
@@ -60,5 +62,5 @@ export function mountUpdates(parent: HTMLElement): void {
       status.textContent = error instanceof Error ? error.message : 'Could not check for updates.';
     } finally { check.disabled = false; }
   };
-  parent.append(check, status, download, manage);
+  parent.append(check, download, manage, status);
 }

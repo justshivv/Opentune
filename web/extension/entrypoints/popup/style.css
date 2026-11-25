@@ -1,126 +1,133 @@
+/* The web player's dark palette (web/app/src/styles/opentune.css, dark appearance, default seed #e53935). */
 :root {
-  color-scheme: light dark;
-  --primary: #000000e0;
-  --secondary: #0000008f;
-  --group: #0000000d;
-  --divider: #00000026;
-  --key: #d60017;
-  --bg: #ffffff;
+  color-scheme: dark;
+  --bg: #191210;
+  --surface: #ffffff0d;
+  --surface-hover: #ffffff17;
+  --divider: #ffffff1c;
+  --primary: #f6ede9;
+  --secondary: #c9bdb7;
+  --tertiary: #a99891;
+  /* Key color on dark: the seed mixed into a pale rose, as the player's dark mode does. */
+  --key: #f7aba2;
+  /* Fills under white text: the deeper seed. */
+  --key-bg: #bc2f2c;
+  --key-bg-hover: #a72926;
+  --ok: #32d74b;
+  --warn: #ffd60a;
+  --font: 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --primary: #ffffffeb;
-    --secondary: #ffffffa3;
-    --group: #ffffff0d;
-    --divider: #ffffff1a;
-    --key: #fa586a;
-    --bg: #1f1f1f;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  width: 300px;
   margin: 0;
-  padding: 16px;
-  font: 400 13px / 16px 'DM Sans', system-ui, sans-serif;
+  font: 400 13px / 18px var(--font);
   color: var(--primary);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
 }
 
+body.popup {
+  width: 340px;
+  padding: 14px 14px 12px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--key);
+  outline-offset: 2px;
+}
+
+/* ---- Header ---------------------------------------------------------------- */
+
 .header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 12px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.logo {
+  border-radius: 8px;
 }
 
 .name {
-  font: 700 17px / 22px 'DM Sans', system-ui, sans-serif;
+  font: 700 18px / 24px var(--font);
+  letter-spacing: -0.01em;
 }
 
 .version {
+  margin-left: auto;
   font-size: 12px;
+  color: var(--tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Sections and rows -------------------------------------------------------- */
+
+.section + .section {
+  margin-top: 14px;
+}
+
+h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 6px 4px;
+  font: 600 12px / 16px var(--font);
   color: var(--secondary);
+}
+
+.count {
+  font-weight: 400;
+  color: var(--tertiary);
 }
 
 .group {
   margin: 0;
   padding: 0;
   list-style: none;
-  border-radius: 10px;
-  background: var(--group);
+  border-radius: 14px;
+  background: var(--surface);
   overflow: hidden;
 }
 
 .row {
   position: relative;
-  display: flex;
-  justify-content: space-between;
-  padding: 11px 14px;
-  font-size: 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  min-height: 48px;
+  padding: 8px 12px;
 }
 
 .row + .row::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 14px;
+  left: 12px;
   right: 0;
-  border-top: 0.5px solid var(--divider);
+  border-top: 1px solid var(--divider);
 }
 
-.value {
-  color: var(--secondary);
-}
-
-.site {
-  display: block;
-  margin-top: 14px;
-  text-align: center;
-  color: var(--key);
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.site:hover {
-  text-decoration: underline;
-}
-
-.logo {
-  align-self: center;
-  border-radius: 6px;
-}
-
-.header {
-  gap: 8px;
-}
-
-.version {
-  margin-left: auto;
-}
-
-/* The YouTube Music row, once it has an account: avatar, name and handle, action. */
-.account {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 10px;
-}
-
-.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--group);
-  object-fit: cover;
+.row.compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 40px;
+  padding: 6px 8px 6px 12px;
 }
 
 .who {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
@@ -132,6 +139,7 @@ body {
 
 .title {
   font-weight: 600;
+  font-size: 14px;
 }
 
 .detail {
@@ -139,32 +147,190 @@ body {
   color: var(--secondary);
 }
 
-.action {
-  padding: 4px 10px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--group);
-  color: var(--key);
-  font: 600 12px / 16px 'DM Sans', system-ui, sans-serif;
-  cursor: pointer;
-  text-decoration: none;
+.host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.action:hover {
-  background: var(--divider);
+.empty {
+  display: block;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--secondary);
 }
 
-/* Why the account couldn't be read, word for word, so a screenshot says it. */
+/* Why an account couldn't be read, word for word, so a screenshot says it. */
 .problem {
   display: block;
+  padding: 8px 12px 10px;
   font-size: 12px;
   line-height: 16px;
   color: var(--secondary);
   word-break: break-word;
 }
 
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  object-fit: cover;
+}
 
-#updates { margin-top: 12px; }
-#updates .site { cursor: pointer; width: 100%; font: inherit; }
-#updates [hidden] { display: none; }
-.update-status { font-size: 12px; line-height: 1.5; opacity: .8; margin: 8px 4px; }
+.avatar.initial {
+  display: grid;
+  place-items: center;
+  font: 600 13px / 1 var(--font);
+  color: var(--secondary);
+}
+
+/* The player's status light, where an account row has its picture. */
+.light {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+}
+
+.light::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tertiary);
+}
+
+.light.ok::before {
+  background: var(--ok);
+  box-shadow: 0 0 0 4px #32d74b29;
+}
+
+.light.warn::before {
+  background: var(--warn);
+  box-shadow: 0 0 0 4px #ffd60a24;
+}
+
+/* ---- Buttons ---------------------------------------------------------------- */
+
+.action {
+  padding: 5px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  color: var(--key);
+  font: 600 12px / 16px var(--font);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.action:hover {
+  background: var(--divider);
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.action.quiet {
+  color: var(--secondary);
+}
+
+.primary {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--key-bg);
+  color: #fff;
+  font: 600 14px / 20px var(--font);
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: var(--key-bg-hover);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--key);
+  font: 500 12px / 16px var(--font);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.link:disabled {
+  color: var(--tertiary);
+  cursor: default;
+  text-decoration: none;
+}
+
+/* ---- Access warning --------------------------------------------------------- */
+
+.notice {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #ffd60a14;
+  border: 1px solid #ffd60a33;
+}
+
+.notice p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--secondary);
+}
+
+.notice strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 13px;
+  color: var(--primary);
+}
+
+.notice .action {
+  justify-self: start;
+}
+
+/* ---- Footer ------------------------------------------------------------------- */
+
+.footer {
+  margin-top: 16px;
+}
+
+#updates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 14px;
+  margin-top: 10px;
+  text-align: center;
+}
+
+#updates [hidden] {
+  display: none;
+}
+
+.update-status {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--secondary);
+}
+
+.update-status:empty {
+  display: none;
+}
