@@ -35,6 +35,7 @@ val sharedFromCore = listOf(
     "com/opentune/data/DebugLog.kt",
     "com/opentune/data/AppLog.kt",
     "com/opentune/data/TrackIds.kt",
+    "com/opentune/data/account/AccountStore.kt",
     "com/opentune/data/settings/AppSettings.kt",
     "com/opentune/data/history/ListeningHistoryTarget.kt",
     // The phone's listening stats, daily mixes and speed dial, fed from the desktop's own plays.
@@ -247,7 +248,7 @@ dependencies {
     implementation("org.bytedeco:ffmpeg:7.1.1-1.5.12:$bytedecoPlatform")
     implementation("org.bytedeco:javacpp:1.5.12:$bytedecoPlatform")
 
-    for (module in listOf("base", "graphics", "media")) {
+    for (module in listOf("base", "graphics", "controls", "media", "web", "swing")) {
         implementation("org.openjfx:javafx-$module:21.0.5:$javafxPlatform")
     }
 
@@ -294,3 +295,4 @@ compose.desktop {
         }
     }
 }
+
