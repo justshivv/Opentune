@@ -1,4 +1,5 @@
 import type { Innertube, Types } from 'youtubei.js/web';
+import type { YtFetchParams } from '@opentune/shared/bridge';
 import { getBridge } from '@/extension/bridge';
 import { ensureYtAuth, identityOf, noteMusicIdentity } from '@/extension/useYtAuth';
 import { trackLog } from '../trackLog';
@@ -106,6 +107,21 @@ function decodeBase64(base64: string): Uint8Array<ArrayBuffer> {
 }
 
 /** InnerTube calls through the extension, signed as the chosen channel; the rest as simpleRequestFetch. */
+const SIGNED_CALL_TIMEOUT_MS = 50_000;
+
+/** What a signed InnerTube call sends the extension (`yt.fetch` with `auth`), which lib/validate.ts checks there. */
+export async function signedBridgeParams(input: RequestInfo | URL, init?: RequestInit): Promise<YtFetchParams> {
+  const request = input instanceof Request ? input : null;
+  const url = new URL(request ? request.url : input.toString());
+  const method = (init?.method ?? request?.method ?? 'GET').toUpperCase() as 'GET' | 'POST';
+  const headers: Record<string, string> = {};
+  new Headers(init?.headers ?? request?.headers).forEach((value, key) => (headers[key] = value));
+  let body = init?.body ?? undefined;
+  if (body === undefined && request && method !== 'GET') body = await request.text();
+  if (body != null && typeof body !== 'string') body = await new Response(body).text();
+  return { url: url.toString(), method, headers, ...(typeof body === 'string' && { body }), auth: true };
+}
+
 async function signedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const request = input instanceof Request ? input : null;
   const url = new URL(request ? request.url : input.toString());
@@ -113,18 +129,11 @@ async function signedFetch(input: RequestInfo | URL, init?: RequestInit): Promis
 
   const bridge = getBridge();
   if (!bridge) throw new Error('Signed-in requests need the NepTune extension');
-  const method = (init?.method ?? request?.method ?? 'GET').toUpperCase() as 'GET' | 'POST';
-  const headers: Record<string, string> = {};
-  new Headers(init?.headers ?? request?.headers).forEach((value, key) => (headers[key] = value));
-  let body = init?.body ?? undefined;
-  if (body === undefined && request && method !== 'GET') body = await request.text();
-  if (body != null && typeof body !== 'string') body = await new Response(body).text();
-
-  const response = await bridge.call(
-    'yt.fetch',
-    { url: url.toString(), method, headers, ...(typeof body === 'string' && { body }), auth: true },
-    { ...(init?.signal && { signal: init.signal }) },
-  );
+  // The extension may first have to read the account (up to 20 s, lib/ytAuth.ts), then make the request (25 s).
+  const response = await bridge.call('yt.fetch', await signedBridgeParams(input, init), {
+    timeoutMs: SIGNED_CALL_TIMEOUT_MS,
+    ...(init?.signal && { signal: init.signal }),
+  });
   const payload = response.bodyEncoding === 'base64' ? decodeBase64(response.body) : response.body;
   return new Response(response.status === 204 || response.status === 304 ? null : payload, {
     status: response.status,

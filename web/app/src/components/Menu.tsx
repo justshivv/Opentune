@@ -110,10 +110,12 @@ interface MenuItemProps {
   disabled?: boolean;
   /** Extra text at the trailing edge. */
   trailing?: ReactNode;
+  /** A second, smaller line under the label: why an item is unavailable, say. */
+  detail?: ReactNode;
   children: ReactNode;
 }
 
-export function MenuItem({ onSelect, icon, checked, destructive, disabled, trailing, children }: MenuItemProps) {
+export function MenuItem({ onSelect, icon, checked, destructive, disabled, trailing, detail, children }: MenuItemProps) {
   return (
     <button
       className="flex min-h-7 w-full items-center gap-2 rounded-[5px] px-2 py-1 text-start type-body text-primary enabled:hover:bg-quinary focus-visible:bg-quinary disabled:text-tertiary data-destructive:text-destructive"
@@ -125,7 +127,14 @@ export function MenuItem({ onSelect, icon, checked, destructive, disabled, trail
     >
       {checked !== undefined && <span className="inline-grid w-3.5 flex-none place-items-center text-key">{checked && <Check size={14} strokeWidth={2.6} />}</span>}
       {icon && <span className="inline-grid w-5 flex-none place-items-center text-secondary">{icon}</span>}
-      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {detail ? (
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate">{children}</span>
+          <span className="type-caption-1 text-pretty text-secondary">{detail}</span>
+        </span>
+      ) : (
+        <span className="min-w-0 flex-1 truncate">{children}</span>
+      )}
       {trailing && <span className="flex-none text-secondary">{trailing}</span>}
     </button>
   );
