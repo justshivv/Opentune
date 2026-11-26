@@ -1563,7 +1563,7 @@ private fun settingsSections(
                     ToggleRow("Seek bar waveform", ui.seekbarWaveform, { v -> AppSettings.updateUi { it.copy(seekbarWaveform = v) } },
                         summary = "Waves above the bar that dance with the beat",
                         icon = ImageVector.vectorResource(AppIcons.Equalizer), enabled = !appleStyle && !ui.wavySeekbar,
-                        disabledReason = if (appleStyle) "Not with the Apple Music inspired player, whose bar stays plain" else "Not with the wavy seek bar, which draws its own wave")
+                        disabledReason = if (appleStyle) "Not with the Apple Music inspired player, whose bar stays plain" else "Not with the wavy seek bar, which draws its own wave", beta = true)
                 },
                 Entry("Lyric preview while seeking", "scrub seek bar lyric line preview bubble drag") {
                     ToggleRow("Lyric preview while seeking", ui.lyricScrubPreview, { v -> AppSettings.updateUi { it.copy(lyricScrubPreview = v) } }, summary = "Shows the lyric at that point while you drag the seek bar", icon = ImageVector.vectorResource(AppIcons.Lyrics))
