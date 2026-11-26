@@ -254,7 +254,7 @@ object DiscordRpc {
                 if (image != null) {
                     put("large_image", image)
                     // The app's mark on the cover's bottom corner, where Discord badges a card.
-                    put("small_image", LOGO_URL)
+                    put("small_image", externalAsset(token, LOGO_URL) ?: LOGO_URL)
                     put("small_text", APP_NAME)
                 }
                 now.album?.takeIf { it.isNotBlank() }?.let { put("large_text", fit(it, TEXT_MAX)) }
