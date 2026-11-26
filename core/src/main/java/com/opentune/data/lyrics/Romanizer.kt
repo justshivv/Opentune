@@ -17,11 +17,17 @@ object Romanizer {
     private fun create(id: String): Any? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) runCatching { android.icu.text.Transliterator.getInstance(id) }.getOrNull() else null
 
-    val available: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && any != null
+    /**
+     * Whether lyrics can be romanized here: Android 10 and later, whose ICU always has these
+     * rules. Asked by menus as they open, on the main thread, so it never loads the
+     * transliterator itself: building it reads ICU's rule data, a long stall the first time
+     * (it made the player's "…" menu stutter as it opened). [lines] builds it, off the main thread.
+     */
+    val available: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
     /** Each line in Latin letters, or null where it's already in them (or can't be). */
     fun lines(texts: List<String>): List<String?> {
-        if (!available) return texts.map { null }
+        if (!available || any == null) return texts.map { null }
         val japanese = texts.any { t -> t.any(::isKana) }
         return texts.map { romanize(it, japanese) }
     }

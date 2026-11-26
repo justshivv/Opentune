@@ -456,7 +456,9 @@ fun PlayerLayout(
     var showSpeed by remember { mutableStateOf(false) }
     var showCast by remember { mutableStateOf(false) }
     var showOutput by remember { mutableStateOf(false) }
-    var showMenu by remember { mutableStateOf(false) }
+    // The "…" menu: written by the buttons, read only by SheetSlot and the controls' countdown.
+    val menuOpen = remember { mutableStateOf(false) }
+    var showMenu by menuOpen
     var showSleep by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
     var showOffset by remember { mutableStateOf(false) }
@@ -505,21 +507,28 @@ fun PlayerLayout(
     val canvasFocusable = state.ui.canvasFocus && pane == Pane.COVER && state.canvasVideo != null && state.isSounding &&
             !docked && !state.ui.reduceAnimation && state.ui.playerStyle != PlayerStyle.LYRICS_FIRST
     val focusable = lyricsFocusable || canvasFocusable
-    val sheetOpen = showMenu || showRemix || showSpeed || showSleep || showCast || showOffset || showLyricsSource || songSheet != SongSheetOpen.CLOSED || showCredits || showSignal
+    // Read only inside the countdown below, never while composing: a sheet opening or
+    // closing (the "…" menu) and every touch (the tap that opens it) composed this whole
+    // player again, in the very frame the sheet began to move; see SheetSlot.
+    val sheetOpen: () -> Boolean = {
+        showMenu || showRemix || showSpeed || showSleep || showCast || showOffset || showLyricsSource || songSheet != SongSheetOpen.CLOSED || showCredits || showSignal
+    }
     // The view the countdown was started on: moving from the Canvas to the lyrics brings the
     // controls back, and they go again from there after their own few seconds.
     val focusPane = remember { arrayOf(pane) }
-    LaunchedEffect(touchedAt, focusable, sheetOpen, pane) {
-        // A sheet opening or closing leaves the controls as they are, the tap that opened
-        // it included: bringing them back resized the lyrics under the sheet as it slid
-        // up, and the sheet stuttered. The countdown starts again once it's gone.
-        if (sheetOpen) { seenTouch = touchedAt; return@LaunchedEffect }
-        if (!focusable || touchedAt != seenTouch || pane != focusPane[0]) controlsAway = false
-        seenTouch = touchedAt
-        focusPane[0] = pane
-        if (!focusable) return@LaunchedEffect
-        delay(LYRICS_FOCUS_MS)
-        controlsAway = true
+    LaunchedEffect(focusable, pane) {
+        androidx.compose.runtime.snapshotFlow { touchedAt to sheetOpen() }.collectLatest { (touched, open) ->
+            // A sheet opening or closing leaves the controls as they are, the tap that opened
+            // it included: bringing them back resized the lyrics under the sheet as it slid
+            // up, and the sheet stuttered. The countdown starts again once it's gone.
+            if (open) { seenTouch = touched; return@collectLatest }
+            if (!focusable || touched != seenTouch || pane != focusPane[0]) controlsAway = false
+            seenTouch = touched
+            focusPane[0] = pane
+            if (!focusable) return@collectLatest
+            delay(LYRICS_FOCUS_MS)
+            controlsAway = true
+        }
     }
     // Swiping up through the lyrics slides the controls down out of the way;
     // swiping back down brings them up again. Only the finger's own scrolling
@@ -2460,7 +2469,8 @@ fun PlayerLayout(
         if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
         if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })
         if (showComments && videoFull == null) CommentsSheet(current, onDismiss = { showComments = false })
-        if (showMenu) {
+        // Read in a scope of its own: the menu coming and going composes only itself.
+        SheetSlot(menuOpen) {
             SongMenuSheet(
                 current,
                 onDismiss = { showMenu = false },
@@ -3065,6 +3075,15 @@ private val DOCKED_ROOMY_HEIGHT = 720.dp
 /** Room kept at the top of the cover page for the "Playing from" line over it. */
 private val STATUS_ROOM = 40.dp
 
+/**
+ * Shows [content] while [open] holds, reading it here only: a sheet's flag read in the
+ * player's own body made the whole player (a few thousand lines of it) compose again in
+ * the frame the sheet opened and again as it closed, which is where the "…" menu stuttered.
+ */
+@Composable
+internal fun SheetSlot(open: androidx.compose.runtime.State<Boolean>, content: @Composable () -> Unit) {
+    if (open.value) content()
+}
 
 /** How far the grab pill drifts down as the lyrics or queue come in. */
 private val PILL_DRIFT = 3.dp
