@@ -686,20 +686,30 @@ private fun BySection(names: List<String>, info: SongInfo, actions: SongSheetAct
     }
 }
 
-/** Tiles that open the song on other services: only the ones it was found on. */
+/**
+ * Tiles that open the song on other services: only the ones it was found on, each with its
+ * logo and name, from the left. While more are still being looked for, a small spinner
+ * follows them; never a blank tile standing in for one that may not come.
+ */
 @Composable
 private fun ElsewhereSection(song: Song, info: SongInfo, actions: SongSheetActions) {
     val links = remember(song.videoId, info.links, info.appleUrl) { serviceLinks(song, info) }
     val loading = SongInfoPart.LINKS in info.pending
-    if (links.isEmpty() && !loading) return
+    if (links.isEmpty()) return
     SectionHeading("Also available on")
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start),
     ) {
         links.forEach { link -> ServiceTile(link.service, onClick = { actions.openUrl(link.url) }) }
-        if (loading) repeat((3 - links.size).coerceAtLeast(1)) {
-            Box(Modifier.padding(6.dp).size(84.dp).clip(RoundedCornerShape(24.dp)).background(placeholderColor()))
+        if (loading) Box(
+            Modifier.padding(6.dp).size(width = 40.dp, height = 84.dp).semantics { contentDescription = Tr.t("Loading") },
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.CircularProgressIndicator(
+                Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                trackColor = Color.Transparent,
+            )
         }
     }
 }

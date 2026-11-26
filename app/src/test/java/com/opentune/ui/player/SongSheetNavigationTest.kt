@@ -21,6 +21,7 @@ import com.opentune.ui.theme.OpenTuneTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -182,6 +183,37 @@ class SongSheetNavigationTest {
         assertEquals(first, again)
         // The app's own links join what was found: YouTube Music for a YouTube song.
         assertEquals(listOf(MusicService.SPOTIFY, MusicService.YOUTUBE_MUSIC), serviceLinks(SongSheetFixtures.song, again).map { it.service })
+    }
+
+    /**
+     * A links service that never answers doesn't hold "Also available on" open (which showed
+     * as a blank tile after the known ones): the row settles on what it has, and the next
+     * opening asks again.
+     */
+    @Test fun linksThatNeverComeStopBeingWaitedFor() {
+        val asked = java.util.concurrent.atomic.AtomicInteger()
+        val sources = object : SongInfoSources {
+            override suspend fun description(videoId: String): String? = null
+            override suspend fun apple(song: Song, durationMs: Long) = null
+            override suspend fun musicBrainz(song: Song, durationMs: Long) = null
+            override suspend fun artistPhoto(song: Song, name: String): String? = null
+            override suspend fun wikipedia(song: Song) = null
+            override suspend fun lastFm(song: Song) = null
+            override suspend fun platformLinks(videoId: String): Map<String, String> { asked.incrementAndGet(); kotlinx.coroutines.awaitCancellation() }
+            override suspend fun deezer(song: Song, durationMs: Long): String? = "https://www.deezer.com/track/7"
+            override fun artistGenre(artist: String): String? = null
+        }
+        val store = SongInfoStore(sources, CoroutineScope(SupervisorJob() + Dispatchers.Default), linksWaitMs = 100)
+        val settled = kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withTimeout(5_000) {
+                store.load(SongSheetFixtures.song, 221_000).first { SongInfoPart.LINKS !in it.pending }
+            }
+        }
+        assertEquals(listOf(MusicService.DEEZER), settled.links.map { it.service })
+        assertEquals(listOf(MusicService.YOUTUBE_MUSIC, MusicService.DEEZER), serviceLinks(SongSheetFixtures.song, settled).map { it.service })
+        store.load(SongSheetFixtures.song, 221_000)
+        kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeout(5_000) { while (asked.get() < 2) kotlinx.coroutines.delay(10) } }
+        assertEquals(2, asked.get())
     }
 
     @Test fun releaseDatesReadNaturally() {

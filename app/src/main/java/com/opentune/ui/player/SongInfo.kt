@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** The parts of a song's info that load on their own, each from its own sources. */
 internal enum class SongInfoPart { DESCRIPTION, CATALOG, PHOTOS, ABOUT, LINKS }
@@ -146,6 +147,8 @@ internal object AppSongInfoSources : SongInfoSources {
 internal class SongInfoStore(
     private val sources: SongInfoSources,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+    /** The longest "Also available on" waits for the services that list the song elsewhere. */
+    private val linksWaitMs: Long = LINKS_WAIT_MS,
 ) {
     private class Entry(val state: MutableStateFlow<SongInfo>) {
         val done = HashSet<SongInfoPart>()
@@ -241,19 +244,34 @@ internal class SongInfoStore(
         }
         start(SongInfoPart.LINKS, online) { state ->
             coroutineScope {
-                val platforms = async { runCatching { sources.platformLinks(song.videoId) }.getOrDefault(emptyMap()) }
-                val deezer = async { runCatching { sources.deezer(song, durationMs) }.getOrNull() }
+                // UniTune can take the HTTP client's whole timeout (most of a minute) to answer, or
+                // not answer: the row waits [linksWaitMs] at most, then shows what it has.
+                val platforms = async { waitForLink(emptyMap()) { sources.platformLinks(song.videoId) } }
+                val deezer = async { waitForLink(null) { sources.deezer(song, durationMs) } }
                 val found = platforms.await()
-                val links = MusicService.entries.mapNotNull { service -> found[service.key]?.let { ServiceLink(service, it) } }
+                val links = MusicService.entries.mapNotNull { service -> found?.get(service.key)?.let { ServiceLink(service, it) } }
                 val withDeezer = if (links.none { it.service == MusicService.DEEZER }) links + listOfNotNull(deezer.await()?.let { ServiceLink(MusicService.DEEZER, it) }) else links
                 state.update { it.copy(links = withDeezer) }
+                // Out of time rather than answered: kept undone, so the next opening asks again.
+                if (found == null) throw java.util.concurrent.TimeoutException("UniTune took too long")
             }
         }
         return entry.state
     }
 
+    /** [block]'s answer, [failed] when it fails, null when it takes longer than [linksWaitMs]. */
+    private suspend fun <T> waitForLink(failed: T, block: suspend () -> T): T? = try {
+        withTimeoutOrNull(linksWaitMs) { block() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        failed
+    }
+
     companion object {
         private const val MAX_ARTISTS = 6
+        /** The longest "Also available on" waits for the services that list the song elsewhere. */
+        internal const val LINKS_WAIT_MS = 10_000L
     }
 }
 
