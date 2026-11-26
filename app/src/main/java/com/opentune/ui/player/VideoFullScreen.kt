@@ -86,6 +86,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import com.opentune.data.model.artworkAt
 import coil3.request.allowHardware
@@ -1111,7 +1112,14 @@ private fun VideoSeekBar(
         Row(
             Modifier
                 .fillMaxWidth()
-                .offset(y = -(emptyBelow - 8.dp))
+                // Rides up over the bar's touch box, and gives the ridden-up height back:
+                // an offset alone leaves it as dead space under the row, which is what
+                // made the bottom margin so much fatter than the top's.
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    val shift = (emptyBelow - 8.dp).roundToPx()
+                    layout(placeable.width, (placeable.height - shift).coerceAtLeast(0)) { placeable.placeRelative(0, -shift) }
+                }
                 .padding(top = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
