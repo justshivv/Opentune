@@ -2282,8 +2282,22 @@ fun PlayerLayout(
             // Before the header is back (a swipe still under the finger), where it was last.
             val to = if (flying) flight.target(smallCover, bigCover()) else (smallCover
                 ?: flight.lastSmall)
-            if (from != null && to != null && (flying || flies)) {
-                // The big end's corners: none edge to edge, the video box's own, else the cover's.
+                if (from != null && to != null && (flying || flies)) {
+                    // The video's box is wide and the header's cover square: flown between those
+                    // two shapes, the still cover is scaled a different amount each way and
+                    // stretches. In video mode it flies from the square at the box's heart
+                    // instead — hidden at the wide end anyway, it appears only as it shrinks,
+                    // already the cover's own shape. (A square passes through unchanged.)
+                    fun coverEnd(r: androidx.compose.ui.geometry.Rect) =
+                        if (videoBox) {
+                            val side = minOf(r.width, r.height)
+                            val left = r.left + (r.width - side) / 2f
+                            val top = r.top + (r.height - side) / 2f
+                            androidx.compose.ui.geometry.Rect(left, top, left + side, top + side)
+                        } else r
+                    val artFrom = coverEnd(from)
+                    val artTo = coverEnd(to)
+                    // The big end's corners: none edge to edge, the video box's own, else the cover's.
                 val bigCorner = when {
                     videoBox -> videoBoxCorner(fullStyle, state.ui.coverCornerDp.dp).value
                     fullStyle -> 0f
@@ -2306,7 +2320,7 @@ fun PlayerLayout(
                     com.opentune.ui.components.MorphBox(
                         current.thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
                         current.thumbnailUrl.artworkAt(ROW_ART_PX),
-                        from, to,
+                        artFrom, artTo,
                         p = { flight.progress },
                         startCornerDp = if (flight.toSmall) bigCorner else 10f,
                         endCornerDp = if (flight.toSmall) 10f else bigCorner,
