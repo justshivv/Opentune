@@ -1155,7 +1155,7 @@ fun PlayerLayout(
                     // Not built once the video's box has settled over it; while the box grows out
                     // of it or back into it, it fades on the same clock.
                     fullCoverArt = styleCoverBuilt,
-                    fullCoverAlpha = { if (videoBox) edgeCoverAlpha(videoMorph.value) else 1f },
+                    fullCoverAlpha = { if (videoBox) 1f - ((videoMorph.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f },
                     fullCoverVisible = { fullCover && !flight.active },
                     artworkMotion = artworkMotion,
                     fullCoverBottom = with(LocalDensity.current) {
@@ -1572,10 +1572,10 @@ fun PlayerLayout(
                                         }
                                     }
                                     // The layout's own cover: kept built under the video's box while it morphs,
-                                    // hidden the moment the box leaves it, shown again as the box lands back on it.
+                                    // faded out as the box leaves it, shown again as the box lands back on it.
                                     if (styleCoverBuilt) Box(
                                         Modifier.matchParentSize().graphicsLayer {
-                                            alpha = if (videoBox && videoMorph.value > 0f) 0f else 1f
+                                            alpha = if (videoBox) 1f - ((videoMorph.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f
                                         },
                                         contentAlignment = Alignment.Center,
                                     ) {
@@ -1585,9 +1585,10 @@ fun PlayerLayout(
                                             Modifier.matchParentSize()
                                         ) { design() } else design()
                                     }
-                                    // In video mode every style shows the picture in its own
-                                    // rounded box in the cover's region, grown out of the cover itself.
-                                    if (videoBox) {
+                                    // The video's pane: built as soon as the song has a video and
+                                    // kept under the cover, warm and measured, so switching to
+                                    // the video only has to reveal it (see its fade below).
+                                    if (!landscape && (state.videoAvailable || videoBox)) {
                                         val videoPane: @Composable () -> Unit = {
                                             VideoCoverPane(
                                                 current.thumbnailUrl,
@@ -1603,7 +1604,8 @@ fun PlayerLayout(
                                                 onSwipeNext = coverNext,
                                                 onSwipePrevious = coverPrevious,
                                                 modifier = Modifier.fillMaxSize()
-                                                    .then(if (fullStyle) Modifier.onGloballyPositioned(placeEdge) else Modifier),
+                                                    .then(if (fullStyle) Modifier.onGloballyPositioned(placeEdge) else Modifier)
+                                                    .graphicsLayer { alpha = ((videoMorph.value - 0.6f) / 0.4f).coerceIn(0f, 1f) },
                                                 ready = videoReady,
                                                 onBox = { box ->
                                                     // Only its place at rest: not scaled down under the lists, nor carried by a finger.
@@ -1618,7 +1620,7 @@ fun PlayerLayout(
                                                 picture = boxPicture,
                                             )
                                         }
-                                        if (state.ui.doubleTapSeek) SeekTaps(seekBy, 1f, Modifier.matchParentSize()) { videoPane() } else videoPane()
+                                        if (state.ui.doubleTapSeek && videoBox) SeekTaps(seekBy, 1f, Modifier.matchParentSize()) { videoPane() } else videoPane()
                                     }
                                 }
                                 if (state.videoAvailable) {

@@ -328,14 +328,17 @@ internal data class MorphFrame(val clip: Rect, val image: Rect, val corner: Floa
  * by [boxCorner]. The cut, the image's square and the corner move together, so the box is
  * one shape on its way; at 1 the image fills the box centred, as the picture does.
  */
-internal fun morphFrame(cover: CoverPlace, box: Rect, boxCorner: Float, t: Float): MorphFrame {
+internal fun morphFrame(cover: CoverPlace, box: Rect, boxCorner: Float, t: Float, filled: Rect? = null): MorphFrame {
     val k = t.coerceIn(0f, 1f)
     val side = maxOf(box.width, box.height)
-    val filled = Rect(box.center.x - side / 2f, box.center.y - side / 2f, box.center.x + side / 2f, box.center.y + side / 2f)
+    val end = filled ?: Rect(box.center.x - side / 2f, box.center.y - side / 2f, box.center.x + side / 2f, box.center.y + side / 2f)
+    // The corner leads the way: it is fully the box's by the morph's last
+    // stretch, so the box never shows with its rounding still catching up.
+    val cornerK = (k / 0.6f).coerceIn(0f, 1f)
     return MorphFrame(
         androidx.compose.ui.geometry.lerp(cover.clip, box, k),
-        androidx.compose.ui.geometry.lerp(cover.image, filled, k),
-        cover.corner + (boxCorner - cover.corner) * k,
+        androidx.compose.ui.geometry.lerp(cover.image, end, k),
+        cover.corner + (boxCorner - cover.corner) * cornerK,
     )
 }
 
@@ -459,20 +462,6 @@ internal fun VideoCoverPane(
         androidx.compose.animation.core.spring(dampingRatio = 0.62f, stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
         label = "videoBoxScale",
     )
-    // With grow on, a picture that keeps playing for a few seconds fills the
-    // whole pane, the way it did before the box; a pause shrinks it back.
-    val grownState = remember { androidx.compose.runtime.mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(grow, isPlaying) {
-        grownState.value = if (grow && isPlaying) {
-            kotlinx.coroutines.delay(3000)
-            true
-        } else false
-    }
-    val growF = androidx.compose.animation.core.animateFloatAsState(
-        if (grownState.value) 1f else 0f,
-        if (animate) androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing) else androidx.compose.animation.core.snap(),
-        label = "videoGrow",
-    )
     // The picture over the cover: in once a frame of it is drawn, out as the song comes back.
     // Already in only when the box opens settled on a picture that's drawn (the player opened
     // on the video); turning the video on, the cover always shows first.
@@ -494,6 +483,23 @@ internal fun VideoCoverPane(
     val coverHidden by remember { androidx.compose.runtime.derivedStateOf { pictureIn.value >= 1f } }
     // The picture's own buttons come with it, not over the cover of a video still loading.
     val pictureSeen by remember { androidx.compose.runtime.derivedStateOf { pictureIn.value > 0f } }
+    // With grow on, a picture that keeps playing for a few seconds fills the
+    // whole pane, the way it did before the box; a pause shrinks it back. The
+    // wait counts only while the picture itself is on screen: a song can be
+    // playing under its cover, with the video still to come, and the cover
+    // must not grow in the picture's place.
+    val grownState = remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(grow, isPlaying, pictureSeen) {
+        grownState.value = if (grow && isPlaying && pictureSeen) {
+            kotlinx.coroutines.delay(3000)
+            true
+        } else false
+    }
+    val growF = androidx.compose.animation.core.animateFloatAsState(
+        if (grownState.value) 1f else 0f,
+        if (animate) androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing) else androidx.compose.animation.core.snap(),
+        label = "videoGrow",
+    )
     ArtworkSwipeArea(onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious, modifier = modifier) {
         BoxWithConstraints(Modifier.matchParentSize()) {
             val w = constraints.maxWidth.toFloat()
@@ -522,13 +528,30 @@ internal fun VideoCoverPane(
             }
             val cornerPx = with(density) { boxCorner.toPx() }
             val pivot = Offset(w / 2f, h / 2f)
+            val side = kotlin.math.ceil(maxOf(cover.image.width, box.width, box.height, 1f)).toInt()
+            val coverContext = LocalContext.current
+            val coverUrl = artworkUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX)
+            val coverPainter = coil3.compose.rememberAsyncImagePainter(
+                remember(coverUrl, side) { coil3.request.ImageRequest.Builder(coverContext).data(coverUrl).size(side, side).build() },
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
             val frame: () -> MorphFrame = {
                 val g = growF.value
                 val t = morph().coerceIn(0f, 1f)
                 val target = androidx.compose.ui.geometry.lerp(boxNow.value, grown, g)
                 // The edge-to-edge cover never shrinks on a pause; the box does, as it comes in.
                 val k = if (edgeToEdge) 1f + (scale.value - 1f) * t else scale.value
-                morphFrame(cover, target, cornerPx * (1f - g), t).scaledAbout(k, pivot)
+                // The image lands in the box at the cover's own shape, so the whole
+                // way there is one smooth move, never a swap of how it is drawn at
+                // the end. Until the cover has loaded its shape is unknown and it
+                // lands in the box's square, as it always did.
+                val intr = coverPainter.intrinsicSize
+                val filled = if (intr.width.isFinite() && intr.height.isFinite() && intr.width > 0f && intr.height > 0f) {
+                    val a = intr.width / intr.height
+                    val fw = minOf(target.width, target.height * a)
+                    Rect(Offset(target.center.x - fw / 2f, target.center.y - fw / a / 2f), Size(fw, fw / a))
+                } else null
+                morphFrame(cover, target, cornerPx * (1f - g), t, filled).scaledAbout(k, pivot)
             }
             // Everything the box may be cut to, so its cut always lies inside its own layer.
             val reach = maxOf(bleed, growPx)
@@ -540,7 +563,6 @@ internal fun VideoCoverPane(
             val sy = kotlin.math.floor(stage.top)
             val stageW = kotlin.math.ceil(stage.right - sx).toInt()
             val stageH = kotlin.math.ceil(stage.bottom - sy).toInt()
-            val side = kotlin.math.ceil(maxOf(cover.image.width, box.width, box.height, 1f)).toInt()
             val shadow = with(density) { 16.dp.toPx() }
             Box(
                 Modifier
@@ -580,15 +602,10 @@ internal fun VideoCoverPane(
                 ) { picture(spec.crop) }
                 // The cover over it, where the layout draws it to begin with: what the box
                 // starts as, and what shows in it until the picture's first frame, however
-                // long the video takes to load. Its image's square always covers the cut.
+                // long the video takes to load. Its image covers the cut on its way
+                // and sits in the box at its own shape once it lands.
                 // Drawn where it belongs on a layer the stage's own size, never a moved layer
                 // of its own, so it can't be cut to where such a layer was laid out.
-                val context = LocalContext.current
-                val coverUrl = artworkUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX)
-                val coverPainter = coil3.compose.rememberAsyncImagePainter(
-                    remember(coverUrl, side) { coil3.request.ImageRequest.Builder(context).data(coverUrl).size(side, side).build() },
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                )
                 val drift = artworkMotion.takeIf { moving && !coverHidden }
                 Box(
                     Modifier
@@ -605,7 +622,8 @@ internal fun VideoCoverPane(
                             // cover, so the box starts on the very same frame of it.
                             val (zoom, dx, dy) = drift?.let { coverDrift(it, i.width, i.height) } ?: Triple(1f, 0f, 0f)
                             val w = i.width * zoom
-                            val r = Rect(Offset(i.center.x - w / 2f + dx, i.center.y - w / 2f + dy), Size(w, w))
+                            val hh = i.height * zoom
+                            val r = Rect(Offset(i.center.x - w / 2f + dx, i.center.y - hh / 2f + dy), Size(w, hh))
                             clipRect(i.left, i.top, i.right, i.bottom) {
                                 translate(r.left, r.top) { with(coverPainter) { draw(r.size) } }
                             }
@@ -636,7 +654,6 @@ internal fun VideoCoverPane(
                 // small window only while the picture plays (a paused picture in a small
                 // window is a frozen window). They ride the box's corners as it moves.
                 if (showVideo && pictureSeen && aspect > 0f && (onPictureInPicture != null || onFullScreen != null)) {
-                    val buttonScale = (with(density) { minOf(spec.width, spec.height).toDp().value } / 190f).coerceIn(0.85f, 1.3f)
                     val shown: androidx.compose.ui.graphics.GraphicsLayerScope.(Boolean) -> Unit = { end ->
                         val c = frame().clip
                         translationX = if (end) c.right - box.right else c.left - box.left
@@ -647,14 +664,14 @@ internal fun VideoCoverPane(
                     if (isPlaying && onPictureInPicture != null) Box(
                         Modifier.align(Alignment.BottomStart).graphicsLayer { shown(this, false) }.padding(10.dp),
                     ) {
-                        PaneButton(buttonScale) {
+                        PaneButton({ val c = frame().clip; (with(density) { minOf(c.width, c.height).toDp().value } / 190f).coerceIn(0.85f, 1.3f) }) {
                             PictureInPictureButton(onPictureInPicture, tint = Color.White)
                         }
                     }
                     if (onFullScreen != null) Box(
                         Modifier.align(Alignment.BottomEnd).graphicsLayer { shown(this, true) }.padding(10.dp),
                     ) {
-                        PaneButton(buttonScale) {
+                        PaneButton({ val c = frame().clip; (with(density) { minOf(c.width, c.height).toDp().value } / 190f).coerceIn(0.85f, 1.3f) }) {
                             FullScreenButton(onFullScreen, tint = Color.White)
                         }
                     }
@@ -663,12 +680,12 @@ internal fun VideoCoverPane(
         }
     }
 }
-/** A round dark chip under one of the pane's own buttons, scaled with the box. */
+/** A round dark chip under one of the pane's own buttons, scaled with the size the picture is shown at. */
 @Composable
-private fun PaneButton(scale: Float, content: @Composable () -> Unit) {
+private fun PaneButton(scale: () -> Float, content: @Composable () -> Unit) {
     Box(
         Modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .graphicsLayer { val s = scale(); scaleX = s; scaleY = s }
             .background(Color.Black.copy(alpha = 0.45f), androidx.compose.foundation.shape.CircleShape),
         contentAlignment = Alignment.Center,
     ) { content() }
