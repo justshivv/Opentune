@@ -684,6 +684,10 @@ data class InterfaceSettings(
     val canvasFocus: Boolean = true,
     /** While a Canvas takes the screen, the song's current lyric line stays under the title. */
     val canvasLyricsLine: Boolean = true,
+    /** While a video plays on the cover, the controls slide down after a few seconds, leaving the title. The video's own switch, apart from the Canvas'. */
+    val videoFocus: Boolean = true,
+    /** While a video takes the screen, the song's current lyric line stays under the title. The video's own switch, apart from the Canvas'. */
+    val videoLyricsLine: Boolean = true,
     /** With Spotify connected, songs liked here are saved to Spotify's Liked Songs too. */
     val spotifySaveLikes: Boolean = true,
     /** With Spotify connected, Home shows Spotify's mixes made for the listener. */

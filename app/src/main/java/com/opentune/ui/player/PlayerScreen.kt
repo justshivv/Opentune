@@ -504,9 +504,13 @@ fun PlayerLayout(
             ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
     // A Canvas playing on the cover takes the screen the same way: the controls slide down
     // and leave the title over the video. A tap or a short swipe up brings them back.
-    val canvasFocusable = state.ui.canvasFocus && pane == Pane.COVER && state.canvasVideo != null && state.isSounding &&
+    val canvasFocusable = state.ui.canvasFocus && pane == Pane.COVER && state.canvasVideo != null && state.isSounding && !state.videoMode &&
             !docked && !state.ui.reduceAnimation && state.ui.playerStyle != PlayerStyle.LYRICS_FIRST
-    val focusable = lyricsFocusable || canvasFocusable
+    // A video playing on the cover takes the screen the same way, under its own setting,
+    // apart from the Canvas': the controls slide down and leave the title over the picture.
+    val videoFocusable = state.ui.videoFocus && pane == Pane.COVER && state.videoMode && state.isPlaying &&
+            !docked && !state.ui.reduceAnimation && state.ui.playerStyle != PlayerStyle.LYRICS_FIRST
+    val focusable = lyricsFocusable || canvasFocusable || videoFocusable
     // Read only inside the countdown below, never while composing: a sheet opening or
     // closing (the "…" menu) and every touch (the tap that opens it) composed this whole
     // player again, in the very frame the sheet began to move; see SheetSlot.
@@ -1669,7 +1673,8 @@ fun PlayerLayout(
                                 // With the controls away over a Canvas, the title sits a little up from the bottom edge —
                                 // unless the lyric line is staying behind under it (canvasLyricsLine): then the
                                 // line takes the foot's place, at the exact distance it had before the slide.
-                                val lyricLineStays = controlsAway && state.ui.canvasLyricsLine && state.ui.lyricsPreview &&
+                                val lyricLineStays = controlsAway && state.ui.lyricsPreview &&
+                                        ((state.canvasVideo != null && !state.videoMode && state.ui.canvasLyricsLine) || (state.videoMode && state.ui.videoLyricsLine)) &&
                                         ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced || state.lyrics is LyricsState.Loading)
                                 val footRoom by androidx.compose.animation.core.animateDpAsState(
                                     if (controlsHidden && !lyricLineStays) CANVAS_TITLE_FOOT else 0.dp,
@@ -1916,7 +1921,7 @@ fun PlayerLayout(
                     // stay behind under the title (canvasLyricsLine) as they slide away.
                     // The queue and the lyrics page still take it away, as before.
                     AnimatedVisibility(
-                        pane != Pane.LYRICS && pane != Pane.QUEUE && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST) && (!controlsHidden || (controlsAway && state.ui.canvasLyricsLine)),
+                        pane != Pane.LYRICS && pane != Pane.QUEUE && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST) && (!controlsHidden || (controlsAway && ((state.canvasVideo != null && !state.videoMode && state.ui.canvasLyricsLine) || (state.videoMode && state.ui.videoLyricsLine)))),
                         enter = expandVertically(
                             spring(
                                 dampingRatio = 0.9f,
