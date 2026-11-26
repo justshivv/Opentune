@@ -115,6 +115,13 @@ class VideoBoxTest {
         }
     }
 
+    /** The picture as the box asks for it: cut to fill with crop, else whole. */
+    private fun boxPicture(bitmap: Bitmap): @Composable BoxScope.(Boolean) -> Unit = { crop ->
+        Box(Modifier.matchParentSize().testTag("video-picture"), contentAlignment = Alignment.Center) {
+            Image(bitmap.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = if (crop) ContentScale.Crop else ContentScale.Fit)
+        }
+    }
+
     private fun show(state: PlayerUiState, bitmap: Bitmap = frame(), pip: (() -> Unit)? = {}) {
         val aspect = bitmap.width.toFloat() / bitmap.height
         compose.setContent {
@@ -123,7 +130,7 @@ class VideoBoxTest {
                     state, position = { 92_000 }, buffered = { 140_000 },
                     actions = PlayerActions({}, {}, {}, {}, {}, {}, {}, {}, {}, pictureInPicture = pip),
                     videoSurface = picture(bitmap),
-                    videoPage = VideoPage({ }, aspect = aspect),
+                    videoPage = VideoPage(boxPicture(bitmap), aspect = aspect),
                 )
             }
         }
@@ -154,10 +161,16 @@ class VideoBoxTest {
         shoot("video-box-portrait-9x16")
     }
 
-    @Test fun theEdgeToEdgeStyleStillShowsTheVideoInItsBox() {
+    @Test fun theEdgeToEdgeStyleFillsTheCoverRegionWithTheVideo() {
         show(state(fullCover = true))
         val box = compose.onNodeWithTag("video-cover-box").getBoundsInRoot()
-        assertEquals(411f - 48f, (box.right - box.left).value, 1.5f)
+        // Nearly the screen's width: 14dp short of each side.
+        assertEquals(411f - 28f, (box.right - box.left).value, 1.5f)
+        assertEquals(14f, box.left.value, 1f)
+        // Wider than tall, and not at the picture's 16:9: the picture fills it, cut to fit.
+        val shape = (box.right - box.left) / (box.bottom - box.top)
+        assertTrue("shape $shape", shape > 1f && shape < 16f / 9f - 0.05f)
+        compose.onNodeWithTag("video-picture").assertIsDisplayed()
         shoot("video-box-portrait-full-cover-style")
     }
 
@@ -168,37 +181,34 @@ class VideoBoxTest {
         assertEquals(16f / 9f, (box.right - box.left) / (box.bottom - box.top), 0.03f)
     }
 
-    @Test fun theBoxEasesFromTheCoversSquareToThePicturesShape() {
+    @Test fun aShapeLearntLateEasesTheBoxToIt() {
         compose.mainClock.autoAdvance = false
-        // Just switched to the video: its size isn't known until the first frame decodes.
+        // Just switched to the video: its size isn't known until the first frame decodes,
+        // and it turns out tall.
         val aspect = androidx.compose.runtime.mutableFloatStateOf(0f)
-        val bitmap = frame()
+        val bitmap = frame(720, 1280)
         compose.setContent {
             OpenTuneTheme(ThemeSettings()) {
                 PlayerLayout(
                     state(reduce = false), position = { 92_000 }, buffered = { 140_000 },
                     actions = PlayerActions({}, {}, {}, {}, {}, {}, {}, {}, {}),
                     videoSurface = picture(bitmap),
-                    videoPage = VideoPage({ }, aspect = aspect.floatValue),
+                    videoPage = VideoPage(boxPicture(bitmap), aspect = aspect.floatValue),
                 )
             }
         }
         compose.mainClock.advanceTimeBy(100)
-        val first = compose.onNodeWithTag("video-cover-box").getBoundsInRoot()
-        val firstShape = (first.right - first.left) / (first.bottom - first.top)
-        // Until then, the cover's own square.
-        assertEquals(1f, firstShape, 0.02f)
-        aspect.floatValue = 16f / 9f
+        fun shape() = VideoMorphProbe.last!!.clip.let { it.width / it.height }
+        // Until then, 16:9, the shape most videos have.
+        assertEquals(16f / 9f, shape(), 0.03f)
+        aspect.floatValue = 9f / 16f
         compose.mainClock.advanceTimeBy(VIDEO_BOX_MS / 3L)
-        val mid = compose.onNodeWithTag("video-cover-box").getBoundsInRoot()
-        val midShape = (mid.right - mid.left) / (mid.bottom - mid.top)
-        assertTrue("on its way, was $midShape", midShape > 1.02f && midShape < 1.75f)
+        val mid = shape()
+        assertTrue("on its way, was $mid", mid < 1.7f && mid > 0.6f)
         compose.mainClock.advanceTimeBy(VIDEO_BOX_MS + 200L)
+        assertEquals(9f / 16f, shape(), 0.02f)
         val last = compose.onNodeWithTag("video-cover-box").getBoundsInRoot()
-        // The same width throughout: only its height changes, about the cover's middle.
-        assertEquals((first.right - first.left).value, (last.right - last.left).value, 1.5f)
-        assertEquals((first.top + first.bottom).value / 2f, (last.top + last.bottom).value / 2f, 1.5f)
-        assertEquals(16f / 9f, (last.right - last.left) / (last.bottom - last.top), 0.02f)
+        assertEquals(9f / 16f, (last.right - last.left) / (last.bottom - last.top), 0.02f)
     }
 
     @Test fun thePictureInPictureButtonShowsOnlyWhileTheSongPlaysAsItsVideo() {

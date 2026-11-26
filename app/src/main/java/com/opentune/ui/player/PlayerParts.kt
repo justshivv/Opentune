@@ -191,6 +191,13 @@ fun PlayerBackdrop(
     artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
     /** Apple's animated cover for the playing song, looped over the full-screen still. */
     video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
+    /**
+     * Whether the full cover's art is built at all. Off only while the music video has its
+     * box and nothing of the cover is left to see; [fullCover] still sets the colours.
+     */
+    fullCoverArt: Boolean = true,
+    /** How much of the full cover shows, read while drawing: it fades as the video's box grows out of it. */
+    fullCoverAlpha: () -> Float = { 1f },
 ) {
     val scheme = MaterialTheme.colorScheme
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
@@ -255,16 +262,16 @@ fun PlayerBackdrop(
         }
         if (canvas != null && !amoled) {
             CanvasBackdrop(canvas, canvasPlaying, titleTop, canvasBehindText, Modifier.matchParentSize())
-        } else if (fullCover && !amoled) {
+        } else if (fullCover && fullCoverArt && !amoled) {
             // (The music video isn't drawn here: it has its own rounded box in the cover's place; see VideoCoverPane.)
             CoverSwap(CoverShown(artworkUrl, index, songId), change) { url, motion ->
                 // The cover runs from the top down to just behind the title and
                 // fades out there into whatever backdrop is below it, with a light
                 // scrim at the top so the status line stays readable. It's never
                 // shorter than it is wide; taller, it's cropped at the sides.
-                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible()) 1f else 0f }) {
-                    val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
-                    val solid = (1f - FULL_COVER_FADE / height).coerceIn(0.4f, 0.8f)
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible()) fullCoverAlpha().coerceIn(0f, 1f) else 0f }) {
+                    val height = fullCoverHeight(maxWidth, fullCoverBottom)
+                    val solid = fullCoverSolid(height)
                     Box(
                         Modifier
                             .fillMaxWidth()
@@ -569,8 +576,18 @@ private fun UpgradingArtwork(
 }
 
 /** How far a full-screen cover runs past its area, under the title, and how long its fade is. */
-private val FULL_COVER_OVERLAP = 44.dp
+internal val FULL_COVER_OVERLAP = 44.dp
 private val FULL_COVER_FADE = 210.dp
+
+/**
+ * How tall the full-screen cover is, from the top of the player: never shorter than it is
+ * wide, and a little past where its area ends ([bottom], when known). The music video's box
+ * grows out of exactly this.
+ */
+internal fun fullCoverHeight(width: Dp, bottom: Dp?): Dp = maxOf(width / 0.9f, (bottom ?: 0.dp) + FULL_COVER_OVERLAP)
+
+/** The share of the full-screen cover's height drawn solid; below it the cover fades out. */
+internal fun fullCoverSolid(height: Dp): Float = (1f - FULL_COVER_FADE / height).coerceIn(0.4f, 0.8f)
 
 /**
  * Wide, soft patches of the cover's own colours, several of them, laid over

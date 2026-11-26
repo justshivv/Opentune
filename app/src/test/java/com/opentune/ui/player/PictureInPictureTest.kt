@@ -123,17 +123,12 @@ class PictureInPictureTest {
         assertTrue(PictureInPicture.showing.value.isEmpty())
     }
 
-    @Test fun theVideoBoxKeepsInsideTheCoversSquare() {
-        // Wide: as wide as the cover, the picture's height.
-        val (w, h) = videoBoxSize(360f, 16f / 9f)
-        assertEquals(360f, w, 0.01f)
-        assertEquals(202.5f, h, 0.01f)
-        // Tall: as tall as the cover.
-        val (tw, th) = videoBoxSize(360f, 9f / 16f)
-        assertEquals(202.5f, tw, 0.01f)
-        assertEquals(360f, th, 0.01f)
-        // Not known yet: the cover's own square.
-        assertEquals(360f to 360f, videoBoxSize(360f, 0f))
-        assertEquals(360f to 360f, videoBoxSize(360f, 1f))
+    @Test fun inASquareLayoutTheVideoBoxKeepsInsideTheCoversSquare() {
+        // Wide: as wide as the cover, the picture's height, shown whole.
+        assertEquals(VideoBoxSpec(360f, 202.5f, crop = false), videoBoxSpec(360f, 500f, 16f / 9f, fill = false))
+        // Tall: as tall as the cover, shown whole.
+        assertEquals(VideoBoxSpec(202.5f, 360f, crop = false), videoBoxSpec(360f, 500f, 9f / 16f, fill = false))
+        // Not known yet: taken as 16:9.
+        assertEquals(VideoBoxSpec(360f, 202.5f, crop = false), videoBoxSpec(360f, 500f, 0f, fill = false))
     }
 }

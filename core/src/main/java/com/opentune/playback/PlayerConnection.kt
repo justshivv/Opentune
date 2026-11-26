@@ -100,6 +100,14 @@ class PlayerConnection(private val context: Context) {
     /** The playing stream's picture size, so the video surface can fit itself. */
     val videoSize = _videoSize.asStateFlow()
 
+    private val _firstFrames = MutableStateFlow(0)
+    /**
+     * Rises each time the player renders the first frame of a picture onto its surface (a
+     * video starting, another song's video, a new surface): the player's box keeps the cover
+     * until then.
+     */
+    val firstFrames = _firstFrames.asStateFlow()
+
     private val _shuffleEnabled = MutableStateFlow(false)
     val shuffleEnabled = _shuffleEnabled.asStateFlow()
 
@@ -195,6 +203,10 @@ class PlayerConnection(private val context: Context) {
     private val listener = object : Player.Listener {
         override fun onVideoSizeChanged(videoSize: VideoSize) {
             _videoSize.value = videoSize
+        }
+
+        override fun onRenderedFirstFrame() {
+            _firstFrames.value++
         }
 
         override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
