@@ -43,11 +43,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
@@ -102,12 +100,8 @@ import com.opentune.data.model.ROW_ART_PX
 import com.opentune.data.model.Song
 import com.opentune.data.model.artworkAt
 import com.opentune.data.settings.AppSettings
-import com.opentune.data.settings.SheetStyle
 import com.opentune.i18n.Tr
 import com.opentune.ui.components.Artwork
-import com.opentune.ui.components.PLAIN_DARK
-import com.opentune.ui.components.PLAIN_LIGHT
-import com.opentune.ui.components.PosterCaps
 import com.opentune.ui.components.SheetButton
 import com.opentune.ui.components.SheetTone
 import com.opentune.ui.components.TransparentSheetNavBar
@@ -223,9 +217,9 @@ internal fun SongInfoSheets(
             onDispose { }
         }
         TransparentSheetNavBar()
-        val colors = MaterialTheme.colorScheme
-        val dark = colors.surface.luminance() <= 0.5f
-        val fill = if (ui.sheetStyle == SheetStyle.SOLID) (if (dark) PLAIN_DARK else PLAIN_LIGHT) else colors.surfaceContainerHigh
+        // The cover's colours, as the player's backdrop has them: a deep tint of the cover for
+        // the sheets, its cards a step lighter, its clearest colour for Done.
+        val tint = rememberSheetTint(song.thumbnailUrl)
         val density = LocalDensity.current
         LaunchedEffect(Unit) {
             // Up once the song sheet knows its height, so its first frame is already below the screen.
@@ -234,7 +228,10 @@ internal fun SongInfoSheets(
             launch { songShown.animateTo(1f, enter) }
             if (startOnAbout) aboutShown.animateTo(1f, enter)
         }
-        CompositionLocalProvider(LocalContentColor provides colors.onSurface) {
+        SheetTinted(tint) {
+            val colors = MaterialTheme.colorScheme
+            val dark = tint.dark
+            val fill = tint.fill
             BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                 val fullPx = with(density) { maxHeight.toPx() }
                 val topRoom = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 12.dp
@@ -540,7 +537,10 @@ private fun SongHeader(song: Song, poster: Boolean, large: Boolean) {
                 song.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 14.dp),
             )
-            PosterCaps(song.artist, Modifier.padding(top = 6.dp))
+            Text(
+                song.artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant, textAlign = TextAlign.Center,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp),
+            )
         }
         return
     }
@@ -548,22 +548,22 @@ private fun SongHeader(song: Song, poster: Boolean, large: Boolean) {
         Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(60.dp), RoundedCornerShape(12.dp))
         Column(Modifier.weight(1f).padding(start = 16.dp)) {
             Text(song.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (poster) PosterCaps(song.artist, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Start)
-            else Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                song.artist, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, maxLines = 2,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
+            )
         }
     }
 }
 
-/** A heading for one of About song's parts; the Poster layout's in spaced capitals. */
+/** A heading for one of About song's parts: a plain title, set apart by the room above it. */
 @Composable
 private fun SectionHeading(text: String, trailing: (@Composable () -> Unit)? = null) {
-    androidx.compose.material3.HorizontalDivider(
-        Modifier.padding(horizontal = 20.dp).padding(top = 22.dp, bottom = 18.dp),
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-    )
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (posterLayout()) PosterCaps(Tr.t(text), textAlign = TextAlign.Start, color = MaterialTheme.colorScheme.onSurface)
-        else Text(text, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 20.dp).padding(top = 20.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         if (trailing != null) {
             Spacer(Modifier.width(12.dp))
             trailing()
@@ -588,7 +588,7 @@ private fun GeneralInformation(song: Song, info: SongInfo, durationMs: Long, nam
     val loading = SongInfoPart.CATALOG in info.pending && info.genre == null && info.released == null
     if (facts.isEmpty() && !loading) return
     SectionHeading("General information")
-    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    InfoCard {
         facts.forEach { (label, value) -> Fact(label, value) }
         if (loading) PlaceholderLines(2, Modifier.padding(top = 4.dp))
     }
@@ -602,7 +602,7 @@ private fun GeneralInformation(song: Song, info: SongInfo, durationMs: Long, nam
 @Composable
 private fun Fact(label: String, value: String) {
     Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.Top) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(108.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(100.dp))
         Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
     }
 }
@@ -616,7 +616,7 @@ private fun CreditsSection(info: SongInfo, names: List<String>, actions: SongShe
         .distinctBy { it.name.lowercase() }
     if (people.isEmpty()) return
     SectionHeading("Credits")
-    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    InfoCard(spacing = 14.dp) {
         people.take(CREDITS_SHOWN).forEach { person ->
             Column(Modifier.semantics(mergeDescendants = true) {}) {
                 Text(person.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
@@ -857,8 +857,21 @@ private fun PlaceholderLines(lines: Int, modifier: Modifier = Modifier) {
     }
 }
 
+/** A part of About song in one soft card: facts, credits. */
+@Composable
+private fun InfoCard(spacing: Dp = 12.dp, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(CARD_SHAPE).background(tileColor())
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(spacing),
+        content = content,
+    )
+}
+
+/** A card on the sheet: the tint a step up from the sheet, or the theme's soft fill where there's no tint. */
 @Composable
 private fun tileColor(): Color {
+    LocalSheetTint.current?.let { return it.card }
     val c = MaterialTheme.colorScheme
     return c.onSurface.copy(alpha = if (c.surface.luminance() <= 0.5f) 0.07f else 0.05f)
 }

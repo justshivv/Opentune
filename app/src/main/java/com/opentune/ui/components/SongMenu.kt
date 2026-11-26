@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -153,6 +152,9 @@ fun SongMenuSheet(
     var pickPlaylist by remember { mutableStateOf(false) }
     var ringtone by remember { mutableStateOf(false) }
     val close = onDismiss
+    // The quick actions wear the song's cover, as its song sheet does: one family of tonal
+    // circles from the cover's colour, its clearest colour for what's on.
+    val tint = com.opentune.ui.player.rememberSheetTint(song.thumbnailUrl)
 
     // The song and its four quick actions stay put; the rest of the menu scrolls under them.
     val header: @Composable ColumnScope.() -> Unit = {
@@ -166,7 +168,8 @@ fun SongMenuSheet(
                 .shadow(18.dp, frame, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f)), shape = frame)
             Text(song.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 16.dp))
-            PosterCaps(song.artist, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelLarge)
+            Text(song.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
         }
         else if (!menuAsPage) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(56.dp))
@@ -178,7 +181,7 @@ fun SongMenuSheet(
         }
         // The four things done most often, one tap each.
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            QuickAction(if (isLiked) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder), if (isLiked) "Liked" else "Like", active = isLiked) {
+            QuickAction(if (isLiked) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder), if (isLiked) "Liked" else "Like", active = isLiked, tint = tint) {
                 LibraryStore.setLiked(song, !isLiked)
             }
             if (!local) {
@@ -194,7 +197,7 @@ fun SongMenuSheet(
                     DownloadState.QUEUED -> -1f
                     else -> null
                 }
-                QuickAction(icon, label, active = download?.state == DownloadState.DONE, progress = ring) {
+                QuickAction(icon, label, active = download?.state == DownloadState.DONE, tint = tint, progress = ring) {
                     when (download?.state) {
                         DownloadState.DONE, DownloadState.QUEUED, DownloadState.DOWNLOADING -> Downloads.remove(context, song.videoId)
                         DownloadState.FAILED -> Downloads.retry(context, song.videoId)
@@ -202,9 +205,9 @@ fun SongMenuSheet(
                     }
                 }
             }
-            QuickAction(ImageVector.vectorResource(AppIcons.PlaylistAdd), "Playlist", active = false) { pickPlaylist = true }
+            QuickAction(ImageVector.vectorResource(AppIcons.PlaylistAdd), "Playlist", active = false, tint = tint) { pickPlaylist = true }
             if (!local) {
-                QuickAction(ImageVector.vectorResource(AppIcons.Share), "Share", active = false) {
+                QuickAction(ImageVector.vectorResource(AppIcons.Share), "Share", active = false, tint = tint) {
                     // The link goes with a picture of the song, like a now-playing card.
                     val (at, length) = actions?.progressOf?.invoke(song) ?: (0L to 0L)
                     com.opentune.ui.share.ShareCard.share(context, song, at, length)
@@ -449,19 +452,25 @@ private fun SongMenuPage(
     }
 }
 
-/** A round quick action with its label underneath; filled when [active]. */
-@Composable
 /**
- * One of the menu's big buttons. With [progress] (0..1) a ring fills round
- * its edge from the top, as a download goes; below 0 it's waiting, and a
- * short stretch of the ring runs round instead.
+ * One of the menu's four big buttons: a round tonal button of the song's [tint], the same for
+ * all four, with its name under it. [active] (liked, downloaded) shows in the icon, in the
+ * cover's accent, on a button warmed a little by it. With [progress] (0..1) a ring fills round
+ * its edge from the top, as a download goes; below 0 it's waiting, and a short stretch of the
+ * ring runs round instead.
  */
-private fun QuickAction(icon: ImageVector, label: String, active: Boolean, progress: Float? = null, onClick: () -> Unit) {
-    // The Poster layout's are round, of clear glass, with the label in small spaced capitals.
-    val poster = posterLayout()
-    val round = if (poster) 26.dp else 18.dp
-    val ringColour = MaterialTheme.colorScheme.primary
-    val trackColour = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+@Composable
+private fun QuickAction(
+    icon: ImageVector,
+    label: String,
+    active: Boolean,
+    tint: com.opentune.ui.player.SheetTint,
+    progress: Float? = null,
+    onClick: () -> Unit,
+) {
+    val accent = tint.on
+    val track = tint.ink.copy(alpha = 0.12f)
+    val container = if (active) accent.copy(alpha = if (tint.dark) 0.2f else 0.16f).compositeOver(tint.raised) else tint.raised
     val shown by androidx.compose.animation.core.animateFloatAsState((progress ?: 0f).coerceIn(0f, 1f), androidx.compose.animation.core.tween(300), label = "downloadRing")
     val waiting = progress != null && progress < 0f
     val spin = if (waiting) {
@@ -469,64 +478,40 @@ private fun QuickAction(icon: ImageVector, label: String, active: Boolean, progr
             .animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1_200, easing = androidx.compose.animation.core.LinearEasing)), label = "downloadWaitSpin")
     } else null
     Column(
-        Modifier.width(76.dp).clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(vertical = 8.dp),
+        Modifier.width(80.dp).clip(RoundedCornerShape(18.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            Modifier.size(52.dp)
+            Modifier.size(QUICK_ACTION_SIZE).clip(CircleShape).background(container)
                 .then(if (progress == null) Modifier else Modifier.drawWithCache {
                     val stroke = 3.dp.toPx()
                     val inset = stroke / 2
-                    // The button's own outline, starting at the top middle and going clockwise.
-                    val corner = round.toPx() - inset
-                    val outline = androidx.compose.ui.graphics.Path().apply {
-                        val w = size.width - inset
-                        val h = size.height - inset
-                        moveTo(size.width / 2, inset)
-                        lineTo(w - corner, inset)
-                        arcTo(androidx.compose.ui.geometry.Rect(w - 2 * corner, inset, w, inset + 2 * corner), -90f, 90f, false)
-                        lineTo(w, h - corner)
-                        arcTo(androidx.compose.ui.geometry.Rect(w - 2 * corner, h - 2 * corner, w, h), 0f, 90f, false)
-                        lineTo(inset + corner, h)
-                        arcTo(androidx.compose.ui.geometry.Rect(inset, h - 2 * corner, inset + 2 * corner, h), 90f, 90f, false)
-                        lineTo(inset, inset + corner)
-                        arcTo(androidx.compose.ui.geometry.Rect(inset, inset, inset + 2 * corner, inset + 2 * corner), 180f, 90f, false)
-                        close()
-                    }
-                    val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(outline, false) }
-                    val length = measure.length
-                    val piece = androidx.compose.ui.graphics.Path()
+                    val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+                    val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
                     val style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
                     onDrawWithContent {
                         drawContent()
-                        drawPath(outline, trackColour, style = style)
-                        piece.reset()
+                        drawArc(track, 0f, 360f, false, topLeft, arcSize, style = style)
+                        // Read here, while drawing: the ring turning redraws the button, never composes it.
                         val s = spin?.value
-                        if (s != null) {
-                            val from = s * length
-                            val to = from + length * 0.22f
-                            if (to <= length) measure.getSegment(from, to, piece, true)
-                            else { measure.getSegment(from, length, piece, true); measure.getSegment(0f, to - length, piece, true) }
-                        } else if (shown > 0f) {
-                            measure.getSegment(0f, shown * length, piece, true)
-                        }
-                        drawPath(piece, ringColour, style = style)
+                        if (s != null) drawArc(accent, -90f + s * 360f, 80f, false, topLeft, arcSize, style = style)
+                        else if (shown > 0f) drawArc(accent, -90f, shown * 360f, false, topLeft, arcSize, style = style)
                     }
-                })
-                .then(
-                    if (poster && !active) Modifier.posterGlass(RoundedCornerShape(round))
-                    else Modifier.clip(RoundedCornerShape(round))
-                        .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest),
-                ),
+                }),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, null, tint = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+            Icon(icon, null, Modifier.size(24.dp), tint = if (active) accent else tint.ink)
         }
-        if (poster) Text(com.opentune.ui.theme.tr(label).uppercase(), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
-            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp), maxLines = 1)
-        else Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp), maxLines = 1)
+        Text(
+            com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium,
+            color = if (active) tint.ink else tint.inkSoft, modifier = Modifier.padding(top = 8.dp), maxLines = 1,
+        )
     }
 }
+
+private val QUICK_ACTION_SIZE = 56.dp
 
 /**
  * Between a menu's groups: a rule across, or in the Poster layout, whose rows each carry their

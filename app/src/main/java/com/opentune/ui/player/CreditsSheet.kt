@@ -1,6 +1,13 @@
 package com.opentune.ui.player
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.semantics
+import com.opentune.data.model.ROW_ART_PX
+import com.opentune.data.model.artworkAt
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,53 +64,56 @@ internal fun CreditsSheet(song: Song, onDismiss: () -> Unit) {
         }
         loading = false
     }
-    val c = MaterialTheme.colorScheme
-    FloatingCard(
-        onDismiss = onDismiss,
-        title = "Credits",
-        expandable = true,
-        fitContent = false,
-        fullFraction = 1f,
-        openFraction = 0.75f,
-        header = {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Artwork(song.thumbnailUrl, Modifier.size(56.dp), shape = RoundedCornerShape(10.dp))
-                Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                    Text(song.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    // The song's cover tints the sheet, as it does the song sheet and About song.
+    SheetTinted(rememberSheetTint(song.thumbnailUrl)) {
+        val c = MaterialTheme.colorScheme
+        FloatingCard(
+            onDismiss = onDismiss,
+            title = "Credits",
+            expandable = true,
+            fitContent = false,
+            fullFraction = 1f,
+            openFraction = 0.75f,
+            header = {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(56.dp), shape = RoundedCornerShape(12.dp))
+                    Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                        Text(song.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
-            }
-        },
-    ) {
-        Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 6.dp).padding(bottom = 24.dp)) {
-            val data = credits
-            when {
-                loading -> Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
-                }
-                failed -> Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Couldn't reach YouTube for the credits.", style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
-                    SheetButton("Try again", onClick = { retry++ })
-                }
-                data == null || data.isEmpty -> Text(
-                    "No credits for this song. Credits come with songs a label puts on YouTube Music; uploads, and some releases, have none.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = c.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 24.dp),
-                )
-                else -> {
-                    Section("Performing Artists", data.performers)
-                    Section("Composition & Lyrics", data.composition)
-                    Section("Production & Engineering", data.production)
-                    val footer = listOfNotNull(
-                        data.released?.let { com.opentune.i18n.Tr.f("Released {0}", it) },
-                        data.copyright,
-                        data.label?.let { com.opentune.i18n.Tr.f("Credits as {0} sent them to YouTube", it) },
+            },
+        ) {
+            Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+                val data = credits
+                when {
+                    loading -> Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp, color = c.onSurfaceVariant)
+                    }
+                    failed -> Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Couldn't reach YouTube for the credits.", style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
+                        Spacer(Modifier.height(16.dp))
+                        SheetButton("Try again", onClick = { retry++ })
+                    }
+                    data == null || data.isEmpty -> Text(
+                        "No credits for this song. Credits come with songs a label puts on YouTube Music; uploads, and some releases, have none.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = c.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 24.dp),
                     )
-                    if (footer.isNotEmpty()) {
-                        HorizontalDivider(Modifier.padding(horizontal = 14.dp, vertical = 16.dp), color = c.outlineVariant.copy(alpha = 0.5f))
-                        Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            footer.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant) }
+                    else -> {
+                        Section("Performing Artists", data.performers)
+                        Section("Composition & Lyrics", data.composition)
+                        Section("Production & Engineering", data.production)
+                        val footer = listOfNotNull(
+                            data.released?.let { com.opentune.i18n.Tr.f("Released {0}", it) },
+                            data.copyright,
+                            data.label?.let { com.opentune.i18n.Tr.f("Credits as {0} sent them to YouTube", it) },
+                        )
+                        if (footer.isNotEmpty()) {
+                            Column(Modifier.padding(horizontal = 6.dp).padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                footer.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant) }
+                            }
                         }
                     }
                 }
@@ -112,19 +122,28 @@ internal fun CreditsSheet(song: Song, onDismiss: () -> Unit) {
     }
 }
 
+/**
+ * One kind of credit (performing, writing, production) as a titled card: each person once,
+ * every role they had on the song under their name.
+ */
 @Composable
 private fun Section(title: String, people: List<Credit>) {
     if (people.isEmpty()) return
+    val c = MaterialTheme.colorScheme
+    val card = LocalSheetTint.current?.card ?: c.onSurface.copy(alpha = 0.07f)
     Text(
         title,
         style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(horizontal = 14.dp).padding(top = 20.dp, bottom = 6.dp),
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(horizontal = 6.dp).padding(top = 20.dp, bottom = 10.dp),
     )
-    people.forEach { person ->
-        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
-            Text(person.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-            Text(person.roles.joinToString(", "), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(card)) {
+        people.forEachIndexed { i, person ->
+            if (i > 0) HorizontalDivider(Modifier.padding(start = 18.dp), color = c.onSurface.copy(alpha = 0.08f))
+            Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.padding(horizontal = 18.dp, vertical = 12.dp)) {
+                Text(person.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Text(person.roles.joinToString(", "), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
+            }
         }
     }
 }
