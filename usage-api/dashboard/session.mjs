@@ -36,7 +36,13 @@ export function start(load) {
   if(token) show();else login.hidden=false;
   // Do not restore a previous dashboard containing counts after sign-out/back navigation.
   addEventListener('pagehide',()=>{dashboard.hidden=true;});
-  addEventListener('pageshow',event=>{if(event.persisted) location.reload();});
+  // Coming back to a still signed-in page shows the counts it already has: they are reloaded only
+  // when the page is opened, the dates or calendar change, or Refresh is pressed.
+  addEventListener('pageshow',event=>{
+    if(!event.persisted) return;
+    let kept='';try { kept=sessionStorage.getItem(key) || ''; } catch {}
+    if(token && kept===token && login.hidden) dashboard.hidden=false; else location.reload();
+  });
 }
 
 /** Owner-only catalog writes use the same authentication as private reads. */

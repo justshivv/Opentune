@@ -40,21 +40,27 @@ if(process.env.USAGE_ADMIN_USERNAME && process.env.USAGE_ADMIN_PASSWORD) {
   assert.equal(login.status,303);
   const cookie=login.headers.get('set-cookie');assert.ok(cookie?.includes('HttpOnly'));
   const headers={Cookie:cookie.split(';')[0]};
-  for(const path of ['/usage/','/usage/v1/summary']) assert.equal((await read(path,{headers})).status,200);
+  // ?probe=1 answers once the session and the route's parameters check out, without counting
+  // anything: a deploy costs no database reads (the dashboard's figures are tested in CI).
+  assert.equal((await read('/usage/',{headers})).status,200);
+  const cookieProbe=await read('/usage/v1/summary?probe=1',{headers});
+  assert.equal(cookieProbe.status,200);assert.equal((await cookieProbe.json()).probe,true);
   const logout=await read('/auth/logout',{method:'POST',headers:{...headers,Origin:base}});
   assert.match(logout.headers.get('set-cookie'),/Max-Age=0/);
   const pagesLogin=await signIn({Origin:'https://justshivv.github.io',Accept:'application/json'});
   assert.equal(pagesLogin.status,200);
   assert.equal(pagesLogin.headers.get('set-cookie'),null);
   const {token}=await pagesLogin.json();
-  const pagesRead=await read('/usage/v1/summary',{headers:{Origin:'https://justshivv.github.io',Authorization:'Bearer '+token}});
+  const bearer={Origin:'https://justshivv.github.io',Authorization:'Bearer '+token};
+  const pagesRead=await read('/usage/v1/summary?timeZone=Asia%2FKolkata&probe=1',{headers:bearer});
   assert.equal(pagesRead.status,200);
-  const current = await pagesRead.json();
-  assert.ok(Array.isArray(current.currentVersions));
-  assert.equal(current.currentVersions.reduce((sum,row)=>sum+row.installations,0),current.totals.installs);
+  assert.equal(pagesRead.headers.get('Access-Control-Allow-Origin'),'https://justshivv.github.io');
+  assert.deepEqual(await pagesRead.json(),{probe:true,timeZone:'Asia/Kolkata'});
   const todayIst = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const istRead=await read(`/usage/v1/analytics?from=${todayIst}&to=${todayIst}&timeZone=Asia%2FKolkata`,{headers:{Origin:'https://justshivv.github.io',Authorization:'Bearer '+token}});
+  const istRead=await read(`/usage/v1/analytics?from=${todayIst}&to=${todayIst}&timeZone=Asia%2FKolkata&probe=1`,{headers:bearer});
   assert.equal(istRead.status,200);
   assert.equal((await istRead.json()).timeZone,'Asia/Kolkata');
-  console.log('Verified Pages bearer login, Worker cookie login, private data and anonymous rejection.');
+  // A bad range is still refused before anything is read.
+  assert.equal((await read('/usage/v1/analytics?from=bad&probe=1',{headers:bearer})).status,400);
+  console.log('Verified Pages bearer login, Worker cookie login, private routes (probed, no database reads) and anonymous rejection.');
 } else console.log('Verified login form and anonymous rejection. Add owner credentials to enable sign-in.');

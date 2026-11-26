@@ -129,7 +129,7 @@ async function loadPeriod() {
     $('period-returning').textContent = fmt(hasHistory && data.split ? data.split.returningInstallations : null);
     $('period-plays').textContent = fmt(hasHistory ? data.totals.plays : null);
     $('period-average').textContent = fmt(hasHistory && data.totals.active > 0 ? data.totals.plays / data.totals.active : null);
-    $('period-status').textContent = data.limited ? 'Limited server: daily counts available; period-wide unique counts and version filters need the analytics API update.' : !hasHistory ? (reportZone() === 'Asia/Kolkata' ? 'No IST reports for these dates yet. Updated apps report IST; older counts remain in UTC history.' : 'No activity history available for these dates.') : `Reports available since ${dateLabel(data.coverageSince)}. Today and recent days may still change.`;
+    $('period-status').textContent = data.limited ? 'Limited server: daily counts available; period-wide unique counts and version filters need the analytics API update.' : !hasHistory ? (reportZone() === 'Asia/Kolkata' ? 'No IST reports for these dates yet. Updated apps report IST; older counts remain in UTC history.' : 'No activity history available for these dates.') : `Reports available since ${dateLabel(data.coverageSince)}. Today and recent days may still change: late reports for earlier days join the unique and new/returning counts at the nightly recount (06:05 IST).`;
     const days = dailyRows(data).reverse();
     if (data.cohorts) table('daily-table', [`Date (${zoneLabel()})`, 'Active', 'New', 'Returning', 'Plays'], days.map(row => [row.day, row.active, row.newInstallations, row.returningInstallations, row.plays]), { daily: true });
     else table('daily-table', [`Date (${zoneLabel()})`, 'Active', 'Plays'], days.map(row => [row.day, row.active, row.plays]), { daily: true });
@@ -170,7 +170,9 @@ async function loadAll() {
         table('current-versions-table', ['Version', 'Installations', 'Updated to'],
           data.currentVersions.map(row => [row.version, row.installations, updatedTo.get(row.version) || 0]));
         const inferred = data.currentVersions.reduce((sum, row) => sum + row.inferred, 0);
-        $('current-versions-note').textContent = `${fmt(data.totals.installs)} reporting installations in total. ${inferred ? `${fmt(inferred)} older installations estimated from daily history.` : 'Each installation is assigned to its latest reported version.'}`;
+        // Counted nightly: reports since then are in the next night's count.
+        const counted = data.currentVersionsAsOf ? ` Counted ${new Date(data.currentVersionsAsOf).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })} IST, nightly.` : '';
+        $('current-versions-note').textContent = `${fmt(data.totals.installs)} reporting installations in total. ${inferred ? `${fmt(inferred)} older installations estimated from daily history.` : 'Each installation is assigned to its latest reported version.'}${counted}`;
       } else {
         empty('current-versions-table', 'Current version counts need the API update.');
         $('current-versions-note').textContent = 'Historical version activity remains available above.';

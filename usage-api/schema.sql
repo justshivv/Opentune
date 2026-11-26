@@ -203,3 +203,28 @@ INSERT OR IGNORE INTO daily_totals(zone, day, installations, plays)
   SELECT 'Asia/Kolkata', day, COUNT(DISTINCT installation), SUM(plays)
   FROM (SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM backfills WHERE name = 'daily-totals')) AS go CROSS JOIN activity_ist GROUP BY day;
 INSERT OR IGNORE INTO backfills(name) VALUES ('daily-totals');
+
+-- For the owner's dashboard (see "The owner's dashboard" in worker.mjs). Everything here is counted
+-- from the tables above, so losing it costs only a recount. WITHOUT ROWID: a row written is one
+-- row, with no separate index to write.
+-- Each final day's new and returning installations, their plays and listeners. A day is final
+-- once reports for it are no longer accepted (after 30 days); its row is written once, by the
+-- nightly cron or the first time a dashboard range shows that day.
+CREATE TABLE IF NOT EXISTS daily_cohorts (
+  zone TEXT NOT NULL,
+  day TEXT NOT NULL,
+  new_installations INTEGER NOT NULL,
+  returning_installations INTEGER NOT NULL,
+  new_plays INTEGER NOT NULL,
+  returning_plays INTEGER NOT NULL,
+  listeners INTEGER NOT NULL,
+  PRIMARY KEY (zone, day)
+) WITHOUT ROWID;
+-- Counts and responses shared by every Worker instance: the nightly counts (window:<zone> and
+-- lifetime) and dashboard responses, kept for half an hour. Rows older than two days are deleted
+-- nightly.
+CREATE TABLE IF NOT EXISTS report_cache (
+  key TEXT PRIMARY KEY,
+  payload TEXT NOT NULL,
+  computed_at INTEGER NOT NULL
+) WITHOUT ROWID;
