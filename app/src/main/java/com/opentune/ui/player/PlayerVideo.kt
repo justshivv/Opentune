@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.keepScreenOn
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -573,6 +574,9 @@ internal fun VideoCoverPane(
                         val p = measurable.measure(Constraints.fixed(stageW, stageH))
                         layout(c.maxWidth, c.maxHeight) { p.place(sx.toInt(), sy.toInt()) }
                     }
+                    // A playing picture holds the screen awake, as the full screen's does;
+                    // paused or stopped, the system's own timeout is back in charge.
+                    .then(if (isPlaying) Modifier.keepScreenOn() else Modifier)
                     .graphicsLayer {
                         val f = frame()
                         VideoMorphProbe.last = f
