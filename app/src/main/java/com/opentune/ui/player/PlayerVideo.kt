@@ -21,11 +21,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.keepScreenOn
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -396,6 +397,21 @@ private fun Modifier.placedPx(w: Int, h: Int): Modifier = layout { measurable, _
 }
 
 /** For tests: the last frame of the morph drawn, in the cover region's px. */
+/**
+ * Who is holding the screen awake — the video pane, the full screen — each
+ * under its own name: the window's flag is the sum of the holders, so one
+ * letting go (or leaving the tree) never drops another's hold.
+ */
+internal object ScreenHolds {
+    private val holders = mutableSetOf<String>()
+
+    @Synchronized
+    fun set(view: android.view.View, who: String, on: Boolean) {
+        if (on) holders += who else holders -= who
+        view.keepScreenOn = holders.isNotEmpty()
+    }
+}
+
 internal object VideoMorphProbe {
     @Volatile var last: MorphFrame? = null
 }
@@ -460,6 +476,14 @@ internal fun VideoCoverPane(
     picture: @Composable androidx.compose.foundation.layout.BoxScope.(crop: Boolean) -> Unit,
 ) {
     val density = LocalDensity.current
+    // A playing picture holds the screen awake only while it is the one being
+    // watched: the pane stays composed under the cover in song mode, so the
+    // playing state alone must never hold it. Held under the pane's own name
+    // (see ScreenHolds), so the full screen's hold is never dropped by it.
+    val holdScreen = isPlaying && showVideo
+    val screenView = LocalView.current
+    SideEffect { ScreenHolds.set(screenView, "video pane", holdScreen) }
+    DisposableEffect(Unit) { onDispose { ScreenHolds.set(screenView, "video pane", false) } }
     // Smaller while paused, as the cover is, so going between the two never jumps.
     val scale = androidx.compose.animation.core.animateFloatAsState(
         if (isPlaying || !animate) 1f else 0.86f,
@@ -574,9 +598,6 @@ internal fun VideoCoverPane(
                         val p = measurable.measure(Constraints.fixed(stageW, stageH))
                         layout(c.maxWidth, c.maxHeight) { p.place(sx.toInt(), sy.toInt()) }
                     }
-                    // A playing picture holds the screen awake, as the full screen's does;
-                    // paused or stopped, the system's own timeout is back in charge.
-                    .then(if (isPlaying) Modifier.keepScreenOn() else Modifier)
                     .graphicsLayer {
                         val f = frame()
                         VideoMorphProbe.last = f

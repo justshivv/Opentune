@@ -45,6 +45,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -70,7 +71,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.keepScreenOn
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -264,6 +265,13 @@ internal fun FullScreenVideo(
     val barBase = uiLook.seekbarThickness.dp.dp
     val controlsStrip = 16.dp + maxOf(48.dp, barBase * 6f) + 44.dp
     val haptics = com.opentune.ui.components.rememberHaptics()
+    // The screen is held while the video plays and let go the moment it
+    // pauses, under the full screen's own name (see ScreenHolds in
+    // PlayerVideo.kt): the pane letting go as it leaves for the full screen
+    // must never drop this hold, nor this one the pane's.
+    val screenView = LocalView.current
+    SideEffect { ScreenHolds.set(screenView, "full-screen video", state.isPlaying) }
+    DisposableEffect(Unit) { onDispose { ScreenHolds.set(screenView, "full-screen video", false) } }
 
     Row(Modifier
         .fillMaxSize()
@@ -273,7 +281,6 @@ internal fun FullScreenVideo(
                 .weight(1f - panel)
                 .fillMaxHeight()
                 .testTag("video-full-screen")
-                .then(if (state.isPlaying) Modifier.keepScreenOn() else Modifier)
                 .background(Color.Black)
                 .pointerInput(Unit) {
                     detectTapGestures(
