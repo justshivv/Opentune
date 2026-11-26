@@ -824,6 +824,8 @@ fun ArtworkPane(
     onSeekBy: ((Long) -> Unit)? = null,
     /** A soft light in the cover's colour under it, swelling with the bass. */
     glow: Boolean = false,
+    /** Where the song has got to, so the glow reads the levels being heard. */
+    position: () -> Long = { 0L },
     /** Apple's animated cover for this song, looped over the still one. */
     video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
     /**
@@ -872,7 +874,7 @@ fun ArtworkPane(
             },
         contentAlignment = Alignment.Center,
     ) {
-        if (glow && !canvasShowing) CoverGlow(isPlaying, scale, Modifier.matchParentSize())
+        if (glow && !canvasShowing) CoverGlow(isPlaying, scale, Modifier.matchParentSize(), position)
         Box(Modifier.graphicsLayer { alpha = coverShown }, contentAlignment = Alignment.Center) {
             CoverSwap(CoverShown(song.thumbnailUrl, index, song.videoId), change) { url, motion ->
                 UpgradingArtwork(
@@ -997,7 +999,7 @@ internal fun SeekTaps(
 
 /** A blurred light in the cover's colours under it, drifting a little lower and swelling with the bass. */
 @Composable
-private fun CoverGlow(playing: Boolean, scale: Float, modifier: Modifier) {
+private fun CoverGlow(playing: Boolean, scale: Float, modifier: Modifier, position: () -> Long) {
     val (a, b) = com.opentune.ui.theme.songAccents()
     val swell = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     androidx.compose.runtime.DisposableEffect(Unit) {
@@ -1011,7 +1013,7 @@ private fun CoverGlow(playing: Boolean, scale: Float, modifier: Modifier) {
             androidx.compose.runtime.withFrameNanos { now ->
                 val dt = if (last == 0L) 0.016f else ((now - last) / 1e9f).coerceIn(0f, 0.1f)
                 last = now
-                val level = com.opentune.playback.AudioLevels.at(System.nanoTime())?.let { it.bass * 0.8f + it.level * 0.2f } ?: 0f
+                val level = com.opentune.playback.AudioLevels.atSmooth(position())?.let { it.bass * 0.8f + it.level * 0.2f } ?: 0f
                 peak = maxOf(level, peak * (1f - dt * 0.3f)).coerceAtLeast(0.02f)
                 val target = (level / peak).coerceIn(0f, 1f)
                 swell.floatValue += (target - swell.floatValue) * (dt * if (target > swell.floatValue) 6f else 2f).coerceAtMost(1f)
@@ -1138,10 +1140,14 @@ fun SeekBar(
         var last = 0L
         while (true) {
             androidx.compose.runtime.withFrameNanos { now ->
-                val lvl = com.opentune.playback.AudioLevels.at(System.nanoTime())
-                val target = if (lvl == null) 0f else (lvl.level * 0.6f + lvl.bass * 0.4f).coerceIn(0f, 1f)
-                // Quick to rise with a hit, slower to fall away: the beat's shape.
-                shown += (target - shown) * if (target > shown) 0.6f else 0.13f
+                val lvl = com.opentune.playback.AudioLevels.atSmooth(position())
+                // The dance arrives already smooth — an envelope timed in
+                // the levels themselves, gliding between slices — and a
+                // whisper of time-based smoothing irons out the rest, at the
+                // same speed on any screen.
+                val target = lvl?.dance ?: 0f
+                val dtF = if (last != 0L) ((now - last) / 1_000_000_000f).coerceIn(0f, 0.1f) else 0f
+                shown += (target - shown) * (1f - kotlin.math.exp(-dtF / 0.035f))
                 waveLevel.floatValue = shown
                 if (last != 0L) {
                     val dt = (now - last) / 1_000_000_000f
@@ -1149,8 +1155,6 @@ fun SeekBar(
                 }
                 last = now
             }
-            // Slow rolling waves look the same at 30 fps; every vsync kept the GPU busy.
-            kotlinx.coroutines.delay(33L)
         }
     }
     val waveAmp1 by animateFloatAsState(if (dragFraction != null) 1.2f else 13f, tween(180), label = "waveAmp1")
@@ -1268,7 +1272,7 @@ fun SeekBar(
                     // The two companion lines use a sharper edge (edge > 1), so
                     // they fade out sooner and only the main line makes the entry
                     // and the landing: one clean thread.
-                    val transition = minOf(28.dp.toPx(), span * 0.35f)
+                    val transition = minOf(44.dp.toPx(), span * 0.5f)
                     val invTransition = if (transition > 0f) 1f / transition else 0f
                     val step = 1.5.dp.toPx()
                     fun smootherstep(t: Float): Float {
@@ -1310,24 +1314,32 @@ fun SeekBar(
                     val join = StrokeJoin.Round
                     // A layer's brush over one stretch of the bar, dissolving at
                     // the bar's tips (fadeIn/fadeOut) so no stroke end ever shows.
-                    fun layerBrush(colors: List<Color>, from: Float, to: Float, fadeIn: Boolean, fadeOut: Boolean): Brush =
-                        Brush.horizontalGradient(
+                    // The dissolve is a fixed width in dp at whichever tip the
+                    // stretch touches: as a fraction of the stretch it grew and
+                    // shrank with the played part, and the lines showed their entry.
+                    fun layerBrush(colors: List<Color>, from: Float, to: Float, fadeIn: Boolean, fadeOut: Boolean): Brush {
+                        val width = (to - from).coerceAtLeast(1f)
+                        val fade = 40.dp.toPx()
+                        val inStop = if (fadeIn) (fade / width).coerceIn(0f, 1f) else 0f
+                        val outStop = if (fadeOut) (1f - fade / width).coerceIn(0f, 1f) else 1f
+                        return Brush.horizontalGradient(
                             0f to colors[0].copy(alpha = if (fadeIn) 0f else colors[0].alpha),
-                            0.045f to colors[0],
-                            0.955f to colors[1],
+                            inStop to colors[0],
+                            outStop to colors[1],
                             1f to colors[1].copy(alpha = if (fadeOut) 0f else colors[1].alpha),
                             startX = from, endX = to,
                         )
+                    }
                     fun drawLayer(path: Path, colors: List<Color>, dimmed: List<Color>, widthDp: Float) {
                         val w = widthDp.dp.toPx()
                         if (thumbX > 0f) {
                             clipRect(left = 0f, right = thumbX, top = 0f, bottom = size.height) {
-                                drawPath(path, layerBrush(colors, 0f, thumbX.coerceAtLeast(1f), fadeIn = true, fadeOut = false), style = Stroke(w, cap = StrokeCap.Round, join = join))
+                                drawPath(path, layerBrush(colors, 0f, thumbX.coerceAtLeast(1f), fadeIn = true, fadeOut = thumbX >= span), style = Stroke(w, cap = StrokeCap.Round, join = join))
                             }
                         }
                         if (thumbX < span) {
                             clipRect(left = thumbX, right = span, top = 0f, bottom = size.height) {
-                                drawPath(path, layerBrush(dimmed, thumbX, span, fadeIn = false, fadeOut = true), style = Stroke(w, cap = StrokeCap.Round, join = join))
+                                drawPath(path, layerBrush(dimmed, thumbX, span, fadeIn = thumbX <= 0f, fadeOut = true), style = Stroke(w, cap = StrokeCap.Round, join = join))
                             }
                         }
                     }

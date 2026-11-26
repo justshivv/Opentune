@@ -1571,6 +1571,7 @@ fun PlayerLayout(
                                                     index = state.currentIndex,
                                                     onSeekBy = seekBy.takeIf { state.ui.doubleTapSeek },
                                                     glow = state.ui.coverGlow && !state.ui.reduceAnimation && !amoled && !apple,
+                                                    position = position,
                                                     video = state.coverVideo,
                                                     musicVideo = styleVideo,
                                                     videoSurface = inlineVideo,

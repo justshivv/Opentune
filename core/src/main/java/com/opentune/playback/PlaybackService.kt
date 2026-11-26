@@ -414,7 +414,7 @@ class PlaybackService : MediaLibraryService() {
         // The main player and the bridge decode the same way: the bridge used to
         // take the phone's default FLAC decoder, which some phones can't play
         // add-on FLAC with, so the swap to it failed and the song stayed on YouTube.
-        fun renderersFor(effects: DspAudioProcessor, exclusive: Boolean, allowFloat: Boolean = true) = object : DefaultRenderersFactory(context) {
+        fun renderersFor(effects: DspAudioProcessor, exclusive: Boolean, allowFloat: Boolean = true, meterLevels: Boolean = false) = object : DefaultRenderersFactory(context) {
             // The main player measures its song's bitrate from the audio (see MeasuredBitrate); the others don't.
             override fun buildAudioRenderers(
                 context: Context,
@@ -477,9 +477,10 @@ class PlaybackService : MediaLibraryService() {
                                     }) && source != C.ENCODING_PCM_16BIT && source != C.ENCODING_PCM_8BIT)
                             )
                 },
+                meterLevels = meterLevels,
             )
         }
-        val renderers = renderersFor(dsp, exclusive = true)
+        val renderers = renderersFor(dsp, exclusive = true, meterLevels = true)
 
         // Start as soon as a little audio is in: the defaults wait for 2.5 s,
         // which is video-sized caution. A stream starts after half a second buffered
@@ -1358,6 +1359,11 @@ class PlaybackService : MediaLibraryService() {
                 )
             ) {
                 refreshButtons()
+            }
+            if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_POSITION_DISCONTINUITY)) {
+                // The levels learn the new stretch's place from here, on the
+                // player's own thread — the sink's thread may not ask it.
+                com.opentune.playback.AudioLevels.notePosition(player.currentPosition * 1_000L)
             }
             if (events.containsAny(
                     Player.EVENT_MEDIA_ITEM_TRANSITION,
