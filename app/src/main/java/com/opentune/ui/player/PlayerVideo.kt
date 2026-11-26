@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -27,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -664,15 +667,15 @@ internal fun VideoCoverPane(
                     if (isPlaying && onPictureInPicture != null) Box(
                         Modifier.align(Alignment.BottomStart).graphicsLayer { shown(this, false) }.padding(10.dp),
                     ) {
-                        PaneButton({ val c = frame().clip; (with(density) { minOf(c.width, c.height).toDp().value } / 190f).coerceIn(0.85f, 1.3f) }) {
-                            PictureInPictureButton(onPictureInPicture, tint = Color.White)
+                        PaneButton({ val c = frame().clip; (with(density) { minOf(c.width, c.height).toDp().value } / 190f).coerceIn(0.85f, 1.3f) }) { tint ->
+                            PictureInPictureButton(onPictureInPicture, tint = tint)
                         }
                     }
                     if (onFullScreen != null) Box(
                         Modifier.align(Alignment.BottomEnd).graphicsLayer { shown(this, true) }.padding(10.dp),
                     ) {
-                        PaneButton({ val c = frame().clip; (with(density) { minOf(c.width, c.height).toDp().value } / 190f).coerceIn(0.85f, 1.3f) }) {
-                            FullScreenButton(onFullScreen, tint = Color.White)
+                        PaneButton({ val c = frame().clip; (with(density) { minOf(c.width, c.height).toDp().value } / 190f).coerceIn(0.85f, 1.3f) }) { tint ->
+                            FullScreenButton(onFullScreen, tint = tint)
                         }
                     }
                 }
@@ -680,15 +683,23 @@ internal fun VideoCoverPane(
         }
     }
 }
-/** A round dark chip under one of the pane's own buttons, scaled with the size the picture is shown at. */
+/** One of the pane's own buttons: no chip under it, just the icon wearing a soft shadow in its own shape, scaled with the size the picture is shown at. */
 @Composable
-private fun PaneButton(scale: () -> Float, content: @Composable () -> Unit) {
+private fun PaneButton(scale: () -> Float, button: @Composable (Color) -> Unit) {
     Box(
-        Modifier
-            .graphicsLayer { val s = scale(); scaleX = s; scaleY = s }
-            .background(Color.Black.copy(alpha = 0.45f), androidx.compose.foundation.shape.CircleShape),
+        Modifier.graphicsLayer { val s = scale(); scaleX = s; scaleY = s },
         contentAlignment = Alignment.Center,
-    ) { content() }
+    ) {
+        // The shadow first: a dark, softened copy of the icon itself, a step below it.
+        Box(
+            Modifier
+                .offset(y = 1.5.dp)
+                .blur(3.dp)
+                .graphicsLayer { alpha = 0.55f }
+                .clearAndSetSemantics {},
+        ) { button(Color.Black) }
+        button(Color.White)
+    }
 }
 /** A picture's shape, width over height as it is shown, or 0 while unknown. */
 @OptIn(markerClass = [UnstableApi::class])
