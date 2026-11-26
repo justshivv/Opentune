@@ -259,20 +259,26 @@ internal data class VideoBoxSpec(val width: Float, val height: Float, val crop: 
 /**
  * The box the music video shows in, inside a cover region [regionW] by [regionH].
  *
- * With [fill] (the edge-to-edge layout) the box takes the whole region. In the square
- * layouts it is as wide as the cover's square and as tall as the picture needs, up to the
- * square's height. A picture whose shape differs a little from the box's fills it, centred
- * and cut at the sides that overflow, never stretched; one that would lose more than
- * [MIN_VISIBLE_WIDE] (wide) or [MIN_VISIBLE_TALL] (tall) allows shows whole instead, in a
- * box at its own shape as large as the region holds. [aspect] 0 (not known yet) is taken
- * as 16:9.
+ * With [fill] (the edge-to-edge layout) the box takes the picture's own shape: the
+ * largest box of that shape the region holds, shown whole and never cut to fill the
+ * region. In the square layouts it is as wide as the cover's square and as tall as the
+ * picture needs, up to the square's height. A picture whose shape differs a little
+ * from the box's fills it, centred and cut at the sides that overflow, never
+ * stretched; one that would lose more than [MIN_VISIBLE_WIDE] (wide) or
+ * [MIN_VISIBLE_TALL] (tall) allows shows whole instead, in a box at its own shape as
+ * large as the region holds. [aspect] 0 (not known yet) is taken as 16:9.
  */
 internal fun videoBoxSpec(regionW: Float, regionH: Float, aspect: Float, fill: Boolean): VideoBoxSpec {
     if (regionW <= 0f || regionH <= 0f) return VideoBoxSpec(0f, 0f, false)
     val a = if (aspect.isFinite() && aspect > 0f) aspect else VIDEO_ASSUMED_ASPECT
+    if (fill) {
+        // Edge to edge the picture keeps its own shape, as large as the region holds.
+        val fw = minOf(regionW, regionH * a)
+        return VideoBoxSpec(fw, fw / a, crop = false)
+    }
     val side = minOf(regionW, regionH)
-    val w = if (fill) regionW else side
-    val h = if (fill) regionH else minOf(side, side / a)
+    val w = side
+    val h = minOf(side, side / a)
     val shape = w / h
     val visible = if (a > shape) shape / a else a / shape
     if (visible >= 0.999f) return VideoBoxSpec(w, h, crop = false)

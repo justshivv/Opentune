@@ -76,14 +76,15 @@ class VideoBoxMorphTest {
 
     // The box's size and the crop-or-whole choice.
 
-    @Test fun edgeToEdgeTheBoxFillsTheRegionAndAWidePictureIsCutToFit() {
+    @Test fun edgeToEdgeTheBoxTakesThePicturesOwnShape() {
         // The S25 Ultra's region, in dp: 383 wide (14dp short of each side), 325 tall.
-        assertEquals(VideoBoxSpec(383f, 325f, crop = true), videoBoxSpec(383f, 325f, 16f / 9f, fill = true))
-        assertEquals(VideoBoxSpec(383f, 325f, crop = true), videoBoxSpec(383f, 325f, 4f / 3f, fill = true))
+        // The box is as wide as the region and as tall as the picture's shape asks.
+        assertEquals(VideoBoxSpec(383f, 383f * 9f / 16f, crop = false), videoBoxSpec(383f, 325f, 16f / 9f, fill = true))
+        assertEquals(VideoBoxSpec(383f, 383f * 3f / 4f, crop = false), videoBoxSpec(383f, 325f, 4f / 3f, fill = true))
         // Not known yet: as 16:9.
-        assertEquals(VideoBoxSpec(383f, 325f, crop = true), videoBoxSpec(383f, 325f, 0f, fill = true))
-        // Even a square region is filled by a 16:9 picture (it keeps 56% of its width).
-        assertTrue(videoBoxSpec(330f, 330f, 16f / 9f, fill = true).crop)
+        assertEquals(VideoBoxSpec(383f, 383f * 9f / 16f, crop = false), videoBoxSpec(383f, 325f, 0f, fill = true))
+        // Even in a square region a 16:9 picture shows whole, at its own shape.
+        assertFalse(videoBoxSpec(330f, 330f, 16f / 9f, fill = true).crop)
     }
 
     @Test fun aTallPictureShowsWholeAtTheRegionsHeightInsteadOfLosingMostOfIt() {
