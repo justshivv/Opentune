@@ -28,13 +28,15 @@ struct Artwork: View {
     var circle = false
 
     var body: some View {
-        AsyncImage(url: url.artworkAt(size), transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
-            switch phase {
-            case let .success(image): image.resizable().scaledToFill()
-            default:
-                ZStack {
-                    Theme.card
-                    Image(systemName: "music.note").foregroundStyle(.white.opacity(0.35))
+        Color.clear.overlay {
+            AsyncImage(url: url.artworkAt(size), transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
+                switch phase {
+                case let .success(image): image.resizable().scaledToFill()
+                default:
+                    ZStack {
+                        Theme.card
+                        Image(systemName: "music.note").foregroundStyle(.white.opacity(0.35))
+                    }
                 }
             }
         }
