@@ -697,7 +697,7 @@ class PlaybackService : MediaLibraryService() {
             scope, player,
             canFade = {
                 !BitPerfectUsb.active && castMirror?.active != true && crossfade?.blending != true &&
-                    !swapRamping && swappingTo == null
+                        !swapRamping && swappingTo == null
             },
             blend = { target, ms, fallback -> crossfade?.blendSkip(target, ms, fallback) == true },
         )
@@ -2141,7 +2141,7 @@ class PlaybackService : MediaLibraryService() {
             PreloadSteps.forQueue(chances, unmetered = !AppSettings.onMeteredNetwork(), boost = pb.preloadBoostOnWifi).also { plan ->
                 if (plan != queuePlan) com.opentune.data.DebugLog.d("Preload", "Queue ahead: chances " +
                         chances.joinToString(" ") { "%.2f".format(it) } + "; " + plan.sources.entries.joinToString(", ") { (tier, at) -> "$tier at ${at.sorted()}" } + ", " +
-                    "addresses at ${plan.warm.sorted()}, lyrics at ${plan.lyrics.sorted()}, next song's buffer ${plan.nextBufferUs / 1_000_000} s")
+                        "addresses at ${plan.warm.sorted()}, lyrics at ${plan.lyrics.sorted()}, next song's buffer ${plan.nextBufferUs / 1_000_000} s")
             }
         }
         val bufferChanged = plan.nextBufferUs != queuePlan.nextBufferUs
@@ -2958,8 +2958,10 @@ class PlaybackService : MediaLibraryService() {
                 skipped += segment.uuid
                 Log.i(TAG, "SponsorBlock: skipping ${segment.category} ${segment.startMs}-${segment.endMs} ms")
                 if (duration > 0 && segment.endMs >= duration - SEGMENT_END_SLACK_MS) {
-                    // The segment runs to the end: that's the song over.
-                    if (player.hasNextMediaItem()) player.seekToNextMediaItem() else player.seekTo(duration)
+                    // The segment runs to the end: that's the song over, so it ends the way
+                    // the song itself would. Seeking to the next song outright steamrollers
+                    // repeat one, which a natural end honours.
+                    player.seekTo(duration)
                 } else {
                     player.seekTo(segment.endMs)
                 }
