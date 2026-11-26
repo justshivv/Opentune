@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0} گانے ڈاؤن لوڈ ہوئے · آف لائن چلتے ہیں",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "کوئی پلے لسٹ یا البم اس کے صفحے سے ڈاؤن لوڈ کریں، یا اس کے پانچ سے زیادہ گانے، تو وہ یہاں دکھائی دے گا۔",
 "Grow video while playing": "چلتے وقت ویڈیو بڑا کریں",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "جب ویڈیو چل رہا ہو تو یہ 3 سیکنڈ بعد اسکرین کے کناروں تک پھیل جاتا ہے اور رکنے پر سکڑ جاتا ہے"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "جب ویڈیو چل رہا ہو تو یہ 3 سیکنڈ بعد اسکرین کے کناروں تک پھیل جاتا ہے اور رکنے پر سکڑ جاتا ہے",
+"Video takes the screen": "ویڈیو اسکرین بھر لیتا ہے",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "جب ویڈیو چل رہا ہو، کنٹرولز چند سیکنڈ بعد نیچے سرک جاتے ہیں اور عنوان رہ جاتا ہے۔ انہیں واپس لانے کے لیے اوپر سوائپ کریں یا تھپتھپائیں۔",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "جب ویڈیو اسکرین پر چھا جاتا ہے تو موجودہ بولوں کی سطر کنٹرولز کے ساتھ سرکنے کے بجائے عنوان کے نیچے برقرار رہتی ہے۔",
+"Only with Video takes the screen on": "صرف 'Video takes the screen' آن ہونے پر"
 }

@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0} nummers gedownload · speelt offline",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Download een playlist of album via de pagina, of meer dan vijf nummers ervan, en het verschijnt hier.",
 "Grow video while playing": "Video vergroten tijdens afspelen",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Tijdens het afspelen zet de video na 3 seconden uit tot de randen van het scherm en krimpt terug bij pauzeren"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Tijdens het afspelen zet de video na 3 seconden uit tot de randen van het scherm en krimpt terug bij pauzeren",
+"Video takes the screen": "Video vult het scherm",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Terwijl een video speelt, schuiven de bediening na een paar seconden omlaag en blijft de titel staan. Veeg omhoog of tik om ze terug te halen.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Terwijl een video het scherm overneemt, blijft de huidige songtekstregel onder de titel staan in plaats van met de bediening weg te schuiven.",
+"Only with Video takes the screen on": "Alleen met 'Video takes the screen' ingeschakeld"
 }

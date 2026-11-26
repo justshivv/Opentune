@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0} låtar nedladdade · spelas offline",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Ladda ner en spellista eller ett album från dess sida, eller fler än fem av dess låtar, så visas den här.",
 "Grow video while playing": "Förstora video under uppspelning",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Medan en video spelas utvidgas den till skärmens kanter efter 3 sekunder och krymper tillbaka vid paus"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Medan en video spelas utvidgas den till skärmens kanter efter 3 sekunder och krymper tillbaka vid paus",
+"Video takes the screen": "Video tar över skärmen",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Medan en video spelas glider kontrollerna ner efter några sekunder och lämnar titeln kvar. Svep uppåt eller tryck för att ta tillbaka dem.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Medan en video tar över skärmen stannar den aktuella textraden kvar under titeln i stället för att glida bort med kontrollerna.",
+"Only with Video takes the screen on": "Endast med 'Video takes the screen' påslaget"
 }

@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0}곡 다운로드됨 · 오프라인 재생",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "재생목록이나 앨범을 해당 페이지에서 다운로드하거나 그 곡을 다섯 곡 넘게 다운로드하면 여기에 표시됩니다.",
 "Grow video while playing": "재생 중 동영상 확대",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "동영상이 재생되는 동안 3초 후 화면 가장자리까지 확장되고, 일시정지하면 다시 축소됩니다"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "동영상이 재생되는 동안 3초 후 화면 가장자리까지 확장되고, 일시정지하면 다시 축소됩니다",
+"Video takes the screen": "동영상을 전체 화면으로",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "동영상이 재생되는 동안 몇 초 후 컨트롤이 아래로 내려가고 제목만 남아요. 위로 스와이프하거나 탭하면 다시 나타나요.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "동영상이 화면을 채우는 동안 현재 가사 줄이 컨트롤과 함께 사라지지 않고 제목 아래에 그대로 유지됩니다.",
+"Only with Video takes the screen on": "'Video takes the screen'이 켜진 경우에만"
 }

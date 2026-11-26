@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0} آهنگ دانلود شده · بدون اینترنت پخش می‌شود",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "یک پلی‌لیست یا آلبوم را از صفحه‌اش دانلود کنید، یا بیش از پنج آهنگش را، تا اینجا نشان داده شود.",
 "Grow video while playing": "بزرگ شدن ویدیو هنگام پخش",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "هنگام پخش ویدیو، پس از 3 ثانیه تا لبه‌های صفحه گسترش می‌یابد و با توقف، به حالت قبل برمی‌گردد"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "هنگام پخش ویدیو، پس از 3 ثانیه تا لبه‌های صفحه گسترش می‌یابد و با توقف، به حالت قبل برمی‌گردد",
+"Video takes the screen": "ویدیو صفحه را پر می‌کند",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "وقتی یک ویدیو پخش می‌شود، کنترل‌ها بعد از چند ثانیه پایین می‌روند و عنوان می‌ماند. برای برگرداندنشان به بالا بکشید یا ضربه بزنید.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "وقتی ویدیو صفحه را می‌گیرد، خط فعلی متن ترانه زیر عنوان باقی می‌ماند و همراه کنترل‌ها کنار نمی‌رود.",
+"Only with Video takes the screen on": "فقط با روشن بودن «Video takes the screen»"
 }

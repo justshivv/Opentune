@@ -3660,5 +3660,9 @@
 "{0} songs downloaded · plays offline": "{0} പാട്ടുകൾ ഡൗൺലോഡ് ചെയ്തു · ഓഫ്‌ലൈനായി കേൾക്കാം",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "ഒരു പ്ലേലിസ്റ്റോ ആൽബമോ അതിന്റെ പേജിൽ നിന്ന് ഡൗൺലോഡ് ചെയ്യുക, അല്ലെങ്കിൽ അതിലെ അഞ്ചിലധികം പാട്ടുകൾ, അപ്പോൾ അത് ഇവിടെ കാണാം.",
 "Grow video while playing": "പ്ലേ ചെയ്യുമ്പോൾ വീഡിയോ വലുതാക്കുക",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "വീഡിയോ പ്ലേ ചെയ്യുമ്പോൾ, അത് 3 സെക്കൻഡിന് ശേഷം സ്ക്രീനിന്റെ അരികുകളിലേക്ക് വികസിക്കുകയും പോസ് ചെയ്യുമ്പോൾ ചുരുങ്ങുകയും ചെയ്യുന്നു"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "വീഡിയോ പ്ലേ ചെയ്യുമ്പോൾ, അത് 3 സെക്കൻഡിന് ശേഷം സ്ക്രീനിന്റെ അരികുകളിലേക്ക് വികസിക്കുകയും പോസ് ചെയ്യുമ്പോൾ ചുരുങ്ങുകയും ചെയ്യുന്നു",
+"Video takes the screen": "വീഡിയോ സ്ക്രീൻ മുഴുവൻ",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "വീഡിയോ പ്ലേ ചെയ്യുമ്പോൾ, കുറച്ച് സെക്കൻഡുകൾക്ക് ശേഷം നിയന്ത്രണങ്ങൾ താഴേക്ക് നീങ്ങി, തലക്കെട്ട് മാത്രം ശേഷിക്കും. അവ തിരികെ കൊണ്ടുവരാൻ മുകളിലേക്ക് സ്വൈപ്പ് ചെയ്യുക അല്ലെങ്കിൽ ടാപ്പ് ചെയ്യുക.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "വീഡിയോ സ്ക്രീൻ ഏറ്റെടുക്കുമ്പോൾ, നിലവിലെ വരി നിയന്ത്രണങ്ങൾക്കൊപ്പം മാറിപ്പോകാതെ തലക്കെട്ടിന് താഴെ നിലനിൽക്കും.",
+"Only with Video takes the screen on": "'Video takes the screen' ഓൺ ആയിരിക്കുമ്പോൾ മാത്രം"
 }

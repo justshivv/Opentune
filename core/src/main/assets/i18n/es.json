@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0} canciones descargadas · se escuchan sin conexión",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Descarga una playlist o un álbum desde su página, o más de cinco de sus canciones, y aparecerá aquí.",
 "Grow video while playing": "Ampliar el video al reproducir",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Mientras se reproduce un video, se expande hasta los bordes de la pantalla tras 3 segundos y se reduce al pausarlo"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Mientras se reproduce un video, se expande hasta los bordes de la pantalla tras 3 segundos y se reduce al pausarlo",
+"Video takes the screen": "El vídeo ocupa la pantalla",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Mientras suena un vídeo, los controles bajan tras unos segundos y dejan el título. Desliza hacia arriba o toca para que vuelvan.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Mientras un vídeo ocupa la pantalla, la línea actual de la letra permanece bajo el título en lugar de deslizarse con los controles.",
+"Only with Video takes the screen on": "Solo con «Video takes the screen» activado"
 }

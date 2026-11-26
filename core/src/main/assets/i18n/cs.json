@@ -3660,5 +3660,9 @@
 "{0} songs downloaded · plays offline": "Staženo skladeb: {0} · hraje offline",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Stáhněte playlist nebo album z jeho stránky, nebo víc než pět jeho skladeb, a objeví se tady.",
 "Grow video while playing": "Zvětšit video při přehrávání",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Při přehrávání se video po 3 sekundách roztáhne k okrajům obrazovky a při pozastavení se zmenší zpět"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Při přehrávání se video po 3 sekundách roztáhne k okrajům obrazovky a při pozastavení se zmenší zpět",
+"Video takes the screen": "Video zabere obrazovku",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Během přehrávání videa se ovládací prvky po několika sekundách vysunou dolů a zůstane jen název. Přejeďte nahoru nebo klepněte a vrátí se.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Když video převezme obrazovku, aktuální řádek textu zůstává pod názvem, místo aby odjel spolu s ovládáním.",
+"Only with Video takes the screen on": "Pouze se zapnutou funkcí 'Video takes the screen'"
 }

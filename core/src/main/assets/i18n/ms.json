@@ -3660,5 +3660,9 @@
 "{0} songs downloaded · plays offline": "{0} lagu dimuat turun · dimainkan di luar talian",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Muat turun senarai main atau album dari halamannya, atau lebih daripada lima lagunya, dan ia akan dipaparkan di sini.",
 "Grow video while playing": "Besarkan video semasa dimainkan",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Semasa video dimainkan, ia mengembang ke tepi skrin selepas 3 saat, dan mengecut kembali apabila dijeda"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Semasa video dimainkan, ia mengembang ke tepi skrin selepas 3 saat, dan mengecut kembali apabila dijeda",
+"Video takes the screen": "Video memenuhi skrin",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Semasa video dimainkan, kawalan turun selepas beberapa saat dan meninggalkan tajuk. Leret ke atas atau ketik untuk memaparkannya semula.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Apabila video menguasai skrin, baris lirik semasa kekal di bawah tajuk dan bukannya hilang bersama kawalan.",
+"Only with Video takes the screen on": "Hanya dengan 'Video takes the screen' dihidupkan"
 }
