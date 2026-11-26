@@ -35,6 +35,10 @@ jobs:
           fi
       - name: Apply additive database schema
         if: steps.credentials.outputs.ready == 'true'
+        # The Worker is written to run on the schema before and after this file, so a day when D1
+        # refuses writes (the free plan's daily limit) doesn't hold back a Worker fix; the schema
+        # then applies on the next deploy.
+        continue-on-error: true
         working-directory: usage-api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -464,3 +464,27 @@ test('the nightly clean-up drops rows past the retention but keeps the lifetime 
   // Running it again finds nothing more to remove.
   assert.equal((await housekeeping(db, now)).removed, 0);
 });
+
+test('when D1 refuses writes, the public counts serve the last saved copy instead of failing',async()=>{
+  const db=database();
+  const kept={asOf:'2026-11-26T00:07:21.762Z',timeZone:'Asia/Kolkata',installations:23932,daily:204,yesterday:2072,weekly:12012,monthly:21698};
+  const yesterdayAt=Date.parse('2026-11-26T00:07:21.762Z');
+  await db.prepare('INSERT INTO public_snapshot(zone,payload,computed_at) VALUES(?,?,?)').bind('Asia/Kolkata',JSON.stringify(kept),yesterdayAt).run();
+  // Every write throws, as D1 does once the daily write limit is spent; reads still work.
+  const blocked={prepare(q){const p=db.prepare(q);return {bind(...a){const b=p.bind(...a);return {...b,run:async()=>{throw new Error('D1_ERROR: write limit exceeded');}};}};},batch:(s)=>db.batch(s)};
+  const later=Date.parse('2026-11-26T00:46:00Z'); // past 06:00 in India: a new day's count is due
+  assert.deepEqual(await sharedCounts(blocked,'Asia/Kolkata',later),kept);
+});
+test('a report raising a day\'s plays writes the day row and its day total, nothing lifetime',async()=>{
+  const sql=new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));
+  const up=sql.prepare(`INSERT INTO activity_ist(installation,day,version,plays,received_at) VALUES(?,?,?,?,?)
+    ON CONFLICT(installation,day,version) DO UPDATE SET plays=excluded.plays,received_at=excluded.received_at WHERE excluded.plays > activity_ist.plays`);
+  up.run(id,'2026-11-25','1.1.0',3,'t');
+  const before=sql.prepare('SELECT plays FROM totals WHERE id=1').get().plays;
+  up.run(id,'2026-11-25','1.1.0',9,'t');
+  assert.equal(sql.prepare('SELECT plays FROM totals WHERE id=1').get().plays,before,'the lifetime row is not written on a plays update');
+  assert.equal(sql.prepare("SELECT plays FROM daily_totals WHERE zone='Asia/Kolkata' AND day='2026-11-25'").get().plays,9);
+  const names=sql.prepare("SELECT name FROM sqlite_master WHERE type IN ('index','trigger')").all().map(r=>r.name);
+  assert.ok(!names.includes('activity_ist_version') && !names.includes('activity_version'),'no per-version index');
+  assert.ok(!names.includes('summarize_activity_ist_plays'),'no lifetime plays trigger');
+});

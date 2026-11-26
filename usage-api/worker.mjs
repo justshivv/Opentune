@@ -117,8 +117,10 @@ export async function summary(db, now = new Date(), timeZone = 'UTC') {
   const month = day.slice(0,7)+'-01';
   const from = calendarDay(new Date(now.getTime()-29*DAY),timeZone);
   const results = await db.batch([
-    // Lifetime figures come from the totals the triggers keep; the first day is an index lookup.
-    db.prepare(`SELECT t.installations AS installs, t.plays AS plays,
+    // Lifetime installations come from the count a trigger keeps; lifetime plays are the sum of
+    // the day rows (a few hundred), so a report raising a day's plays writes no lifetime row.
+    db.prepare(`SELECT t.installations AS installs,
+      (SELECT COALESCE(SUM(plays),0) FROM daily_totals) AS plays,
       (SELECT MIN(day) FROM daily_totals) AS since
       FROM totals t WHERE t.id=1`),
     // A day's figures are one row of daily_totals (see schema.sql), not every report that day.
@@ -248,12 +250,22 @@ export async function sharedCounts(db, zone, now = Date.now()) {
   const saved = row?.payload ? JSON.parse(row.payload) : null;
   // A copy saved before yesterday's count existed is counted again.
   if (saved && 'yesterday' in saved && countDay(row.computed_at, zone) === countDay(now, zone)) return saved;
-  const claim = row
-    ? await db.prepare('UPDATE public_snapshot SET computed_at=? WHERE zone=? AND computed_at=?').bind(now, zone, row.computed_at).run()
-    : await db.prepare("INSERT OR IGNORE INTO public_snapshot(zone,payload,computed_at) VALUES(?,'',?)").bind(zone, now).run();
+  // Claiming the recount is a write. When D1 refuses writes (the free plan's daily limit), the
+  // last copy is still right to within a day: serve it rather than fail every badge until the reset.
+  let claim;
+  try {
+    claim = row
+      ? await db.prepare('UPDATE public_snapshot SET computed_at=? WHERE zone=? AND computed_at=?').bind(now, zone, row.computed_at).run()
+      : await db.prepare("INSERT OR IGNORE INTO public_snapshot(zone,payload,computed_at) VALUES(?,'',?)").bind(zone, now).run();
+  } catch (e) {
+    if (saved) return saved;
+    throw e;
+  }
   if (!changed(claim) && saved) return saved;
   const counts = await publicCounts(db, new Date(now), zone);
-  await db.prepare('UPDATE public_snapshot SET payload=?, computed_at=? WHERE zone=?').bind(JSON.stringify(counts), now, zone).run();
+  // Counted but not kept: still the right answer for this request.
+  try { await db.prepare('UPDATE public_snapshot SET payload=?, computed_at=? WHERE zone=?').bind(JSON.stringify(counts), now, zone).run(); }
+  catch { /* kept in this instance's memory by the caller, and counted again later */ }
   return counts;
 }
 
