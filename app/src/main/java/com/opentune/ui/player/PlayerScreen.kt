@@ -504,11 +504,14 @@ fun PlayerLayout(
             ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
     // A Canvas playing on the cover takes the screen the same way: the controls slide down
     // and leave the title over the video. A tap or a short swipe up brings them back.
-    val canvasFocusable = state.ui.canvasFocus && pane == Pane.COVER && state.canvasVideo != null && state.isSounding && !state.videoMode &&
+    // The takeovers wait until the picture is really on screen, as the video's grow does:
+    // the Canvas counts only once a frame of it has been drawn, and the video likewise.
+    var canvasDrawn by remember(state.canvasVideo) { mutableStateOf(false) }
+    val canvasFocusable = state.ui.canvasFocus && pane == Pane.COVER && state.canvasVideo != null && canvasDrawn && state.isSounding && !state.videoMode &&
             !docked && !state.ui.reduceAnimation && state.ui.playerStyle != PlayerStyle.LYRICS_FIRST
     // A video playing on the cover takes the screen the same way, under its own setting,
     // apart from the Canvas': the controls slide down and leave the title over the picture.
-    val videoFocusable = state.ui.videoFocus && pane == Pane.COVER && state.videoMode && state.isPlaying &&
+    val videoFocusable = state.ui.videoFocus && pane == Pane.COVER && state.videoMode && state.isPlaying && videoReady() &&
             !docked && !state.ui.reduceAnimation && state.ui.playerStyle != PlayerStyle.LYRICS_FIRST
     val focusable = lyricsFocusable || canvasFocusable || videoFocusable
     // Read only inside the countdown below, never while composing: a sheet opening or
@@ -1178,6 +1181,7 @@ fun PlayerLayout(
                     },
                     // Lyrics and the queue are read over the whole page, so the Canvas frosts top to bottom.
                     canvasBehindText = pane != Pane.COVER,
+                    onCanvasDrawn = { canvasDrawn = it },
                 )
             }
 

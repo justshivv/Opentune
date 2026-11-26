@@ -169,6 +169,8 @@ internal fun LoopingVideo(
     maxBitrate: Int = 4_000_000,
     /** Told of the view the picture is drawn in (null once it's gone), for a frost made from its frames. */
     onView: ((TextureView?) -> Unit)? = null,
+    /** Told when a frame has been drawn, and when a new clip takes this one's place undrawn. */
+    onDrawn: ((Boolean) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -188,6 +190,7 @@ internal fun LoopingVideo(
         if (active) SharedLoops.want(entry, true)
         onDispose { if (active) SharedLoops.want(entry, false) }
     }
+    LaunchedEffect(drawn) { onDrawn?.invoke(drawn) }
     LaunchedEffect(url, drawn) {
         if (!drawn) return@LaunchedEffect
         // A band has to be there in every look, so a dark scene isn't taken for one.

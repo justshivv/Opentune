@@ -181,6 +181,8 @@ fun PlayerBackdrop(
     titleTop: Dp? = null,
     /** Lyrics or the queue are open over the Canvas: it's frosted and darkened all the way up. */
     canvasBehindText: Boolean = false,
+    /** Told when the Canvas has drawn a frame, and when the next song's takes its place undrawn. */
+    onCanvasDrawn: ((Boolean) -> Unit)? = null,
     /**
      * Whether the full cover shows, read while drawing: it turns off and on as the cover flies
      * between the lists' header and its full place, and passed as a plain value it rebuilt the
@@ -261,7 +263,7 @@ fun PlayerBackdrop(
             }
         }
         if (canvas != null && !amoled) {
-            CanvasBackdrop(canvas, canvasPlaying, titleTop, canvasBehindText, Modifier.matchParentSize())
+            CanvasBackdrop(canvas, canvasPlaying, titleTop, canvasBehindText, Modifier.matchParentSize(), onCanvasDrawn)
         } else if (fullCover && fullCoverArt && !amoled) {
             // (The music video isn't drawn here: it has its own rounded box in the cover's place; see VideoCoverPane.)
             CoverSwap(CoverShown(artworkUrl, index, songId), change) { url, motion ->
@@ -325,7 +327,7 @@ fun PlayerBackdrop(
  * - Plain: only a light darkening behind the controls.
  */
 @Composable
-private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behindText: Boolean, modifier: Modifier) {
+private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behindText: Boolean, modifier: Modifier, onDrawn: ((Boolean) -> Unit)? = null) {
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
     val look = ui.canvasLook
     val frost = look == com.opentune.data.settings.CanvasLook.FROST && !ui.reduceBlur && !ui.liteMode
@@ -334,7 +336,7 @@ private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behi
         // Keyed on the clip, so the next song's starts fresh and fades in over this one's backdrop.
         androidx.compose.runtime.key(canvas) {
             LoopingVideo(canvas, playing, Modifier.matchParentSize(), maxPx = 1920, maxBitrate = 8_000_000,
-                onView = if (frost) ({ v -> video = v }) else null)
+                onView = if (frost) ({ v -> video = v }) else null, onDrawn = onDrawn)
         }
         // A light scrim at the top so the status bar and "Playing from" stay readable.
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.18f to Color.Transparent)))
