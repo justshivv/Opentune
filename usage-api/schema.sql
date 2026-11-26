@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS activity (
   PRIMARY KEY (installation, day, version)
 );
 CREATE INDEX IF NOT EXISTS activity_day ON activity(day, installation);
-CREATE INDEX IF NOT EXISTS activity_version ON activity(version, installation);
+-- No query reads by version through this table any more (version_installs does), and every
+-- index costs a row written per report: D1's free plan allows 100,000 rows written a day.
+DROP INDEX IF EXISTS activity_version;
 -- UTC daily totals cannot be shifted accurately after collection. Keep the
 -- legacy table and collect new IST days separately, without rewriting history.
 CREATE TABLE IF NOT EXISTS activity_ist (
@@ -19,7 +21,9 @@ CREATE TABLE IF NOT EXISTS activity_ist (
   PRIMARY KEY (installation, day, version)
 );
 CREATE INDEX IF NOT EXISTS activity_ist_day ON activity_ist(day, installation);
-CREATE INDEX IF NOT EXISTS activity_ist_version ON activity_ist(version, installation);
+-- No query reads by version through this table any more (version_installs does), and every
+-- index costs a row written per report: D1's free plan allows 100,000 rows written a day.
+DROP INDEX IF EXISTS activity_ist_version;
 CREATE TABLE IF NOT EXISTS installation_versions (
   installation TEXT PRIMARY KEY,
   version TEXT NOT NULL,
@@ -106,37 +110,32 @@ BEGIN
   UPDATE totals SET installations = installations + 1 WHERE id = 1;
 END;
 
-CREATE TRIGGER IF NOT EXISTS summarize_activity_insert AFTER INSERT ON activity
+DROP TRIGGER IF EXISTS summarize_activity_insert;
+CREATE TRIGGER summarize_activity_insert AFTER INSERT ON activity
 BEGIN
   INSERT OR IGNORE INTO installations(installation, first_day) VALUES (new.installation, new.day);
   UPDATE installations SET first_day = new.day WHERE installation = new.installation AND first_day > new.day;
-  UPDATE totals SET plays = plays + new.plays WHERE id = 1;
   INSERT OR IGNORE INTO active_weeks(week, installation) VALUES (date(new.day, '-6 days', 'weekday 1'), new.installation);
   INSERT OR IGNORE INTO active_months(month, installation) VALUES (substr(new.day, 1, 7), new.installation);
   INSERT OR IGNORE INTO version_installs(version, installation) VALUES (new.version, new.installation);
   INSERT OR IGNORE INTO versions_seen(version, last_day) VALUES (new.version, new.day);
   UPDATE versions_seen SET last_day = new.day WHERE version = new.version AND last_day < new.day;
 END;
-CREATE TRIGGER IF NOT EXISTS summarize_activity_ist_insert AFTER INSERT ON activity_ist
+DROP TRIGGER IF EXISTS summarize_activity_ist_insert;
+CREATE TRIGGER summarize_activity_ist_insert AFTER INSERT ON activity_ist
 BEGIN
   INSERT OR IGNORE INTO installations(installation, first_day) VALUES (new.installation, new.day);
   UPDATE installations SET first_day = new.day WHERE installation = new.installation AND first_day > new.day;
-  UPDATE totals SET plays = plays + new.plays WHERE id = 1;
   INSERT OR IGNORE INTO active_weeks(week, installation) VALUES (date(new.day, '-6 days', 'weekday 1'), new.installation);
   INSERT OR IGNORE INTO active_months(month, installation) VALUES (substr(new.day, 1, 7), new.installation);
   INSERT OR IGNORE INTO version_installs(version, installation) VALUES (new.version, new.installation);
   INSERT OR IGNORE INTO versions_seen(version, last_day) VALUES (new.version, new.day);
   UPDATE versions_seen SET last_day = new.day WHERE version = new.version AND last_day < new.day;
 END;
--- A report raises a day's plays (never lowers them): the difference goes on the total.
-CREATE TRIGGER IF NOT EXISTS summarize_activity_plays AFTER UPDATE OF plays ON activity
-BEGIN
-  UPDATE totals SET plays = plays + new.plays - old.plays WHERE id = 1;
-END;
-CREATE TRIGGER IF NOT EXISTS summarize_activity_ist_plays AFTER UPDATE OF plays ON activity_ist
-BEGIN
-  UPDATE totals SET plays = plays + new.plays - old.plays WHERE id = 1;
-END;
+-- Lifetime plays are no longer kept in totals: they are the sum of daily_totals, read only by the
+-- owner's dashboard. Keeping them here cost a row written on every report.
+DROP TRIGGER IF EXISTS summarize_activity_plays;
+DROP TRIGGER IF EXISTS summarize_activity_ist_plays;
 
 -- Backfill from what was recorded before these tables existed, once. This file runs on every
 -- deploy, and each of these reads every activity row; the marker in backfills makes the later
