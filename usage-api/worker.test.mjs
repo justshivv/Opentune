@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import worker, { tooSoon, REPORT_GAP_MS, rememberFor, ingest, summary, downloadSql, validateActivity, publicCounts, shortCount, badge } from './worker.mjs';
+import worker, { currentVersionsSql, tooSoon, REPORT_GAP_MS, rememberFor, ingest, summary, downloadSql, validateActivity, publicCounts, shortCount, badge } from './worker.mjs';
 
 function database() {
   const sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));
@@ -18,6 +18,7 @@ const loginEnv={USAGE_ADMIN_USERNAME:'owner',USAGE_ADMIN_PASSWORD:'test-password
 function loginRequest(user='owner',password=loginEnv.USAGE_ADMIN_PASSWORD,origin='https://example.test') {
   return new Request('https://example.test/auth/login',{method:'POST',headers:{Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({username:user,password})});
 }
+const currentNow=async db=>(await db.batch([db.prepare(currentVersionsSql)]))[0].results;
 const signedIn=await worker.fetch(loginRequest(),loginEnv);
 const auth={Cookie:signedIn.headers.get('set-cookie').split(';')[0]};
 const id='00000000-0000-4000-8000-000000000001';
@@ -54,7 +55,7 @@ test('legacy current versions use newest activity day and numeric version order'
   await ingest(db,body(1,'0.4.9'),now);await ingest(db,body(1,'0.4.13'),now);
   assert.equal((await summary(db,now)).currentVersions[0].version,'0.4.13');
   await ingest(db,{installationId:id,days:[{day:'2026-10-08',version:'1.0.0',plays:1}]},now);
-  assert.equal((await summary(db,now)).currentVersions[0].version,'0.4.13');
+  assert.equal((await currentNow(db))[0].version,'0.4.13');
 });
 test('explicit version revisions handle upgrades, downgrades, offline backlog and delayed retries',async()=>{
   const db=database();
@@ -62,9 +63,11 @@ test('explicit version revisions handle upgrades, downgrades, offline backlog an
   await ingest(db,report('0.4.14',1),now);
   await ingest(db,report('0.4.15',2),now);
   await ingest(db,report('0.4.14',1),now);
-  assert.equal((await summary(db,now)).currentVersions[0].version,'0.4.15');
+  // Current versions are counted nightly; between reports, read them as that count does.
+  assert.equal((await currentNow(db))[0].version,'0.4.15');
   await ingest(db,report('0.4.14',3),now);
   await ingest(db,body(1,'0.4.16'),now); // Legacy retry cannot overwrite explicit state.
+  assert.deepEqual((await currentNow(db)).map(r=>[r.version,r.installations,r.inferred]),[['0.4.14',1,0]]);
   const result=await summary(db,now);
   assert.deepEqual(result.currentVersions.map(r=>[r.version,r.installations,r.inferred]),[['0.4.14',1,0]]);
   assert.equal(result.totals.plays,4);
@@ -487,4 +490,186 @@ test('a report raising a day\'s plays writes the day row and its day total, noth
   const names=sql.prepare("SELECT name FROM sqlite_master WHERE type IN ('index','trigger')").all().map(r=>r.name);
   assert.ok(!names.includes('activity_ist_version') && !names.includes('activity_version'),'no per-version index');
   assert.ok(!names.includes('summarize_activity_ist_plays'),'no lifetime plays trigger');
+});
+
+// ---------------------------------------------------------------------------
+// The dashboard's nightly counts against the queries they replaced (reference-queries.mjs), on a
+// synthetic history shaped like production: installations first seen over 60 days (more of them
+// lately), most active a few days a month, older clients reporting UTC days and some of them
+// moving to the India-time table, releases taken up with a lag (some mid-day), explicit current
+// versions, plays of zero, downloads.
+const { oldSummary, oldAnalytics } = await import('./reference-queries.mjs');
+const { reuse } = await import('./worker.mjs');
+const schemaText=readFileSync(new URL('./schema.sql',import.meta.url),'utf8');
+function wrapped(sql, refuseWrites=false) {
+  const log=[], write=q=>/^\s*(INSERT|UPDATE|DELETE)/i.test(q);
+  const refuse=q=>{ if(refuseWrites&&write(q)) throw new Error('D1_ERROR: write limit exceeded'); };
+  return { log, prepare(query) { return { bind(...args) { return { query,args,run:async()=>{log.push(query);refuse(query);return sql.prepare(query).run(...args);} }; }, query,args:[] }; },
+    async batch(statements) {
+      for(const s of statements) { log.push(s.query); refuse(s.query); }
+      sql.exec('BEGIN');
+      try { const results=statements.map(s=>({results:sql.prepare(s.query).all(...s.args)})); sql.exec('COMMIT'); return results; }
+      catch(e) { sql.exec('ROLLBACK'); throw e; }
+    } };
+}
+function history(sql, {installs=3000, days=60, end='2026-11-26', seed=11}={}) {
+  let s=seed; const rnd=()=>(s=(s*1103515245+12345)%2147483648)/2147483648;
+  const dayOf=i=>new Date(Date.parse(end)-(days-1-i)*86400000).toISOString().slice(0,10);
+  const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+  const releases=[[0,'1.0.0'],[Math.floor(days*0.35),'1.1.0'],[Math.floor(days*0.7),'1.2.0'],[days-3,'1.2.1']];
+  const add={activity:sql.prepare('INSERT INTO activity VALUES(?,?,?,?,?)'),activity_ist:sql.prepare('INSERT INTO activity_ist VALUES(?,?,?,?,?)')};
+  const current=sql.prepare(`INSERT INTO installation_versions(installation,version,revision,received_at) VALUES(?,?,?,?)
+    ON CONFLICT(installation) DO UPDATE SET version=excluded.version,revision=excluded.revision,received_at=excluded.received_at WHERE excluded.revision>installation_versions.revision`);
+  const people=[];
+  for(let n=1;n<=installs;n++) {
+    const r=rnd(),k=rnd();
+    people.push({id:uuid(n),n,first:Math.min(days-1,Math.floor(Math.pow(rnd(),0.6)*days)),rate:r<0.08?0.55:r<0.3?0.12:0.035,
+      kind:k<0.12?'legacy':k<0.2?'migrated':k<0.85?'explicit':'inferred',lag:Math.floor(rnd()*12),rev:0,version:null});
+  }
+  const byDay=Array.from({length:days},()=>[]);
+  for(const p of people) { byDay[p.first].push(p); for(let d=p.first+1;d<days;d++) if(rnd()<p.rate) byDay[d].push(p); }
+  sql.exec('BEGIN');
+  for(let d=0;d<days;d++) for(const p of byDay[d]) {
+    const day=dayOf(d),at=day+'T20:00:00.000Z',legacy=p.kind==='legacy'||(p.kind==='migrated'&&d<p.first+10);
+    const table=legacy?'activity':'activity_ist';
+    const version=legacy?['0.4.9','0.4.13','0.4.16'][Math.min(2,Math.floor((d-p.first)/30)+(p.n%2))]:releases.filter(([from])=>from+p.lag<=d).at(-1)?.[1]||'1.0.0';
+    if(p.version&&p.version!==version&&rnd()<0.5) add[table].run(p.id,day,p.version,Math.floor(rnd()*5),at);
+    add[table].run(p.id,day,version,rnd()<0.1?0:Math.floor(rnd()*40),at);
+    if(!legacy&&p.kind!=='inferred'&&p.version!==version) current.run(p.id,version,++p.rev,at);
+    p.version=version;
+  }
+  const download=sql.prepare('INSERT OR IGNORE INTO downloads VALUES(?,?,?)');
+  for(let b=1;b<=installs/4;b++) for(const [from,release] of releases) if(rnd()<0.5)
+    download.run(`00000000-0000-4000-9000-${String(b).padStart(12,'0')}`,release,dayOf(Math.min(days-1,from+Math.floor(rnd()*10)))+'T10:00:00.000Z');
+  sql.exec('COMMIT');
+  return people;
+}
+function built(schema=schemaText) { const sql=new DatabaseSync(':memory:'); sql.exec(schema); return {sql, people:history(sql)}; }
+// The same page, apart from when it was made; versions that were last seen the same day come in
+// either order, as they did before.
+const figures=page=>{
+  const out=JSON.parse(JSON.stringify(page)); delete out.asOf; delete out.currentVersionsAsOf;
+  if(!out.range) out.versions.sort((a,b)=>a.version<b.version?-1:1);
+  if(out.downloads) out.downloads.sort((a,b)=>a.release<b.release?-1:1);
+  return out;
+};
+const evening=new Date('2026-11-26T14:00:00Z'), nightly=new Date('2026-11-26T00:35:00Z');   // 19:30 and 06:05 India time
+const lastDays=(n,to='2026-11-26')=>({from:new Date(Date.parse(to)-(n-1)*86400000).toISOString().slice(0,10),to});
+const ranges=[lastDays(1),lastDays(7),lastDays(30),lastDays(90),lastDays(21),lastDays(60),lastDays(366),
+  lastDays(11,'2026-10-31'),lastDays(10,'2026-11-25'),lastDays(1,'2026-11-25'),{from:'2026-11-17',to:'2026-11-26'}];
+async function sameAsBefore(db, now, label, {skip=[]}={}) {
+  for(const zone of ['Asia/Kolkata','UTC']) {
+    const page=figures(await summary(db,now,zone,{shared:true})), before=figures(await oldSummary(db,now,zone));
+    for(const key of skip) { delete page[key]; delete before[key]; }
+    assert.deepEqual(page,before,`${label}: summary ${zone}`);
+    for(const range of ranges.filter(r=>r.to<=new Intl.DateTimeFormat('en-CA',{timeZone:zone}).format(now)))
+      assert.deepEqual(figures(await analytics(db,range,now,zone,{shared:true})),figures(await oldAnalytics(db,range,now,zone)),`${label}: ${zone} ${range.from}..${range.to}`);
+  }
+}
+test('the dashboard from the nightly counts matches the queries it replaced, figure for figure', async () => {
+  const {sql}=built(), db=wrapped(sql);
+  await housekeeping(db,nightly);
+  await sameAsBefore(db,evening,'after the nightly count');
+  // The days before the window are now kept, and read back the same in another instance.
+  assert.ok(sql.prepare("SELECT COUNT(*) AS n FROM daily_cohorts WHERE zone='Asia/Kolkata'").get().n>=25);
+  await sameAsBefore(wrapped(sql),evening,'read back from daily_cohorts');
+  // Without the cron, the first request counts the window itself.
+  await sameAsBefore(wrapped(built().sql),evening,'counted on first use');
+  // Between midnight and the nightly count, the count is a day old and two days are read live.
+  const night=wrapped(built().sql);
+  await housekeeping(night,nightly);
+  await sameAsBefore(night,new Date('2026-11-26T20:00:00Z'),'after midnight');   // 01:30 on the 27th in India
+});
+test('reports after the nightly count show in the next load; current versions follow the next night', async () => {
+  const {sql,people}=built(), db=wrapped(sql);
+  await housekeeping(db,nightly);
+  const counted=figures(await oldSummary(db,evening,'Asia/Kolkata')).currentVersions;
+  const at=new Date('2026-11-26T15:00:00Z');
+  for(let n=0;n<40;n++) await ingest(db,{installationId:`00000000-0000-4000-8000-9${String(n).padStart(11,'0')}`,currentVersion:'1.3.0',versionRevision:1,
+    days:[{day:'2026-11-26',version:'1.3.0',plays:n%5,timeZone:'Asia/Kolkata'}]},at);
+  for(const p of people.filter(p=>p.kind==='explicit').slice(0,60))
+    await ingest(db,{installationId:p.id,currentVersion:'1.3.0',versionRevision:p.rev+1,days:[{day:'2026-11-26',version:'1.3.0',plays:7,timeZone:'Asia/Kolkata'}]},at);
+  for(const p of people.filter(p=>p.kind==='legacy').slice(0,20))
+    await ingest(db,{installationId:p.id,days:[{day:'2026-11-26',version:'0.4.17',plays:3}]},at);
+  for(const browser of ['00000000-0000-4000-9000-999999999999','00000000-0000-4000-9000-000000000001'])
+    await db.prepare(downloadSql).bind(browser,'1.3.0',at.toISOString()).run();
+  const now=new Date('2026-11-26T16:00:00Z');
+  await sameAsBefore(db,now,'with today\'s new reports',{skip:['currentVersions']});
+  assert.deepEqual(figures(await summary(db,now,'Asia/Kolkata')).currentVersions,counted,'as of the nightly count');
+  await housekeeping(db,new Date('2026-11-27T00:35:00Z'));
+  const next=new Date('2026-11-27T01:00:00Z');
+  assert.deepEqual(figures(await summary(db,next,'Asia/Kolkata')).currentVersions,figures(await oldSummary(db,next,'Asia/Kolkata')).currentVersions);
+});
+test('a load reads a few rows per installation active today; the nightly count does the rest', async () => {
+  const {sql}=built(), db=wrapped(sql);
+  await housekeeping(db,nightly);
+  db.log.length=0;
+  await summary(db,evening,'Asia/Kolkata',{shared:true}); await analytics(db,lastDays(30),evening,'Asia/Kolkata',{shared:true});
+  // Each activity query reads today's rows only (day BETWEEN today AND today), never a range.
+  const heavy=db.log.filter(q=>/FROM activity/.test(q));
+  assert.equal(heavy.length,1,heavy.join('\n'));
+  assert.ok(!db.log.some(q=>q.includes('WITH legacy')),'current versions are not counted per load');
+});
+
+// The fetch handler counts by the real clock: a little history ending today.
+async function recentHistory(db) {
+  const zone='Asia/Kolkata', today=new Intl.DateTimeFormat('en-CA',{timeZone:zone}).format(new Date());
+  const ago=n=>new Date(Date.parse(today)-n*86400000).toISOString().slice(0,10);
+  for(let n=10;n<40;n++) await ingest(db,{installationId:`00000000-0000-4000-8000-0000000000${n}`,currentVersion:'1.1.0',versionRevision:1,
+    days:[{day:ago(n%9+1),version:'1.1.0',plays:n,timeZone:zone},{day:today,version:'1.1.0',plays:n%4,timeZone:zone}]},new Date());
+  return [`/v1/summary?timeZone=Asia%2FKolkata`,`/v1/analytics?from=${ago(29)}&to=${today}&timeZone=Asia%2FKolkata`,
+    `/v1/summary`,`/v1/analytics?from=${ago(6)}&to=${today}`];
+}
+const getPage=(DB,path)=>worker.fetch(new Request('https://example.test'+path,{headers:auth}),{...loginEnv,DB});
+test('opening the dashboard again reads one saved row per request, or nothing in the same instance', async () => {
+  const sql=new DatabaseSync(':memory:'); sql.exec(schemaText);
+  const first=wrapped(sql), paths=await recentHistory(first), pages=[];
+  for(const path of paths) { const r=await getPage(first,path); assert.equal(r.status,200); pages.push(await r.json()); }
+  first.log.length=0;
+  for(const [i,path] of paths.entries()) assert.deepEqual(await (await getPage(first,path)).json(),pages[i]);
+  assert.deepEqual(first.log,[],'same instance: from memory');
+  const other=wrapped(sql);   // another instance, with its own memory
+  for(const [i,path] of paths.entries()) assert.deepEqual(await (await getPage(other,path)).json(),pages[i]);
+  assert.equal(other.log.length,paths.length);
+  assert.ok(other.log.every(q=>q.includes('FROM report_cache')),other.log.join('\n'));
+  // Past the half hour it is worked out again.
+  let counted=0; const later=Date.now()+31*60_000;
+  await reuse(other,'summary:Asia/Kolkata:'+new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(new Date()),e=>later-e.at<30*60_000,async()=>++counted,{now:later});
+  assert.equal(counted,1);
+});
+test('when D1 refuses writes, the dashboard still answers, with the same figures', async () => {
+  const {sql}=built(), refused=wrapped(sql,true);
+  await housekeeping(refused,nightly);                              // nothing kept, nothing thrown
+  assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM report_cache').get().n,0);
+  await sameAsBefore(refused,evening,'writes refused');
+  const live=new DatabaseSync(':memory:'); live.exec(schemaText);
+  const paths=await recentHistory(wrapped(live)), blocked=wrapped(live,true);
+  for(const path of paths) {
+    const r=await getPage(blocked,path); assert.equal(r.status,200);
+    const page=await r.json(); delete page.asOf; delete page.currentVersionsAsOf;
+    const fresh=await (await getPage(wrapped(live),path)).json(); delete fresh.asOf; delete fresh.currentVersionsAsOf;
+    assert.deepEqual(page,fresh);
+  }
+});
+test('before schema.sql adds the dashboard tables, the same figures are counted directly', async () => {
+  const {sql}=built(schemaText.slice(0,schemaText.indexOf("-- For the owner's dashboard"))), db=wrapped(sql);
+  assert.throws(()=>sql.prepare('SELECT 1 FROM report_cache').get());
+  await housekeeping(db,nightly);
+  await sameAsBefore(db,evening,'old schema');
+});
+test('the deploy check\'s probe signs in and checks the route without reading the database', async () => {
+  const untouchable={prepare(){throw new Error('must not query');},batch(){throw new Error('must not query');}};
+  for(const path of ['/v1/summary?probe=1','/usage/v1/summary?timeZone=Asia%2FKolkata&probe=1','/v1/analytics?from=2026-01-01&to=2026-01-01&probe=1']) {
+    const r=await getPage(untouchable,path); assert.equal(r.status,200); assert.equal((await r.json()).probe,true);
+  }
+  assert.equal((await getPage(untouchable,'/v1/analytics?from=bad&probe=1')).status,400);
+  assert.equal((await worker.fetch(new Request('https://example.test/v1/summary?probe=1'),{...loginEnv,DB:untouchable})).status,401);
+});
+test('with more versions than fit in columns, the nightly count sorts by version instead, with the same figures', async () => {
+  const {sql}=built(), add=sql.prepare('INSERT INTO activity_ist VALUES(?,?,?,?,?)');
+  for(let n=0;n<14;n++) add.run(`00000000-0000-4000-8000-${String(n+1).padStart(12,'0')}`,'2026-11-20',`2.0.${n}`,n,'x');
+  const db=wrapped(sql);
+  await housekeeping(db,nightly);
+  assert.ok(db.log.some(q=>/GROUP BY version/.test(q)));
+  await sameAsBefore(db,evening,'many versions');
 });

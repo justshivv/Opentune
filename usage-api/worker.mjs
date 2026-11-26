@@ -25,7 +25,7 @@ const currentVersionSql = `INSERT INTO installation_versions(installation,versio
 // cannot be rolled back by delayed reports or retries.
 // Only each legacy installation's newest day can rank first, so only that day's rows are read
 // (found through the primary key), never the whole history.
-const currentVersionsSql = `WITH legacy AS MATERIALIZED (
+export const currentVersionsSql = `WITH legacy AS MATERIALIZED (
  SELECT i.installation,MAX(COALESCE((SELECT MAX(day) FROM activity a WHERE a.installation=i.installation),''),
  COALESCE((SELECT MAX(day) FROM activity_ist a WHERE a.installation=i.installation),'')) AS day
  FROM installations i WHERE NOT EXISTS (SELECT 1 FROM installation_versions v WHERE v.installation=i.installation)
@@ -72,77 +72,376 @@ export async function ingest(db, body, now = new Date()) {
   return { accepted: rows.length };
 }
 
-/** First observed activity, not APK downloads or unverifiable unique people. */
-export async function cohorts(db, from, to, timeZone = 'UTC') {
-  const table = activityTable(timeZone);
-  // installations holds each one's first day, kept by triggers: no scan of all history.
-  const [result] = await db.batch([db.prepare(`WITH daily_install AS (
-    SELECT installation, day, SUM(plays) AS plays FROM ${table}
-    WHERE day BETWEEN ? AND ? GROUP BY installation, day
-  ) SELECT d.day,
-    SUM(CASE WHEN f.first_day=d.day THEN 1 ELSE 0 END) AS newInstallations,
-    SUM(CASE WHEN f.first_day<d.day THEN 1 ELSE 0 END) AS returningInstallations,
-    SUM(CASE WHEN f.first_day=d.day THEN d.plays ELSE 0 END) AS newPlays,
-    SUM(CASE WHEN f.first_day<d.day THEN d.plays ELSE 0 END) AS returningPlays,
-    SUM(CASE WHEN d.plays>0 THEN 1 ELSE 0 END) AS listeners
-    FROM daily_install d JOIN installations f USING(installation)
-    GROUP BY d.day ORDER BY d.day`).bind(from, to)]);
-  return result.results;
+// ---------------------------------------------------------------------------
+// The owner's dashboard. Counted straight from the activity rows, opening it (/v1/summary and
+// /v1/analytics for the last 30 days) read about a million rows, and D1's free plan allows 5
+// million a day. So nothing on that path reads the activity history any more:
+//  * Each night the cron counts the last WINDOW_DAYS days of each reporting zone into one saved
+//    row: unique installations, new ones and their plays, and versions since each day a preset
+//    range, this week or this month can start on, and each day's listeners and new
+//    installations. A range starting on one of those days reads no activity rows up to the count.
+//  * Reports since the count (today's, mostly) are read live: one row per installation and
+//    version active since, plus that installation's first day and its last day active before.
+//  * Days before the window can no longer change (apps send at most 30 days back); each one's
+//    new/returning row is kept for good in daily_cohorts.
+//  * Lifetime figures are counted nightly as well. The tables that only grow (versions seen,
+//    downloads, updates) are then read past that count by rowid, so those stay exact; current
+//    versions are as of the nightly count (currentVersionsAsOf).
+//  * The Worker keeps whole responses for REPORT_TTL_MS (report_cache and memory), so opening the
+//    dashboard again reads one row.
+// Every copy kept is a write that D1 may refuse (the free plan's daily limit): the answer is still
+// returned, and kept in this instance's memory. Before schema.sql has created the tables, the
+// same figures are counted from the activity rows, and kept in memory.
+export const REPORT_TTL_MS = 30 * 60_000;
+export const WINDOW_DAYS = 31;
+const KEPT = 'dash2:';   // changed whenever a kept copy changes shape, so a deploy never reads the old one
+const addDays = (day, n) => new Date(Date.parse(day + 'T00:00:00Z') + n * DAY).toISOString().slice(0, 10);
+const mondayOf = day => addDays(day, -((new Date(day + 'T00:00:00Z').getUTCDay() + 6) % 7));
+const monthOf = day => day.slice(0, 7) + '-01';
+const before = (counts, day) => Object.entries(counts).reduce((n, [d, v]) => d < day ? n + v : n, 0);
+const onOrAfter = (counts, day) => Object.entries(counts).reduce((n, [d, v]) => d >= day ? n + v : n, 0);
+const tally = (counts, key, n = 1) => { counts[key] = (counts[key] || 0) + n; };
+const descending = (a, b) => a < b ? 1 : a > b ? -1 : 0;
+
+const memo = new WeakMap(), working = new WeakMap();
+const mapOf = (store, db) => store.get(db) || store.set(db, new Map()).get(db);
+async function keptCopy(db, key) {
+  try {
+    const [{results: [row]}] = await db.batch([db.prepare('SELECT payload,computed_at FROM report_cache WHERE key=?1').bind(KEPT + key)]);
+    return row ? {at: Number(row.computed_at), value: JSON.parse(row.payload)} : null;
+  } catch { return null; }   // no table yet
+}
+async function keepCopy(db, key, value, at) {
+  try {
+    await db.prepare(`INSERT INTO report_cache(key,payload,computed_at) VALUES(?1,?2,?3)
+      ON CONFLICT(key) DO UPDATE SET payload=excluded.payload,computed_at=excluded.computed_at`).bind(KEPT + key, JSON.stringify(value), at).run();
+  } catch { /* refused, or no table yet: kept in memory by the caller */ }
+}
+function hold(db, key, entry, now) {
+  const mem = mapOf(memo, db);
+  if (mem.size > 100) mem.clear();
+  mem.set(key, {...entry, held: now});
+}
+/**
+ * The value kept under [key] while [fresh] says so: from this instance's memory (for at most
+ * [memoryMs]), else from report_cache, else [compute]d and kept in both. Concurrent callers share
+ * one computation. With [shared] false only memory is used.
+ */
+export async function reuse(db, key, isFresh, compute, {now = Date.now(), shared = true, memoryMs = Infinity} = {}) {
+  const fresh = entry => entry.at <= now + 60_000 && isFresh(entry);   // never one dated ahead of the clock
+  const hit = mapOf(memo, db).get(key);
+  if (hit && fresh(hit) && now - hit.held < memoryMs) return hit.value;
+  const busy = mapOf(working, db);
+  if (!busy.has(key)) busy.set(key, (async () => {
+    const copy = shared ? await keptCopy(db, key) : null;
+    const entry = copy && fresh(copy) ? copy : {at: now, value: await compute()};
+    if (shared && entry !== copy) await keepCopy(db, key, entry.value, now);
+    hold(db, key, entry, now);
+    return entry.value;
+  })().finally(() => busy.delete(key)));
+  return busy.get(key);
+}
+
+// The first days a range can start on and still be answered from the nightly count: today, the
+// 7- and 30-day presets, this week and this month, for the day after the count and the day after
+// that (the count runs at 06:05 India time, so from midnight until then it is a day older).
+function windowStarts(through) {
+  const starts = new Set();
+  for (const today of [addDays(through, 1), addDays(through, 2)])
+    for (const from of [addDays(today, -6), addDays(today, -29), mondayOf(today), monthOf(today)]) starts.add(from);
+  return [...starts].filter(from => from <= through).sort();
+}
+// Installations seen for the first time in [?1, ?2], with their plays over the same days (so,
+// all of them), and how many of those were active, and their plays, on that first day itself.
+const newSql = table => `SELECT i.first_day AS day,COUNT(DISTINCT i.installation) AS installs,COALESCE(SUM(a.plays),0) AS plays,
+ COUNT(DISTINCT CASE WHEN a.day=i.first_day THEN i.installation END) AS firstDay,
+ COALESCE(SUM(CASE WHEN a.day=i.first_day THEN a.plays END),0) AS firstDayPlays
+ FROM installations i JOIN ${table} a ON a.installation=i.installation AND a.day BETWEEN i.first_day AND ?2
+ WHERE i.first_day BETWEEN ?1 AND ?2 GROUP BY i.first_day`;
+
+/** The nightly count of [zone]'s last WINDOW_DAYS days, up to and including [through]. */
+export async function countWindow(db, zone, through) {
+  const table = activityTable(zone), start = addDays(through, 1 - WINDOW_DAYS), starts = windowStarts(through);
+  const days = [];
+  for (let day = start; day <= through; day = addDays(day, 1)) days.push(day);
+  // Each COUNT(DISTINCT) is worked out in the one pass over the window's rows.
+  const since = starts.map((_, i) => `COUNT(DISTINCT CASE WHEN day>=?${i + 3} THEN installation END) AS s${i}`);
+  const heard = days.map((_, i) => `COUNT(DISTINCT CASE WHEN day=?${starts.length + i + 3} AND plays>0 THEN installation END) AS h${i}`);
+  // Versions are needed for the 7- and 30-day presets only (the summary's week and month show none).
+  const presets = [...new Set([-5, -4, -28, -27].map(n => addDays(through, n)))].sort();
+  const [{results: seen}] = await db.batch([db.prepare('SELECT version FROM versions_seen WHERE last_day>=?1').bind(start)]);
+  // Two columns per version and preset, in one pass, while they fit (D1 allows 100); else a sort.
+  const listed = seen.length > 0 && seen.length * presets.length * 2 <= 88;
+  const at = i => `?${i + 3}`, named = j => `?${presets.length + j + 3}`;
+  const byVersion = listed
+    ? seen.flatMap((_, j) => presets.map((_, i) => `COUNT(DISTINCT CASE WHEN version=${named(j)} AND day>=${at(i)} THEN installation END) AS i${j}_${i},` +
+      `COALESCE(SUM(CASE WHEN version=${named(j)} AND day>=${at(i)} THEN plays END),0) AS p${j}_${i}`))
+    : presets.map((_, i) => `COUNT(DISTINCT CASE WHEN day>=${at(i)} THEN installation END) AS i0_${i},SUM(CASE WHEN day>=${at(i)} THEN plays ELSE 0 END) AS p0_${i}`);
+  const [[unique = {}], versionRows, firsts] = (await db.batch([
+    db.prepare(`SELECT ${[...since, ...heard].join(',')} FROM ${table} WHERE day BETWEEN ?1 AND ?2`).bind(start, through, ...starts, ...days),
+    listed
+      ? db.prepare(`SELECT ${byVersion.join(',')} FROM ${table} WHERE day BETWEEN ?1 AND ?2`).bind(start, through, ...presets, ...seen.map(v => v.version))
+      : db.prepare(`SELECT version,${byVersion.join(',')} FROM ${table} WHERE day BETWEEN ?1 AND ?2 GROUP BY version`).bind(start, through, ...presets),
+    db.prepare(newSql(table)).bind(start, through),
+  ])).map(result => result.results);
+  const versions = listed
+    ? seen.map(({version}, j) => ({ version, installs: presets.map((_, i) => versionRows[0][`i${j}_${i}`]), plays: presets.map((_, i) => versionRows[0][`p${j}_${i}`]) }))
+    : versionRows.map(row => ({ version: row.version, installs: presets.map((_, i) => row[`i0_${i}`]), plays: presets.map((_, i) => row[`p0_${i}`]) }));
+  return { zone, start, through, starts, presets,
+    active: starts.map((_, i) => unique[`s${i}`] ?? 0),
+    listeners: Object.fromEntries(days.map((day, i) => [day, unique[`h${i}`] ?? 0])),
+    versions: versions.filter(v => v.installs.some(n => n > 0)),
+    firsts: Object.fromEntries(firsts.map(row => [row.day, [row.installs, row.plays, row.firstDay, row.firstDayPlays]])) };
+}
+const nothing = { active: 0, new: 0, newPlays: 0, versions: [] };
+function fromWindow(window, from) {
+  const i = window.starts.indexOf(from), j = window.presets.indexOf(from);
+  let installs = 0, plays = 0;
+  for (const [day, [n, p]] of Object.entries(window.firsts)) if (day >= from) { installs += n; plays += p; }
+  return { active: window.active[i], new: installs, newPlays: plays, versions: j < 0 ? [] :
+    window.versions.filter(v => v.installs[j] > 0).map(v => ({ version: v.version, installations: v.installs[j], plays: v.plays[j] })) };
+}
+function windowDay(window, day, live) {
+  const [, , n = 0, p = 0] = window.firsts[day] || [];
+  return { day, newInstallations: n, returningInstallations: Math.max(0, live.active - n), newPlays: p,
+    returningPlays: Math.max(0, live.plays - p), listeners: window.listeners[day] ?? 0 };
+}
+// The kept count for [zone], made last night (or, failing that, now). From midnight until the
+// nightly run it is a day old, and the day between is read live with today.
+function windowCount(db, zone, now) {
+  const today = calendarDay(new Date(now), zone), oldest = addDays(today, -2);
+  return reuse(db, 'window:' + zone, entry => entry.value.through >= oldest && entry.value.through < today,
+    () => countWindow(db, zone, addDays(today, -1)), { now, memoryMs: 60 * 60_000 });
+}
+
+/** Unique installations, new ones and their plays, and versions, over [from, through], counted directly. */
+async function countRange(db, zone, from, through) {
+  const table = activityTable(zone);
+  // Every version seen on or after [from] (versions_seen, a few rows) gets two columns, so the
+  // unique count and the versions come from one pass over the rows instead of a pass and a sort.
+  const [{results: seen}] = await db.batch([db.prepare('SELECT version FROM versions_seen WHERE last_day>=?1').bind(from)]);
+  if (seen.length <= 40) {
+    const columns = seen.map((_, i) => `COUNT(DISTINCT CASE WHEN version=?${i + 3} THEN installation END) AS i${i},COALESCE(SUM(CASE WHEN version=?${i + 3} THEN plays END),0) AS p${i}`);
+    const [[unique], [added]] = (await db.batch([
+      db.prepare(`SELECT ${['COUNT(DISTINCT installation) AS active', ...columns].join(',')} FROM ${table} WHERE day BETWEEN ?1 AND ?2`).bind(from, through, ...seen.map(v => v.version)),
+      db.prepare(`SELECT COALESCE(SUM(installs),0) AS installs,COALESCE(SUM(plays),0) AS plays FROM (${newSql(table)})`).bind(from, through),
+    ])).map(result => result.results);
+    return { active: unique.active, new: added.installs, newPlays: added.plays,
+      versions: seen.map(({version}, i) => ({ version, installations: unique[`i${i}`], plays: unique[`p${i}`] })).filter(v => v.installations > 0) };
+  }
+  const [[unique], versions, [added]] = (await db.batch([
+    db.prepare(`SELECT COUNT(DISTINCT installation) AS active FROM ${table} WHERE day BETWEEN ?1 AND ?2`).bind(from, through),
+    db.prepare(`SELECT version,COUNT(DISTINCT installation) AS installations,SUM(plays) AS plays FROM ${table} WHERE day BETWEEN ?1 AND ?2 GROUP BY version`).bind(from, through),
+    db.prepare(`SELECT COALESCE(SUM(installs),0) AS installs,COALESCE(SUM(plays),0) AS plays FROM (${newSql(table)})`).bind(from, through),
+  ])).map(result => result.results);
+  return { active: unique.active, new: added.installs, newPlays: added.plays, versions };
 }
 
 /**
- * The period as a whole, split by when each installation was first seen: new ones were first
- * seen within [from, to], returning ones before it. Together they make the period's unique
- * active installations, each counted once.
+ * Activity from [r0] to [to], with each installation's first day and its last active day in
+ * [lo, r0): what a count up to the day before r0 needs to cover a range [from, to], lo <= from <= r0.
+ * One row per installation and version active since; nothing per installation is kept.
  */
-export async function periodCohorts(db, from, to, timeZone = 'UTC') {
-  const table = activityTable(timeZone);
-  const [result] = await db.batch([db.prepare(`WITH period AS (
-    SELECT installation, SUM(plays) AS plays FROM ${table}
-    WHERE day BETWEEN ? AND ? GROUP BY installation
-  ) SELECT
-    COALESCE(SUM(CASE WHEN f.first_day>=? THEN 1 ELSE 0 END),0) AS newInstallations,
-    COALESCE(SUM(CASE WHEN f.first_day<? THEN 1 ELSE 0 END),0) AS returningInstallations,
-    COALESCE(SUM(CASE WHEN f.first_day>=? THEN p.plays ELSE 0 END),0) AS newPlays,
-    COALESCE(SUM(CASE WHEN f.first_day<? THEN p.plays ELSE 0 END),0) AS returningPlays
-    FROM period p JOIN installations f USING(installation)`).bind(from, to, from, from, from, from)]);
-  return result.results[0];
+async function countRecent(db, zone, r0, to, lo) {
+  const table = activityTable(zone);
+  const [{results}] = await db.batch([db.prepare(`SELECT a.installation,a.day,a.version,a.plays,
+    (SELECT i.first_day FROM installations i WHERE i.installation=a.installation) AS first,
+    (SELECT p.day FROM ${table} p WHERE p.installation=a.installation AND p.day>=?3 AND p.day<?1 ORDER BY p.day DESC LIMIT 1) AS prev,
+    (SELECT p.day FROM ${table} p WHERE p.installation=a.installation AND p.version=a.version AND p.day>=?3 AND p.day<?1 ORDER BY p.day DESC LIMIT 1) AS prevVersion
+    FROM ${table} a WHERE a.day BETWEEN ?1 AND ?2`).bind(r0, to, lo)]);
+  // Keyed by day: '' is "not active in [lo, r0)".
+  const out = { r0, to, lo, lastBefore: {}, firstSeen: {}, firstPlays: {}, versions: {}, days: {} };
+  const installs = new Set(), pairs = new Set(), byDay = {};
+  for (const row of results) {
+    if (!installs.has(row.installation)) {
+      installs.add(row.installation);
+      tally(out.lastBefore, row.prev || '');
+      if (!row.prev && row.first >= lo) tally(out.firstSeen, row.first);
+    }
+    if (row.first >= lo) tally(out.firstPlays, row.first, row.plays);
+    const version = out.versions[row.version] ??= { plays: 0, lastBefore: {} };
+    version.plays += row.plays;
+    if (!pairs.has(row.installation + ' ' + row.version)) {
+      pairs.add(row.installation + ' ' + row.version);
+      tally(version.lastBefore, row.prevVersion || '');
+    }
+    const day = byDay[row.day] ??= new Map(), seen = day.get(row.installation) || { first: row.first, plays: 0 };
+    seen.plays += row.plays; day.set(row.installation, seen);
+  }
+  for (const [day, seen] of Object.entries(byDay)) {
+    const row = { day, newInstallations: 0, returningInstallations: 0, newPlays: 0, returningPlays: 0, listeners: 0 };
+    for (const { first, plays } of seen.values()) {
+      if (first == null) continue;   // as cohorts() did: counted with its first day only
+      if (first === day) { row.newInstallations++; row.newPlays += plays; }
+      else { row.returningInstallations++; row.returningPlays += plays; }
+      if (plays > 0) row.listeners++;
+    }
+    out.days[day] = row;
+  }
+  return out;
+}
+function withRecent(base, recent, from) {
+  if (!recent) return { ...base, versions: base.versions.map(v => ({ ...v })) };
+  const versions = new Map(base.versions.map(v => [v.version, { ...v }]));
+  for (const [version, v] of Object.entries(recent.versions)) {
+    const row = versions.get(version) || { version, installations: 0, plays: 0 };
+    row.installations += before(v.lastBefore, from); row.plays += v.plays;
+    versions.set(version, row);
+  }
+  return { active: base.active + before(recent.lastBefore, from), new: base.new + onOrAfter(recent.firstSeen, from),
+    newPlays: base.newPlays + onOrAfter(recent.firstPlays, from), versions: [...versions.values()].filter(v => v.installations > 0) };
 }
 
-export async function summary(db, now = new Date(), timeZone = 'UTC') {
-  const table = activityTable(timeZone), zone = reportZone(timeZone);
-  const day = calendarDay(now,timeZone);
-  const week = new Date(day+'T00:00:00Z');
-  week.setUTCDate(week.getUTCDate() - ((week.getUTCDay()+6)%7));
-  const month = day.slice(0,7)+'-01';
-  const from = calendarDay(new Date(now.getTime()-29*DAY),timeZone);
-  const results = await db.batch([
-    // Lifetime installations come from the count a trigger keeps; lifetime plays are the sum of
-    // the day rows (a few hundred), so a report raising a day's plays writes no lifetime row.
-    db.prepare(`SELECT t.installations AS installs,
-      (SELECT COALESCE(SUM(plays),0) FROM daily_totals) AS plays,
-      (SELECT MIN(day) FROM daily_totals) AS since
-      FROM totals t WHERE t.id=1`),
-    // A day's figures are one row of daily_totals (see schema.sql), not every report that day.
-    db.prepare(`SELECT COALESCE((SELECT installations FROM daily_totals WHERE zone=? AND day=?),0) AS active,
-      COALESCE((SELECT plays FROM daily_totals WHERE zone=? AND day=?),0) AS plays`).bind(zone,day,zone,day),
-    db.prepare(`SELECT COUNT(DISTINCT installation) AS active FROM ${table} WHERE day>=? AND day<=?`).bind(week.toISOString().slice(0,10),day),
-    db.prepare(`SELECT COUNT(DISTINCT installation) AS active FROM ${table} WHERE day>=? AND day<=?`).bind(month,day),
-    db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=? AND day>=? AND day<=? ORDER BY day').bind(zone,from,day),
-    db.prepare(`SELECT s.version,(SELECT COUNT(*) FROM version_installs v WHERE v.version=s.version) AS installations
-      FROM versions_seen s ORDER BY s.last_day DESC`),
-    db.prepare('SELECT release,COUNT(*) AS browsers FROM downloads GROUP BY release ORDER BY MAX(first_requested_at) DESC'),
-    db.prepare('SELECT COUNT(DISTINCT browser) AS browsers FROM downloads'),
+/**
+ * Unique installations, new ones and their plays, and versions in [zone] over [from, to]: the
+ * nightly count when the range starts on one of its days, else a direct count up to yesterday
+ * (kept until the next night), plus the days since read live.
+ */
+async function rangeCount(c, from, to, { versions = true } = {}) {
+  const { db, zone, window, today, now } = c;
+  let base, r0, lo;
+  const counted = window.starts.includes(from) && (!versions || window.presets.includes(from));
+  if (to >= window.through && (from > window.through || counted)) {
+    base = from > window.through ? nothing : fromWindow(window, from);
+    r0 = from > window.through ? from : addDays(window.through, 1); lo = window.start;
+  } else {
+    const through = to < today ? to : addDays(today, -1), final = through < addDays(today, -WINDOW_DAYS);
+    base = from > through ? nothing : await reuse(db, `range:${zone}:${from}:${through}`,
+      entry => now - entry.at < (final ? 7 * DAY : 12 * 60 * 60_000), () => countRange(db, zone, from, through), { now });
+    r0 = from > through ? from : addDays(through, 1); lo = from;
+  }
+  // The live part is shared by every range and page that needs the same days (and, through
+  // report_cache, by the summary and analytics requests of one dashboard load).
+  const key = `recent:${zone}:${r0}:${to}:${lo}`, count = async () => ({ ...await countRecent(db, zone, r0, to, lo), at: now });
+  if (r0 <= to && !c.recents.has(key))
+    c.recents.set(key, c.shared ? reuse(db, key, entry => now - entry.at < REPORT_TTL_MS, count, { now }) : count());
+  const recent = r0 <= to ? await c.recents.get(key) : null;
+  return { ...withRecent(base, recent, from), recent };
+}
+async function dashboardContext(db, zone, now, shared) {
+  const at = now.getTime();
+  return { db, zone, now: at, today: calendarDay(now, zone), shared, recents: new Map(), window: await windowCount(db, zone, at) };
+}
+
+const cohortColumns = 'day,new_installations AS newInstallations,returning_installations AS returningInstallations,new_plays AS newPlays,returning_plays AS returningPlays,listeners';
+async function keepCohorts(db, zone, rows) {
+  if (!rows.length) return;
+  try {
+    await db.batch(rows.map(r => db.prepare(`INSERT OR IGNORE INTO daily_cohorts(zone,day,new_installations,returning_installations,new_plays,returning_plays,listeners)
+      VALUES(?1,?2,?3,?4,?5,?6,?7)`).bind(zone, r.day, r.newInstallations, r.returningInstallations, r.newPlays, r.returningPlays, r.listeners)));
+  } catch { /* refused, or no table yet: counted again next time */ }
+}
+/** Each day's new and returning installations and listeners, for the [daily] days with activity. */
+async function cohortRows({ db, zone, window, today }, daily, recent) {
+  if (!daily.length) return [];
+  const rows = new Map(), missing = [];
+  let kept = [];
+  const oldest = daily[0].day;
+  if (oldest < window.start) {
+    try {
+      [{results: kept}] = await db.batch([db.prepare(`SELECT ${cohortColumns} FROM daily_cohorts WHERE zone=?1 AND day BETWEEN ?2 AND ?3`)
+        .bind(zone, oldest, addDays(window.start, -1))]);
+    } catch { /* no table yet */ }
+  }
+  const stored = new Map(kept.map(row => [row.day, row]));
+  for (const live of daily) {
+    const { day } = live;
+    if (recent && day >= recent.r0) rows.set(day, recent.days[day]);
+    else if (day >= window.start && day <= window.through) rows.set(day, windowDay(window, day, live));
+    else if (stored.has(day)) rows.set(day, { ...stored.get(day) });
+    else missing.push(live);
+  }
+  if (missing.length) {
+    // Days not counted yet: a day before the window is final, so it is kept for good.
+    const table = activityTable(zone), start = missing[0].day, end = missing.at(-1).day;
+    const [heard, firsts] = (await db.batch([
+      db.prepare(`SELECT day,COUNT(DISTINCT CASE WHEN plays>0 THEN installation END) AS listeners FROM ${table} WHERE day BETWEEN ?1 AND ?2 GROUP BY day`).bind(start, end),
+      db.prepare(`SELECT i.first_day AS day,COUNT(DISTINCT i.installation) AS installs,COALESCE(SUM(a.plays),0) AS plays FROM installations i
+        JOIN ${table} a ON a.installation=i.installation AND a.day=i.first_day WHERE i.first_day BETWEEN ?1 AND ?2 GROUP BY i.first_day`).bind(start, end),
+    ])).map(result => result.results);
+    const listeners = new Map(heard.map(row => [row.day, row.listeners])), added = new Map(firsts.map(row => [row.day, row]));
+    const counted = missing.map(live => {
+      const n = added.get(live.day)?.installs ?? 0, p = added.get(live.day)?.plays ?? 0;
+      return { day: live.day, newInstallations: n, returningInstallations: Math.max(0, live.active - n), newPlays: p,
+        returningPlays: Math.max(0, live.plays - p), listeners: listeners.get(live.day) ?? 0 };
+    });
+    for (const row of counted) rows.set(row.day, row);
+    await keepCohorts(db, zone, counted.filter(row => row.day < addDays(today, -WINDOW_DAYS)));
+  }
+  return daily.map(live => rows.get(live.day)).filter(Boolean);
+}
+
+// Lifetime figures, counted nightly. Rows only ever get added to version_installs, downloads and
+// version_transitions, so each count goes on from the last one by rowid (from scratch once a week).
+function growth(db, ids) {
+  return [
+    db.prepare('SELECT version,COUNT(*) AS n,MAX(rowid) AS id FROM version_installs NOT INDEXED WHERE rowid>?1 GROUP BY version').bind(ids.installs),
+    db.prepare('SELECT release,COUNT(*) AS n,MAX(first_requested_at) AS last,MAX(rowid) AS id FROM downloads NOT INDEXED WHERE rowid>?1 GROUP BY release').bind(ids.downloads),
+    db.prepare('SELECT COUNT(DISTINCT browser) AS n FROM downloads d NOT INDEXED WHERE rowid>?1 AND (?1=0 OR NOT EXISTS (SELECT 1 FROM downloads o WHERE o.browser=d.browser AND o.rowid<=?1))').bind(ids.downloads),
+    db.prepare('SELECT to_version AS version,COUNT(*) AS n,MAX(rowid) AS id FROM version_transitions NOT INDEXED WHERE rowid>?1 GROUP BY to_version').bind(ids.moves),
+  ];
+}
+function grown(life, [installs, releases, [browsers], moves]) {
+  const ids = { ...life.ids }, versions = { ...life.versions }, downloads = {}, updates = { ...life.updates };
+  for (const [release, d] of Object.entries(life.downloads)) downloads[release] = { ...d };
+  for (const r of installs) { tally(versions, r.version, r.n); ids.installs = Math.max(ids.installs, r.id); }
+  for (const r of releases) {
+    const d = downloads[r.release] ??= { browsers: 0, last: '' };
+    d.browsers += r.n; if (r.last > d.last) d.last = r.last;
+    ids.downloads = Math.max(ids.downloads, r.id);
+  }
+  for (const r of moves) { tally(updates, r.version, r.n); ids.moves = Math.max(ids.moves, r.id); }
+  return { ...life, ids, versions, downloads, browsers: life.browsers + (browsers?.n ?? 0), updates };
+}
+export async function countLifetime(db, now = Date.now(), previous = null) {
+  const fresh = !previous || now - previous.full >= 7 * DAY;
+  const last = fresh ? { full: now, ids: { installs: 0, downloads: 0, moves: 0 }, versions: {}, downloads: {}, browsers: 0, updates: {}, cutoff: '', plays: 0 } : previous;
+  // Days at least 32 days old can't change any more: their plays are added up once.
+  const cutoff = calendarDay(new Date(now - 32 * DAY), 'UTC');
+  const [current, ...rest] = (await db.batch([
     db.prepare(currentVersionsSql),
-    db.prepare('SELECT COUNT(*) AS n FROM version_transitions'),
-    db.prepare('SELECT to_version AS version, COUNT(*) AS updates FROM version_transitions GROUP BY to_version ORDER BY updates DESC, version DESC'),
-  ]);
-  return { asOf: now.toISOString(), timeZone, totals: results[0].results[0], today: results[1].results[0],
-    week: results[2].results[0].active, month: results[3].results[0].active,
-    daily: results[4].results, cohorts: await cohorts(db, from, day, timeZone), versions: results[5].results, downloads: results[6].results,
-    downloadBrowsers: results[7].results[0].browsers, currentVersions: results[8].results,
+    ...growth(db, last.ids),
+    db.prepare("SELECT COALESCE(SUM(plays),0) AS plays FROM daily_totals WHERE zone IN ('UTC','Asia/Kolkata') AND day>=?1 AND day<?2").bind(last.cutoff, cutoff),
+  ])).map(result => result.results);
+  const plays = rest.pop()[0].plays;
+  return { ...grown(last, rest), currentVersions: current, cutoff, plays: last.plays + plays, at: now };
+}
+function lifetime(db, now) {
+  return reuse(db, 'lifetime', entry => now - entry.at < 26 * 60 * 60_000, () => countLifetime(db, now), { now, memoryMs: 60 * 60_000 });
+}
+
+export async function summary(db, now = new Date(), timeZone = 'UTC', { shared = false } = {}) {
+  const zone = reportZone(timeZone), at = now.getTime();
+  const day = calendarDay(now, zone), from = addDays(day, -29);
+  const [life, c] = await Promise.all([lifetime(db, at), dashboardContext(db, zone, now, shared)]);
+  const [[{installs}], [{plays}], [{since}], daily, seen, ...added] = (await db.batch([
+    // Lifetime installations come from the count a trigger keeps; lifetime plays are the nightly
+    // sum of the days that can't change any more, plus the last few days' rows of daily_totals.
+    db.prepare('SELECT installations AS installs FROM totals WHERE id=1'),
+    db.prepare("SELECT COALESCE(SUM(plays),0) AS plays FROM daily_totals WHERE zone IN ('UTC','Asia/Kolkata') AND day>=?1").bind(life.cutoff),
+    db.prepare("SELECT MIN(day) AS since FROM (SELECT MIN(day) AS day FROM daily_totals WHERE zone='UTC' UNION ALL SELECT MIN(day) FROM daily_totals WHERE zone='Asia/Kolkata')"),
+    // A day's figures are one row of daily_totals (see schema.sql), not every report that day.
+    db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=?1 AND day>=?2 AND day<=?3 ORDER BY day').bind(zone, from, day),
+    db.prepare('SELECT version FROM versions_seen ORDER BY last_day DESC'),
+    ...growth(db, life.ids),
+  ])).map(result => result.results);
+  const sofar = grown(life, added);
+  const today = daily.at(-1)?.day === day ? daily.at(-1) : { active: 0, plays: 0 };
+  const weekly = await rangeCount(c, mondayOf(day), day, { versions: false }), monthly = await rangeCount(c, monthOf(day), day, { versions: false });
+  const recent = [weekly.recent, monthly.recent].filter(Boolean).sort((a, b) => a.r0 < b.r0 ? -1 : 1)[0];
+  return { asOf: new Date(recent?.at ?? at).toISOString(), timeZone,
+    totals: { installs, plays: life.plays + plays, since }, today: { active: today.active, plays: today.plays },
+    week: weekly.active, month: monthly.active,
+    daily, cohorts: await cohortRows(c, daily, recent),
+    versions: seen.map(({version}) => ({ version, installations: sofar.versions[version] || 0 })),
+    downloads: Object.entries(sofar.downloads).sort((a, b) => descending(a[1].last, b[1].last)).map(([release, d]) => ({ release, browsers: d.browsers })),
+    downloadBrowsers: sofar.browsers,
+    // Each installation under its latest version, as of the nightly count.
+    currentVersions: life.currentVersions, currentVersionsAsOf: new Date(life.at).toISOString(),
     // Version moves (updates, and the occasional downgrade): counted, not mistaken for new installs.
-    updates: { total: results[9].results[0].n, byVersion: results[10].results } };
+    updates: { total: Object.values(sofar.updates).reduce((n, v) => n + v, 0),
+      byVersion: Object.entries(sofar.updates).map(([version, updates]) => ({ version, updates }))
+        .sort((a, b) => b.updates - a.updates || descending(a.version, b.version)) } };
 }
 
 // Inclusive calendar dates in the requested reporting zone; bounded to keep dashboard queries predictable.
@@ -158,19 +457,42 @@ export function validateRange(params, now = new Date(), timeZone = 'UTC') {
   return { from, to };
 }
 
-export async function analytics(db, range, now = new Date(), timeZone = 'UTC') {
-  const { from, to } = range;
-  const table = activityTable(timeZone), zone = reportZone(timeZone);
-  const results = await db.batch([
-    db.prepare(`SELECT COUNT(DISTINCT installation) AS active, COALESCE(SUM(plays),0) AS plays FROM ${table} WHERE day BETWEEN ? AND ?`).bind(from,to),
-    db.prepare('SELECT day, installations AS active, plays FROM daily_totals WHERE zone=? AND day BETWEEN ? AND ? ORDER BY day').bind(zone,from,to),
-    db.prepare(`SELECT version, COUNT(DISTINCT installation) AS installations, SUM(plays) AS plays FROM ${table} WHERE day BETWEEN ? AND ? GROUP BY version ORDER BY installations DESC, version DESC`).bind(from,to),
-    db.prepare('SELECT MIN(day) AS since FROM daily_totals WHERE zone=?').bind(zone),
-  ]);
-  return { asOf: now.toISOString(), range, timeZone, totals: results[0].results[0],
-    split: await periodCohorts(db, from, to, timeZone),
-    daily: results[1].results, cohorts: await cohorts(db, from, to, timeZone), versions: results[2].results,
-    coverageSince: results[3].results[0].since };
+export async function analytics(db, range, now = new Date(), timeZone = 'UTC', { shared = false } = {}) {
+  const { from, to } = range, zone = reportZone(timeZone);
+  const c = await dashboardContext(db, zone, now, shared);
+  const [daily, [{since}]] = (await db.batch([
+    db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=?1 AND day BETWEEN ?2 AND ?3 ORDER BY day').bind(zone, from, to),
+    db.prepare('SELECT MIN(day) AS since FROM daily_totals WHERE zone=?1').bind(zone),
+  ])).map(result => result.results);
+  const counted = await rangeCount(c, from, to);
+  const plays = daily.reduce((n, row) => n + row.plays, 0);
+  return { asOf: new Date(counted.recent?.at ?? c.now).toISOString(), range, timeZone, totals: { active: counted.active, plays },
+    // The period as a whole, split by when each installation was first seen: new ones were first
+    // seen within [from, to], returning ones before it. Together they make the period's unique
+    // active installations, each counted once.
+    split: { newInstallations: counted.new, returningInstallations: counted.active - counted.new,
+      newPlays: counted.newPlays, returningPlays: plays - counted.newPlays },
+    daily, cohorts: await cohortRows(c, daily, counted.recent),
+    versions: counted.versions.sort((a, b) => b.installations - a.installations || descending(a.version, b.version)),
+    coverageSince: since };
+}
+
+/** Last night's counts for the dashboard, made by the cron so that no request has to. */
+export async function refreshDashboard(db, now = new Date()) {
+  const at = now.getTime();
+  for (const zone of ['Asia/Kolkata', 'UTC']) {
+    const window = await countWindow(db, zone, addDays(calendarDay(now, zone), -1));
+    await keepCopy(db, 'window:' + zone, window, at);
+    hold(db, 'window:' + zone, { at, value: window }, at);
+    // Reports for the window's first day are no longer accepted: its row is final.
+    const [{results: [live]}] = await db.batch([db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=?1 AND day=?2').bind(zone, window.start)]);
+    if (live) await keepCohorts(db, zone, [windowDay(window, window.start, live)]);
+  }
+  const life = await countLifetime(db, at, (await keptCopy(db, 'lifetime'))?.value);
+  await keepCopy(db, 'lifetime', life, at);
+  hold(db, 'lifetime', { at, value: life }, at);
+  // Copies of earlier days' pages and ranges.
+  try { await db.prepare('DELETE FROM report_cache WHERE computed_at<?1').bind(at - 2 * DAY).run(); } catch { /* next night */ }
 }
 
 // Aggregate-only, no version breakdown or per-day series: safe to serve without
@@ -272,26 +594,30 @@ export async function sharedCounts(db, zone, now = Date.now()) {
 // Each installation's day-by-day rows are kept for [KEEP_DAYS] (past the dashboard's longest range
 // of 366 days); the lifetime figures and daily_totals keep everything. Run nightly by the cron in
 // wrangler.jsonc, a few thousand rows at a time so a first clean-up of a long history spreads over
-// some nights instead of spending a day's writes at once. Then the public counts are worked out
-// for the new day, so no visitor's request has to.
+// some nights instead of spending a day's writes at once. Then the public counts and the
+// dashboard's counts are worked out for the new day, so no visitor's request has to. Each step
+// runs even if one before it failed (a clean-up is a write D1 may refuse).
 export const KEEP_DAYS = 400;
 const PRUNE_ROWS = 5000, PRUNE_ROUNDS = 2;
 export async function housekeeping(db, now = new Date()) {
   const cutoff = calendarDay(new Date(now.getTime() - KEEP_DAYS * DAY), 'UTC');
   let removed = 0;
-  for (const table of ['activity', 'activity_ist']) {
-    for (let round = 0; round < PRUNE_ROUNDS; round++) {
-      const done = await db.prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE day < ? LIMIT ${PRUNE_ROWS})`).bind(cutoff).run();
-      const n = done?.meta?.changes ?? done?.changes ?? 0;
-      removed += n;
-      if (n < PRUNE_ROWS) break;
+  try {
+    for (const table of ['activity', 'activity_ist']) {
+      for (let round = 0; round < PRUNE_ROUNDS; round++) {
+        const done = await db.prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE day < ? LIMIT ${PRUNE_ROWS})`).bind(cutoff).run();
+        const n = done?.meta?.changes ?? done?.changes ?? 0;
+        removed += n;
+        if (n < PRUNE_ROWS) break;
+      }
     }
-  }
-  await db.batch([
-    db.prepare('DELETE FROM active_weeks WHERE week < ?').bind(cutoff),
-    db.prepare('DELETE FROM active_months WHERE month < ?').bind(cutoff.slice(0, 7)),
-  ]);
-  await sharedCounts(db, 'Asia/Kolkata', now.getTime());
+    await db.batch([
+      db.prepare('DELETE FROM active_weeks WHERE week < ?').bind(cutoff),
+      db.prepare('DELETE FROM active_months WHERE month < ?').bind(cutoff.slice(0, 7)),
+    ]);
+  } catch { /* tomorrow night */ }
+  try { await sharedCounts(db, 'Asia/Kolkata', now.getTime()); } catch { /* counted at the first request instead */ }
+  try { await refreshDashboard(db, now); } catch { /* counted at the first dashboard load instead */ }
   return { removed, cutoff };
 }
 
@@ -344,6 +670,11 @@ export default {
     const publicRead = ['/v1/public', '/v1/badge'].includes(path) && request.method==='GET';
     // Static Pages contains no private data; every read is authorized here.
     if (!reporting && !publicRead && !(await authorized(request, env))) return cors(locked(request));
+    // One line per signed-in dashboard read, for Workers Logs (wrangler.jsonc keeps only console
+    // lines): who asked, never the token, cookie or address.
+    if (request.method === 'GET' && ['/v1/summary', '/v1/analytics'].includes(path))
+      console.log(JSON.stringify({ dashboard: path, query: url.search, origin: origin || '', userAgent: request.headers.get('User-Agent') || '',
+        country: request.cf?.country || '', auth: request.headers.get('Authorization')?.startsWith('Bearer ') ? 'bearer' : 'cookie' }));
     try {
       if (request.method === 'POST' && path === '/v1/addons') {
         try { const published = await publishCatalog(env.DB, await readCatalogBody(request)); forget(env.DB, 'addons'); return json(published); }
@@ -360,11 +691,19 @@ export default {
       if (request.method==='GET' && path==='/v1/analytics') {
         let range,zone;
         try { zone=reportZone(url.searchParams.get('timeZone') || 'UTC'); range = validateRange(url.searchParams,new Date(),zone); } catch(e) { return json({error:e.message},400); }
-        return json(await analytics(env.DB,range,new Date(),zone));
+        // ?probe=1: signed in, the route and its parameters are fine; nothing is counted (the deploy check).
+        if (url.searchParams.get('probe')==='1') return json({probe:true,range,timeZone:zone});
+        const now=new Date();
+        return json(await reuse(env.DB,`analytics:${zone}:${range.from}:${range.to}`,entry=>now-entry.at<REPORT_TTL_MS,
+          ()=>analytics(env.DB,range,now,zone,{shared:true}),{now:now.getTime()}));
       }
       if (request.method==='GET' && path==='/v1/summary') {
         let zone;try { zone=reportZone(url.searchParams.get('timeZone') || 'UTC'); } catch(e) {return json({error:e.message},400);}
-        return json(await summary(env.DB,new Date(),zone));
+        if (url.searchParams.get('probe')==='1') return json({probe:true,timeZone:zone});
+        // Kept for REPORT_TTL_MS, and only for this calendar day: opening the dashboard again reads one row.
+        const now=new Date();
+        return json(await reuse(env.DB,`summary:${zone}:${calendarDay(now,zone)}`,entry=>now-entry.at<REPORT_TTL_MS,
+          ()=>summary(env.DB,now,zone,{shared:true}),{now:now.getTime()}));
       }
       if (request.method==='GET' && path==='/v1/public') {
         let zone;try { zone=reportZone(url.searchParams.get('timeZone') || 'Asia/Kolkata'); } catch(e) {return json({error:e.message},400);}
