@@ -110,7 +110,7 @@ class VideoFullScreenTest {
                 FullScreenVideo(
                     state(), position = { 92_000 }, buffered = { 140_000 }, actions = actions(),
                     page = VideoPage(picture(bitmap), aspect = 16f / 9f, playing = 720, chosen = VideoQuality.AUTO),
-                    entry = FullScreenEntry.ROTATION, onExit = {},
+                    liked = false, onLike = {}, commentsOpen = false, onComments = {}, entry = FullScreenEntry.ROTATION, onExit = {},
                 )
             }
         }
@@ -130,7 +130,7 @@ class VideoFullScreenTest {
             OpenTuneTheme(ThemeSettings()) {
                 FullScreenVideo(
                     state(), position = { 60_000 }, buffered = { 0 }, actions = actions(seeks),
-                    page = VideoPage(picture(frame())), entry = FullScreenEntry.ROTATION, onExit = {},
+                    page = VideoPage(picture(frame())), liked = false, onLike = {}, commentsOpen = false, onComments = {}, entry = FullScreenEntry.ROTATION, onExit = {},
                     controlsAtFirst = false,
                 )
             }
@@ -151,7 +151,7 @@ class VideoFullScreenTest {
             OpenTuneTheme(ThemeSettings()) {
                 FullScreenVideo(
                     state(), position = { 0 }, buffered = { 0 }, actions = actions(),
-                    page = VideoPage(picture(frame())), entry = FullScreenEntry.ROTATION, onExit = {},
+                    page = VideoPage(picture(frame())), liked = false, onLike = {}, commentsOpen = false, onComments = {}, entry = FullScreenEntry.ROTATION, onExit = {},
                     controlsAtFirst = false,
                 )
             }
@@ -178,7 +178,7 @@ class VideoFullScreenTest {
                         choices = { listOf(VideoQuality.AUTO, 1080, 720, 360) },
                         choose = { picked = it; chosen = it },
                     ),
-                    entry = FullScreenEntry.ROTATION, onExit = {},
+                    liked = false, onLike = {}, commentsOpen = false, onComments = {}, entry = FullScreenEntry.ROTATION, onExit = {},
                 )
             }
         }
@@ -200,7 +200,7 @@ class VideoFullScreenTest {
             OpenTuneTheme(ThemeSettings()) {
                 FullScreenVideo(
                     state(playing = false), position = { 0 }, buffered = { 0 }, actions = actions(),
-                    page = VideoPage(picture(frame())), entry = FullScreenEntry.ROTATION, onExit = { exits++ },
+                    page = VideoPage(picture(frame())), liked = false, onLike = {}, commentsOpen = false, onComments = {}, entry = FullScreenEntry.ROTATION, onExit = { exits++ },
                 )
             }
         }
@@ -218,7 +218,7 @@ class VideoFullScreenTest {
             OpenTuneTheme(ThemeSettings()) {
                 if (open) FullScreenVideo(
                     state(playing = false), position = { 0 }, buffered = { 0 }, actions = actions(),
-                    page = VideoPage(picture(frame()), aspect = 16f / 9f), entry = FullScreenEntry.BUTTON, onExit = { open = false },
+                    page = VideoPage(picture(frame()), aspect = 16f / 9f), liked = false, onLike = {}, commentsOpen = false, onComments = {}, entry = FullScreenEntry.BUTTON, onExit = { open = false },
                 )
             }
         }
