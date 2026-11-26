@@ -65,7 +65,7 @@ class VideoFullScreenTest {
         LibraryStore.init(context)
     }
 
-    private val song = Song("x", "Midnight City", "M83", null, "4:03")
+    private val song = Song("x", "Paper Lanterns", "The Quiet Harbour", null, "4:03")
 
     private fun state(playing: Boolean = true, reduce: Boolean = true) = PlayerUiState(
         song = song, isPlaying = playing, isSounding = playing, isBuffering = false, hasNext = true, shuffle = false,
@@ -115,12 +115,13 @@ class VideoFullScreenTest {
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithText("Midnight City").assertIsDisplayed()
-        compose.onNodeWithText("M83").assertIsDisplayed()
+        compose.onNodeWithText("Paper Lanterns").assertIsDisplayed()
+        compose.onNodeWithText("The Quiet Harbour").assertIsDisplayed()
         compose.onNodeWithContentDescription("Pause").assertIsDisplayed()
         compose.onNodeWithContentDescription("Exit full screen").assertIsDisplayed()
-        compose.onNodeWithText("Auto").assertIsDisplayed()
-        compose.onNodeWithText("1:32").assertIsDisplayed()
+        // The quality button shows the size playing on Auto as a badge.
+        compose.onNodeWithContentDescription("Video quality").assertIsDisplayed()
+        compose.onNodeWithText("1:32", substring = true).assertIsDisplayed()
         shoot("video-full-screen")
     }
 
@@ -157,13 +158,13 @@ class VideoFullScreenTest {
             }
         }
         compose.mainClock.advanceTimeBy(100)
-        compose.onNodeWithText("Midnight City").assertDoesNotExist()
+        compose.onNodeWithText("Paper Lanterns").assertDoesNotExist()
         compose.onNodeWithTag("video-full-screen").performTouchInput { click(Offset(width * 0.5f, height * 0.5f)) }
         // Past the double-tap wait, the single tap lands.
         compose.mainClock.advanceTimeBy(500)
-        compose.onNodeWithText("Midnight City").assertIsDisplayed()
+        compose.onNodeWithText("Paper Lanterns").assertIsDisplayed()
         compose.mainClock.advanceTimeBy(VIDEO_CONTROLS_MS + 500)
-        compose.onNodeWithText("Midnight City").assertDoesNotExist()
+        compose.onNodeWithText("Paper Lanterns").assertDoesNotExist()
     }
 
     @Test fun pickingASizeAsksForItAndTheButtonSwitchesFitAndFill() {
@@ -187,11 +188,16 @@ class VideoFullScreenTest {
         compose.onNodeWithText("Auto · 720p").assertIsDisplayed()
         compose.onNodeWithText("1080p").performClick()
         compose.runOnIdle { assertEquals(1080, picked) }
+        // Opened again, the menu ticks the size picked.
+        compose.onNodeWithTag("video-quality").performClick()
         compose.onNodeWithText("1080p").assertIsDisplayed()
+        compose.onNodeWithText("Playing at 720p").assertIsDisplayed()
+        compose.onNodeWithText("1080p").performClick()
 
-        compose.onNodeWithTag("picture-fit").assertIsDisplayed()
-        compose.onNodeWithText("Fit").performClick()
-        compose.onNodeWithTag("picture-fill").assertIsDisplayed()
+        // Fill and fit sit with the extras behind More controls.
+        compose.onNodeWithContentDescription("More controls").performClick()
+        compose.onNodeWithContentDescription("Fill the screen").performClick()
+        compose.onNodeWithContentDescription("Fit the whole picture").assertIsDisplayed()
     }
 
     @Test fun aSwipeDownOrTheButtonLeaves() {
