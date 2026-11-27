@@ -22,13 +22,26 @@ export type PhoneSignInState =
 const relays: TransportFactory = (filter, onEvent, onConnected) => new RelayPool(RELAYS, filter, onEvent, onConnected);
 
 /** How often, and how many times, the answer is sent: the phone may hear it on a relay that connected late. */
-const ANSWER_EVERY_MS = 2_000;
-const ANSWER_TIMES = 5;
+export const ANSWER_EVERY_MS = 2_000;
+export const ANSWER_TIMES = 5;
 
-/** Starts a code; the returned function stops listening (leaving the page, or a new code). */
-export function startPhoneSignIn(bridge: Bridge, onState: (state: PhoneSignInState) => void, transport: TransportFactory = relays): () => void {
+/**
+ * Starts a code; the returned function stops it (leaving the page, or a new code). Once the
+ * phone's sign-in is being taken, stopping only stops the showing: the answer still goes out,
+ * because the page that started this goes away the moment the extension says Discord is
+ * connected, which is before the answer could be sent. Without it the phone, which waits for
+ * the answer, says it couldn't reach the web player though the sign-in worked.
+ */
+export function startPhoneSignIn(
+  bridge: Bridge,
+  onState: (state: PhoneSignInState) => void,
+  transport: TransportFactory = relays,
+  answerEveryMs = ANSWER_EVERY_MS,
+): () => void {
   let stopped = false;
   let done = false;
+  /** Taking a packet, or answering one: the relays stay open until that's over. */
+  let busy = false;
   let queue: Promise<void> = Promise.resolve();
   let pool: ReturnType<TransportFactory> | null = null;
   const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -39,22 +52,29 @@ export function startPhoneSignIn(bridge: Bridge, onState: (state: PhoneSignInSta
     }, ms);
     timers.add(t);
   };
-  const stop = () => {
-    stopped = true;
+  const close = () => {
     timers.forEach(clearTimeout);
     timers.clear();
     pool?.close();
     pool = null;
+  };
+  const stop = () => {
+    stopped = true;
+    if (!busy) close();
   };
   const show = (state: PhoneSignInState) => {
     if (!stopped) onState(state);
   };
 
   const answer = (event: NostrEvent, left: number) => {
-    if (stopped || !pool) return;
+    if (!pool) return;
     pool.publish(event);
-    if (left > 1) later(ANSWER_EVERY_MS, () => answer(event, left - 1));
-    else stop();
+    if (left > 1) later(answerEveryMs, () => answer(event, left - 1));
+    else {
+      busy = false;
+      stopped = true;
+      close();
+    }
   };
 
   (async () => {
@@ -74,6 +94,7 @@ export function startPhoneSignIn(bridge: Bridge, onState: (state: PhoneSignInSta
         // One at a time, in the order they came: each relay hands an event on only once.
         queue = queue.then(async () => {
           if (done || stopped) return;
+          busy = true;
           try {
             const result = await bridge.call('discord.phoneAccept', { phoneKey: packet.k, sealed: packet.s }, { timeoutMs: 30_000 });
             done = true;
@@ -82,10 +103,13 @@ export function startPhoneSignIn(bridge: Bridge, onState: (state: PhoneSignInSta
                 ? { step: 'done', name: result.state.user?.name ?? null }
                 : { step: 'failed', message: 'Discord didn’t accept that sign-in. Sign in to Discord on the phone again, or connect it here instead.' },
             );
+            // Only what was kept ("discord", or nothing), sealed for the phone: no token, nothing a relay can read.
             const reply = await signedEvent(newPrivateKey(), SHARE_KIND, [['t', tag]], JSON.stringify({ a: result.answer }));
             answer(reply, ANSWER_TIMES);
           } catch {
             // Not sealed for this code (or not from the phone at all): wait for the one that is.
+            busy = false;
+            if (stopped) close();
           }
         });
       },

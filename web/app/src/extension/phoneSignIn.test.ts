@@ -3,7 +3,7 @@ import { fromBase64Url, SHARE_KIND, shareKey, shareOpen, shareSeal, shareTag, to
 import { describe, expect, it, vi } from 'vitest';
 import type { NostrEvent } from '@/together/nostr';
 import type { TransportFactory } from '@/together/session';
-import { startPhoneSignIn, type PhoneSignInState } from './phoneSignIn';
+import { ANSWER_TIMES, startPhoneSignIn, type PhoneSignInState } from './phoneSignIn';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -40,7 +40,7 @@ describe('share crypto', () => {
 });
 
 /** The extension's half, as lib/discordPhone.ts does it, behind a bridge. */
-async function fakeExtension() {
+async function fakeExtension(onAccept: () => void = () => undefined) {
   const pair = await crypto.subtle.generateKey(ecdh, true, ['deriveBits']);
   const publicKey = toBase64Url(new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey)));
   const accepted: string[] = [];
@@ -53,8 +53,10 @@ async function fakeExtension() {
       const key = await shareKey(pair.privateKey, phone, fromBase64Url(publicKey), phone);
       const plain = JSON.parse(dec.decode(await shareOpen(key, fromBase64Url(sealed), 'extras'))) as { discord: { token: string } };
       accepted.push(plain.discord.token);
+      // The real one says Discord is connected (discord.state) before it answers this call.
+      onAccept();
       const answer = toBase64Url(await shareSeal(key, enc.encode('discord'), 'ack'));
-      const state = { available: true, connected: true, enabled: true, user: { name: 'Shiv', username: 'shiv', avatarUrl: null }, gateway: 'off', problem: null };
+      const state = { available: true, connected: true, enabled: true, user: { name: 'Wren Calloway', username: 'wrencalloway', avatarUrl: null }, gateway: 'off', problem: null };
       return { state, answer, took: ['discord'] } as ResultOf<M>;
     },
   } as unknown as Bridge;
@@ -90,7 +92,7 @@ describe('startPhoneSignIn', () => {
     deliver!(event(JSON.stringify({ k: toBase64Url(phonePublic), s: toBase64Url(sealed) }), 'real'));
 
     await vi.waitFor(() => expect(published.length).toBeGreaterThan(0));
-    expect(states.at(-1)).toEqual({ step: 'done', name: 'Shiv' });
+    expect(states.at(-1)).toEqual({ step: 'done', name: 'Wren Calloway' });
     expect(accepted).toEqual(['mfa.NotARealToken_0123456789-abcdef']);
     const reply = published[0]!;
     expect(reply.tags).toEqual([['t', tag]]);
@@ -98,5 +100,49 @@ describe('startPhoneSignIn', () => {
     const a = (JSON.parse(reply.content) as { a: string }).a;
     expect(dec.decode(await shareOpen(key, fromBase64Url(a), 'ack'))).toBe('discord');
     stop();
+  });
+
+  it('still answers the phone when the page stops it as Discord connects', async () => {
+    // The Discord page shows the code only while Discord isn't connected: the extension's
+    // "connected" reaches it during phoneAccept, and it unmounts (and stops) at once.
+    let stop: () => void = () => undefined;
+    const { bridge, publicKey } = await fakeExtension(() => stop());
+    let deliver: ((e: NostrEvent) => void) | null = null;
+    const published: NostrEvent[] = [];
+    let closed = 0;
+    const transport: TransportFactory = (_f, onEvent) => {
+      deliver = onEvent;
+      return { start: () => undefined, publish: (e) => (closed ? false : (published.push(e), true)), close: () => void closed++ };
+    };
+    const states: PhoneSignInState[] = [];
+    stop = startPhoneSignIn(bridge, (s) => states.push(s), transport, 5);
+    await vi.waitFor(() => expect(states.at(-1)?.step).toBe('code'));
+    const tag = await shareTag(publicKey);
+
+    const phone = await crypto.subtle.generateKey(ecdh, true, ['deriveBits']);
+    const phonePublic = new Uint8Array(await crypto.subtle.exportKey('raw', phone.publicKey));
+    const key = await shareKey(phone.privateKey, fromBase64Url(publicKey), fromBase64Url(publicKey), phonePublic);
+    const sealed = await shareSeal(key, enc.encode('{"discord":{"token":"mfa.NotARealToken_0123456789-abcdef"}}'), 'extras');
+    deliver!({ id: 'real', pubkey: '00', created_at: 0, kind: SHARE_KIND, tags: [['t', tag]], content: JSON.stringify({ k: toBase64Url(phonePublic), s: toBase64Url(sealed) }), sig: '00' });
+
+    // Sent every time, then the relays are let go.
+    await vi.waitFor(() => expect(closed).toBe(1));
+    expect(published).toHaveLength(ANSWER_TIMES);
+    const a = (JSON.parse(published[0]!.content) as { a: string }).a;
+    expect(dec.decode(await shareOpen(key, fromBase64Url(a), 'ack'))).toBe('discord');
+    expect(published.every((e) => !e.content.includes('NotARealToken') && e.tags[0]![1] === tag)).toBe(true);
+    // Stopped, it showed nothing more.
+    expect(states.at(-1)?.step).toBe('code');
+  });
+
+  it('lets the relays go at once when stopped before any sign-in came', async () => {
+    const { bridge } = await fakeExtension();
+    let closed = 0;
+    const transport: TransportFactory = () => ({ start: () => undefined, publish: () => true, close: () => void closed++ });
+    const states: PhoneSignInState[] = [];
+    const stop = startPhoneSignIn(bridge, (s) => states.push(s), transport);
+    await vi.waitFor(() => expect(states.at(-1)?.step).toBe('code'));
+    stop();
+    expect(closed).toBe(1);
   });
 });
