@@ -47,20 +47,20 @@ private fun KeyringChoice(onDismiss: () -> Unit) {
     ) {
         Column {
             Text(
-                "OpenTune keeps your sign-ins (YouTube Music, Last.fm, Subsonic) encrypted with a key from your " +
+                "NepTune keeps your sign-ins (YouTube Music, Last.fm, Subsonic) encrypted with a key from your " +
                     "system's keyring, and none answered on this computer.",
                 style = PageType.cardLine, color = PageInk.grey,
             )
             Spacer(Modifier.height(10.dp))
             Text(
                 "You can keep them in files in your home folder that only your user can read, but they won't be " +
-                    "encrypted. Or keep them only until you quit OpenTune and sign in again next time.",
+                    "encrypted. Or keep them only until you quit NepTune and sign in again next time.",
                 style = PageType.cardLine, color = PageInk.grey,
             )
             if (com.sun.jna.Platform.isLinux()) {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Installing GNOME Keyring or KWallet and starting OpenTune again keeps them encrypted.",
+                    "Installing GNOME Keyring or KWallet and starting NepTune again keeps them encrypted.",
                     style = PageType.cardLine, color = PageInk.grey,
                 )
             }
@@ -105,7 +105,7 @@ internal fun UpdateBanner(modifier: Modifier = Modifier) {
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
     ) {
-        Text("OpenTune ${f.version} is out", style = PageType.cardLine, color = PageInk.text)
+        Text("NepTune ${f.version} is out", style = PageType.cardLine, color = PageInk.text)
         PageButton("Get it", primary = true) { runCatching { links.openUri(f.page) } }
         androidx.compose.material3.IconButton(onClick = { Updates.dismiss(f.version) }) {
             androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Close, "Not now", tint = inkSecondary())
@@ -125,7 +125,7 @@ internal fun UpdateAndUsageRows() {
     val status = when {
         !enabled -> "Off. Releases are on GitHub."
         checking -> "Checking…"
-        found != null -> "OpenTune ${found!!.version} is out."
+        found != null -> "NepTune ${found!!.version} is out."
         checked > 0 -> "You have the latest version."
         else -> "Looks at GitHub's latest release twice a day. Nothing is downloaded on its own."
     }

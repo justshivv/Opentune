@@ -218,7 +218,7 @@ object DiscordPresence {
                 buttons.put(JSONObject().put("label", button(card.listenLabel, "Listen on YouTube Music")).put("url", "https://music.youtube.com/watch?v=${song.videoId}"))
             }
             if (card.openTuneButton) {
-                buttons.put(JSONObject().put("label", button(card.openTuneLabel, "Visit OpenTune")).put("url", com.opentune.data.config.RemoteConfig.current.tv))
+                buttons.put(JSONObject().put("label", button(card.openTuneLabel, "Visit NepTune")).put("url", com.opentune.data.config.RemoteConfig.current.tv))
             }
             if (buttons.length() > 0) put("buttons", buttons)
         }

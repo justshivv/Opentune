@@ -84,7 +84,7 @@ internal object DeepLinks {
         val command = "\"$exe\" \"%1\""
         if (runCatching { Advapi32Util.registryGetStringValue(WinReg.HKEY_CURRENT_USER, "$root\\shell\\open\\command", "") }.getOrNull() == command) return
         Advapi32Util.registryCreateKey(WinReg.HKEY_CURRENT_USER, root)
-        Advapi32Util.registrySetStringValue(WinReg.HKEY_CURRENT_USER, root, "", "URL:OpenTune")
+        Advapi32Util.registrySetStringValue(WinReg.HKEY_CURRENT_USER, root, "", "URL:NepTune")
         Advapi32Util.registrySetStringValue(WinReg.HKEY_CURRENT_USER, root, "URL Protocol", "")
         Advapi32Util.registryCreateKey(WinReg.HKEY_CURRENT_USER, "$root\\DefaultIcon")
         Advapi32Util.registrySetStringValue(WinReg.HKEY_CURRENT_USER, "$root\\DefaultIcon", "", "\"$exe\",0")
@@ -96,8 +96,8 @@ internal object DeepLinks {
     internal fun desktopEntry(exec: String) = """
         [Desktop Entry]
         Type=Application
-        Name=OpenTune
-        Comment=Opens opentune:// links in OpenTune
+        Name=NepTune
+        Comment=Opens opentune:// links in NepTune
         Exec="${exec.replace("\"", "\\\"")}" %u
         Terminal=false
         NoDisplay=true

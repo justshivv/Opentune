@@ -32,7 +32,7 @@ internal fun ApplicationScope.TrayMenu(onShow: () -> Unit, onQuit: () -> Unit) {
     val song = queue.getOrNull(index)
     Tray(
         icon = rememberLogo(Logo.APP),
-        tooltip = song?.let { "OpenTune · ${it.title} · ${it.artist}" } ?: "OpenTune",
+        tooltip = song?.let { "NepTune · ${it.title} · ${it.artist}" } ?: "NepTune",
         onAction = onShow,
         menu = {
             song?.let { Item("${it.title} · ${it.artist}", enabled = false, onClick = {}) }
@@ -40,7 +40,7 @@ internal fun ApplicationScope.TrayMenu(onShow: () -> Unit, onQuit: () -> Unit) {
             Item("Next", enabled = song != null, onClick = Player::next)
             Item("Previous", enabled = song != null, onClick = Player::previous)
             Separator()
-            Item("Show OpenTune", onClick = onShow)
+            Item("Show NepTune", onClick = onShow)
             // A window that opens and stays black (an older Intel graphics driver) is still
             // running, so the start guard never moves it to another renderer. From here the
             // listener can, without the window: Software draws on any computer.

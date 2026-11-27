@@ -97,7 +97,7 @@ internal fun SourcesSection() {
             Column {
                 CardHeading("Lossless add-ons")
                 RowsCard {
-                    if (sources.isEmpty()) NoteRow("No add-ons yet. OpenTune's own appear here when they're published; you can add others below.")
+                    if (sources.isEmpty()) NoteRow("No add-ons yet. NepTune's own appear here when they're published; you can add others below.")
                     sources.forEachIndexed { i, source -> SourceRow(source, first = i == 0, last = i == sources.lastIndex) }
                     if (status.isNotBlank()) SettingRow("Last song", detail = status)
                 }
@@ -108,7 +108,7 @@ internal fun SourcesSection() {
                     ButtonsRow { QuietPill("Check for published add-ons", { scope.launch { Addons.syncPublished(force = true) } }) }
                 }
                 if (sources.any { it.enabled && !it.ownerOff && AddonPairing.protects(it.url.replace("manifest.json", "search")) }) {
-                    CardHeading("OpenTune's own source")
+                    CardHeading("NepTune's own source")
                     RowsCard { VerifyComputer() }
                 }
             }
@@ -122,8 +122,8 @@ private fun SourceRow(source: Addons.Source, first: Boolean, last: Boolean) {
     ToggleRow(
         source.name,
         when {
-            source.ownerOff -> "Turned off by OpenTune for now"
-            source.admin -> "Added by OpenTune"
+            source.ownerOff -> "Turned off by NepTune for now"
+            source.admin -> "Added by NepTune"
             else -> runCatching { java.net.URI(source.url).host }.getOrDefault(source.url)
         },
         source.enabled && !source.ownerOff,
@@ -190,7 +190,7 @@ private fun VerifyComputer() {
             }
         }
     }
-    NoteRow("It plays only for devices the official app vouches for. Approve this computer once from OpenTune on your Android phone or TV; access lasts up to 12 hours.")
+    NoteRow("It plays only for devices the official app vouches for. Approve this computer once from NepTune on your Android phone or TV; access lasts up to 12 hours.")
     val now = System.currentTimeMillis()
     val waiting = pair
     when {
@@ -203,7 +203,7 @@ private fun VerifyComputer() {
                 Text("Code", style = rowDetailStyle(), color = inkSecondary())
                 Text(waiting.code, fontFamily = FontFamily.Monospace, fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
                 Text(
-                    "Scan this with your phone's camera, then allow it in OpenTune when the app shows this same code.",
+                    "Scan this with your phone's camera, then allow it in NepTune when the app shows this same code.",
                     style = rowTitleStyle(), modifier = Modifier.widthIn(max = 320.dp),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

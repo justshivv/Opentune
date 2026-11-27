@@ -30,7 +30,7 @@ fun main(args: Array<String>) {
     if (!instance.claim()) {
         // The first may be a moment from listening, if it's only just started.
         repeat(10) { if (instance.handOff(args.toList())) kotlin.system.exitProcess(0); Thread.sleep(300) }
-        System.err.println("OpenTune is already running and didn't answer.")
+        System.err.println("NepTune is already running and didn't answer.")
         kotlin.system.exitProcess(0)
     }
     CrashLog.install()
@@ -103,7 +103,7 @@ fun main(args: Array<String>) {
             onCloseRequest = close,
             visible = shown,
             onKeyEvent = Shortcuts::handle,
-            title = "OpenTune",
+            title = "NepTune",
             icon = rememberLogo(Logo.APP),
             state = rememberWindowState(size = DpSize(1180.dp, 760.dp)),
             // On Windows the app draws its own title bar (see WindowsFrame), and on Windows 11 the

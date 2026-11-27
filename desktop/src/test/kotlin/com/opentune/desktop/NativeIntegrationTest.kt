@@ -96,7 +96,7 @@ class NativeIntegrationTest {
             assertTrue(meta, meta.contains("'xesam:artist': <['Rick Astley']>"))
             assertTrue(meta, meta.contains("'mpris:length': <int64 213000000>"))
             assertTrue(meta, meta.contains("'mpris:trackid': <objectpath '/com/opentune/track/tdQw4w9WgXcQ'>"))
-            assertTrue(gdbus("--method", get, "org.mpris.MediaPlayer2", "Identity").contains("OpenTune"))
+            assertTrue(gdbus("--method", get, "org.mpris.MediaPlayer2", "Identity").contains("NepTune"))
             // The panel's buttons, and a seek to a minute in.
             gdbus("--method", "org.mpris.MediaPlayer2.Player.PlayPause")
             gdbus("--method", "org.mpris.MediaPlayer2.Player.Next")

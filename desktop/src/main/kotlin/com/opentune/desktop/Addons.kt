@@ -126,7 +126,7 @@ internal object Addons {
     /** Adds the listener's own add-on, after reading its manifest. */
     suspend fun add(raw: String) {
         val url = manifestUrl(raw)
-        require(!retired(url)) { "OpenTune no longer offers this source." }
+        require(!retired(url)) { "NepTune no longer offers this source." }
         val manifest = AddonProtocol.manifest(text(url))
         val now = saved.value.sources
         require(now.count { !it.admin } < 20) { "Up to 20 sources can be added" }

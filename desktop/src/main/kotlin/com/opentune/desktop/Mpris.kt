@@ -123,7 +123,7 @@ internal object Mpris : MediaControls.Backend {
             "CanQuit" to Variant(false),
             "CanRaise" to Variant(true),
             "HasTrackList" to Variant(false),
-            "Identity" to Variant("OpenTune"),
+            "Identity" to Variant("NepTune"),
             "DesktopEntry" to Variant("opentune"),
             "SupportedUriSchemes" to Variant(arrayOf("opentune")),
             "SupportedMimeTypes" to Variant(arrayOf<String>(), "as"),
