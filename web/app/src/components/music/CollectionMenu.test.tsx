@@ -19,6 +19,7 @@ const SIGNED_OUT: YtAuthState = { ...SIGNED_IN, browserSignedIn: false, signedIn
 const mocks = vi.hoisted(() => ({
   auth: { state: 'checking', lastKnown: null } as YtAuthStatus,
   setListSaved: vi.fn<(playlistId: string, saved: boolean) => Promise<void>>(),
+  setArtistSubscribed: vi.fn<(channelId: string, subscribed: boolean) => Promise<void>>(),
 }));
 vi.mock('@/extension/useYtAuth', () => ({
   useYtAuth: () => mocks.auth,
@@ -30,9 +31,10 @@ vi.mock('@/extension/useYtAuth', () => ({
 vi.mock('@/data/music/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/data/music/api')>()),
   setListSaved: mocks.setListSaved,
+  setArtistSubscribed: mocks.setArtistSubscribed,
 }));
 
-const { SquareLockup } = await import('./Lockups');
+const { CircleLockup, SquareLockup } = await import('./Lockups');
 const { queryClient } = await import('@/lib/queryClient');
 
 /** An invented playlist, its first page already in the cache as its page would leave it. */
@@ -56,6 +58,7 @@ beforeEach(() => {
   queryClient.clear();
   mocks.auth = { state: 'ready', auth: SIGNED_IN };
   mocks.setListSaved.mockReset().mockResolvedValue(undefined);
+  mocks.setArtistSubscribed.mockReset().mockResolvedValue(undefined);
 });
 afterEach(() => {
   act(() => root?.unmount());
@@ -63,11 +66,11 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function rightClick() {
+async function rightClick(node: React.ReactNode = <SquareLockup item={card} />) {
   const host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);
-  await act(async () => root!.render(<QueryClientProvider client={queryClient}><MemoryRouter><SquareLockup item={card} /></MemoryRouter></QueryClientProvider>));
+  await act(async () => root!.render(<QueryClientProvider client={queryClient}><MemoryRouter>{node}</MemoryRouter></QueryClientProvider>));
   const target = host.firstElementChild!;
   await act(async () => { target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })); });
 }
@@ -97,4 +100,28 @@ it('signed out, the menu has no library item', async () => {
   await rightClick();
   expect(item('Play')).toBeTruthy();
   expect(item('Add to Library')).toBeFalsy();
+});
+
+/** An invented artist, their page already in the cache. */
+const singer: MusicItem = { ...card, kind: 'artist', id: 'UCivo', title: 'Ivo Marlowe', subtitle: 'Artist' };
+function cacheArtist(subscribed: boolean) {
+  queryClient.setQueryData(['music', 'artist', singer.id], {
+    id: singer.id, name: singer.title, description: null, heroImage: null, audience: null,
+    subscription: { channelId: 'UCivo', subscribed }, topSongs: [], topSongsSeeAll: null, shelves: [],
+  });
+}
+
+it('a right-click on an artist opens their menu, with Subscribe synced to the account', async () => {
+  cacheArtist(false);
+  await rightClick(<CircleLockup item={singer} />);
+  for (const label of ['Play', 'Shuffle', 'Start Radio', 'Go to Artist', 'Copy Link']) expect(item(label), label).toBeTruthy();
+  await until(() => expect(item('Subscribe')).toBeTruthy());
+  await act(async () => item('Subscribe')!.click());
+  await until(() => expect(mocks.setArtistSubscribed).toHaveBeenCalledWith('UCivo', true));
+});
+
+it('a subscribed artist offers Unsubscribe', async () => {
+  cacheArtist(true);
+  await rightClick(<CircleLockup item={singer} />);
+  await until(() => expect(item('Unsubscribe')).toBeTruthy());
 });

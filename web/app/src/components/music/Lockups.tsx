@@ -6,7 +6,7 @@ import { ExplicitBadge } from './ExplicitBadge';
 import { artistHref, hrefFor } from './links';
 import { playTrack } from './play';
 import { TrackMenu, useTrackContextMenu } from './TrackMenu';
-import { useCollectionContextMenu } from './CollectionMenu';
+import { useArtistContextMenu, useCollectionContextMenu } from './CollectionMenu';
 
 const isPlayable = (item: MusicItem) => item.kind === 'song' || item.kind === 'video';
 
@@ -135,11 +135,19 @@ export function VideoLockup({ item, width = 300 }: { item: MusicItem; width?: nu
 
 /** Circular artist lockup (report §2, type H). */
 export function CircleLockup({ item, width = 160 }: { item: MusicItem; width?: number }) {
+  const context = useArtistContextMenu(item);
   return (
-    <PrefetchLink to={hrefFor(item) ?? '#'} className="ot-circle-lockup group/circle flex min-w-0 flex-col items-center gap-2.5">
-      <Artwork src={item.thumbnail} displayWidth={width} radius="50%" />
-      <span className="ot-circle-name max-w-full truncate text-center type-body">{item.title}</span>
-    </PrefetchLink>
+    <>
+      <PrefetchLink
+        to={hrefFor(item) ?? '#'}
+        className="ot-circle-lockup group/circle flex min-w-0 flex-col items-center gap-2.5"
+        onContextMenu={context.onContextMenu}
+      >
+        <Artwork src={item.thumbnail} displayWidth={width} radius="50%" />
+        <span className="ot-circle-name max-w-full truncate text-center type-body">{item.title}</span>
+      </PrefetchLink>
+      {context.menu}
+    </>
   );
 }
 

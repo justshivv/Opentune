@@ -1,4 +1,6 @@
 import { useSearchParams } from 'react-router';
+import { useArtistContextMenu, useCollectionContextMenu } from '@/components/music/CollectionMenu';
+import { useTrackContextMenu } from '@/components/music/TrackMenu';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { Artwork } from '@/components/music/Artwork';
 import { CategoryTiles } from '@/components/music/CategoryTiles';
@@ -47,6 +49,15 @@ const topText = 'flex min-w-0 flex-col gap-0.5';
 
 function TopResult({ item }: { item: MusicItem }) {
   const href = hrefFor(item);
+  // A right-click opens the item's menu, as on its card: songs, albums and playlists, artists.
+  const song = useTrackContextMenu(item.kind === 'song' || item.kind === 'video' ? item : null);
+  const list = useCollectionContextMenu(item);
+  const artist = useArtistContextMenu(item);
+  const onContextMenu = (event: React.MouseEvent) => {
+    song.onContextMenu(event);
+    list.onContextMenu(event);
+    artist.onContextMenu(event);
+  };
   const body = (
     <>
       <div className="w-[90px]">
@@ -60,14 +71,22 @@ function TopResult({ item }: { item: MusicItem }) {
       </div>
     </>
   );
+  // The menus sit beside the link, not in it: a click in a menu would otherwise also follow the link.
   return href ? (
-    <PrefetchLink to={href} className={top}>
-      {body}
-    </PrefetchLink>
+    <>
+      <PrefetchLink to={href} className={top} onContextMenu={onContextMenu}>
+        {body}
+      </PrefetchLink>
+      {list.menu}
+      {artist.menu}
+    </>
   ) : (
-    <button className={top} onClick={() => playTrack(item)}>
-      {body}
-    </button>
+    <>
+      <button className={top} onClick={() => playTrack(item)} onContextMenu={onContextMenu}>
+        {body}
+      </button>
+      {song.menu}
+    </>
   );
 }
 
