@@ -202,10 +202,14 @@ private fun Rows(modifier: Modifier = Modifier, content: @Composable () -> Unit)
     }
 }
 
-/** A soft rounded card of rows, as the web's settings group (rounded-[18px] bg-quinary). */
+/**
+ * A soft rounded card of rows, as the web's settings group (rounded-[18px] bg-quinary), with a
+ * faint rim so the group holds its shape on the warm page without a heavier fill.
+ */
 @Composable
 internal fun RowsCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Rows(modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(fillQuinary()), content)
+    val shape = RoundedCornerShape(20.dp)
+    Rows(modifier.fillMaxWidth().clip(shape).background(fillQuinary()).border(0.75.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f), shape), content)
 }
 
 /** A small heading between two cards of one group, as the web's section header. */

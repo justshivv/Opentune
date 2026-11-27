@@ -203,11 +203,16 @@ internal fun SettingsPage() {
 /** One group in the settings list: its glyph on a tile of its colour, its name; the one in view is lit. */
 @Composable
 private fun SideGroup(g: Group, current: Boolean, onClick: () -> Unit) {
+    // The group in view on a wash of the key colour, as the sidebar marks the page showing; a faint fill under the pointer.
+    val hover = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
     val fill by androidx.compose.animation.animateColorAsState(
-        if (current) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f) else Color.Transparent, label = "sideGroup",
+        when { current -> selectedFill(); hovered -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f); else -> Color.Transparent },
+        androidx.compose.animation.core.tween(160), label = "sideGroup",
     )
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(fill).clickable(onClick = onClick)
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(fill)
+            .hoverable(hover).clickable(interactionSource = hover, indication = null, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -495,10 +500,12 @@ private fun AppearanceSection() {
             ToggleRow("Pure black", "A black background in the dark theme, rather than a dark grey", theme.pureBlack, { on -> AppSettings.updateTheme { it.copy(pureBlack = on) } })
             ToggleRow("Colour from the song", "A soft wash of the playing cover's colour behind the pages", theme.colorFromArtwork, { on -> AppSettings.updateTheme { it.copy(colorFromArtwork = on) } })
             AccentRow(theme.seedColor)
-            // The first choice is DM Sans here, the web player's typeface, rather than the system's own sans.
+            // The first choice is Outfit here, NepTune's own typeface, rather than the system's own sans.
+            // The phone's separate Outfit choice is the same face, so it shows as this one.
             SegmentedRow(
-                "Font", choices = AppFont.entries.filter { it != AppFont.CUSTOM }, selected = theme.font,
-                label = { if (it == AppFont.SYSTEM) "DM Sans" else it.label },
+                "Font", choices = listOf(AppFont.SYSTEM, AppFont.SERIF, AppFont.MONO),
+                selected = if (theme.font == AppFont.OUTFIT || theme.font == AppFont.CUSTOM) AppFont.SYSTEM else theme.font,
+                label = { if (it == AppFont.SYSTEM) "Outfit" else it.label },
             ) { v -> AppSettings.updateTheme { it.copy(font = v) } }
             SegmentedRow("Text weight", choices = TextWeight.entries, selected = theme.textWeight, label = { it.label }) { v -> AppSettings.updateTheme { it.copy(textWeight = v) } }
         }
@@ -580,9 +587,9 @@ private fun AccentRow(chosen: Int) {
 private fun WindowRows() {
     val own by WindowsFrame.ownFrame.collectAsState()
     ToggleRow(
-        "OpenTune's own title bar",
+        "NepTune's own title bar",
         "Close, minimise and zoom at the head of the sidebar, and the window is moved by the empty parts of the bars." +
-            if (own != WindowsFrame.drawn) " Takes effect when OpenTune next opens." else "",
+            if (own != WindowsFrame.drawn) " Takes effect when NepTune next opens." else "",
         own,
         { WindowsFrame.setOwnFrame(it) },
     )
@@ -591,7 +598,7 @@ private fun WindowRows() {
         val inUse = WindowsFrame.rendererOf(WindowsFrame.drawingWith)
         SegmentedRow(
             "Renderer",
-            detail = "How the window is drawn${inUse?.let { " (now ${it.label})" } ?: ""}. Automatic is OpenGL, or Direct3D with Mica or Acrylic on. If OpenTune closes on its own as it opens, the next start moves to another by itself. Takes effect when OpenTune next opens.",
+            detail = "How the window is drawn${inUse?.let { " (now ${it.label})" } ?: ""}. Automatic is OpenGL, or Direct3D with Mica or Acrylic on. If NepTune closes on its own as it opens, the next start moves to another by itself. Takes effect when NepTune next opens.",
             choices = WindowsFrame.Renderer.entries, selected = renderer, label = { it.label },
         ) { WindowsFrame.setRenderer(it) }
     }
@@ -604,7 +611,7 @@ private fun WindowRows() {
         SegmentedRow(
             "Window material",
             detail = "Mica or Acrylic shows the desktop's colour through the window. Off is the plain window, the steadiest on every computer." +
-                if (restart) " Takes effect when OpenTune next opens." else "",
+                if (restart) " Takes effect when NepTune next opens." else "",
             choices = WindowsFrame.Material.entries, selected = material, label = { it.label },
         ) { WindowsFrame.setMaterial(it, dark) }
     }
@@ -670,7 +677,7 @@ private fun ConnectedRows() {
         detail = when (discordStatus) {
             DiscordPresence.Status.Connected -> "The song you play shows on your Discord profile while the Discord app is open."
             DiscordPresence.Status.NotRunning -> "Waiting for the Discord app. Open it on this computer and the song shows on your profile."
-            DiscordPresence.Status.NoApp -> "Needs a Discord application named OpenTune, which the card is titled with. Paste its id below."
+            DiscordPresence.Status.NoApp -> "Needs a Discord application named NepTune, which the card is titled with. Paste its id below."
             DiscordPresence.Status.Off -> "Show the song you play on your Discord profile, through the Discord app on this computer."
         },
         modifier = Modifier.toggleable(discord, role = Role.Switch, onValueChange = DiscordPresence::setEnabled)
@@ -686,7 +693,7 @@ private fun ConnectedRows() {
         FieldRow(
             "Application ID", appId, { appId = it; if (it.isBlank() || it.trim().matches(Regex("[0-9]{17,20}"))) DiscordPresence.setOwnAppId(it) },
             placeholder = "17 to 20 digits", inset = ICON_INSET,
-            detail = "This build has no Discord application of its own. Create one named OpenTune at discord.com/developers/applications and paste its Application ID.",
+            detail = "This build has no Discord application of its own. Create one named NepTune at discord.com/developers/applications and paste its Application ID.",
             problem = if (valid) null else "An application id is 17 to 20 digits.",
         )
     }
@@ -742,9 +749,9 @@ private fun AboutSection() {
     // Read so a configuration pushed from the dashboard redraws these links.
     com.opentune.data.config.RemoteConfig.state.collectAsState().value
     val config = com.opentune.data.config.RemoteConfig.current
-    Section("About", footer = "OpenTune is free and open source. Report bugs, suggest features and share the add-ons you build.") {
+    Section("About", footer = "NepTune is free and open source. Report bugs, suggest features and share the add-ons you build.") {
         SettingRow(
-            "OpenTune ${BuildConfig.VERSION_NAME} for computers",
+            "NepTune ${BuildConfig.VERSION_NAME} for computers",
             detail = "Settings and playlists are kept in ${appContext.getFilesDir().parentFile.absolutePath}.",
             leading = { androidx.compose.foundation.Image(rememberLogo(Logo.APP), null, Modifier.size(28.dp).clip(RoundedCornerShape(9.dp))) },
         )
@@ -753,8 +760,8 @@ private fun AboutSection() {
         listOf(
             Triple("Source code", "GitHub", config.github) to (Icons.Rounded.Code to Color(0xFF24292F)),
             Triple("Community", "Discord", config.discord) to (null to Brand.Discord),
-            Triple("OpenTune for Android", "Download", "${config.github.trimEnd('/')}/releases/latest") to (Icons.Rounded.Smartphone to Color(0xFF2FA84F)),
-            Triple("OpenTune on TV", null, config.tv) to (Icons.Rounded.Tv to Color(0xFF3478F6)),
+            Triple("NepTune for Android", "Download", "${config.github.trimEnd('/')}/releases/latest") to (Icons.Rounded.Smartphone to Color(0xFF2FA84F)),
+            Triple("NepTune on TV", null, config.tv) to (Icons.Rounded.Tv to Color(0xFF3478F6)),
             Triple("Web player", null, config.web) to (Icons.Rounded.Language to Color(0xFF8E5BD8)),
             Triple("Build an add-on", null, "https://justshivv.github.io/Opentune/addons/") to (Icons.Rounded.Build to Color(0xFFE5483A)),
         ).plus(
@@ -786,16 +793,16 @@ private fun AboutSection() {
 private fun DiscordCardRows() {
     val card by DiscordPresence.card.collectAsState()
     val nested = Modifier.hairline(ICON_INSET).padding(start = ICON_INSET - TEXT_INSET)
-    ToggleRow("Lead with the song", "Member lists show the song's title rather than OpenTune", card.leadWithSong, { on -> DiscordPresence.setCard { it.copy(leadWithSong = on) } }, nested)
+    ToggleRow("Lead with the song", "Member lists show the song's title rather than NepTune", card.leadWithSong, { on -> DiscordPresence.setCard { it.copy(leadWithSong = on) } }, nested)
     ToggleRow("Listen button", "A button under the card that opens the song on YouTube Music", card.listenButton, { on -> DiscordPresence.setCard { it.copy(listenButton = on) } }, nested)
     if (card.listenButton) FieldRow(
         "Listen button text", card.listenLabel, { v -> DiscordPresence.setCard { it.copy(listenLabel = v.take(32)) } },
         placeholder = "Listen on YouTube Music", inset = ICON_INSET,
     )
-    ToggleRow("OpenTune button", "A button under the card that opens OpenTune's page", card.openTuneButton, { on -> DiscordPresence.setCard { it.copy(openTuneButton = on) } }, nested)
+    ToggleRow("NepTune button", "A button under the card that opens NepTune's page", card.openTuneButton, { on -> DiscordPresence.setCard { it.copy(openTuneButton = on) } }, nested)
     if (card.openTuneButton) FieldRow(
-        "OpenTune button text", card.openTuneLabel, { v -> DiscordPresence.setCard { it.copy(openTuneLabel = v.take(32)) } },
-        placeholder = "Visit OpenTune", inset = ICON_INSET,
+        "NepTune button text", card.openTuneLabel, { v -> DiscordPresence.setCard { it.copy(openTuneLabel = v.take(32)) } },
+        placeholder = "Visit NepTune", inset = ICON_INSET,
     )
 }
 
