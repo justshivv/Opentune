@@ -120,7 +120,7 @@ private enum class Tab(val route: String, val label: String, val iconRes: Int, v
     HOME("home", "Home", AppIcons.HomeOutline, AppIcons.Home),
     EXPLORE("explore", "Explore", AppIcons.ExploreOutline, AppIcons.Explore),
     /** YouTube Music's mixes for the account and live stations (see RadioMixesScreen); can be turned off. */
-    RADIO(com.opentune.ui.radio.RADIO_ROUTE, "Radio", AppIcons.Radio, AppIcons.Radio),
+    RADIO(com.opentune.ui.radio.RADIO_ROUTE, "Radio", AppIcons.RadioOutline, AppIcons.Radio),
     PODCASTS("podcasts", "Podcasts", AppIcons.Podcasts, AppIcons.Podcasts),
     LIBRARY("library", "Library", AppIcons.LibraryMusicOutline, AppIcons.LibraryMusic),
 }

@@ -166,6 +166,7 @@ internal object AppIcons {
     val QrCodeScanner = R.drawable.symbol_qr_code_scanner_rounded
     val QueueMusic = R.drawable.symbol_queue_music_rounded
     val Radio = R.drawable.symbol_radio_rounded
+    val RadioOutline = R.drawable.symbol_radio_outline_rounded
     val RadioButtonChecked = R.drawable.symbol_radio_button_checked
     val RadioButtonUnchecked = R.drawable.symbol_radio_button_unchecked
     val Refresh = R.drawable.symbol_refresh_rounded
