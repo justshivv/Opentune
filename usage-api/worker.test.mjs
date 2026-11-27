@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import worker, { SAVE_TODAY_EVERY_MS, currentVersionsSql, tooSoon, REPORT_GAP_MS, rememberFor, ingest, summary, downloadSql, validateActivity, publicCounts, shortCount, badge } from './worker.mjs';
+import worker, { recountDailyTotals, SAVE_TODAY_EVERY_MS, currentVersionsSql, tooSoon, REPORT_GAP_MS, rememberFor, ingest, summary, downloadSql, validateActivity, publicCounts, shortCount, badge } from './worker.mjs';
 
 function database() {
   const sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));
@@ -14,6 +14,29 @@ function database() {
     }
   };
 }
+// The same, over a database made elsewhere.
+const d1=sql=>({ prepare(query) { return { bind(...args) { return { query,args,run:async()=>sql.prepare(query).run(...args) }; }, query,args:[] }; },
+  async batch(statements) {
+    sql.exec('BEGIN');
+    try { const results=statements.map(s=>({results:sql.prepare(s.query).all(...s.args)})); sql.exec('COMMIT'); return results; }
+    catch(e) { sql.exec('ROLLBACK'); throw e; }
+  } });
+const DAY_MS=86400000;
+// The triggers that kept daily_totals before the nightly recount (schema.sql drops them).
+const oldDayTriggers=`CREATE TRIGGER daily_activity_insert AFTER INSERT ON activity BEGIN
+  INSERT OR IGNORE INTO daily_totals(zone, day, installations, plays) VALUES ('UTC', new.day, 0, 0);
+  UPDATE daily_totals SET plays = plays + new.plays,
+    installations = installations + NOT EXISTS (SELECT 1 FROM activity a WHERE a.installation = new.installation AND a.day = new.day AND a.version <> new.version)
+  WHERE zone = 'UTC' AND day = new.day; END;
+CREATE TRIGGER daily_activity_ist_insert AFTER INSERT ON activity_ist BEGIN
+  INSERT OR IGNORE INTO daily_totals(zone, day, installations, plays) VALUES ('Asia/Kolkata', new.day, 0, 0);
+  UPDATE daily_totals SET plays = plays + new.plays,
+    installations = installations + NOT EXISTS (SELECT 1 FROM activity_ist a WHERE a.installation = new.installation AND a.day = new.day AND a.version <> new.version)
+  WHERE zone = 'Asia/Kolkata' AND day = new.day; END;
+CREATE TRIGGER daily_activity_plays AFTER UPDATE OF plays ON activity BEGIN
+  UPDATE daily_totals SET plays = plays + new.plays - old.plays WHERE zone = 'UTC' AND day = new.day; END;
+CREATE TRIGGER daily_activity_ist_plays AFTER UPDATE OF plays ON activity_ist BEGIN
+  UPDATE daily_totals SET plays = plays + new.plays - old.plays WHERE zone = 'Asia/Kolkata' AND day = new.day; END;`;
 const loginEnv={USAGE_ADMIN_USERNAME:'owner',USAGE_ADMIN_PASSWORD:'test-password-only-12345',USAGE_SESSION_SECRET:'a'.repeat(64),LOGIN_LIMITER:{limit:async()=>({success:true})}};
 function loginRequest(user='owner',password=loginEnv.USAGE_ADMIN_PASSWORD,origin='https://example.test') {
   return new Request('https://example.test/auth/login',{method:'POST',headers:{Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({username:user,password})});
@@ -150,6 +173,7 @@ test('date range uses inclusive UTC endpoints and distinct installations across 
 test('historical activity remains queryable beyond the summary 30 day window', async () => {
   const db=database();
   await ingest(db,{installationId:id,days:[{day:'2026-01-01',version:'0.4.2',plays:7}]},new Date('2026-01-01T12:00:00Z'));
+  await housekeeping(db,new Date('2026-01-02T00:35:00Z'));   // that night's recount of daily_totals
   assert.equal((await summary(db,now)).daily.length,0);
   assert.equal((await analytics(db,{from:'2026-01-01',to:'2026-01-01'},now)).totals.plays,7);
   const empty = await analytics(database(),{from:'2026-10-01',to:'2026-10-09'},now);
@@ -409,6 +433,10 @@ test('reports keep the summary tables in step with the activity they record', as
   await ingest(db, {installationId:id, days:[{day:'2026-10-05',version:'1.0.1',plays:6,timeZone:'Asia/Kolkata'}]}, now);
   await ingest(db, {installationId:id, days:[{day:'2026-10-09',version:'0.4.2',plays:1}]}, now);
   await ingest(db, {installationId:id.replace(/1$/, '2'), days:[{day:'2026-10-11',version:'1.0.1',plays:1,timeZone:'Asia/Kolkata'}]}, new Date('2026-10-11T12:00:00Z'));
+  // The 5th is four days back: read live are only yesterday and today (and the 11th, ahead of this
+  // clock), so its plays count once the nightly recount of daily_totals has run.
+  assert.equal((await summary(db, now)).totals.plays, 2);
+  await housekeeping(db, now);
   const s = await summary(db, now);
   assert.equal(s.totals.installs, 2); assert.equal(s.totals.plays, 8); assert.equal(s.totals.since, '2026-10-05');
   assert.deepEqual(s.versions.map(v => [v.version, v.installations]), [['1.0.1', 2], ['0.4.2', 1]]);
@@ -471,6 +499,8 @@ test('the nightly clean-up drops rows past the retention but keeps the lifetime 
   const db = database();
   const old = '2025-01-01';
   await db.prepare('INSERT INTO activity_ist VALUES(?,?,?,?,?)').bind(id, old, '0.4.0', 7, 'x').run();
+  // Its day total, as that night's recount (or, back then, the triggers) wrote it.
+  await db.prepare('INSERT INTO daily_totals VALUES(?,?,?,?)').bind('Asia/Kolkata', old, 1, 7).run();
   await ingest(db, {installationId:id, days:[{day:'2026-10-09',version:'1.0.1',plays:2,timeZone:'Asia/Kolkata'}]}, now);
   const done = await housekeeping(db, now);
   assert.equal(done.removed, 1);
@@ -494,20 +524,24 @@ test('when D1 refuses writes, the public counts serve the last saved copy instea
   const later=Date.parse('2026-11-26T00:46:00Z'); // past 06:00 in India: a new day's count is due
   assert.deepEqual(await sharedCounts(blocked,'Asia/Kolkata',later),kept);
 });
-test('a report raising a day\'s plays writes the day row and its day total, nothing lifetime',async()=>{
+test('a report raising a day\'s plays writes the day row only: nothing lifetime, no day total',async()=>{
   const sql=new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));
   const up=sql.prepare(`INSERT INTO activity_ist(installation,day,version,plays,received_at) VALUES(?,?,?,?,?)
     ON CONFLICT(installation,day,version) DO UPDATE SET plays=excluded.plays,received_at=excluded.received_at WHERE excluded.plays > activity_ist.plays`);
+  // total_changes() counts the rows written by triggers too (sqlite3_changes() does not).
+  const written=()=>sql.prepare('SELECT total_changes() AS n').get().n;
   up.run(id,'2026-11-25','1.1.0',3,'t');
-  const before=sql.prepare('SELECT plays FROM totals WHERE id=1').get().plays;
+  const before=written(), lifetime=sql.prepare('SELECT plays FROM totals WHERE id=1').get().plays;
   up.run(id,'2026-11-25','1.1.0',9,'t');
-  assert.equal(sql.prepare('SELECT plays FROM totals WHERE id=1').get().plays,before,'the lifetime row is not written on a plays update');
-  assert.equal(sql.prepare("SELECT plays FROM daily_totals WHERE zone='Asia/Kolkata' AND day='2026-11-25'").get().plays,9);
+  assert.equal(written()-before,1,'one row written: the day row');
+  assert.equal(sql.prepare('SELECT plays FROM totals WHERE id=1').get().plays,lifetime,'the lifetime row is not written on a plays update');
+  assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM daily_totals').get().n,0,'no day total');
   const names=sql.prepare("SELECT name FROM sqlite_master WHERE type IN ('index','trigger')").all().map(r=>r.name);
   assert.ok(!names.includes('activity_ist_version') && !names.includes('activity_version'),'no per-version index');
   assert.ok(!names.includes('summarize_activity_ist_plays'),'no lifetime plays trigger');
+  for(const name of ['daily_activity_insert','daily_activity_ist_insert','daily_activity_plays','daily_activity_ist_plays'])
+    assert.ok(!names.includes(name),`no ${name} trigger`);
 });
-
 // ---------------------------------------------------------------------------
 // The dashboard's nightly counts against the queries they replaced (reference-queries.mjs), on a
 // synthetic history shaped like production: installations first seen over 60 days (more of them
@@ -554,6 +588,10 @@ function history(sql, {installs=3000, days=60, end='2026-11-26', seed=11}={}) {
     if(!legacy&&p.kind!=='inferred'&&p.version!==version) current.run(p.id,version,++p.rev,at);
     p.version=version;
   }
+  // daily_totals as the triggers and then the nightly recounts left it: every day but the last
+  // two, which the dashboard reads from the activity rows.
+  for(const [zone,table] of [['UTC','activity'],['Asia/Kolkata','activity_ist']])
+    sql.prepare(`INSERT INTO daily_totals(zone,day,installations,plays) SELECT ?,day,COUNT(DISTINCT installation),SUM(plays) FROM ${table} WHERE day<? GROUP BY day`).run(zone,dayOf(days-2));
   const download=sql.prepare('INSERT OR IGNORE INTO downloads VALUES(?,?,?)');
   for(let b=1;b<=installs/4;b++) for(const [from,release] of releases) if(rnd()<0.5)
     download.run(`00000000-0000-4000-9000-${String(b).padStart(12,'0')}`,release,dayOf(Math.min(days-1,from+Math.floor(rnd()*10)))+'T10:00:00.000Z');
@@ -621,9 +659,12 @@ test('a load reads a few rows per installation active today; the nightly count d
   await housekeeping(db,nightly);
   db.log.length=0;
   await summary(db,evening,'Asia/Kolkata',{shared:true}); await analytics(db,lastDays(30),evening,'Asia/Kolkata',{shared:true});
-  // Each activity query reads today's rows only (day BETWEEN today AND today), never a range.
+  // The activity queries read today's rows (day BETWEEN today AND today), yesterday's and today's
+  // day totals once per table (the days the nightly recount may have missed), and each table's
+  // first day (one row of the day index): never a range.
   const heavy=db.log.filter(q=>/FROM activity/.test(q));
-  assert.equal(heavy.length,1,heavy.join('\n'));
+  const kind=q=>q.includes('WHERE a.day BETWEEN ?1 AND ?2')?'today':/WHERE day>=\?1 GROUP BY day/.test(q)?'live days':/^SELECT MIN\(day\)/.test(q)?'first day':q;
+  assert.deepEqual(heavy.map(kind).sort(),['first day','first day','live days','live days','today'],heavy.join('\n'));
   assert.ok(!db.log.some(q=>q.includes('WITH legacy')),'current versions are not counted per load');
 });
 
@@ -704,8 +745,93 @@ test('the WITHOUT ROWID rebuild keeps every row, the triggers and the day index'
   }
   assert.equal(rows(), before);
   const names = sql.prepare("SELECT name FROM sqlite_master WHERE type IN ('index','trigger')").all().map(r => r.name);
-  for (const name of ['activity_day', 'activity_ist_day', 'summarize_activity_ist_insert', 'daily_activity_ist_insert', 'daily_activity_ist_plays', 'daily_activity_plays'])
+  for (const name of ['activity_day', 'activity_ist_day', 'summarize_activity_ist_insert', 'summarize_activity_insert'])
     assert.ok(names.includes(name), name);
+  assert.ok(!names.some(name => name.startsWith('daily_activity')), 'no day-total triggers');
   up('activity_ist').run('new', '2026-11-20', '1.0.0', 4, 't');
   assert.equal(sql.prepare("SELECT 1 AS ok FROM installations WHERE installation='new'").get()?.ok, 1, 'the insert trigger still runs');
+});
+
+// ---------------------------------------------------------------------------
+// daily_totals, recounted nightly instead of kept by triggers.
+test('a new report writes no daily_totals row, and running the schema over a database with the old triggers drops them',async()=>{
+  const sql=new DatabaseSync(':memory:'); sql.exec(schemaText); sql.exec(oldDayTriggers);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='trigger' AND name LIKE 'daily_activity%'").get().n,4);
+  sql.exec(schemaText);   // the next deploy
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='trigger' AND name LIKE 'daily_activity%'").get().n,0);
+  const db=d1(sql);
+  await ingest(db,{installationId:id,days:[{day:'2026-10-09',version:'1.0.1',plays:2,timeZone:'Asia/Kolkata'},{day:'2026-10-08',version:'0.4.2',plays:1}]},now);
+  await ingest(db,{installationId:id,days:[{day:'2026-10-09',version:'1.0.2',plays:1,timeZone:'Asia/Kolkata'}]},now);
+  assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM activity_ist').get().n,2);
+  assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM daily_totals').get().n,0);
+  // The other summaries are still kept as reports arrive.
+  assert.equal(sql.prepare('SELECT installations FROM totals').get().installations,1);
+  assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM version_installs').get().n,3);
+});
+test('the nightly recount gives the same daily_totals the triggers kept, on a history with updates mid-day and late reports',async()=>{
+  const old=new DatabaseSync(':memory:'); old.exec(schemaText); old.exec(oldDayTriggers);
+  const fresh=new DatabaseSync(':memory:'); fresh.exec(schemaText);
+  const dbs=[d1(old),d1(fresh)];
+  let seed=7; const rnd=()=>(seed=(seed*1103515245+12345)%2147483648)/2147483648;
+  const start=Date.parse('2026-09-20'), nights=50, uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+  const people=Array.from({length:80},(_,n)=>({id:uuid(n+1),zone:n%5===0?'UTC':'Asia/Kolkata',version:'1.0.0',late:[]}));
+  let midDay=0, late=0;
+  for(let d=0;d<nights;d++) {
+    const day=new Date(start+d*DAY_MS).toISOString().slice(0,10), at=h=>new Date(start+d*DAY_MS+h*3600000);
+    for(const p of people) {
+      const zone=p.zone==='UTC'?{}:{timeZone:'Asia/Kolkata'};
+      // Reports owed from earlier days (an app offline for a while), sent with today's.
+      for(const owed of p.late.splice(0)) { for(const db of dbs) await ingest(db,{installationId:p.id,days:[owed]},at(9)); late++; }
+      if(rnd()>0.45) continue;
+      const plays=Math.floor(rnd()*30), report={day,version:p.version,plays,...zone};
+      if(rnd()<0.15) { p.late.push(report); continue; }
+      for(const db of dbs) await ingest(db,{installationId:p.id,days:[{...report,plays:Math.floor(plays/2)}]},at(1));   // so far today (UTC 01:00 is the same day in India)
+      if(rnd()<0.1) {   // updated mid-day: the rest of the day under the new version
+        const next=`1.0.${Number(p.version.split('.')[2])+1}`, more=Math.floor(rnd()*10);
+        for(const db of dbs) await ingest(db,{installationId:p.id,days:[{day,version:next,plays:more,...zone}]},at(4));
+        p.version=next; midDay++;
+      }
+      for(const db of dbs) await ingest(db,{installationId:p.id,days:[report]},at(17));   // later the same day: more plays
+      if(rnd()<0.1) for(const db of dbs) await ingest(db,{installationId:p.id,days:[{...report,plays:Math.max(0,plays-1)}]},at(18));   // no new plays: nothing written
+    }
+    await recountDailyTotals(dbs[1],new Date(start+(d+1)*DAY_MS+35*60000));   // that night, 06:05 India time
+  }
+  assert.ok(midDay>=10 && late>=10,`${midDay} mid-day updates, ${late} late reports`);
+  const all=sql=>sql.prepare('SELECT zone,day,installations,plays FROM daily_totals ORDER BY zone,day').all();
+  assert.ok(all(old).length>=nights*2-2);
+  assert.deepEqual(all(fresh),all(old));
+  // An installation on two versions in a day counted once.
+  const twice=fresh.prepare("SELECT day,COUNT(*) AS n FROM activity_ist GROUP BY installation,day HAVING n>1 LIMIT 1").get();
+  assert.ok(twice);
+  assert.equal(fresh.prepare("SELECT installations FROM daily_totals WHERE zone='Asia/Kolkata' AND day=?").get(twice.day).installations,
+    fresh.prepare('SELECT COUNT(DISTINCT installation) AS n FROM activity_ist WHERE day=?').get(twice.day).n);
+  // Nothing has changed since: the next recount reads the window and writes nothing.
+  assert.equal(await recountDailyTotals(dbs[1],new Date(start+nights*DAY_MS+35*60000)),0);
+});
+test('the dashboard shows today and yesterday, reports after the recount included, without another recount',async()=>{
+  const db=database(), ist=(n,day,version,plays)=>({installationId:id.replace(/1$/,String(n)),days:[{day,version,plays,timeZone:'Asia/Kolkata'}]});
+  await ingest(db,ist(1,'2026-10-08','1.0.0',4),new Date('2026-10-08T12:00:00Z'));
+  await housekeeping(db,new Date('2026-10-09T00:35:00Z'));                         // 06:05 on the 9th in India
+  const kept=()=>db.batch([db.prepare("SELECT day,installations,plays FROM daily_totals WHERE zone='Asia/Kolkata' ORDER BY day")]).then(([r])=>r.results.map(x=>[x.day,x.installations,x.plays]));
+  assert.deepEqual(await kept(),[['2026-10-08',1,4]]);
+  // After the recount: a late report for yesterday, and today's, one installation updating mid-day.
+  await ingest(db,ist(2,'2026-10-08','1.0.0',3),now);
+  await ingest(db,ist(1,'2026-10-09','1.0.0',2),now);
+  await ingest(db,ist(1,'2026-10-09','1.0.1',5),now);
+  await ingest(db,ist(3,'2026-10-09','1.0.1',1),now);
+  await ingest(db,{installationId:id.replace(/1$/,'4'),days:[{day:'2026-10-09',version:'0.4.2',plays:6}]},now);   // UTC
+  assert.deepEqual(await kept(),[['2026-10-08',1,4]],'daily_totals is not written by reports');
+  const s=await summary(db,now,'Asia/Kolkata');
+  assert.deepEqual(s.daily.map(d=>[d.day,d.active,d.plays]),[['2026-10-08',2,7],['2026-10-09',2,8]]);
+  assert.deepEqual({...s.today},{active:2,plays:8});
+  assert.equal(s.totals.plays,21); assert.equal(s.totals.since,'2026-10-08');
+  const a=await analytics(db,{from:'2026-10-08',to:'2026-10-09'},now,'Asia/Kolkata');
+  assert.deepEqual(a.daily.map(d=>[d.day,d.active,d.plays]),[['2026-10-08',2,7],['2026-10-09',2,8]]);
+  assert.deepEqual({...a.totals},{active:3,plays:15});
+  assert.deepEqual((await analytics(db,{from:'2026-10-09',to:'2026-10-09'},now,'UTC')).daily.map(d=>[d.day,d.active,d.plays]),[['2026-10-09',1,6]]);
+  // The same figures as counted from every activity row. (The new/returning split of yesterday is
+  // the nightly count's, as before: not compared here.)
+  const counted=await oldSummary(db,now,'Asia/Kolkata');
+  const plain=page=>JSON.parse(JSON.stringify([page.daily,page.today,page.totals]));
+  assert.deepEqual(plain(s),plain(counted));
 });

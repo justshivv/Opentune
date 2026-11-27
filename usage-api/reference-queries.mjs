@@ -1,6 +1,8 @@
 // The dashboard's queries from before the nightly counts (see "The owner's dashboard" in
 // worker.mjs), kept only so worker.test.mjs can check the new figures against them. Each reads
-// every activity row in its range: never call these from the Worker.
+// every activity row in its range: never call these from the Worker. The day-by-day figures, lifetime
+// plays and first day are counted from the activity rows themselves, as the triggers used to keep
+// daily_totals: what the nightly recount and the live days have to add up to.
 import { calendarDay, currentVersionsSql } from './worker.mjs';
 const DAY = 86400000;
 const reportZone = value => { if (!['UTC', 'Asia/Kolkata'].includes(value)) throw new Error('Unsupported reporting time zone'); return value; };
@@ -44,25 +46,22 @@ async function periodCohorts(db, from, to, timeZone = 'UTC') {
 }
 
 export async function oldSummary(db, now = new Date(), timeZone = 'UTC') {
-  const table = activityTable(timeZone), zone = reportZone(timeZone);
+  const table = activityTable(timeZone);
   const day = calendarDay(now,timeZone);
   const week = new Date(day+'T00:00:00Z');
   week.setUTCDate(week.getUTCDate() - ((week.getUTCDay()+6)%7));
   const month = day.slice(0,7)+'-01';
   const from = calendarDay(new Date(now.getTime()-29*DAY),timeZone);
   const results = await db.batch([
-    // Lifetime installations come from the count a trigger keeps; lifetime plays are the sum of
-    // the day rows (a few hundred), so a report raising a day's plays writes no lifetime row.
+    // Lifetime installations come from the count a trigger keeps.
     db.prepare(`SELECT t.installations AS installs,
-      (SELECT COALESCE(SUM(plays),0) FROM daily_totals) AS plays,
-      (SELECT MIN(day) FROM daily_totals) AS since
+      (SELECT COALESCE(SUM(plays),0) FROM activity) + (SELECT COALESCE(SUM(plays),0) FROM activity_ist) AS plays,
+      (SELECT MIN(day) FROM (SELECT day FROM activity UNION ALL SELECT day FROM activity_ist)) AS since
       FROM totals t WHERE t.id=1`),
-    // A day's figures are one row of daily_totals (see schema.sql), not every report that day.
-    db.prepare(`SELECT COALESCE((SELECT installations FROM daily_totals WHERE zone=? AND day=?),0) AS active,
-      COALESCE((SELECT plays FROM daily_totals WHERE zone=? AND day=?),0) AS plays`).bind(zone,day,zone,day),
+    db.prepare(`SELECT COUNT(DISTINCT installation) AS active, COALESCE(SUM(plays),0) AS plays FROM ${table} WHERE day=?`).bind(day),
     db.prepare(`SELECT COUNT(DISTINCT installation) AS active FROM ${table} WHERE day>=? AND day<=?`).bind(week.toISOString().slice(0,10),day),
     db.prepare(`SELECT COUNT(DISTINCT installation) AS active FROM ${table} WHERE day>=? AND day<=?`).bind(month,day),
-    db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=? AND day>=? AND day<=? ORDER BY day').bind(zone,from,day),
+    db.prepare(`SELECT day, COUNT(DISTINCT installation) AS active, SUM(plays) AS plays FROM ${table} WHERE day>=? AND day<=? GROUP BY day ORDER BY day`).bind(from,day),
     db.prepare(`SELECT s.version,(SELECT COUNT(*) FROM version_installs v WHERE v.version=s.version) AS installations
       FROM versions_seen s ORDER BY s.last_day DESC`),
     db.prepare('SELECT release,COUNT(*) AS browsers FROM downloads GROUP BY release ORDER BY MAX(first_requested_at) DESC'),
@@ -81,12 +80,12 @@ export async function oldSummary(db, now = new Date(), timeZone = 'UTC') {
 
 export async function oldAnalytics(db, range, now = new Date(), timeZone = 'UTC') {
   const { from, to } = range;
-  const table = activityTable(timeZone), zone = reportZone(timeZone);
+  const table = activityTable(timeZone);
   const results = await db.batch([
     db.prepare(`SELECT COUNT(DISTINCT installation) AS active, COALESCE(SUM(plays),0) AS plays FROM ${table} WHERE day BETWEEN ? AND ?`).bind(from,to),
-    db.prepare('SELECT day, installations AS active, plays FROM daily_totals WHERE zone=? AND day BETWEEN ? AND ? ORDER BY day').bind(zone,from,to),
+    db.prepare(`SELECT day, COUNT(DISTINCT installation) AS active, SUM(plays) AS plays FROM ${table} WHERE day BETWEEN ? AND ? GROUP BY day ORDER BY day`).bind(from,to),
     db.prepare(`SELECT version, COUNT(DISTINCT installation) AS installations, SUM(plays) AS plays FROM ${table} WHERE day BETWEEN ? AND ? GROUP BY version ORDER BY installations DESC, version DESC`).bind(from,to),
-    db.prepare('SELECT MIN(day) AS since FROM daily_totals WHERE zone=?').bind(zone),
+    db.prepare(`SELECT MIN(day) AS since FROM ${table}`),
   ]);
   return { asOf: now.toISOString(), range, timeZone, totals: results[0].results[0],
     split: await periodCohorts(db, from, to, timeZone),
