@@ -528,7 +528,9 @@ internal fun VideoCoverPane(
         if (animate) androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing) else androidx.compose.animation.core.snap(),
         label = "videoGrow",
     )
-    ArtworkSwipeArea(onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious, modifier = modifier) {
+    // Unseen in song mode it sits over the cover, so it takes touches only while the video shows:
+    // otherwise the cover's own double-tap to seek and swipes never reached it.
+    ArtworkSwipeArea(onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious, modifier = modifier, enabled = showVideo) {
         BoxWithConstraints(Modifier.matchParentSize()) {
             val w = constraints.maxWidth.toFloat()
             val h = constraints.maxHeight.toFloat()

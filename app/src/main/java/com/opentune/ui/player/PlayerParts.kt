@@ -1979,18 +1979,23 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
     }
 }
 
-/** An empty area that still skips tracks on a sideways swipe, for full-screen cover mode. */
+/**
+ * An empty area that still skips tracks on a sideways swipe, for full-screen cover mode.
+ * [enabled] false takes no touches at all, so whatever lies under it gets them (the video pane
+ * kept ready, unseen, over the cover).
+ */
 @Composable
 fun ArtworkSwipeArea(
     onSwipeNext: () -> Unit,
     onSwipePrevious: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val threshold = with(LocalDensity.current) { 96.dp.toPx() }
     var dx by remember { mutableFloatStateOf(0f) }
     Box(
-        modifier.pointerInput(Unit) {
+        if (!enabled) modifier else modifier.pointerInput(Unit) {
             detectHorizontalDragGestures(
                 onDragStart = { dx = 0f },
                 onDragEnd = {

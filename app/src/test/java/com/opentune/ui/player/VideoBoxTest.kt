@@ -46,7 +46,6 @@ import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -240,11 +239,7 @@ class VideoBoxTest {
         compose.onNodeWithTag("video-picture").assertDoesNotExist()
     }
 
-    @Ignore(
-        "Suspected bug from 2dcbf51d: the video's pane, now kept built (transparent) over the cover in song " +
-            "mode whenever the song has a video, takes the cover's touches, so a double tap on the cover no " +
-            "longer seeks. With videoAvailable = false the same tap seeks. Left for the owner to decide."
-    )
+    // The video pane, kept ready and unseen over the cover in song mode, used to take these touches.
     @Test fun aDoubleTapOnTheCoverSeeksInSongModeThoughTheSongHasAVideo() {
         val seeks = mutableListOf<Long>()
         compose.mainClock.autoAdvance = false
