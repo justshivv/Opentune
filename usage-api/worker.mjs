@@ -383,8 +383,10 @@ async function cohortRows({ db, zone, window, today }, daily, recent) {
 // report for it can still come in after the count, and today) straight from the activity rows.
 // A late report for an older day (apps send up to 30 days back) shows once the next nightly
 // recount has run; until then that day's row in daily_totals is short of it. Reports for a day
-// are accepted until it is 30 days old, so the recount on the night it is 31 days old sees it final.
-export const RECOUNT_DAYS = 31;
+// are accepted until it is 30 days old, so the recount on the night it is 31 days old sees it final;
+// two more nights of recounts cover a night whose recount failed (about 2,700 rows read a day each,
+// nothing written unless something changed).
+export const RECOUNT_DAYS = 33;
 /**
  * Recounts each zone's days from today-RECOUNT_DAYS to today: one grouped pass over the day index,
  * writing only the days whose figures changed. Counted as the triggers did: an installation that
@@ -441,9 +443,9 @@ function grown(life, [installs, releases, [browsers], moves]) {
 export async function countLifetime(db, now = Date.now(), previous = null) {
   const fresh = !previous || now - previous.full >= 7 * DAY;
   const last = fresh ? { full: now, ids: { installs: 0, downloads: 0, moves: 0 }, versions: {}, downloads: {}, browsers: 0, updates: {}, cutoff: '', plays: 0 } : previous;
-  // Days at least 32 days old can't change any more: their plays are added up once. Each was last
-  // recounted the night it was 31 days old (RECOUNT_DAYS), with every report it can get.
-  const cutoff = calendarDay(new Date(now - 32 * DAY), 'UTC');
+  // Days older than the recount window can't change any more: their plays are added up once. Each
+  // was last recounted the night it was RECOUNT_DAYS old, with every report it can get.
+  const cutoff = calendarDay(new Date(now - (RECOUNT_DAYS + 1) * DAY), 'UTC');
   const [current, ...rest] = (await db.batch([
     db.prepare(currentVersionsSql),
     ...growth(db, last.ids),
