@@ -80,7 +80,6 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.keepScreenOn
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.positionInRoot
@@ -973,10 +972,20 @@ fun PlayerLayout(
         // The lyrics view is kept built behind the cover, so it can't hold the flag itself:
         // it kept the screen on as long as the player was open, on any page.
         val lyricsInView = pane == Pane.LYRICS || (pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST && !landscape)
+        // The lyrics hold goes through ScreenHolds under its own name, like the
+        // video's do: the keepScreenOn modifier wrote the window's flag itself
+        // and the pane's holds write it as their sum, so each kept dropping the
+        // other's hold and the screen slept over the lyrics.
+        val lyricsView = androidx.compose.ui.platform.LocalView.current
+        androidx.compose.runtime.SideEffect {
+            ScreenHolds.set(lyricsView, "lyrics", state.ui.keepScreenOnLyrics && lyricsInView)
+        }
+        DisposableEffect(Unit) {
+            onDispose { ScreenHolds.set(lyricsView, "lyrics", false) }
+        }
         Box(
             Modifier
                 .fillMaxSize()
-                .then(if (state.ui.keepScreenOnLyrics && lyricsInView) Modifier.keepScreenOn() else Modifier)
                 .graphicsLayer {
                     // Dragging down turns the player into a card over the app,
                     // the way iOS sheets do: it shrinks from the top edge and
