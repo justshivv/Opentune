@@ -129,7 +129,7 @@ internal fun RadioMixesPage(
         val cardWidth = (maxWidth - side * 2 - gap * 2) / 2.4f
         LazyColumn(state = list, contentPadding = contentPadding, modifier = Modifier.fillMaxSize().testTag("radio-mixes")) {
             item(key = "header") {
-                PageHeader(com.opentune.ui.theme.tr("Radio"), actions = { AccountButton(onOpenSettings) })
+                PageHeader(com.opentune.ui.theme.tr("Radio"), actions = { com.opentune.ui.components.GlassPill { AccountButton(onOpenSettings, plain = true) } })
             }
             val shown = page
             item(key = "tiles") {

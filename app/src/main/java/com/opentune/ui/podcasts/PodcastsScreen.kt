@@ -147,7 +147,7 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-            item { PageHeader(com.opentune.ui.theme.tr("Podcasts"), actions = onOpenSettings?.let { open -> { com.opentune.ui.components.AccountButton(open) } }) }
+            item { PageHeader(com.opentune.ui.theme.tr("Podcasts"), actions = onOpenSettings?.let { open -> { com.opentune.ui.components.GlassPill { com.opentune.ui.components.AccountButton(open, plain = true) } } }) }
             if (onOpenLibrary != null) item(key = "library") { PodcastLibraryEntry(subscriptions.size, onOpenLibrary) }
             if (onOpenAudiobooks != null) item(key = "audiobooks") { AudiobooksEntry(onOpenAudiobooks) }
             item {

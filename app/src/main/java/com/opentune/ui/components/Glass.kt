@@ -507,6 +507,23 @@ fun GlassBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     GlassIconButton(ImageVector.vectorResource(AppIcons.ArrowBack), "Back", onClick, modifier)
 }
 
+/**
+The glass pill the main pages keep at their top right: 48.dp tall, the playlist
+pages' button pill's size, holding plain buttons — the account button and
+whatever page action rides beside it, like Home's song recogniser. One size
+everywhere, so no page's pill differs from another's. Its ends are padded
+2.dp: the account button is 44.dp, so a pill holding it alone is
+44 + 2 + 2, the pill's own 48 — a circle, not an oval — and the wider
+pills hug their glass just as tight.
+ */
+@Composable
+fun GlassPill(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    androidx.compose.foundation.layout.Row(
+        modifier.height(48.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 2.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        content = content,
+    )
+}
 /** A page's top: optional glass back button and a large title. Draws under the status bar inset. */
 @Composable
 fun PageHeader(title: String, onBack: (() -> Unit)? = null, actions: (@Composable () -> Unit)? = null) {

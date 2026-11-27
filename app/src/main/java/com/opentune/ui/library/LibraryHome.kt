@@ -396,10 +396,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
             }
             Spacer(Modifier.width(10.dp))
             // History and the account side by side in one glass pill.
-            Row(
-                Modifier.height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            com.opentune.ui.components.GlassPill {
                 // On the playlists, smart and Spotify faces the pill sorts instead, as on their old pages.
                 when (tab) {
                     1 -> SortPill(playlistsOrder, playlistsSorting, { playlistsSorting = it }, { playlistsOrder = it })

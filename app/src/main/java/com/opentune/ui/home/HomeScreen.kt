@@ -417,19 +417,15 @@ fun HomeScreen(
                                 Text(com.opentune.ui.theme.tr(greeting), style = MaterialTheme.typography.displaySmall, maxLines = 2)
                             }
                         }
-                        if (onRecognize != null) {
-                            GlassIconButton(ImageVector.vectorResource(AppIcons.GraphicEq), "Name a song playing nearby", onRecognize, size = 48.dp)
-                        }
-                        com.opentune.ui.components.WithUpdateDot {
-                            // The account menu (switch, add, manage, Settings) where the shell provides it.
-                            val menu = com.opentune.ui.components.LocalAccountMenu.current
-                            var menuOpen by remember { mutableStateOf(false) }
-                            if (menuOpen && menu != null) com.opentune.ui.components.AccountMenu(menu, onDismiss = { menuOpen = false })
-                            GlassIconButton(ImageVector.vectorResource(AppIcons.Person), "Account and settings", if (menu != null) ({ menuOpen = true }) else onOpenSettings, size = 48.dp) {
-                                val photo = account?.thumbnailUrl
-                                if (photo != null) Artwork(photo, Modifier.size(48.dp), CircleShape)
-                                else Icon(ImageVector.vectorResource(AppIcons.Person), "Account and settings", Modifier.size(24.dp))
+                        // The recogniser and the account share the pages' top-right pill;
+                        // the account button inside it brings its own menu and update dot.
+                        com.opentune.ui.components.GlassPill {
+                            if (onRecognize != null) {
+                                IconButton(onClick = onRecognize) {
+                                    Icon(ImageVector.vectorResource(AppIcons.GraphicEq), "Name a song playing nearby")
+                                }
                             }
+                            com.opentune.ui.components.AccountButton(onOpenSettings, plain = true)
                         }
                     }
                 }
