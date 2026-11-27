@@ -106,7 +106,9 @@ export function useScrubber() {
       setDragging(false);
       const d = remoteRef.current;
       if (d) {
-        seekRemote(fractionAt(e) * lengthSec(d.state?.track?.length) * 1000);
+        // Without the song's length a click has no place to go: it went to 0:00 and restarted the song.
+        const length = lengthSec(d.state?.track?.length);
+        if (length > 0) seekRemote(fractionAt(e) * length * 1000);
         return;
       }
       const audio = getAudio();
