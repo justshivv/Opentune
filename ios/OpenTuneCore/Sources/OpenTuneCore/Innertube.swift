@@ -242,6 +242,11 @@ public enum MusicRepository {
         InnertubeParser.parseSearch(try await Innertube.shared.search(query))
     }
 
+    /** Search limited to catalogue songs (YouTube Music's Songs filter). */
+    public static func searchSongs(_ query: String) async throws -> [SearchResult] {
+        InnertubeParser.parseSearch(try await Innertube.shared.search(query, params: "EgWKAQIIAWoKEAkQChAFEAMQBA=="))
+    }
+
     public static func suggestions(_ input: String) async throws -> [String] {
         InnertubeParser.parseSearchSuggestions(try await Innertube.shared.searchSuggestions(input))
     }
