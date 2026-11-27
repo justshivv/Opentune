@@ -47,7 +47,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         listOf(
             "YouTube Music" to listOf("YouTube Music account", "Listen as", "Other accounts", "Add another account", "Sign out"),
             "Connected services" to listOf("Spotify account", "Spotify", "Show on Discord", "Last.fm scrobbling", "ListenBrainz", "Music server"),
-            "Other devices" to listOf("Link a device"),
+            "Other devices" to listOf("Your devices", "Link a device"),
         ),
     ),
     SettingsCategory(

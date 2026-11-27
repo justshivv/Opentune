@@ -22,7 +22,7 @@ object Core {
      * and TV app does: new-release alerts, update checks and usage counts.
      */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    fun init(app: Application, phone: Boolean = true) {
+    fun init(app: Application, phone: Boolean = true, form: String = if (phone) "phone" else "tv") {
         // Media3's warnings and errors (a failed load, a decoder that won't
         // start) into the app's own log as well as logcat, for "Copy log".
         androidx.media3.common.util.Log.setLogger(object : androidx.media3.common.util.Log.Logger {
@@ -54,7 +54,7 @@ object Core {
         UpgradedTracks.init(app)
         QueueStore.init(app)
         com.opentune.data.together.Together.init(app)
-        com.opentune.data.connect.Connect.init(app)
+        com.opentune.data.connect.Connect.init(app, form)
         LastFm.init(app)
         Subsonic.init(app)
         ListenBrainz.init(app)
@@ -82,7 +82,9 @@ object Core {
         com.opentune.data.spotify.SpotifyWebPlayer.init(app)
         com.opentune.data.spotify.SpotifySync.init(app)
         AutoEq.init(app)
-        com.opentune.data.library.LibraryArtwork.init(app)
+        // Not on a watch: nothing there reads the kept covers, and at every start it went through the
+        // whole library's (a hash and a file each) and fetched the missing ones at full size.
+        if (form != "watch") com.opentune.data.library.LibraryArtwork.init(app)
         LibraryStore.init(app)
         Downloads.init(app)
         com.opentune.data.lyrics.LyricsDisk.init(app)
@@ -94,7 +96,8 @@ object Core {
         com.opentune.data.library.LibraryCache.init(app)
         // After library and account: it sends playlist changes still waiting, when signed in.
         com.opentune.data.library.PlaylistSync.init(app)
-        com.opentune.data.library.LikedSync.init()
+        // On a watch a little after it opens: the whole liked list, page by page, took the CPU from its first screens.
+        com.opentune.data.library.LikedSync.init(startAfterMs = if (form == "watch") 20_000 else 0)
         // After the account and the followed artists: it keeps them in step with YouTube Music's subscriptions.
         if (phone) com.opentune.data.releases.ArtistSync.init(app)
         InnerTubeXResolver.init(app)

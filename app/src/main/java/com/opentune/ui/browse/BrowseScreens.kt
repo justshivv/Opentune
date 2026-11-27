@@ -1061,6 +1061,13 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
                 fromList?.keepWhole(c.songs)
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", c.songs.size), context)
             }
+            val watches by com.opentune.data.connect.Connect.watches.collectAsState()
+            watches.forEach { w ->
+                com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Watch), com.opentune.ui.connect.SendToWatch.label(w, watches)) {
+                    close()
+                    com.opentune.ui.connect.SendToWatch.collection(context, w, c.browseId, c.title, c.subtitle, c.thumbnailUrl)
+                }
+            }
             if (c.songs.isNotEmpty()) com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.PlaylistAdd), if (isAlbum) "Add album to playlist" else "Add all to playlist") { adding = true }
             com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Share), "Share") { close(); com.opentune.ui.share.ListShare.shareList(context, c.title, c.browseId, com.opentune.ui.share.ListShare.coversFor(c.thumbnailUrl, c.songs, album = c.browseId.startsWith("MPRE")), c.subtitle) }
             val ownNow = own

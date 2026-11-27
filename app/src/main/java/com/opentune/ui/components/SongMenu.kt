@@ -245,6 +245,15 @@ fun SongMenuSheet(
                     }
                 }
             }
+            if (!local) {
+                val watches by com.opentune.data.connect.Connect.watches.collectAsState()
+                watches.forEach { w ->
+                    MenuRow(ImageVector.vectorResource(AppIcons.Watch), com.opentune.ui.connect.SendToWatch.label(w, watches)) {
+                        com.opentune.ui.connect.SendToWatch.song(context, w, song)
+                        close()
+                    }
+                }
+            }
             if (actions != null) {
                 MenuRow(ImageVector.vectorResource(AppIcons.PlaylistPlay), "Play next") { actions.playNext(song); close() }
                 MenuRow(ImageVector.vectorResource(AppIcons.QueueMusic), "Add to queue") { actions.addToQueue(song); close() }

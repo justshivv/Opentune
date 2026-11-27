@@ -21,6 +21,18 @@ data class CTrack(
     /** [length] ("3:45", "1:02:03") in ms; 0 when there's none. */
     val lengthMs: Long get() = length?.split(':')?.map { it.toLongOrNull() ?: return 0 }?.fold(0L) { a, b -> a * 60 + b }?.times(1000) ?: 0
 
+    /**
+     * With its length filled in from the player ([ms]) where the song came without one (a radio,
+     * autoplay or a list that doesn't say): a watch draws the song's progress from it.
+     */
+    fun withLength(ms: Long): CTrack {
+        if (lengthMs > 0 || ms <= 0) return this
+        val s = ms / 1000
+        val text = if (s >= 3600) String.format(java.util.Locale.ROOT, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
+            else String.format(java.util.Locale.ROOT, "%d:%02d", s / 60, s % 60)
+        return copy(length = text)
+    }
+
     companion object {
         /** The track for [song], or null for one only this device can play (its own files, a private server). */
         fun of(song: Song): CTrack? =
@@ -57,7 +69,13 @@ sealed interface ConnectMsg {
         val queue: List<CTrack> = emptyList(),
         val volume: Float = 1f,
         val shuffle: Boolean = false,
+        /** Smart shuffle (similar songs mixed in) is what [shuffle] is; only the app does it. */
+        val smart: Boolean = false,
+        /** Smart shuffle can be turned on there (a queue from a list). */
+        val canSmart: Boolean = false,
         val repeat: String = "off",
+        /** Similar music keeps playing after the queue there; null from a device that doesn't say. */
+        val autoplay: Boolean? = null,
         /**
          * When this device took the music (started it, changed the song, or
          * was handed it), on its own clock. The others show whichever took it
@@ -73,7 +91,7 @@ sealed interface ConnectMsg {
         val wants: Boolean? = null,
     ) : ConnectMsg
 
-    /** Asks device [to] to do [action]: play, pause, next, previous, seek, volume, shuffle, repeat, playTrack or addToQueue. */
+    /** Asks device [to] to do [action]: play, pause, next, previous, seek, volume, shuffle, repeat, autoplay, playTrack, addToQueue, jump or remove. */
     @Serializable @SerialName("command")
     data class Command(
         override val from: String,
@@ -86,8 +104,10 @@ sealed interface ConnectMsg {
         val value: Float = 0f,
         val track: CTrack? = null,
         val tracks: List<CTrack> = emptyList(),
-        /** For repeat: "off", "all" or "one". */
+        /** For repeat: "off", "all" or "one"; for shuffle, "smart" for smart shuffle. */
         val mode: String? = null,
+        /** For move: the place in Up Next the entry at [pos] goes to. */
+        val index: Int? = null,
     ) : ConnectMsg
 
     /** The answer to a [Command] or [Transfer] with the same [id]. */
@@ -148,6 +168,7 @@ sealed interface ConnectMsg {
         private fun queueOf(m: ConnectMsg) = when (m) {
             is State -> m.queue
             is Transfer -> m.queue
+            is Command -> m.tracks
             else -> emptyList()
         }
 
@@ -155,6 +176,7 @@ sealed interface ConnectMsg {
             m is State && m.queue.size > max -> m.copy(queue = m.queue.take(max))
             // A transfer keeps the track it starts on.
             m is Transfer && m.queue.size > max -> m.copy(queue = m.queue.drop(m.index).take(maxOf(max, 1)), index = 0)
+            m is Command && m.tracks.size > max -> m.copy(tracks = m.tracks.take(maxOf(max, 1)))
             else -> m
         }
     }

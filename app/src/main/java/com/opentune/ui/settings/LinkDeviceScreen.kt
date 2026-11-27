@@ -137,6 +137,13 @@ fun LinkDeviceScreen(
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
             )
         }
+        // Your devices first: the computers and watches already linked, found here without picking one below.
+        item {
+            DeviceCard("Your devices", "See and control what plays on your computer and watch, and move the music between them.", compact = true) {
+                Buttons({ SheetButton("Your devices", onClick = onConnect, icon = ImageVector.vectorResource(AppIcons.Devices), tone = SheetTone.Primary) })
+            }
+        }
+        item { Spacer(Modifier.height(12.dp)) }
         item { DevicePicker(target) { target = it } }
         item {
             AnimatedContent(
@@ -211,8 +218,15 @@ fun LinkDeviceScreen(
                             "On your watch",
                             "A separate Wear OS app plays on the watch itself, over its Wi-Fi or LTE and Bluetooth headphones, with no phone needed.",
                         ) {
-                            Step(1, "Build the watch app", "It isn't in the releases yet. It's the wear folder in the source code.", last = true) {
+                            Step(1, "Build the watch app", "It isn't in the releases yet. It's the wear folder in the source code.") {
                                 Buttons({ SheetButton("Source code", onClick = { open(SOURCE) }, icon = ImageVector.vectorResource(AppIcons.Code)) })
+                            }
+                            Step(2, "Show its code", "On the watch, open OpenTune and choose Pair with phone.")
+                            Step(3, "Scan it here", "The watch joins your devices: it sees and controls what plays on this phone and your computer. You can sign it in to YouTube Music too.", last = true) {
+                                Buttons(
+                                    { SheetButton("Scan the watch", onClick = ::camera, icon = ImageVector.vectorResource(AppIcons.QrCodeScanner), tone = SheetTone.Primary) },
+                                    { SheetButton("Your devices", onClick = onConnect, icon = ImageVector.vectorResource(AppIcons.Devices)) },
+                                )
                             }
                         }
                     }

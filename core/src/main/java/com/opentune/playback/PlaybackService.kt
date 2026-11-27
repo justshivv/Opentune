@@ -310,6 +310,7 @@ class PlaybackService : MediaLibraryService() {
         com.opentune.data.AppInUse.started.value = true
         super.onCreate()
         val context: Context = this
+        PlaybackHooks.notificationProvider?.invoke(context)?.let { setMediaNotificationProvider(it) }
         // The app died last time while the phone's DAC or jack was being opened exclusively
         // (a crash in AAudio can't be caught): that output goes back to Android's own, so the
         // app doesn't close again each time music starts.
@@ -813,6 +814,14 @@ class PlaybackService : MediaLibraryService() {
             .build()
         // Another of the person's devices playing (Connect): the notification shows and controls that one.
         scope.launch { com.opentune.data.connect.Connect.controlling.collect { showRemote(it, sessionActivity) } }
+        // On the watch, controlling another device keeps Connect going with the app closed, so its
+        // media controls (tile, wrist raise, headphone buttons) still reach that device.
+        if (PlaybackHooks.keepRemote) scope.launch {
+            com.opentune.data.connect.Connect.controlling.map { it?.state?.playing == true }.distinctUntilChanged().collect { on ->
+                remotePlaying = on
+                keepConnect(on || localPlaying)
+            }
+        }
         // Earlier versions posted the song as a Live Update on its own channel. That's
         // gone; clear the channel so it doesn't linger in the phone's settings.
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -1049,12 +1058,67 @@ class PlaybackService : MediaLibraryService() {
         }
         val player = remotePlayer ?: ConnectRemotePlayer().also { remotePlayer = it }
         player.device = device
-        if (remoteSession == null) {
+        val session = remoteSession
+        if (session == null) {
             remoteSession = MediaSession.Builder(this, player)
                 .setId("connect")
                 .setSessionActivity(sessionActivity)
+                .setCallback(remoteCallback)
+                .setMediaButtonPreferences(remoteButtons(device))
                 .build()
                 .also { addSession(it) }
+        } else {
+            session.setMediaButtonPreferences(remoteButtons(device))
+        }
+    }
+
+    /** Like and Shuffle beside the other device's song too, as beside the phone's own: acting on that song and that device. */
+    private fun remoteButtons(device: com.opentune.data.connect.Device?): List<CommandButton> {
+        val state = device?.state
+        val liked = state?.track?.id?.let(LibraryStore::isLiked) == true
+        val shuffle = state?.shuffle == true
+        return listOf(
+            CommandButton.Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+                .setDisplayName(com.opentune.i18n.Tr.t(if (liked) "Remove from Liked" else "Like"))
+                .setSessionCommand(LIKE_COMMAND)
+                .setSlots(CommandButton.SLOT_OVERFLOW)
+                .build(),
+            CommandButton.Builder(if (shuffle) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF)
+                .setDisplayName(com.opentune.i18n.Tr.t(if (shuffle) "Shuffle off" else "Shuffle on"))
+                .setSessionCommand(SHUFFLE_COMMAND)
+                .setSlots(CommandButton.SLOT_OVERFLOW)
+                .build(),
+        )
+    }
+
+    private val remoteCallback = object : MediaSession.Callback {
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                .add(LIKE_COMMAND)
+                .add(SHUFFLE_COMMAND)
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .setMediaButtonPreferences(remoteButtons(remotePlayer?.device))
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            val device = remotePlayer?.device
+            when (customCommand.customAction) {
+                ACTION_LIKE -> device?.state?.track?.let { t ->
+                    LibraryStore.setLiked(t.toSong(), !LibraryStore.isLiked(t.id))
+                }
+                ACTION_SHUFFLE -> com.opentune.data.connect.Connect.toggleShuffle()
+                else -> return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+            }
+            session.setMediaButtonPreferences(remoteButtons(device))
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
     }
 
@@ -1096,9 +1160,53 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    /**
+     * Connect with the app closed: while music plays, the service holds a
+     * player of its own for it, so the person's other devices still see and
+     * control this phone. Let go a while after it stops, so the service can
+     * go too.
+     */
+    private var connectPlayer: PlayerConnection? = null
+    private var connectLetGo: kotlinx.coroutines.Job? = null
+
+    private var connectShared = false
+    /** This device's own player sounding, and the device it controls playing (see [PlaybackHooks.keepRemote]). */
+    private var localPlaying = false
+    private var remotePlaying = false
+
+    private fun keepConnect(playing: Boolean) {
+        if (playing) {
+            connectLetGo?.cancel()
+            connectLetGo = null
+            if (connectPlayer != null) return
+            // The watch shares the one connection its screens, tile and complication use: one is plenty there.
+            val shared = PlaybackHooks.sharedPlayer?.invoke(this)
+            val p = (shared ?: PlayerConnection(this)).also { connectPlayer = it; connectShared = shared != null }
+            scope.launch {
+                if (shared == null) p.connect() else p.connected.first { it }
+                if (connectPlayer === p) com.opentune.data.connect.Connect.keepWith(p)
+            }
+        } else if (connectPlayer != null && connectLetGo == null) {
+            connectLetGo = scope.launch {
+                kotlinx.coroutines.delay(CONNECT_KEEP_MS)
+                releaseConnect()
+            }
+        }
+    }
+
+    private fun releaseConnect() {
+        connectLetGo?.cancel()
+        connectLetGo = null
+        val p = connectPlayer ?: return
+        connectPlayer = null
+        com.opentune.data.connect.Connect.keepWith(null)
+        if (!connectShared) p.disconnect()
+    }
+
     override fun onDestroy() {
         PreloadPlanner.detach(preloadHost)
         PlayingHereNotice.cancel(this)
+        releaseConnect()
         ExternalStreams.playing(null, null)
         // As the queue is saved while it plays, with shuffle, repeat and the songs queued by hand:
         // saved bare here, the last save before the app closed lost them all.
@@ -1333,6 +1441,7 @@ class PlaybackService : MediaLibraryService() {
 
     private fun refreshButtons() {
         mediaSession?.setMediaButtonPreferences(mediaButtons())
+        remoteSession?.setMediaButtonPreferences(remoteButtons(remotePlayer?.device))
         com.opentune.data.AppHooks.onPlayerChanged(this, mediaSession?.player)
     }
 
@@ -1432,6 +1541,8 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            localPlaying = isPlaying
+            keepConnect(isPlaying || remotePlaying)
             mediaSession?.player?.let { watchPlayed(it, isPlaying) }
             if (!isPlaying) mediaSession?.player?.let(::saveEpisodePosition)
             if (isPlaying && startRequestedAt > 0) {
@@ -3621,6 +3732,8 @@ class PlaybackService : MediaLibraryService() {
 
     private companion object {
         const val TAG = "PlaybackService"
+        /** How long after music stops the service keeps Connect going with the app closed. */
+        const val CONNECT_KEEP_MS = 10 * 60_000L
 
         /** How long another device's session waits for this phone's player to start after a hand-over. */
         const val HAND_OVER_WAIT_MS = 4_000L

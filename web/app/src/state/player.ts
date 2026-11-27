@@ -251,6 +251,21 @@ export interface ConnectHooks {
   intercept(control: ConnectControl): boolean;
   /** The user did something to playback here. */
   onIntent?(): void;
+  /** Music started here: true when it went to the device playing elsewhere. */
+  play?(tracks: Track[], startIndex: number, shuffle: boolean): boolean;
+  /** Play next / add to queue here: true when it went to the device playing elsewhere. */
+  queue?(tracks: Track[], next: boolean): boolean;
+  /** What another of the person's devices plays while this one controls it, for the system's media controls; null otherwise. */
+  remote?(): RemoteMedia | null;
+}
+
+export interface RemoteMedia {
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+  playing: boolean;
+  posSec: number;
+  durationSec: number | null;
 }
 let connectHooks: ConnectHooks | null = null;
 export function setConnectHooks(hooks: ConnectHooks | null): void {
@@ -349,6 +364,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   playTracks(tracks, startIndex, source) {
     if (!tracks.length) return;
     if (partyHooks?.suggest([tracks[startIndex] ?? tracks[0]!], true)) return;
+    if (connectHooks?.play?.(tracks, startIndex, get().shuffle)) return;
     const { queue, index, shuffle } = get();
     const built = buildContextQueue(queue, index, tracks, startIndex, source);
     if (shuffle) {
@@ -365,6 +381,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
 
   playTrack(track, source) {
     if (partyHooks?.suggest([track], true)) return;
+    if (connectHooks?.play?.([track], 0, false)) return;
     const { queue, index } = get();
     canonical = null;
     set({ queue: buildOneOffQueue(queue, index, track, source) });
@@ -391,12 +408,14 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
 
   playNext(tracks, source = null) {
     if (partyHooks?.suggest(tracks, false)) return;
+    if (connectHooks?.queue?.(tracks, true)) return;
     insertUser(tracks, source, true);
     intent();
   },
 
   addToQueue(tracks, source = null) {
     if (partyHooks?.suggest(tracks, false)) return;
+    if (connectHooks?.queue?.(tracks, false)) return;
     insertUser(tracks, source, false);
     intent();
   },
@@ -920,10 +939,10 @@ function bindElement(deck: Deck, n: number) {
     });
   }
   element.addEventListener('play', () => {
-    if (inFront() && 'mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+    if (inFront() && !connectHooks?.remote?.() && 'mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
   });
   element.addEventListener('pause', () => {
-    if (inFront() && 'mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+    if (inFront() && !connectHooks?.remote?.() && 'mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
   });
 }
 
@@ -931,20 +950,52 @@ function bindElement(deck: Deck, n: number) {
 
 let handlersBound = false;
 
+/**
+ * The system's media controls (Windows' media flyout, a keyboard's media
+ * keys) say again what plays: the device playing elsewhere while this one
+ * controls it, otherwise this player's song.
+ */
+export function refreshMediaSession(): void {
+  updateMediaSession(usePlayer.getState().nowPlaying);
+  if (!('mediaSession' in navigator) || connectHooks?.remote?.()) return;
+  const audio = getAudio();
+  navigator.mediaSession.playbackState = audio && !audio.paused ? 'playing' : audio ? 'paused' : 'none';
+  updatePositionState();
+}
+
+function showRemoteMedia(session: MediaSession, far: RemoteMedia) {
+  session.metadata = new MediaMetadata({
+    title: far.title,
+    artist: far.artist,
+    artwork: far.artworkUrl ? [96, 256, 512].map((px) => ({ src: artworkAtPixels(far.artworkUrl!, px), sizes: `${px}x${px}` })) : [],
+  });
+  session.playbackState = far.playing ? 'playing' : 'paused';
+  if (far.durationSec && far.durationSec > 0) {
+    try {
+      session.setPositionState({ duration: far.durationSec, playbackRate: 1, position: Math.min(Math.max(far.posSec, 0), far.durationSec) });
+    } catch {
+      // A position just past the end; the next report corrects it.
+    }
+  }
+}
+
 function updateMediaSession(track: NowPlaying | null) {
   if (!('mediaSession' in navigator)) return;
   const session = navigator.mediaSession;
-  if (!track) {
+  const far = connectHooks?.remote?.();
+  if (far) showRemoteMedia(session, far);
+  else if (!track) {
     session.metadata = null;
     return;
+  } else {
+    session.metadata = new MediaMetadata({
+      title: track.title,
+      artist: track.artist,
+      artwork: track.artworkUrl
+        ? [96, 256, 512].map((px) => ({ src: artworkAtPixels(track.artworkUrl!, px), sizes: `${px}x${px}` }))
+        : [],
+    });
   }
-  session.metadata = new MediaMetadata({
-    title: track.title,
-    artist: track.artist,
-    artwork: track.artworkUrl
-      ? [96, 256, 512].map((px) => ({ src: artworkAtPixels(track.artworkUrl!, px), sizes: `${px}x${px}` }))
-      : [],
-  });
 
   if (handlersBound) return;
   handlersBound = true;
@@ -956,20 +1007,27 @@ function updateMediaSession(track: NowPlaying | null) {
     }
   };
   const player = () => usePlayer.getState();
-  // Through the store, so a party hears about them like any other press.
-  handle('play', () => getAudio()?.paused && player().togglePlay());
-  handle('pause', () => getAudio()?.paused === false && player().togglePlay());
+  // Through the store, so a party hears about them like any other press, and
+  // the device playing elsewhere (Connect) gets them while this one controls it.
+  const playing = () => {
+    const far = connectHooks?.remote?.();
+    return far ? far.playing : getAudio()?.paused === false;
+  };
+  const position = () => connectHooks?.remote?.()?.posSec ?? getAudio()?.currentTime ?? 0;
+  handle('play', () => !playing() && player().togglePlay());
+  handle('pause', () => playing() && player().togglePlay());
   handle('seekto', (details) => {
     if (details.seekTime !== undefined) player().seek(details.seekTime);
   });
-  handle('seekbackward', (details) => player().seek((getAudio()?.currentTime ?? 0) - (details.seekOffset ?? 10)));
-  handle('seekforward', (details) => player().seek((getAudio()?.currentTime ?? 0) + (details.seekOffset ?? 10)));
+  handle('seekbackward', (details) => player().seek(position() - (details.seekOffset ?? 10)));
+  handle('seekforward', (details) => player().seek(position() + (details.seekOffset ?? 10)));
   handle('previoustrack', () => player().previous());
   handle('nexttrack', () => player().next());
 }
 
 function updatePositionState() {
   const audio = getAudio();
+  if (connectHooks?.remote?.()) return;
   if (!audio || !('mediaSession' in navigator) || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
   try {
     navigator.mediaSession.setPositionState({

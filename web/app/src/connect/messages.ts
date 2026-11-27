@@ -28,7 +28,13 @@ export type ConnectMsg =
       queue?: CTrack[];
       volume?: number;
       shuffle?: boolean;
+      // Smart shuffle (similar songs mixed in) is what [shuffle] is; only the app does it.
+      smart?: boolean;
+      // Smart shuffle can be turned on there (a queue from a list).
+      canSmart?: boolean;
       repeat?: string;
+      // Similar music keeps playing after the queue there; absent from a device that doesn't say.
+      autoplay?: boolean | null;
       // When this device took the music (started it, changed the song, was handed it), on its own clock; pausing doesn't count.
       since?: number | null;
       // How it sounds there, in that device's words ("Lossless", "Good Quality").
@@ -36,8 +42,9 @@ export type ConnectMsg =
       // Meant to play, stalled or not; [playing] is whether it moves. Missing from devices too old to say.
       wants?: boolean | null;
     })
-  // [mode], for repeat: "off", "all" or "one".
-  | (Base & { type: 'command'; to: string; id: string; action: string; pos?: number; value?: number; track?: CTrack | null; tracks?: CTrack[]; mode?: string | null })
+  // [mode], for repeat: "off", "all" or "one"; for shuffle, "smart" for smart shuffle.
+  // [index], for move: the place in Up Next the entry at [pos] goes to.
+  | (Base & { type: 'command'; to: string; id: string; action: string; pos?: number; value?: number; track?: CTrack | null; tracks?: CTrack[]; mode?: string | null; index?: number | null })
   | (Base & { type: 'ack'; to: string; id: string; ok?: boolean; reason?: string | null })
   | (Base & { type: 'transfer'; to: string; id: string; queue?: CTrack[]; index?: number; pos?: number; playing?: boolean })
   // [next]: the secret of the group the device moved to; the devices here follow it.
@@ -72,10 +79,11 @@ function trimmed(m: ConnectMsg, max: number): ConnectMsg {
     const index = m.index ?? 0;
     return { ...m, queue: m.queue!.slice(index, index + Math.max(max, 1)), index: 0 };
   }
+  if (m.type === 'command' && (m.tracks?.length ?? 0) > max) return { ...m, tracks: m.tracks!.slice(0, Math.max(max, 1)) };
   return m;
 }
 
-const queueSize = (m: ConnectMsg) => (m.type === 'state' || m.type === 'transfer' ? (m.queue?.length ?? 0) : 0);
+const queueSize = (m: ConnectMsg) => (m.type === 'state' || m.type === 'transfer' ? (m.queue?.length ?? 0) : m.type === 'command' ? (m.tracks?.length ?? 0) : 0);
 
 /** [msg] sealed for [group], its queue cut from the end until it fits a relay's limit. */
 export async function fit(msg: ConnectMsg, group: ConnectGroup, limit = MAX_SEALED): Promise<string> {

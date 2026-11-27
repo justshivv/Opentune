@@ -52,6 +52,17 @@ class ConnectMessagesTest {
         assertNull(ConnectMsg.decode("not json"))
     }
 
+    @Test fun aSongWithoutALengthGetsThePlayersOne() {
+        val bare = CTrack("dQw4w9WgXcQ", "Song")
+        assertEquals("3:45", bare.withLength(225_400).length)
+        assertEquals(225_000L, bare.withLength(225_400).lengthMs)
+        assertEquals("1:02:03", bare.withLength(3_723_000).length)
+        // Not known yet: left as it is.
+        assertNull(bare.withLength(0).length)
+        // One the list said stays.
+        assertEquals("4:00", bare.copy(length = "4:00").withLength(225_400).length)
+    }
+
     @Test fun aLongQueueIsCutToFit() {
         val group = ConnectGroup.generate()
         val long = CTrack("dQw4w9WgXcQ", "x".repeat(300), "y".repeat(300))

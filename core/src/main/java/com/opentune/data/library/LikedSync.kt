@@ -61,9 +61,11 @@ object LikedSync {
         ?.takeIf { AccountStore.signedIn.value }
 
     /** Watches for sign-in from the start; each one is a chance to sync. */
-    fun init() {
+    /** [startAfterMs]: how long after the app is first in use the first sync waits. */
+    fun init(startAfterMs: Long = 0) {
         scope.launch {
             com.opentune.data.AppInUse.started.first { it }
+            if (startAfterMs > 0) kotlinx.coroutines.delay(startAfterMs)
             AccountStore.accounts.collect { if (owner() != null) sync() }
         }
     }

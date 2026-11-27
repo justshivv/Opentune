@@ -34,6 +34,8 @@ object LibraryArtwork {
     }
 
     fun keep(urls: List<String?>) {
+        // Not started (a watch): nothing is kept, and nothing piles up waiting.
+        if (dir == null) return
         scope.launch {
         urls.filterNotNull().mapNotNull { it.artworkAt(PLAYER_ART_PX) }.distinct()
             .filter { it.startsWith("https://") && local(it) == null }

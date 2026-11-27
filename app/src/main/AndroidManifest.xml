@@ -117,6 +117,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="justshivv.github.io" android:pathPrefix="/Opentune/pair/" />
             </intent-filter>
+            <!-- A watch's pairing code: opentune://watch/#<one-use key>. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="opentune" android:host="watch" />
+            </intent-filter>
             <!-- A TV's code for pairing this phone as its remote, scanned with the camera app. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

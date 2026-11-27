@@ -966,6 +966,11 @@ object MusicRepository {
         result
     }
 
+    /** The albums saved in the account's library, first page; for the watch, which shows a short list. */
+    suspend fun libraryAlbums(): List<ShelfItem> = io {
+        InnertubeParser.parseLibraryItemPage(Innertube.browse("FEmusic_liked_albums")).items.filter { it.browseId != null }
+    }
+
     /**
      * The song and the radio YouTube Music queues after it; the song itself
      * is always kept, even when hidden, since it was asked for.

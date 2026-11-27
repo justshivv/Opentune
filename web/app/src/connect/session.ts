@@ -18,11 +18,15 @@ export interface ConnectPlayer {
   previous(): void;
   seekTo(ms: number): void;
   setVolume(v: number): void;
-  setShuffle(on: boolean): void;
+  /** [smart]: smart shuffle, where this device can; plain shuffle otherwise. */
+  setShuffle(on: boolean, smart?: boolean): void;
+  setAutoplay(on: boolean): void;
   /** "off", "all" or "one". */
   setRepeat(mode: string): void;
   playTrack(t: CTrack): void;
   addToQueue(ts: CTrack[]): void;
+  /** [ts] right after the song playing, in their order. */
+  playNext(ts: CTrack[]): void;
   /**
    * Plays, or takes out, entry [at] of the queue this device last told
    * (Snapshot.queue) when it's still [id]; otherwise the first one that is.
@@ -50,6 +54,10 @@ export interface Snapshot {
   queue: CTrack[];
   volume: number;
   shuffle: boolean;
+  smart?: boolean;
+  canSmart?: boolean;
+  /** Null where this device has no such thing. */
+  autoplay?: boolean | null;
   repeat: string;
   /** How it sounds here, in this device's words; null when it can't say. */
   quality?: string | null;
@@ -116,16 +124,26 @@ const PING_RETRY_MS = 2_000;
 const YIELD_MS = 1_500;
 /** A handover's target taking the music this long before it was sent still counts as taking it. */
 const TOOK_SLACK_MS = 2_000;
+/** Entry [at] of [q] when it's still [track]; otherwise the first that is. */
+function indexAt(q: CTrack[], at: number, track: CTrack): number | null {
+  if (q[at]?.id === track.id) return at;
+  const i = q.findIndex((t) => t.id === track.id);
+  return i >= 0 ? i : null;
+}
 /**
- * Pressed here for a device a moment ago: play/pause, shuffle and repeat
- * until [until]; a place in a song (a seek, a skip, and the song skipped to
- * as [track]) until [placeUntil], set at [placeAt].
+ * Pressed here for a device a moment ago: play/pause, shuffle, smart shuffle,
+ * repeat, autoplay and its Up Next as changed here until [until]; a place in a
+ * song (a seek, a skip, and the song skipped to as [track]) until [placeUntil],
+ * set at [placeAt].
  */
 interface Guess {
   until: number;
   playing?: boolean;
   shuffle?: boolean;
+  smart?: boolean;
   repeat?: string;
+  autoplay?: boolean;
+  queue?: CTrack[];
   placeUntil?: number;
   placeAt?: number;
   pos?: number;
@@ -289,13 +307,13 @@ export class ConnectSession {
   }
 
   /** Notes a change pressed here for [id], on top of the ones still waiting to show in its reports. */
-  private guess(id: string, change: Pick<Guess, 'playing' | 'shuffle' | 'repeat'>): void {
+  private guess(id: string, change: Pick<Guess, 'playing' | 'shuffle' | 'smart' | 'repeat' | 'autoplay' | 'queue'>): void {
     const now = this.clock();
     const before = this.guesses.get(id) ?? { until: 0 };
     const live = now < before.until;
     this.guesses.set(id, {
       ...before,
-      ...(live ? {} : { playing: undefined, shuffle: undefined, repeat: undefined }),
+      ...(live ? {} : { playing: undefined, shuffle: undefined, smart: undefined, repeat: undefined, autoplay: undefined, queue: undefined }),
       ...change,
       until: now + GUESS_MS,
     });
@@ -331,12 +349,14 @@ export class ConnectSession {
         : action === 'next' ? (next ? { ...shown, track: next, queue: shown.queue!.slice(1), pos: 0, playing: false } : null)
         : action === 'previous' ? { ...shown, pos: 0, playing: false }
         : action === 'volume' ? { ...shown, volume: value }
-        : action === 'shuffle' ? { ...shown, shuffle: value > 0.5 }
+        : action === 'shuffle' ? { ...shown, shuffle: value > 0.5, smart: value > 0.5 && mode === 'smart' }
+        : action === 'autoplay' ? { ...shown, autoplay: value > 0.5 }
         : action === 'repeat' ? { ...shown, repeat: mode ?? shown.repeat }
         : null;
       if (guess) this.setDevice({ ...target, state: guess, receivedAt: now });
       if (guess && (action === 'play' || action === 'pause')) this.guess(target.id, { playing: meant(guess) });
-      if (guess && action === 'shuffle') this.guess(target.id, { shuffle: !!guess.shuffle });
+      if (guess && action === 'shuffle') this.guess(target.id, { shuffle: !!guess.shuffle, smart: !!guess.smart });
+      if (guess && action === 'autoplay') this.guess(target.id, { autoplay: !!guess.autoplay });
       if (guess && action === 'repeat') this.guess(target.id, { repeat: guess.repeat ?? 'off' });
       if (guess && action === 'seek') this.guessPlace(target.id, pos);
       if (guess && action === 'next') this.guessPlace(target.id, 0, next?.id);
@@ -372,6 +392,36 @@ export class ConnectSession {
 
   addToQueueOn(deviceId: string, tracks: CTrack[]): void {
     this.command(deviceId, 'addToQueue', { tracks });
+  }
+
+  playNextOn(deviceId: string, tracks: CTrack[]): void {
+    this.command(deviceId, 'playNext', { tracks });
+  }
+
+  /**
+   * Starts [queue] from [index] on [deviceId], the device playing: what's
+   * started here while another device plays goes there. Shown at once.
+   */
+  playOn(deviceId: string, queue: CTrack[], index: number): void {
+    const target = this.devices.get(deviceId);
+    const start = queue[index];
+    if (!target || !start) return;
+    const shown = target.state;
+    const now = this.clock();
+    if (shown) {
+      this.setDevice({ ...target, state: { ...shown, track: start, private: false, playing: true, pos: 0, queue: queue.slice(index + 1, index + 1 + MAX_QUEUE) }, receivedAt: now });
+      this.guess(deviceId, { playing: true });
+      this.guessPlace(deviceId, 0, start.id);
+    }
+    const id = newId();
+    this.send({ type: 'transfer', from: this.myId, seq: ++this.seq, at: now, to: deviceId, id, queue, index, pos: 0, playing: true });
+    this.expect(id, deviceId, this.timings.transferMs, (ack) => {
+      if (ack.ok) return;
+      this.guesses.delete(deviceId);
+      const d = this.devices.get(deviceId);
+      if (d && shown) this.setDevice({ ...d, state: shown });
+      this.refused(ack, deviceId);
+    });
   }
 
   /** Plays entry [at] of [deviceId]'s Up Next ([track], so a queue changed meanwhile still finds it). */
@@ -620,7 +670,7 @@ export class ConnectSession {
     const g0 = this.guesses.get(msg.from);
     if (g0) {
       let g: Guess = { ...g0 };
-      if (now >= g.until) g = { ...g, playing: undefined, shuffle: undefined, repeat: undefined };
+      if (now >= g.until) g = { ...g, playing: undefined, shuffle: undefined, smart: undefined, repeat: undefined, autoplay: undefined, queue: undefined };
       if (now >= (g.placeUntil ?? 0)) g = { ...g, pos: undefined, track: undefined };
       if (g.playing !== undefined && meant(msg) !== g.playing) return this.touch(msg.from, now);
       if (g.pos !== undefined) {
@@ -628,10 +678,20 @@ export class ConnectSession {
         const off = (g.track !== undefined && msg.track?.id !== g.track) || Math.abs((msg.pos ?? 0) - g.pos) > PLACE_SLACK_MS + (now - (g.placeAt ?? now));
         if (off) return this.touch(msg.from, now);
       }
-      const confirmed = (g.shuffle === undefined || !!msg.shuffle === g.shuffle) && (g.repeat === undefined || (msg.repeat ?? 'off') === g.repeat);
+      const confirmed =
+        (g.shuffle === undefined || !!msg.shuffle === g.shuffle) && (g.smart === undefined || !!msg.smart === g.smart) &&
+        (g.repeat === undefined || (msg.repeat ?? 'off') === g.repeat) && (g.autoplay === undefined || msg.autoplay === g.autoplay) &&
+        (g.queue === undefined || (msg.queue ?? []).map((t) => t.id).join() === g.queue.map((t) => t.id).join());
       if (confirmed) this.guesses.delete(msg.from);
       else {
-        st = { ...msg, ...(g.shuffle !== undefined ? { shuffle: g.shuffle } : {}), ...(g.repeat !== undefined ? { repeat: g.repeat } : {}) };
+        st = {
+          ...msg,
+          ...(g.shuffle !== undefined ? { shuffle: g.shuffle } : {}),
+          ...(g.smart !== undefined ? { smart: g.smart } : {}),
+          ...(g.repeat !== undefined ? { repeat: g.repeat } : {}),
+          ...(g.autoplay !== undefined ? { autoplay: g.autoplay } : {}),
+          ...(g.queue !== undefined ? { queue: g.queue } : {}),
+        };
         this.guesses.set(msg.from, { ...g, playing: undefined, pos: undefined, track: undefined });
       }
     }
@@ -686,13 +746,15 @@ export class ConnectSession {
       case 'previous': this.player.previous(); return true;
       case 'seek': this.player.seekTo(c.pos ?? 0); return true;
       case 'volume': this.player.setVolume(c.value ?? 1); return true;
-      case 'shuffle': this.player.setShuffle((c.value ?? 0) > 0.5); return true;
+      case 'shuffle': this.player.setShuffle((c.value ?? 0) > 0.5, c.mode === 'smart'); return true;
+      case 'autoplay': this.player.setAutoplay((c.value ?? 0) > 0.5); return true;
       case 'repeat':
         if (c.mode !== 'off' && c.mode !== 'all' && c.mode !== 'one') return false;
         this.player.setRepeat(c.mode);
         return true;
       case 'playTrack': if (!c.track) return false; this.player.playTrack(c.track); return true;
       case 'addToQueue': this.player.addToQueue(c.tracks ?? []); return true;
+      case 'playNext': this.player.playNext(c.tracks ?? []); return true;
       case 'jump': return !!c.track && this.player.playQueued(c.pos ?? 0, c.track.id);
       case 'remove': return !!c.track && this.player.removeQueued(c.pos ?? 0, c.track.id);
       case 'move': return !!c.track && !!this.player.moveQueued?.(c.pos ?? 0, Math.round(c.value ?? 0), c.track.id);
@@ -705,7 +767,7 @@ export class ConnectSession {
   private command(
     to: string,
     action: string,
-    o: { pos?: number; value?: number; track?: CTrack; tracks?: CTrack[]; mode?: string; quiet?: boolean; onAck?: (a: Ack) => void } = {},
+    o: { pos?: number; value?: number; track?: CTrack; tracks?: CTrack[]; mode?: string; index?: number; quiet?: boolean; onAck?: (a: Ack) => void } = {},
   ): void {
     const id = newId();
     this.send({
@@ -715,6 +777,7 @@ export class ConnectSession {
       ...(o.track ? { track: o.track } : {}),
       ...(o.mode ? { mode: o.mode } : {}),
       ...(o.tracks?.length ? { tracks: o.tracks } : {}),
+      ...(typeof o.index === 'number' ? { index: o.index } : {}),
     });
     if (!o.quiet) this.expect(id, to, this.timings.commandMs, o.onAck ?? (() => {}));
   }
@@ -770,6 +833,9 @@ export class ConnectSession {
       type: 'state', from: this.myId, seq: ++this.seq, at: this.clock(),
       track: s.track, private: s.private, playing: s.playing, pos: Math.round(s.pos), queue: s.queue.slice(0, MAX_QUEUE),
       volume: s.volume, shuffle: s.shuffle, repeat: s.repeat,
+      ...(s.smart ? { smart: true } : {}),
+      ...(s.canSmart ? { canSmart: true } : {}),
+      ...(typeof s.autoplay === 'boolean' ? { autoplay: s.autoplay } : {}),
       ...(this.mineAt > 0 ? { since: this.mineAt } : {}),
       ...(s.quality ? { quality: s.quality } : {}),
       wants: wants(s),

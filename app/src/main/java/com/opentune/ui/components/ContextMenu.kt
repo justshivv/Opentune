@@ -341,6 +341,7 @@ fun SongContextMenu(
     val isLiked = liked.any { it.videoId == song.videoId }
     val download = downloads[song.videoId]
     val local = !isYouTubeId(song.videoId)
+    val watches by com.opentune.data.connect.Connect.watches.collectAsState()
     // What follows the menu once it's gone: a playlist picker, or the full menu.
     var next by remember { mutableStateOf<String?>(null) }
     when (next) {
@@ -365,6 +366,11 @@ fun SongContextMenu(
                 null -> MenuEntry("Download", ImageVector.vectorResource(AppIcons.Download)) { Downloads.enqueue(context, song); fromList?.keepPicked(listOf(song)) }
             },
         )
+        if (!local) watches.forEach { w ->
+            add(MenuEntry(com.opentune.ui.connect.SendToWatch.label(w, watches), ImageVector.vectorResource(AppIcons.Watch)) {
+                com.opentune.ui.connect.SendToWatch.song(context, w, song)
+            })
+        }
         if (cached && download?.state != DownloadState.DONE) add(MenuEntry("Remove from cache", ImageVector.vectorResource(AppIcons.DeleteSweep)) {
             com.opentune.playback.AudioCache.remove(context, song.videoId)
         })
@@ -419,6 +425,7 @@ fun CollectionContextMenu(
     val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
     val inAccount = accountLists.any { it.browseId?.removePrefix("VL") == list.browseId.removePrefix("VL") }
     val kind = if (list.type == BrowseType.ALBUM) "album" else "playlist"
+    val watches by com.opentune.data.connect.Connect.watches.collectAsState()
     // Add to playlist: the picker takes over from the menu at once while the list's songs are
     // read behind it (that can take seconds); a playlist picked meanwhile is filled when they're in.
     var adding by remember { mutableStateOf(false) }
@@ -461,6 +468,11 @@ fun CollectionContextMenu(
             add(MenuEntry("Add to queue", ImageVector.vectorResource(AppIcons.QueueMusic)) { actions.addToQueue(list.browseId) })
             add(MenuEntry("Add to playlist", ImageVector.vectorResource(AppIcons.PlaylistAdd)) { adding = true })
             add(MenuEntry("Download all", ImageVector.vectorResource(AppIcons.Download)) { com.opentune.data.tips.Tips.done(com.opentune.data.tips.Tip.DOWNLOAD); actions.downloadAll(list.browseId) })
+            watches.forEach { w ->
+                add(MenuEntry(com.opentune.ui.connect.SendToWatch.label(w, watches), ImageVector.vectorResource(AppIcons.Watch)) {
+                    com.opentune.ui.connect.SendToWatch.collection(context, w, list.browseId, list.title, list.subtitle, list.thumbnailUrl)
+                })
+            }
             add(MenuEntry(com.opentune.i18n.Tr.f("Open {0}", kind), ImageVector.vectorResource(AppIcons.KeyboardArrowRight)) { actions.open(list.browseId, list.type) })
         }
         add(MenuEntry("Share", ImageVector.vectorResource(AppIcons.Share)) { com.opentune.ui.share.ListShare.shareList(context, list.title, list.browseId, listOf(list.thumbnailUrl), list.subtitle) })

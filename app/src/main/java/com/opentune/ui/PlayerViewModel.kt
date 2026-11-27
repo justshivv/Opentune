@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import com.opentune.data.settings.AppSettings
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import com.opentune.data.model.artworkAt
@@ -102,9 +103,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val videoAvailable = combine(player.videoAvailable, remote) { here, far -> far == null && here }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
     val shuffleMode = combine(player.shuffleMode, remote) { here, far ->
-        far?.state?.let { if (it.shuffle) com.opentune.playback.ShuffleMode.ON else com.opentune.playback.ShuffleMode.OFF } ?: here
+        far?.state?.let {
+            when {
+                it.smart -> com.opentune.playback.ShuffleMode.SMART
+                it.shuffle -> com.opentune.playback.ShuffleMode.ON
+                else -> com.opentune.playback.ShuffleMode.OFF
+            }
+        } ?: here
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, com.opentune.playback.ShuffleMode.OFF)
-    val smartShuffleAvailable = combine(player.smartShuffleAvailable, remote) { here, far -> far == null && here }
+    val smartShuffleAvailable = combine(player.smartShuffleAvailable, remote) { here, far -> far?.state?.canSmart ?: here }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
     val repeatMode = combine(player.repeatMode, remote) { here, far ->
         when (far?.state?.repeat) {
@@ -310,18 +317,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** In someone else's room, picking a song sends it to the room rather than playing it here. */
     private fun toRoom(song: Song?): Boolean = song != null && Together.room.value?.following == true && Together.suggest(song)
 
-    fun play(song: Song, source: String? = null) { if (!toRoom(song)) player.play(song, source) }
+    // While another of the person's devices plays, what's started here plays there (see Connect).
+    fun play(song: Song, source: String? = null) { if (!toRoom(song) && !Connect.playOnRemote(listOf(song), 0)) player.play(song, source) }
     /** Plays [song] as its music video from the start; in a room, as a song suggested to the host. */
     fun playVideo(song: Song, source: String? = null): Boolean = !toRoom(song) && player.playVideo(song, source)
     fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false, source: String? = null, fromList: Boolean = true) {
-        if (!toRoom(songs.getOrNull(if (shuffle) 0 else startIndex))) player.playAll(songs, startIndex, shuffle, source, fromList = fromList)
+        if (toRoom(songs.getOrNull(if (shuffle) 0 else startIndex))) return
+        val remote = if (shuffle) Connect.playOnRemote(songs.shuffled(), 0) else Connect.playOnRemote(songs, startIndex)
+        if (!remote) player.playAll(songs, startIndex, shuffle, source, fromList = fromList)
     }
     /** Shuffles [songs] with similar songs mixed in; in a room, the first song is only suggested, as with shuffle. */
     fun smartShuffle(songs: List<Song>, source: String? = null) {
-        if (!toRoom(songs.firstOrNull())) player.playAll(songs, 0, shuffle = true, source = source, smart = true)
+        if (!toRoom(songs.firstOrNull()) && !Connect.playOnRemote(songs.shuffled(), 0)) player.playAll(songs, 0, shuffle = true, source = source, smart = true)
     }
-    fun playNext(song: Song) { if (!toRoom(song)) player.playNext(song) }
-    fun addToQueue(song: Song) { if (!toRoom(song)) player.addToQueue(song) }
+    fun playNext(song: Song) { if (!toRoom(song) && !Connect.playNextOnRemote(listOf(song))) player.playNext(song) }
+    fun addToQueue(song: Song) { if (!toRoom(song) && !Connect.addToQueueOnRemote(listOf(song))) player.addToQueue(song) }
     // While another of the person's devices plays, these act on it (see Connect);
     // in someone else's room they go to the host instead (see Together.intercept).
     fun togglePlayPause() { if (!Connect.togglePlayPause() && !Together.intercept(Together.Control.PlayPause)) player.togglePlayPause() }
@@ -334,9 +344,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun toggleShuffle() { if (!Connect.toggleShuffle()) player.toggleShuffle() }
     /** Off, shuffle, then smart shuffle for a queue from a list; returns the new mode. */
     fun cycleShuffle(): com.opentune.playback.ShuffleMode {
-        val far = remote.value ?: return player.cycleShuffle()
-        Connect.toggleShuffle()
-        return if (far.state?.shuffle == true) com.opentune.playback.ShuffleMode.OFF else com.opentune.playback.ShuffleMode.ON
+        return Connect.cycleShuffle() ?: player.cycleShuffle()
     }
     fun cycleRepeatMode() { if (!Connect.cycleRepeat()) player.cycleRepeatMode() }
     /** Entry [index] of [queue] as the other device's Up Next, when one is playing: its place there and its track. */
@@ -353,10 +361,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (remote.value != null) { remoteEntry(index)?.let { (at, t) -> Connect.removeQueued(at, t) }; return }
         player.removeQueueItem(index)
     }
-    // Reordering stays on this device's own queue.
-    fun moveQueueItem(from: Int, to: Int) { if (remote.value == null) player.moveQueueItem(from, to) }
+    fun moveQueueItem(from: Int, to: Int) {
+        if (remote.value != null) {
+            val (at, t) = remoteEntry(from) ?: return
+            val (place, _) = remoteEntry(to) ?: return
+            Connect.moveQueued(at, t, place)
+            return
+        }
+        player.moveQueueItem(from, to)
+    }
     /** A song on its own; the service follows it with radio. */
-    fun startRadio(song: Song) { if (!toRoom(song)) player.play(song, com.opentune.i18n.Tr.f("{0} radio", song.title)) }
+    fun startRadio(song: Song) { if (!toRoom(song) && !Connect.playOnRemote(listOf(song), 0)) player.play(song, com.opentune.i18n.Tr.f("{0} radio", song.title)) }
     fun seekTo(positionMs: Long) { if (!Connect.seekTo(positionMs) && !Together.intercept(Together.Control.Seek(positionMs))) player.seekTo(positionMs) }
     fun positionMs(): Long = remote.value?.let { far ->
         // Counted on from its last report, never past the song's end while the next report is on its way.

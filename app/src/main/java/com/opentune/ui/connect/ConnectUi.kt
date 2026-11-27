@@ -62,15 +62,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Asked once, after signing in to YouTube: may Connect keep its key in the
- * account? Until the answer is yes, nothing is created there.
+ * Asked once per account, after signing in to YouTube: may Connect keep its
+ * key in the account? Until the answer is yes, nothing is created there. An
+ * account that already holds the key is joined without asking.
  */
 @Composable
 fun AccountSyncAsk() {
     val answer by Connect.accountSync.collectAsState()
     val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
     val enabled by Connect.enabled.collectAsState()
-    if (answer != null || !signedIn || !enabled) return
+    // Asked only once the account was looked in and holds no group: one that does already said yes elsewhere.
+    val ask by Connect.askAccount.collectAsState()
+    if (answer != null || !signedIn || !enabled || !ask) return
     com.opentune.ui.components.FloatingDialog(
         onDismissRequest = {},
         properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
@@ -82,10 +85,10 @@ fun AccountSyncAsk() {
     )
 }
 
-/** A device's icon by its form: "web" or "phone". */
+/** A device's icon by its form: "web", "watch" or "phone" (and the phone's for any other). */
 @Composable
 internal fun formIcon(form: String): ImageVector =
-    ImageVector.vectorResource(if (form == "web") AppIcons.Laptop else AppIcons.Smartphone)
+    ImageVector.vectorResource(when (form) { "web" -> AppIcons.Laptop; "watch" -> AppIcons.Watch; else -> AppIcons.Smartphone })
 
 /** The line a device's song shows under its name: "Song · Artist", or what it's doing instead. */
 internal fun doing(d: Device): String? {
@@ -103,6 +106,8 @@ fun ConnectScreen(contentPadding: PaddingValues, joining: String?, onBack: () ->
     val group by Connect.group.collectAsState()
     val name by Connect.deviceName.collectAsState()
     val view by Connect.view.collectAsState()
+    val watches by Connect.watches.collectAsState()
+    val waiting by Connect.waiting.collectAsState()
     val accountSync by Connect.accountSync.collectAsState()
     var editingName by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
@@ -118,8 +123,10 @@ fun ConnectScreen(contentPadding: PaddingValues, joining: String?, onBack: () ->
     LaunchedEffect(joining) { joining?.let(ConnectGroup::parse)?.let(::join) }
     if (scanning) com.opentune.ui.account.QrScannerDialog(onDismiss = { scanning = false }) { text ->
         scanning = false
+        val watch = com.opentune.data.connect.WatchPairingKey.parse(text)
         val g = ConnectGroup.parse(text)
-        if (g == null) Pills.error(Tr.t("That isn't a devices code"), context) else join(g)
+        if (watch != null) com.opentune.ui.account.PairingLinks.watch.value = watch
+        else if (g == null) Pills.error(Tr.t("That isn't a devices code"), context) else join(g)
     }
     if (confirmReset) AlertDialog(
         onDismissRequest = { confirmReset = false },
@@ -143,7 +150,7 @@ fun ConnectScreen(contentPadding: PaddingValues, joining: String?, onBack: () ->
         item { PageHeader("Your devices", onBack = onBack) }
         item {
             Text(
-                "See what plays on your computer from this phone and control it, or move the music from one to the other. Only your devices can read what they say to each other.",
+                "See what plays on your computer or watch from this phone and control it, or move the music from one to the other. Only your devices can read what they say to each other.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
@@ -156,7 +163,7 @@ fun ConnectScreen(contentPadding: PaddingValues, joining: String?, onBack: () ->
                 Text("Add a device", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "In the web player, open Settings › Your devices and scan its code here, or send it this link.",
+                    "In the web player, open Settings › Your devices and scan its code here, or send it this link. On a watch, choose Pair with phone and scan the code it shows.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -208,7 +215,18 @@ fun ConnectScreen(contentPadding: PaddingValues, joining: String?, onBack: () ->
             }
             items(devices.size) { i ->
                 val d = devices[i]
-                SettingRow(d.name.ifBlank { Tr.t("Another device") }, summary = doing(d), icon = formIcon(d.form))
+                val sent = waiting[d.id]?.let { Tr.f("{0} sent to download, on the way", it) }
+                SettingRow(d.name.ifBlank { Tr.t("Another device") }, summary = listOfNotNull(doing(d), sent).joinToString(" · ").ifBlank { null }, icon = formIcon(d.form))
+            }
+            // Watches that aren't here now: what's waiting for them to come online.
+            val away = watches.filter { w -> devices.none { it.id == w.id } }
+            items(away.size) { i ->
+                val w = away[i]
+                SettingRow(
+                    w.name.ifBlank { Tr.t("Watch") },
+                    summary = waiting[w.id]?.let { Tr.f("Away · {0} waiting to download once it's online", it) } ?: Tr.t("Away"),
+                    icon = formIcon("watch"),
+                )
             }
             item {
                 SettingRow(

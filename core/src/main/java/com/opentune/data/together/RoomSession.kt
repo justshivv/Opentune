@@ -59,6 +59,8 @@ internal interface RoomTransport {
     fun start()
     fun publish(event: NostrEvent): Boolean
     fun close()
+    /** Reconnects now to the relays it's waiting to try again. */
+    fun wake() {}
 }
 
 /** Where a room's voice clips go to be heard as they arrive. */

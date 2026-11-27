@@ -131,7 +131,8 @@ fun QueuePane(
     appleWords: Boolean = false,
 ) {
     // A song started on its own carries on with its radio even with AutoPlay off (see PlaybackService.radioWanted).
-    val autoplay = AppSettings.playback.collectAsState().value.autoplay ||
+    val far = com.opentune.data.connect.Connect.controlling.collectAsState().value
+    val autoplay = far?.state?.autoplay ?: AppSettings.playback.collectAsState().value.autoplay ||
             queue.count { it.queueTier != com.opentune.data.model.QueueTier.AUTOPLAY } == 1
     val haptics = com.opentune.ui.components.rememberHaptics()
     val rowPx = with(LocalDensity.current) { QUEUE_ROW.toPx() }
@@ -736,7 +737,9 @@ fun ModesPill(
     /** False while it's fading out of a morphing pill, so taps go to what's coming in. */
     enabled: Boolean = true,
 ) {
-    val autoplay = AppSettings.playback.collectAsState().value.autoplay
+    // With another device playing, its autoplay.
+    val far by com.opentune.data.connect.Connect.controlling.collectAsState()
+    val autoplay = far?.state?.autoplay ?: AppSettings.playback.collectAsState().value.autoplay
     val haptics = com.opentune.ui.components.rememberHaptics()
     val context = LocalContext.current
     val shape = RoundedCornerShape(30.dp)
@@ -796,7 +799,7 @@ fun ModesPill(
         VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
         PillSegment(ImageVector.vectorResource(AppIcons.AllInclusive), "AutoPlay", autoplay, SegmentMotion.PULSE, enabled = enabled) {
             haptics.pattern(if (autoplay) Haptics.Pattern.OFF else Haptics.Pattern.AUTOPLAY)
-            AppSettings.setAutoplay(!autoplay)
+            if (!com.opentune.data.connect.Connect.toggleAutoplay()) AppSettings.setAutoplay(!autoplay)
         }
     }
 }

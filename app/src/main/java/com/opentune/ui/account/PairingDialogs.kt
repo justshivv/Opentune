@@ -40,6 +40,8 @@ import kotlinx.coroutines.withContext
 /** Holds only an unapproved QR offer. Receiving an intent never sends credentials. */
 object PairingLinks {
     val pending = MutableStateFlow<PairingOffer?>(null)
+    /** A watch's pairing code, waiting for the person to add it. */
+    val watch = MutableStateFlow<com.opentune.data.connect.WatchPairingKey?>(null)
     /** The web player's "Sign in with your phone" code, waiting for approval. */
     val pendingWeb = MutableStateFlow<WebShareOffer?>(null)
     /** Why the last sign-in code scanned couldn't be used, until it's read. */
@@ -47,6 +49,10 @@ object PairingLinks {
 
     fun receive(intent: Intent?): Boolean {
         val uri = intent?.data ?: return false
+        if (uri.scheme == "opentune" && uri.host == "watch") {
+            watch.value = com.opentune.data.connect.WatchPairingKey.parse(uri.toString())
+            return true
+        }
         val own = uri.scheme == "opentune" && uri.host == "pair"
         val site = uri.scheme == "https" && uri.host == "justshivv.github.io" && uri.path == "/Opentune/pair/"
         if (own && uri.path == "/web") {
@@ -67,7 +73,50 @@ object PairingLinks {
         return true
     }
     fun dismiss() { pending.value = null }
+    fun dismissWatch() { watch.value = null }
     fun dismissWeb() { pendingWeb.value = null }
+}
+
+/**
+ * A watch's code was scanned: adds the watch to this phone's devices, and
+ * signs it in to YouTube Music too if the person ticks that.
+ */
+@Composable
+fun ConfirmWatch() {
+    val key by PairingLinks.watch.collectAsState()
+    val current = key ?: return
+    val signedIn by AccountStore.signedIn.collectAsState()
+    val scope = rememberCoroutineScope()
+    var busy by remember(current) { mutableStateOf(false) }
+    var status by remember(current) { mutableStateOf<String?>(null) }
+    var withAccount by remember(current) { mutableStateOf(false) }
+    FloatingCard(onDismiss = { if (!busy) PairingLinks.dismissWatch() }, title = "Add your watch") {
+        Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Add this watch to your devices? It will see and control what your other devices play. Approve only if you just scanned the code on your own watch.")
+            if (signedIn) Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                androidx.compose.material3.Checkbox(checked = withAccount, onCheckedChange = { if (!busy) withAccount = it })
+                Text("Also sign the watch in to YouTube Music")
+            }
+            status?.let { Text(it) }
+            if (!busy) SheetButton("Add watch", tone = SheetTone.Primary, onClick = {
+                busy = true; status = "Sending to the watch…"
+                scope.launch {
+                    try {
+                        val name = com.opentune.data.connect.Connect.addWatch(current, withAccount)
+                        if (name != null) {
+                            status = null
+                            current.forget()
+                            PairingLinks.dismissWatch()
+                            com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("{0} is one of your devices now", name.ifBlank { "Your watch" }))
+                        } else status = "The watch didn't answer. Scan a fresh code from it."
+                    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (_: Exception) { status = "Couldn't reach the watch. Check this phone's connection and try again." }
+                    finally { busy = false }
+                }
+            })
+            if (!busy) SheetButton("Cancel", onClick = { PairingLinks.dismissWatch() }, closes = true)
+        }
+    }
 }
 
 /** What the phone says when it couldn't sign a device in, in plain words for each reason. */

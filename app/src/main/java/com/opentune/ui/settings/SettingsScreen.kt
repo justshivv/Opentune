@@ -159,6 +159,8 @@ fun SettingsScreen(
     onOpenSpotify: () -> Unit = {},
     onOpenDevices: () -> Unit = {},
     onOpenDiscord: () -> Unit = {},
+    /** Your devices (Connect): the phone, computers and watches that see and control each other. */
+    onOpenConnect: () -> Unit = {},
     /** A page to open on (its key, "account" for Account & integrations); the main list when null. */
     startPage: String? = null,
 ) {
@@ -168,7 +170,7 @@ fun SettingsScreen(
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val updatePending = com.opentune.ui.components.updatePending()
-    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onOpenWrapped, onSignIn, onOpenDownloads, onOpenSpotify, onOpenDevices, onOpenDiscord)
+    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onOpenWrapped, onSignIn, onOpenDownloads, onOpenSpotify, onOpenDevices, onOpenDiscord, onOpenConnect)
     val placed = remember(sections) { place(sections) }
     var sourcesOpen by rememberSaveable { mutableStateOf(false) }
     if (sourcesOpen) AudioAddonsSheet { sourcesOpen = false }
@@ -494,6 +496,7 @@ private fun settingsSections(
     onOpenSpotify: () -> Unit,
     onOpenDevices: () -> Unit,
     onOpenDiscord: () -> Unit,
+    onOpenConnect: () -> Unit,
 ): List<Section> {
     // Read so a configuration pushed from the dashboard redraws the links below.
     com.opentune.data.config.RemoteConfig.state.collectAsState().value
@@ -985,6 +988,9 @@ private fun settingsSections(
                 },
                 Entry("Link a device", "tv television web browser computer cast speaker chromecast watch wear together qr pairing sign in with your phone platforms") {
                     NavRow("Link a device", onOpenDevices, summary = "Sign in your TV, the web player, speakers and more", leading = { ServiceMark(ServiceKind.Devices) })
+                },
+                Entry("Your devices", "connect devices watch wear computer web player remote control move music pair") {
+                    NavRow("Your devices", onOpenConnect, summary = "See and control what plays on your computer and watch", leading = { ServiceMark(ServiceKind.Devices) })
                 },
                 if (signedIn) {
                     Entry("Sign out", "logout account") {

@@ -1,18 +1,25 @@
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { setAccountSync, useConnect } from '@/connect/connect';
+import { setAccountSync, syncAccount, useConnect } from '@/connect/connect';
 import { useSignedIn } from '@/data/music/queries';
 
 const primary = 'flex-1 rounded-pill bg-key-bg px-5 py-2 type-body-emphasized text-white';
 const secondary = 'flex-1 rounded-pill bg-quaternary px-4 py-2 type-body-emphasized text-primary';
 
 /**
- * Asked once, after signing in to YouTube: may Connect keep its key in the
- * account? Until the answer is yes, nothing is created there.
+ * Asked once per account, after signing in to YouTube: may Connect keep its
+ * key in the account? Until the answer is yes, nothing is created there. An
+ * account that already holds the key is joined without asking.
  */
 export function AccountSyncAsk() {
   const saved = useConnect((s) => s.saved);
+  const ask = useConnect((s) => s.askAccount);
   const signedIn = useSignedIn();
-  if (!signedIn || !saved.enabled || saved.accountSync !== null) return null;
+  // Signing in later looks in the account then.
+  useEffect(() => {
+    if (signedIn && saved.enabled && saved.accountSync === null) void syncAccount();
+  }, [signedIn, saved.enabled, saved.accountSync]);
+  if (!signedIn || !saved.enabled || saved.accountSync !== null || !ask) return null;
   return createPortal(
     <div className="fixed inset-0 z-(--z-modal) grid animate-fade place-items-center bg-scrim p-4 [backdrop-filter:blur(6px)]">
       <div
