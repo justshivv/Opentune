@@ -307,6 +307,10 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     if (naming) NewPlaylistDialog(signedIn, onDismiss = { naming = false }) { name, privacy -> naming = false; nav.playlist(LibraryStore.createPlaylist(name, privacy = privacy)) }
     // The page's faces: the page itself, its playlists, its artists, its smart playlists, and Spotify's own.
     var tab by remember { mutableStateOf(0) }
+    // A tapped pill speaks for the switch until the pager settles: the highlight is
+    // the tap's target while a tap's ride runs, and the pager's own page otherwise,
+    // so a drag never moves the highlight before the page itself has changed.
+    var tappedTab by remember { mutableStateOf<Int?>(null) }
     val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
     val spotifySync by com.opentune.data.spotify.SpotifySync.status.collectAsState()
     // Opening Spotify's face asks Spotify what changed, behind the list already here.
@@ -345,7 +349,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     LaunchedEffect(pagerState) { androidx.compose.runtime.snapshotFlow { pagerState.currentPage }.collect { tab = it } }
     // "Show all" opens no page of its own any more: it turns to the Playlists face, from the top.
     val showAllPlaylists: () -> Unit = { scope.launch { pagerState.animateScrollToPage(1, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing)); playlistsListState.scrollToItem(0) } }
-    val showAllArtists: () -> Unit = { scope.launch { pagerState.animateScrollToPage(2, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing)); artistsListState.scrollToItem(0) } }
+    val showAllArtists: () -> Unit = { scope.launch { pagerState.scrollToPage(2); artistsListState.scrollToItem(0) } }
     val rows = rememberPlaylistRows(nav)
     var spotifyOrder by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PlaylistOrder.LIBRARY) }
     var spotifySorting by remember { mutableStateOf(false) }
@@ -392,7 +396,24 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 Modifier.weight(1f).height(48.dp).glass(androidx.compose.foundation.shape.CircleShape).fadingEdges(switchState),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                LibrarySwitch(tab, switchState, { scope.launch { pagerState.animateScrollToPage(it, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing)) } })
+                // The switch's highlight: a tap's target while that tap's ride runs, the
+                // pager's own page the rest of the time — a tap lights its pill at once
+                // without stopping at the faces between, and a drag moves nothing
+                // until the page itself has changed.
+                // A tap's ride: the neighbouring face slides; anything farther jumps
+                // straight there, so a heavy phone drops no frames crossing the faces
+                // between, and the pill and the page land together.
+                LibrarySwitch(tappedTab ?: tab, switchState, {
+                    tappedTab = it
+                    scope.launch {
+                        try {
+                            if (kotlin.math.abs(it - pagerState.currentPage) > 1) pagerState.scrollToPage(it)
+                            else pagerState.animateScrollToPage(it, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                        } finally {
+                            if (tappedTab == it) tappedTab = null
+                        }
+                    }
+                })
             }
             Spacer(Modifier.width(10.dp))
             // History and the account side by side in one glass pill.
