@@ -34,6 +34,12 @@ export function AppearanceSettings() {
           onChange={(liquidGlass) => a.update({ liquidGlass })}
         />
         <Toggle label="Colors from artwork" detail="Let the playing song color NepTune." checked={a.artworkColors} onChange={(artworkColors) => a.update({ artworkColors })} />
+        <Toggle
+          label="Accent glow on Home"
+          detail="In dark mode, a soft glow of the accent color behind the top of Home. It follows the playing song when colors come from artwork."
+          checked={a.homeGlow}
+          onChange={(homeGlow) => a.update({ homeGlow })}
+        />
         <fieldset className="ot-accent-picker hairline-[16px]">
           <legend>
             Accent color

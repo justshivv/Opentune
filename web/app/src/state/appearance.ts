@@ -16,10 +16,12 @@ export interface Appearance {
   motion: boolean;
   /** The floating pills bend what's behind them (Chromium only; frosted elsewhere). */
   liquidGlass: boolean;
+  /** A soft glow of the accent colour behind the top of Home, in dark mode. */
+  homeGlow: boolean;
 }
 export const DEFAULT_APPEARANCE: Appearance = {
   mode: 'system', accent: '#e53935', pureBlack: true, artworkColors: true,
-  playerBackground: 'mesh', playerStyle: 'classic', motion: true, liquidGlass: true,
+  playerBackground: 'mesh', playerStyle: 'classic', motion: true, liquidGlass: true, homeGlow: false,
 };
 export function appearanceOf(value: unknown): Appearance {
   const v = (value && typeof value === 'object' ? value : {}) as Partial<Appearance>;
@@ -32,6 +34,7 @@ export function appearanceOf(value: unknown): Appearance {
     playerStyle: PLAYER_STYLES.includes(v.playerStyle!) ? v.playerStyle! : 'classic',
     motion: typeof v.motion === 'boolean' ? v.motion : true,
     liquidGlass: typeof v.liquidGlass === 'boolean' ? v.liquidGlass : true,
+    homeGlow: typeof v.homeGlow === 'boolean' ? v.homeGlow : false,
   };
 }
 const KEY = 'opentune:appearance';
