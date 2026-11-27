@@ -127,12 +127,12 @@ internal class Crossfade(
             if (handingOver || tail == null) return
             // The old song ran to its end under the blend: the main player is on the next one now,
             // which the second player is already playing; it stays silent until the hand-over.
-            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && phase == Phase.BLENDING) {
+            if ((reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) && phase == Phase.BLENDING) {
                 main.volume = 0f
                 return
             }
             // The song ran out while a skip's song was still loading: the skip is still made.
-            val skip = skipFallback.takeIf { reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO }
+            val skip = skipFallback.takeIf { reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT }
             bail()
             skip?.invoke()
         }
@@ -199,7 +199,8 @@ internal class Crossfade(
     private fun check(): Long {
         if (tail != null) {
             val expected = expectedNext
-            if (!enabled || BitPerfectUsb.active || main.repeatMode == Player.REPEAT_MODE_ONE ||
+            if (!enabled || BitPerfectUsb.active ||
+                (main.repeatMode == Player.REPEAT_MODE_ONE && expected != (main.currentMediaItemIndex to (main.currentMediaItem?.mediaId ?: ""))) ||
                 (phase == Phase.LOADING && main.pauseAtEndOfMediaItems) ||
                 (expected != null && (expected.first !in 0 until main.mediaItemCount || main.getMediaItemAt(expected.first).mediaId != expected.second))) {
                 // A skip still loading its song is made the plain way: it was asked for.
@@ -217,7 +218,12 @@ internal class Crossfade(
             return SOON_MS
         }
         if (mix?.isActive == true || !enabled || BitPerfectUsb.active) return POLL_MS
-        if (!main.isPlaying || !main.hasNextMediaItem() || main.repeatMode == Player.REPEAT_MODE_ONE) return POLL_MS
+        // Under repeat one the song is its own next entry — the player's own
+        // next-entry index still names the queue's next song, which repeat
+        // never reaches, and a lone song has no next entry at all. It is
+        // brought in over its own ending, like any other next song.
+        if (!main.isPlaying) return POLL_MS
+        if (main.repeatMode != Player.REPEAT_MODE_ONE && !main.hasNextMediaItem()) return POLL_MS
         // The sleep timer stops at the end of this song: nothing of the next is brought in. A mix
         // played its first seconds, then the pause at the song's end stopped both halfway in.
         if (main.pauseAtEndOfMediaItems) return POLL_MS
@@ -231,9 +237,10 @@ internal class Crossfade(
         val left = duration - position
         if (left > analyzeAhead()) return POLL_MS
 
-        val next = main.getMediaItemAt(main.nextMediaItemIndex)
+        val nextIndex = if (main.repeatMode == Player.REPEAT_MODE_ONE) main.currentMediaItemIndex else main.nextMediaItemIndex
+        val next = main.getMediaItemAt(nextIndex)
         // One album played in its order runs on as recorded.
-        if (albumGuarded(main.currentMediaItemIndex, main.nextMediaItemIndex)) return POLL_MS
+        if (albumGuarded(main.currentMediaItemIndex, nextIndex)) return POLL_MS
         // Planned again if the next song changes (the queue was edited).
         val planKey = Triple(key.first, key.second, next.mediaId)
         if (planFor != planKey) {
@@ -252,7 +259,7 @@ internal class Crossfade(
         // stops): the next song is loaded and started straight away. Seen as the sound is decoded,
         // so it works whether or not the song could be read ahead.
         val silent = left in MIN_LEFT_MS..SILENCE_WINDOW_MS && position > duration / 2 && silentMs() >= SILENCE_SKIP_MS &&
-            endedForGood(item, position, duration)
+                endedForGood(item, position, duration)
         // Still reading the songs: plan without them if time is short.
         val p = plan ?: if (silent || left <= quickPlanLeft()) quickPlan(duration).also {
             plan = it
@@ -265,7 +272,7 @@ internal class Crossfade(
         tries++
         lastMixed = key
         beforeMix()
-        begin(p, now = silent)
+        begin(p, now = silent, into = nextIndex)
         return POLL_MS
     }
 
@@ -364,7 +371,7 @@ internal class Crossfade(
         val opening = openingRead.await()
         soundEndsMs = ending?.endMs
         val p = if (settings.automix) automixPlan(duration, ending, opening, automixOptions())
-            else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, ending, opening)
+        else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, ending, opening)
         Log.d(TAG, "Plan for ${item.mediaId} → ${next.mediaId}: $p")
         MixState.picture(MixState.Picture(
             MixState.Side.of(item, duration, ending?.beat, ending?.wave, ending?.key),
@@ -428,8 +435,14 @@ internal class Crossfade(
         mix = scope.launch {
             try {
                 // 1. Loading, until it's due. A skip is due at once, and waits only so long.
+                var lastPos = main.currentPosition
                 while (true) {
                     if (main.currentMediaItemIndex != playing) { failed = skip; return@launch }
+                    // Repeat one looped the song back to its start while its next
+                    // play was still loading: the moment has passed unblended.
+                    val posNow = main.currentPosition
+                    if (posNow < lastPos - 2_000L) { failed = skip; return@launch }
+                    lastPos = posNow
                     val ready = tp.playbackState == Player.STATE_READY && (tp.bufferedPosition - tp.currentPosition >= READY_AHEAD_MS || tp.isLoading.not())
                     val due = skip || urgent || main.currentPosition >= p.mixAtMs
                     if (ready && due) break
@@ -520,6 +533,13 @@ internal class Crossfade(
                     // The next song never came in, and the playing one still has time: another go.
                     val stillOn = main.currentMediaItemIndex to (main.currentMediaItem?.mediaId ?: "")
                     if (!started && tries < MAX_TRIES && stillOn == playingKey) lastMixed = null
+                }
+                // A blend into the song itself (repeat one) leaves that same song
+                // playing: its next ending is another transition, not this one again.
+                if (started && nextIndex == playingKey.first && next.mediaId == playingKey.second) {
+                    lastMixed = null
+                    triesFor = null
+                    tries = 0
                 }
                 // The skip asked for is still made, the plain way.
                 if (failed && !started) onSkipFailed?.invoke()
@@ -637,8 +657,8 @@ internal class Crossfade(
 
     /** Runs [step] from 0 to 1 over [ms] of playing time; paused time doesn't count, and [stop] skips to the end. */
     private suspend fun ramp(ms: Long, stop: () -> Boolean = { false },
-        canAdvance: () -> Boolean = { main.isPlaying || tail?.player?.isPlaying == true },
-        onWaiting: () -> Unit = {}, step: (Float) -> Unit) {
+                             canAdvance: () -> Boolean = { main.isPlaying || tail?.player?.isPlaying == true },
+                             onWaiting: () -> Unit = {}, step: (Float) -> Unit) {
         var done = 0L
         var last = SystemClock.elapsedRealtime()
         while (true) {
@@ -666,7 +686,8 @@ internal class Crossfade(
         // The tail is this fade's now; the cancelled mix leaves it alone.
         tail = null
         // The next song hadn't come in yet: this song may blend again (a seek back).
-        if (t.player.volume == 0f) lastMixed = null
+        // A blend into the song itself may too: its next ending is a new transition.
+        if (t.player.volume == 0f || expectedNext == (main.currentMediaItemIndex to (main.currentMediaItem?.mediaId ?: ""))) lastMixed = null
         phase = Phase.IDLE
         urgent = false
         main.volume = 1f
