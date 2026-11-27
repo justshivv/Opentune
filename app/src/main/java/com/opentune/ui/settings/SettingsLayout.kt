@@ -16,7 +16,13 @@ internal class SettingsCategory(
  * Subsections that show only their first few settings until "See more" is
  * tapped, by heading. Search always shows every match.
  */
-internal val FOLDED_GROUPS = mapOf("Seek bar" to 2)
+internal val FOLDED_GROUPS = mapOf(
+    "Seek bar" to 2,
+    "Between songs" to 3,
+    "Pages" to 3,
+    "Music videos" to 3,
+    "On the player" to 3,
+)
 
 /** Subsections drawn as a card with no heading over it: the page's title already says what it is. */
 internal val UNLABELLED_GROUPS = setOf("YouTube Music", "Updates")
