@@ -21,11 +21,13 @@ import kotlinx.coroutines.flow.map
 import com.opentune.data.settings.AppSettings
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import com.opentune.data.model.artworkAt
 
-/** How long lyrics wait for a music video's SponsorBlock stretches before going on without them. */
+/** How long lyrics wait for a music video's SponsorBlock stretches before going on without them, until they come. */
 private const val GAPS_WAIT_MS = 3_000L
 
 sealed interface LyricsState {
@@ -288,22 +290,47 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 ms.takeIf { id == song.videoId && it > 0 }
                     ?: far?.state?.track?.takeIf { it.id == song.videoId }?.lengthMs?.takeIf { it > 0 } ?: 0L
             }.first { it > 0 }
-            // Plain text often means a synced source was busy just then; the
-            // repository asks again a little later and sends better lyrics on.
-            // A music video's stretches without the song (a scene with no music, say) aren't in
-            // the lyrics' timing: they're looked up for the song without them and moved past each.
-            val gaps = if (AppSettings.playback.value.sponsorBlock && com.opentune.data.isYouTubeId(song.videoId)) {
-                withTimeoutOrNull(GAPS_WAIT_MS) {
-                    com.opentune.data.sponsorblock.SponsorBlock.segments(song.videoId, setOf(com.opentune.data.lyrics.LyricsGaps.CATEGORY))
-                }?.let { com.opentune.data.lyrics.LyricsGaps.of(it, duration) }.orEmpty()
-            } else emptyList()
-            val songMs = com.opentune.data.lyrics.LyricsGaps.songMs(duration, gaps)
-            LyricsRepository.lyricsUpdates(song.videoId, song.title, song.artist, songMs).collect { found ->
-                val placed = found?.let { com.opentune.data.lyrics.LyricsGaps.onto(it, gaps) }
-                _lyrics.value = placed?.let(LyricsState::Found) ?: LyricsState.NotFound
-                // The widgets and floating lyrics show these too, rather than looking them up again.
-                com.opentune.lyrics.NowPlayingLyrics.set(song.videoId, placed)
+            // A music video's stretches without the song (a talking intro, a scene with no
+            // music) aren't in the lyrics' timing: they're looked up for the song without them
+            // and moved past each. Whether "Skip non-music parts" is on or not: on, the player
+            // jumps the stretch; off, it plays, and the lyrics wait through it. Only the lookup
+            // waits, and only so long; stretches that arrive later place the lyrics again.
+            if (!com.opentune.data.isYouTubeId(song.videoId)) {
+                showLyrics(song, duration, emptyList())
+                return@collectLatest
             }
+            kotlinx.coroutines.coroutineScope {
+                val lookup = async {
+                    com.opentune.data.sponsorblock.SponsorBlock.segments(song.videoId, setOf(com.opentune.data.lyrics.LyricsGaps.CATEGORY))
+                        .let { com.opentune.data.lyrics.LyricsGaps.of(it, duration) }
+                }
+                val early = withTimeoutOrNull(GAPS_WAIT_MS) { lookup.await() }
+                if (early != null) {
+                    showLyrics(song, duration, early)
+                    return@coroutineScope
+                }
+                val without = launch { showLyrics(song, duration, emptyList()) }
+                val late = lookup.await()
+                if (late.isNotEmpty()) {
+                    without.cancelAndJoin()
+                    showLyrics(song, duration, late)
+                }
+            }
+        }
+    }
+
+    /** Looks [song]'s lyrics up for the song without [gaps] and shows them placed on the video's clock. */
+    private suspend fun showLyrics(song: Song, duration: Long, gaps: List<com.opentune.data.lyrics.LyricsGaps.Gap>) {
+        val songMs = com.opentune.data.lyrics.LyricsGaps.songMs(duration, gaps)
+        // Plain text often means a synced source was busy just then; the
+        // repository asks again a little later and sends better lyrics on.
+        // The video's own captions are timed to it, gaps and all: taken onto the song's clock first.
+        LyricsRepository.lyricsUpdates(song.videoId, song.title, song.artist, songMs,
+            videoTimed = { com.opentune.data.lyrics.LyricsGaps.fromVideo(it, gaps) }).collect { found ->
+            val placed = found?.let { com.opentune.data.lyrics.LyricsGaps.onto(it, gaps) }
+            _lyrics.value = placed?.let(LyricsState::Found) ?: LyricsState.NotFound
+            // The widgets and floating lyrics show these too, rather than looking them up again.
+            com.opentune.lyrics.NowPlayingLyrics.set(song.videoId, placed)
         }
     }
 

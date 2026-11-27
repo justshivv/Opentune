@@ -9,6 +9,13 @@ import com.opentune.data.sponsorblock.SponsorBlock
  * they ran ahead of the video by its length, whether it was skipped or not.
  * SponsorBlock marks those stretches ("music_offtopic"): the lyrics are looked
  * up for the song without them, and their times moved past each one.
+ *
+ * Moving the lyrics onto the video's clock ([onto]) is the same mapping as taking
+ * the gaps off the playhead ([toSong]), done once instead of every frame: the lyric
+ * clock then runs on the player's own position, so a skipped gap arrives as the
+ * seek it is (a jump, not a glide), and a tapped line seeks to its own start. It
+ * applies whether "Skip non-music parts" is on or not: on, the player jumps the
+ * gap; off, it plays and the lyrics wait through it.
  */
 object LyricsGaps {
     const val CATEGORY = "music_offtopic"
@@ -44,6 +51,45 @@ object LyricsGaps {
         var at = ms
         for (g in gaps) if (at > g.startMs || (!end && at == g.startMs)) at += g.lengthMs else break
         return at
+    }
+
+    /**
+     * The video's [ms] (the playhead) on the song's own clock: the length of every gap
+     * before it taken off. Inside a gap the song is stopped where the gap began, so the
+     * lyrics wait there. The inverse of [toVideo] everywhere outside the gaps.
+     */
+    fun toSong(ms: Long, gaps: List<Gap>): Long {
+        var cut = 0L
+        for (g in gaps) {
+            when {
+                ms >= g.endMs -> cut += g.lengthMs
+                ms > g.startMs -> return g.startMs - cut
+                else -> break
+            }
+        }
+        return ms - cut
+    }
+
+    /**
+     * [lyrics] timed to the video itself (its own captions), moved onto the song's
+     * clock, so they're checked and placed like every other source's. A line that
+     * starts inside a gap is the talking there, not the song, and is left out. The
+     * recording length is left as given: the caller's figure for the song.
+     */
+    fun fromVideo(lyrics: Lyrics, gaps: List<Gap>): Lyrics {
+        if (gaps.isEmpty() || lyrics !is Lyrics.Synced) return lyrics
+        fun inGap(ms: Long) = gaps.any { ms >= it.startMs && ms < it.endMs }
+        fun t(ms: Long) = toSong(ms, gaps)
+        return lyrics.copy(
+            lines = lyrics.lines.filterNot { inGap(it.startMs) }.map { line ->
+                line.copy(
+                    startMs = t(line.startMs),
+                    endMs = t(line.endMs),
+                    words = line.words.map { it.copy(startMs = t(it.startMs), endMs = t(it.endMs)) },
+                )
+            },
+            parts = lyrics.parts.filterNot { inGap(it.startMs) }.map { it.copy(startMs = t(it.startMs), endMs = t(it.endMs)) },
+        )
     }
 
     /** [lyrics] timed to the song, moved onto the clock of the video with [gaps]. */

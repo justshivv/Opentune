@@ -1429,9 +1429,9 @@ object StreamResolver {
         val candidates = (listOfNotNull(paired) + found.filter { VideoLinks.sameSong(song, it) }.take(VideoLinks.CANDIDATES))
             .distinctBy { it.videoId }
         for (video in candidates) {
-            val segments = if (AppSettings.playback.value.sponsorBlock) {
-                com.opentune.data.sponsorblock.SponsorBlock.segments(video.videoId, setOf(com.opentune.data.lyrics.LyricsGaps.CATEGORY))
-            } else emptyList()
+            // The stretches that aren't the song are left out of the picture to keep it in step
+            // with the song's audio, whether or not the player skips them in music videos.
+            val segments = com.opentune.data.sponsorblock.SponsorBlock.segments(video.videoId, setOf(com.opentune.data.lyrics.LyricsGaps.CATEGORY))
             val link = VideoLinks.check(songMs, video.videoId, VideoLinks.lengthOf(video), segments)
             if (link == null) {
                 TrackLog.d(TAG, "${video.videoId} isn't ${song.title}'s music video at its length")

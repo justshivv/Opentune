@@ -1,5 +1,6 @@
 package com.opentune.ui.player
 
+import com.opentune.data.lyrics.activeIndex
 import kotlin.math.abs
 import kotlin.random.Random
 import org.junit.Assert.assertEquals
@@ -189,6 +190,35 @@ class LyricsClockTest {
             readingAt = { taken -> 10_000 + taken.toLong() - if (taken >= 4_000) 20_000 else 0 },
         )
         assertTrue("stayed lost: $last", abs(last - (18_000 - 20_000)) < 40)
+    }
+
+    /**
+     * "Skip non-music parts" jumps a music video's 10 s skit at 100 s: one seek, to 110 s.
+     * The lyrics are placed on the video's clock (LyricsGaps), so the clock follows the
+     * player as it is: the jump lands at once, not as a 10 s catch-up, and the line after
+     * the skit lights when the song reaches it, not before.
+     */
+    @Test fun aSkippedNonMusicStretchLandsAsAJump() {
+        val gaps = listOf(com.opentune.data.lyrics.LyricsGaps.Gap(100_000, 110_000))
+        // On the song's clock: the skit falls between them, at the song's 100 s.
+        val before = com.opentune.data.lyrics.LyricLine(95_000, 100_000, "and the gulls go quiet", emptyList(), wordSynced = false)
+        val after = com.opentune.data.lyrics.LyricLine(101_000, 110_000, "till the ferry bell returns", emptyList(), wordSynced = false)
+        val placed = (com.opentune.data.lyrics.LyricsGaps.onto(
+            com.opentune.data.lyrics.Lyrics.Synced(listOf(before, after), "Test"), gaps,
+        ) as com.opentune.data.lyrics.Lyrics.Synced).lines
+        val clock = LyricClock(97_000)
+        fun reading(at: Double) = 97_000 + at.toLong() + if (at >= 3_000) 10_000 else 0
+        var now = 0.0
+        var jumpShown = Long.MIN_VALUE
+        var lit = Double.NaN
+        while (now <= 6_000) {
+            val shown = clock.frame(now, reading(now), now, discontinuity = if (now >= 3_000) 1 else 0)
+            if (now >= 3_000 && jumpShown == Long.MIN_VALUE) jumpShown = shown
+            if (lit.isNaN() && placed.getOrNull(placed.activeIndex(shown))?.text == after.text) lit = now
+            now += frameMs
+        }
+        assertTrue("glided into the jump: $jumpShown", abs(jumpShown - reading(3_000.0 + frameMs)) < 40)
+        assertTrue("the line after the skit lit at $lit", abs(lit - 4_000) < 40)
     }
 
     /**
