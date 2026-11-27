@@ -107,7 +107,7 @@ fun ConfirmWatch() {
                             status = null
                             current.forget()
                             PairingLinks.dismissWatch()
-                            com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("{0} is one of your devices now", name.ifBlank { "Your watch" }))
+                            com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("{0} is one of your devices now", name.ifBlank { com.opentune.i18n.Tr.t("Your watch") }))
                         } else status = "The watch didn't pair. Scan a fresh code from it."
                     } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                     catch (_: Exception) { status = "Couldn't reach the watch. Check this phone's connection and try again." }
