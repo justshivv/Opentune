@@ -223,6 +223,7 @@ class PlayerConnection(private val context: Context) {
         }
 
         override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+            steadier.reset()
             if (reason == Player.DISCONTINUITY_REASON_SEEK) _seeks.tryEmit(Unit)
             if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SILENCE_SKIP) _jumps.tryEmit(Unit)
         }
@@ -294,6 +295,16 @@ class PlayerConnection(private val context: Context) {
         connectionWatch = scope.launch {
             // A mix starting or ending changes the song shown.
             launch { MixState.showing.collect { if (controller === newController) refresh(newController) } }
+            // The steadier only sees a slip back if it reads the position often enough to catch
+            // the step. The screens read it only while open, and Connect only now and then, so
+            // a slip between two reads went by unseen and the other devices fell behind.
+            if (PlaybackHooks.steadyPosition) launch {
+                while (controller === newController) {
+                    if (!_isSounding.value) { _isSounding.first { it }; continue }
+                    currentPositionMs()
+                    kotlinx.coroutines.delay(STEADY_TICK_MS)
+                }
+            }
             while (controller === newController) {
                 // Only while the app is on screen: this drives the buffering spinner, and with
                 // the screen off it kept the phone working four times a second all listen long.
@@ -588,9 +599,12 @@ class PlayerConnection(private val context: Context) {
 
     /**
      * The list's songs after the current one, in the order they had before shuffle took them,
-     * so turning it off puts them back. Null when shuffle isn't on this way.
+     * so turning it off puts them back. Null when shuffle isn't on this way. Shared by every
+     * connection to the one player (the app's, and the service's own for Connect).
      */
-    private var beforeShuffle: List<MediaItem>? = null
+    private var beforeShuffle: List<MediaItem>?
+        get() = ShuffleMemory.before
+        set(value) { ShuffleMemory.before = value }
 
     /** Which songs that shuffle moved (see [QueueShuffle.movable]), to put the same ones back. */
     private var shuffled: (MediaItem) -> Boolean = { it.queueTier == QueueTier.CONTEXT }
@@ -964,12 +978,19 @@ class PlayerConnection(private val context: Context) {
 
     fun seekTo(positionMs: Long) {
         val controller = controller ?: return
+        steadier.reset()
         // Mixing: a seek is in the song shown, the one coming in.
         MixState.showing.value?.let { controller.seekTo(it.index, positionMs.coerceAtLeast(0L)); return }
         controller.seekTo(positionMs)
     }
 
-    fun currentPositionMs(): Long = MixState.showing.value?.positionMs?.invoke() ?: controller?.currentPosition ?: 0L
+    fun currentPositionMs(): Long {
+        val raw = MixState.showing.value?.positionMs?.invoke() ?: controller?.currentPosition ?: 0L
+        return if (PlaybackHooks.steadyPosition) steadier.steady(_currentSong.value?.videoId, raw) else raw
+    }
+
+    /** See [PositionSteadier]; on where the app asks for it ([PlaybackHooks.steadyPosition]). */
+    private val steadier = PositionSteadier()
 
     /**
      * Plays at [rate] times the Remix speed, pitch unchanged. Listening
@@ -992,6 +1013,9 @@ class PlayerConnection(private val context: Context) {
         const val SWITCH_STALL_MS = 2_500L
         const val SWITCH_SETTLE_MS = 3_000L
         const val LOADING_TICK_MS = 250L
+
+        /** Under the shortest slip seen (about a second), so each one is caught. */
+        const val STEADY_TICK_MS = 400L
 
         /** Songs per chunk when a queue is handed to the player; see setQueue. */
         const val QUEUE_CHUNK = 150
@@ -1043,6 +1067,11 @@ fun dolbyName(info: AudioFormatInfo?): String? {
         mime == "audio/ac3" || codec.startsWith("ac-3") || codec == "ac3" -> "Dolby Digital"
         else -> null
     }
+}
+
+/** What shuffle took from the queue's order, for whichever connection turns it off. */
+private object ShuffleMemory {
+    @Volatile var before: List<MediaItem>? = null
 }
 
 /** Whether the app is on screen, set by the activity that shows it: off it, the UI's polling waits. */

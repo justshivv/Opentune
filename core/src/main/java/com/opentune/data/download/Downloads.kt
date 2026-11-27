@@ -244,7 +244,8 @@ object Downloads {
         if (existing?.state == DownloadState.DONE || existing?.state == DownloadState.DOWNLOADING ||
             (existing?.state == DownloadState.QUEUED && !existing.smartDownload)) return
         // A promoted queued copy uses the listener's manual-download constraints.
-        val preferred = com.opentune.data.lossless.ExternalStreams.downloadPreference(song.videoId)
+        // A device with its own rules (the watch) never asks for lossless.
+        val preferred = if (DownloadRules.device != null) null else com.opentune.data.lossless.ExternalStreams.downloadPreference(song.videoId)
         schedule(context, SongRef.of(song), preferred != null || existing?.preferLossless == true,
             preferred?.key ?: existing?.preferredRenditionKey)
     }
@@ -279,6 +280,8 @@ object Downloads {
         // Behind a VPN that calls itself metered Android's "unmetered" never comes, even on
         // Wi-Fi: the job waits for any connection and the worker checks for Wi-Fi itself.
         val network = when {
+            // The device decides itself which network is fit (see DownloadRules); the worker checks.
+            DownloadRules.device != null -> NetworkType.CONNECTED
             !wifiOnly -> NetworkType.CONNECTED
             context.getSystemService(android.net.ConnectivityManager::class.java)
                 ?.let(com.opentune.data.UnmeteredNetwork::behindMeteredVpn) == true -> NetworkType.CONNECTED
@@ -320,6 +323,7 @@ object Downloads {
      * metered network). Wi-Fi under a VPN counts as Wi-Fi.
      */
     fun waitingForWifi(context: Context): Boolean {
+        DownloadRules.device?.let { return !it.networkReady() }
         if (!AppSettings.library.value.downloadWifiOnly) return false
         val cm = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return false
         return !com.opentune.data.UnmeteredNetwork.available(cm)
@@ -558,12 +562,17 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             }
         }
         val jobDir = File(Downloads.directory(), "$id.${this.id}")
+        val rules = DownloadRules.device
+        if (DeviceDownloadCheck.verdict(rules, Downloads.directory().usableSpace) == DeviceDownloadCheck.Verdict.NO_SPACE) {
+            publish { it.copy(state = DownloadState.FAILED, progress = 0f, error = rules?.noSpaceMessage) }
+            return Result.failure()
+        }
         publish { it.copy(state = DownloadState.DOWNLOADING, error = null) }
         var addon: com.opentune.data.addons.AddonStream? = null
         var fromSaavn = false
         return try {
-            val maxKbps = AppSettings.library.value.downloadQuality.maxKbps
-            val exporting = !entry.smartDownload && AppSettings.library.value.exportDownloads && DownloadExport.supported
+            val maxKbps = rules?.maxKbps ?: AppSettings.library.value.downloadQuality.maxKbps
+            val exporting = rules == null && !entry.smartDownload && AppSettings.library.value.exportDownloads && DownloadExport.supported
             val dir = jobDir.apply { mkdirs() }
             // A playlist queues every song at once; a few at a time each get the
             // bandwidth, and YouTube isn't asked for dozens of streams together.
@@ -576,7 +585,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
                     com.opentune.data.lossless.ExternalStreams.get(id, it)
                 } ?: com.opentune.data.lossless.ExternalStreams.downloadPreference(id)
                 var handOverFailed = false
-                if (LosslessDownloads.shouldTry(maxKbps, entry.preferLossless || upgrading, preferred)) {
+                if (rules == null && LosslessDownloads.shouldTry(maxKbps, entry.preferLossless || upgrading, preferred)) {
                     suspend fun save(candidate: com.opentune.data.addons.AddonStream, holdFailure: Boolean = true): File? {
                         val file = File(dir, "$id.${candidate.extension}")
                         try {
@@ -609,7 +618,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 if (upgrading) throw if (handOverFailed) IOException("The lossless source didn't hand the file over") else NoLosslessCopy()
                 // No lossless file: JioSaavn's 320 kbps next, before YouTube's own stream,
                 // when JioSaavn is on and the download quality reaches that far.
-                if (maxKbps >= SAAVN_KBPS && AppSettings.playback.value.jioSaavnQuality) {
+                if (rules == null && maxKbps >= SAAVN_KBPS && AppSettings.playback.value.jioSaavnQuality) {
                     val song = entry.song.toSong()
                     val duration = com.opentune.data.lossless.CatalogMetadata.duration(song, parseDuration(entry.song.durationText))
                     val url = try {

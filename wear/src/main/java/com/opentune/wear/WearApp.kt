@@ -30,9 +30,17 @@ class WearApp : Application(), SingletonImageLoader.Factory {
             }
             .build()
 
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
-        Core.init(this, phone = false)
+        WatchDownloads.rules()
+        Core.init(this, phone = false, form = "watch")
+        WatchDownloads.init(this)
+        // The playback notification marks OpenTune on the watch face while music plays.
+        com.opentune.playback.PlaybackHooks.notificationProvider = { OngoingPlayback(it) }
+        com.opentune.playback.PlaybackHooks.sharedPlayer = { WatchNow.player(it) }
+        com.opentune.playback.PlaybackHooks.steadyPosition = true
+        com.opentune.playback.PlaybackHooks.keepRemote = true
         MusicRepository.init(this)
     }
 }

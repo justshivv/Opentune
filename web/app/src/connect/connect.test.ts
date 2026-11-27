@@ -99,17 +99,28 @@ function fakePlayer(playable = true, canMove = true) {
     previous: () => { s.calls.push('previous'); },
     seekTo: (ms) => { s.calls.push(`seek ${ms}`); s.pos = ms; },
     setVolume: (v) => { s.calls.push(`volume ${v}`); s.volume = v; },
-    setShuffle: (on) => { s.calls.push(`shuffle ${on}`); },
+    setShuffle: (on, smart) => { s.calls.push(smart ? `shuffle ${on} smart` : `shuffle ${on}`); },
+    setAutoplay: (on) => { s.calls.push(`autoplay ${on}`); },
     setRepeat: (mode) => { s.calls.push(`repeat ${mode}`); },
     needsTap: () => s.needsTap,
     playTrack: (t) => { s.track = t; s.playing = true; },
     addToQueue: (ts) => { s.queue = [...s.queue, ...ts]; },
+    playNext: (ts) => { s.calls.push(`playNext ${ts.length}`); s.queue = [...ts, ...s.queue]; },
     playQueued: (at, id) => {
       const i = s.queue[at]?.id === id ? at : s.queue.findIndex((t) => t.id === id);
       if (i < 0) return false;
       s.calls.push(`jump ${i}`);
       s.track = s.queue[i]!;
       s.queue = s.queue.slice(i + 1);
+      return true;
+    },
+    moveQueued: (from, id, to) => {
+      const i = s.queue[from]?.id === id ? from : s.queue.findIndex((t) => t.id === id);
+      if (i < 0 || to < 0 || to >= s.queue.length) return false;
+      s.calls.push(`move ${i} ${to}`);
+      const [m] = s.queue.splice(i, 1);
+      s.queue.splice(to, 0, m!);
+      s.queue = [...s.queue];
       return true;
     },
     removeQueued: (at, id) => {
@@ -224,9 +235,11 @@ describe('sessions', () => {
     await eventually('b controls a', () => b!.view?.activeId === 'a');
     b!.session.intercept('shuffle', 0, 1);
     b!.session.intercept('repeat', 0, 0, 'all');
-    b!.session.handle({ type: 'state', from: 'a', seq: Number.MAX_SAFE_INTEGER - 1, at: Date.now(), track: track('x'), playing: true });
+    b!.session.intercept('autoplay', 0, 0);
+    b!.session.handle({ type: 'state', from: 'a', seq: Number.MAX_SAFE_INTEGER - 1, at: Date.now(), track: track('x'), playing: true, autoplay: true });
     expect(b!.view!.devices[0]!.state?.shuffle).toBe(true);
     expect(b!.view!.devices[0]!.state?.repeat).toBe('all');
+    expect(b!.view!.devices[0]!.state?.autoplay).toBe(false);
     a!.session.stop(); b!.session.stop();
   });
 
@@ -237,6 +250,22 @@ describe('sessions', () => {
     b!.session.intercept('repeat', 0, 0, 'all');
     b!.session.intercept('shuffle', 0, 1);
     await eventually('a set', () => a!.s.calls.includes('repeat all') && a!.s.calls.includes('shuffle true'));
+    b!.session.intercept('shuffle', 0, 1, 'smart');
+    b!.session.intercept('autoplay', 0, 0);
+    await eventually('a set again', () => a!.s.calls.includes('shuffle true smart') && a!.s.calls.includes('autoplay false'));
+    a!.session.stop(); b!.session.stop();
+  });
+
+  it('plays what is started here on the device playing', async () => {
+    const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
+    play(a!, track('x'));
+    await eventually('b controls a', () => b!.view?.activeId === 'a');
+    b!.session.playOn('a', [track('p'), track('q'), track('r')], 1);
+    expect(b!.view!.devices[0]!.state?.track?.id[0]).toBe('q');
+    await eventually('a plays q', () => a!.s.track?.id[0] === 'q' && a!.s.queue.map((t) => t.id[0]).join('') === 'r');
+    expect(b!.s.track).toBeNull();
+    b!.session.playNextOn('a', [track('n')]);
+    await eventually('n next on a', () => a!.s.queue[0]?.id[0] === 'n');
     a!.session.stop(); b!.session.stop();
   });
 
@@ -247,8 +276,12 @@ describe('sessions', () => {
     await eventually('b sees the queue', () => b!.view?.devices[0]?.state?.queue?.length === 3);
     b!.session.removeOn('a', 0, track('p'));
     await eventually('p gone', () => a!.s.queue.map((t) => t.id[0]).join('') === 'qr');
-    // b may still show p first; r is entry 2 there, and is found by its id.
-    b!.session.jumpOn('a', 2, track('r'));
+    // Taken out on b at once too: r is entry 1 there.
+    await eventually('b sees qr', () => b!.view?.devices[0]?.state?.queue.map((t) => t.id[0]).join('') === 'qr');
+    b!.session.moveOn('a', 1, 0, track('r'));
+    expect(b!.view!.devices[0]!.state?.queue.map((t) => t.id[0]).join('')).toBe('rq');
+    await eventually('r first on a', () => a!.s.queue.map((t) => t.id[0]).join('') === 'rq');
+    b!.session.jumpOn('a', 0, track('r'));
     await eventually('r plays', () => a!.s.track?.id[0] === 'r');
     a!.session.stop(); b!.session.stop();
   });

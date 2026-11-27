@@ -209,6 +209,7 @@ class MainActivity : ComponentActivity(), PipHost {
                             }
                         }
                         com.opentune.ui.account.ConfirmPairing()
+                        com.opentune.ui.account.ConfirmWatch()
                     }
                     }
                     if (inPip) {

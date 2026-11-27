@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Shuffle, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, GripVertical, Infinity as InfinityIcon, MoreHorizontal, Shuffle, X } from 'lucide-react';
 import { useCallback, useState, type CSSProperties } from 'react';
 import { Menu, MenuItem, MenuSeparator } from '@/components/Menu';
 import { Artwork } from '@/components/music/Artwork';
@@ -6,7 +6,7 @@ import { useReorder, type Reorder } from '@/components/music/reorder';
 import { handleClass, ROW_HEIGHT, rowClass } from '@/shell/UpNext';
 import { usePlayer } from '@/state/player';
 import type { CTrack } from './messages';
-import { moveQueuedRemote, playQueuedRemote, removeQueuedRemote } from './connect';
+import { moveQueuedRemote, playQueuedRemote, removeQueuedRemote, toggleRemoteAutoplay } from './connect';
 import type { Device } from './session';
 
 const square = 'grid size-7 place-items-center rounded-[6px] text-secondary transition-colors duration-150 hover:bg-quinary aria-pressed:text-key';
@@ -111,6 +111,17 @@ export function RemoteUpNext({ device }: { device: Device }) {
             onClick={() => usePlayer.getState().toggleShuffle()}
           >
             <Shuffle size={15} strokeWidth={2.2} />
+          </button>
+        )}
+        {typeof device.state?.autoplay === 'boolean' && (
+          <button
+            className={square}
+            aria-label="AutoPlay"
+            title="AutoPlay: keep playing similar music when the queue ends"
+            aria-pressed={device.state.autoplay}
+            onClick={toggleRemoteAutoplay}
+          >
+            <InfinityIcon size={16} strokeWidth={2.4} />
           </button>
         )}
       </div>

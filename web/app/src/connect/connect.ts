@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 import { toast } from '@/components/toastStore';
 import type { Track } from '@/data/music/types';
-import { getAudio, loadingTrack, partyPlayer, setConnectHooks, usePlayer } from '@/state/player';
+import { getAudio, loadingTrack, partyPlayer, refreshMediaSession, setConnectHooks, usePlayer, type RemoteMedia } from '@/state/player';
 import { toRoomTrack } from '@/together/room';
 import { qualityLabel } from '@/shell/quality';
 import { ConnectGroup } from './group';
 import type { CTrack } from './messages';
-import { ConnectSession, controllingOf, meant, type ConnectPlayer, type ConnectView, type Device, type Snapshot } from './session';
+import { ConnectSession, controllingOf, meant, positionAt, type ConnectPlayer, type ConnectView, type Device, type Snapshot } from './session';
 
 /**
  * Connect on the web: this browser is one of the person's devices, sees what
@@ -74,7 +74,13 @@ export const useConnect = create<{
   link: { app: string; web: string } | null;
   view: ConnectView | null;
   notice: ConnectNotice | null;
-}>(() => ({ saved: load(), link: null, view: null, notice: null }));
+  /**
+   * True once the account has been looked in and holds no group yet: only
+   * then is this browser asked about account sync. An account that already
+   * holds one said yes on another device, so this browser joins without asking.
+   */
+  askAccount: boolean;
+}>(() => ({ saved: load(), link: null, view: null, notice: null, askAccount: false }));
 
 
 /** The other device this browser shows and controls, if any. */
@@ -113,6 +119,13 @@ function here(f: () => void): void {
   }
 }
 
+/** "3:45" or "1:02:03" in seconds; null when it isn't one. */
+function lengthSec(text: string): number | null {
+  const parts = text.split(':').map(Number);
+  if (!parts.length || parts.some((n) => !Number.isFinite(n))) return null;
+  return parts.reduce((a, b) => a * 60 + b, 0);
+}
+
 /** The queue row of entry [at] in Snapshot.queue (the shareable songs after this one), checked against [id]. */
 /** The player's rows behind Snapshot.queue: what comes after the song playing, as other devices see it. */
 function queuedRows(): number[] {
@@ -132,7 +145,7 @@ function queuedRow(at: number, id: string): number | null {
 
 export const webPlayer: ConnectPlayer = {
   snapshot(): Snapshot | null {
-    const { queue, index, nowPlaying, volume, shuffle, repeat, status } = usePlayer.getState();
+    const { queue, index, nowPlaying, volume, shuffle, repeat, status, autoplay } = usePlayer.getState();
     if (!nowPlaying) return null;
     const entry = queue[index];
     const track = toCTrack(entry?.track);
@@ -154,30 +167,34 @@ export const webPlayer: ConnectPlayer = {
       volume,
       shuffle,
       repeat,
+      autoplay,
       quality: nowPlaying.streamInfo ? qualityLabel(nowPlaying.streamInfo, false, status).text : null,
     };
   },
   play: () => {
     if (getAudio()) partyPlayer.play();
-    else usePlayer.getState().togglePlay();
+    else here(() => usePlayer.getState().togglePlay());
   },
   pause: () => partyPlayer.pause(),
-  next: () => usePlayer.getState().next(),
-  previous: () => usePlayer.getState().previous(),
+  next: () => here(() => usePlayer.getState().next()),
+  previous: () => here(() => usePlayer.getState().previous()),
   seekTo: (ms) => partyPlayer.seekTo(ms / 1000),
   setVolume: (v) => usePlayer.getState().setVolume(v),
   setShuffle: (on) => here(() => {
     if (usePlayer.getState().shuffle !== on) usePlayer.getState().toggleShuffle();
   }),
+  // No smart shuffle here: plain shuffle stands in for it.
+  setAutoplay: (on) => here(() => usePlayer.getState().setAutoplay(on)),
   setRepeat: (mode) => here(() => {
     // Repeat only cycles here; at most three steps reach any mode.
     for (let i = 0; i < 3 && usePlayer.getState().repeat !== mode; i++) usePlayer.getState().cycleRepeat();
   }),
-  playTrack: (t) => {
+  playTrack: (t) => here(() => {
     usePlayer.getState().playNext([fromCTrack(t)]);
     usePlayer.getState().next();
-  },
-  addToQueue: (ts) => usePlayer.getState().addToQueue(ts.map(fromCTrack)),
+  }),
+  addToQueue: (ts) => here(() => usePlayer.getState().addToQueue(ts.map(fromCTrack))),
+  playNext: (ts) => here(() => usePlayer.getState().playNext(ts.map(fromCTrack))),
   playQueued: (at, id) => {
     const row = queuedRow(at, id);
     if (row === null) return false;
@@ -271,7 +288,7 @@ function restart(): void {
       if (
         now.nowPlaying?.videoId === before.nowPlaying?.videoId && now.nowPlaying?.streamInfo === before.nowPlaying?.streamInfo &&
         now.status === before.status && now.queue === before.queue && now.volume === before.volume &&
-        now.shuffle === before.shuffle && now.repeat === before.repeat
+        now.shuffle === before.shuffle && now.repeat === before.repeat && now.autoplay === before.autoplay
       ) return;
       if (settle) clearTimeout(settle);
       settle = setTimeout(() => session?.localChanged(), 300);
@@ -309,6 +326,49 @@ export function initConnect(): void {
         }
       }
     },
+    // The system's media controls show and act on the device playing elsewhere.
+    remote: (): RemoteMedia | null => {
+      const d = controllingOf(useConnect.getState().view);
+      const t = d?.state?.track;
+      if (!d || !t) return null;
+      return {
+        title: t.title,
+        artist: t.artist ?? '',
+        artworkUrl: t.thumb ?? null,
+        playing: !!d.state?.playing,
+        posSec: positionAt(d, Date.now()) / 1000,
+        durationSec: t.length ? lengthSec(t.length) : null,
+      };
+    },
+    // Music started, or queued, here while another device plays goes there.
+    play: (tracks, startIndex, shuffle) => {
+      const s = session;
+      const target = controllingOf(useConnect.getState().view);
+      if (!s || !target || applying) return false;
+      const start = toCTrack(tracks[startIndex]);
+      if (!start) return false;
+      const before = tracks.slice(0, startIndex).map(toCTrack).filter((t): t is CTrack => !!t);
+      const after = tracks.slice(startIndex + 1).map(toCTrack).filter((t): t is CTrack => !!t);
+      if (shuffle) {
+        const rest = [...before, ...after];
+        for (let i = rest.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [rest[i], rest[j]] = [rest[j]!, rest[i]!];
+        }
+        s.playOn(target.id, [start, ...rest], 0);
+      } else s.playOn(target.id, [...before, start, ...after], before.length);
+      return true;
+    },
+    queue: (tracks, next) => {
+      const s = session;
+      const target = controllingOf(useConnect.getState().view);
+      if (!s || !target || applying) return false;
+      const shared = tracks.map(toCTrack).filter((t): t is CTrack => !!t);
+      if (!shared.length) return false;
+      if (next) s.playNextOn(target.id, shared);
+      else s.addToQueueOn(target.id, shared);
+      return true;
+    },
     // Seeks and play/pause pressed here don't change the store's song or queue.
     onIntent: () => {
       if (settle) clearTimeout(settle);
@@ -319,6 +379,17 @@ export function initConnect(): void {
   // Back from the browser's back-forward cache: the session stopped on the way out, and stayed stopped.
   addEventListener('pageshow', (e: PageTransitionEvent) => {
     if (e.persisted) restart();
+  });
+
+  // The system's media controls follow the device playing elsewhere, and come back here after.
+  let shownKey = '';
+  useConnect.subscribe((s) => {
+    const d = controllingOf(s.view);
+    const st = d?.state;
+    const key = d && st?.track ? `${d.id}|${st.track.id}|${st.playing}|${Math.round((st.pos ?? 0) / 1000)}` : '';
+    if (key === shownKey) return;
+    shownKey = key;
+    refreshMediaSession();
   });
   restart();
   void syncAccount();
@@ -337,6 +408,7 @@ export function setDeviceName(name: string): void {
 }
 
 export function setAccountSync(on: boolean): void {
+  useConnect.setState({ askAccount: false });
   update({ accountSync: on });
   if (on) void syncAccount();
 }
@@ -347,8 +419,15 @@ export function setAccountSync(on: boolean): void {
  * browser's group there regardless (a new secret after "Disconnect all").
  * Signed out or without the extension, it quietly does nothing.
  */
+let looking = false;
+
 export async function syncAccount(push = false): Promise<void> {
-  if (useConnect.getState().saved.accountSync !== true) return;
+  const answer = useConnect.getState().saved.accountSync;
+  if (answer === false) return;
+  if (answer === null) {
+    await lookInAccount();
+    return;
+  }
   try {
     // YouTube.js comes with it; loaded only when the account is used.
     const { readSecret, write: writeToAccount } = await import('./accountSync');
@@ -360,6 +439,27 @@ export async function syncAccount(push = false): Promise<void> {
     await writeToAccount(await ensureGroup());
   } catch {
     // Not signed in, or YouTube said no: the devices can still be added by hand.
+  }
+}
+
+/** Not asked yet here: a group kept in the account means yes; none means ask. A failed look (signed out) asks nothing yet. */
+async function lookInAccount(): Promise<void> {
+  if (looking) return;
+  looking = true;
+  try {
+    const { readSecret } = await import('./accountSync');
+    const kept = await readSecret();
+    if (useConnect.getState().saved.accountSync !== null) return;
+    if (kept) {
+      update({ accountSync: true });
+      joinGroup(kept);
+    } else {
+      useConnect.setState({ askAccount: true });
+    }
+  } catch {
+    // Signed out, or offline: looked at again on the next sign-in or visit.
+  } finally {
+    looking = false;
   }
 }
 
@@ -405,6 +505,12 @@ export async function disconnectAll(): Promise<void> {
 }
 
 export const transferTo = (deviceId: string) => session?.transferTo(deviceId);
+/** Autoplay on or off on the device playing elsewhere. */
+export function toggleRemoteAutoplay(): void {
+  const target = controllingOf(useConnect.getState().view);
+  const on = target?.state?.autoplay;
+  if (target && typeof on === 'boolean') session?.intercept('autoplay', 0, on ? 0 : 1);
+}
 /** Plays, or takes out, entry [at] ([track]) of the Up Next on the device playing elsewhere. */
 export function playQueuedRemote(at: number, track: CTrack): void {
   const target = controllingOf(useConnect.getState().view);

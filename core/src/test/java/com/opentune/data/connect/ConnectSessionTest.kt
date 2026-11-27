@@ -78,17 +78,19 @@ class ConnectSessionTest {
         var pos = 0L
         var vol = 1f
         val calls = mutableListOf<String>()
-        override fun snapshot() = track?.let { Snapshot(it, false, playing && !stalled, pos, queue, vol, false, "off", wants = playing) }
+        override fun snapshot() = track?.let { Snapshot(it, false, playing && !stalled, pos, queue, vol, false, "off", wants = playing, autoplay = true) }
         override fun play() { calls += "play"; playing = true }
         override fun pause() { calls += "pause"; playing = false }
         override fun next() { calls += "next"; track = queue.firstOrNull(); queue = queue.drop(1); pos = 0 }
         override fun previous() { calls += "previous" }
         override fun seekTo(ms: Long) { calls += "seek $ms"; pos = ms }
         override fun setVolume(v: Float) { calls += "volume $v"; vol = v }
-        override fun setShuffle(on: Boolean) { calls += "shuffle $on" }
+        override fun setShuffle(on: Boolean, smart: Boolean) { calls += if (smart) "shuffle $on smart" else "shuffle $on" }
+        override fun setAutoplay(on: Boolean) { calls += "autoplay $on" }
         override fun setRepeat(mode: String) { calls += "repeat $mode" }
         override fun playTrack(t: CTrack) { calls += "playTrack ${t.id}"; track = t; playing = true }
         override fun addToQueue(ts: List<CTrack>) { calls += "add ${ts.size}"; queue = queue + ts }
+        override fun playNext(ts: List<CTrack>) { calls += "playNext ${ts.size}"; queue = ts + queue }
         private fun at(at: Int, id: String): Int? = at.takeIf { queue.getOrNull(it)?.id == id } ?: queue.indexOfFirst { it.id == id }.takeIf { it >= 0 }
         override fun playQueued(at: Int, id: String): Boolean {
             val i = at(at, id) ?: return false
@@ -132,9 +134,11 @@ class ConnectSessionTest {
         val notices = mutableListOf<String>()
         val movedTo = mutableListOf<String>()
         lateinit var session: ConnectSession
+        lateinit var link: RoomTransport
         val clock = { System.currentTimeMillis() + skew }
         fun start(took: Long = 0): Dev {
-            session = ConnectSession(g, id, name, "phone", player, hub.transport(id, connectMs), view, { t, n -> notices += t.replace("{0}", n) }, scope, timings, clock, moved = { movedTo += it }, former = former, took = took)
+            link = hub.transport(id, connectMs)
+            session = ConnectSession(g, id, name, "phone", player, link, view, { t, n -> notices += t.replace("{0}", n) }, scope, timings, clock, moved = { movedTo += it }, former = former, took = took)
             onLoop { session.start() }
             return this
         }
@@ -208,6 +212,26 @@ class ConnectSessionTest {
         assertEquals("a", a.view.value.activeId)
     }
 
+    @Test fun aDeviceThatLostItsRelaysStillShowsTheOnePlayingWhenTheyComeBack() {
+        val a = Dev("a", "Phone").start()
+        val w = Dev("w", "Watch").start()
+        onLoop { a.player.track = track('x'); a.player.playing = true; a.session.localChanged() }
+        eventually("w controls a") { w.view.value.controlling?.id == "a" }
+        // The watch's connections drop (its Wi-Fi taken for a download): it hears nothing for longer than a device lasts.
+        val relays = w.link.connected as MutableStateFlow<Int>
+        hub.deaf += "w"
+        relays.value = 0
+        Thread.sleep(fast.goneMs + 400)
+        assertEquals("a isn't counted gone while w hears nothing at all", "a", onLoop { w.view.value.controlling?.id })
+        // Back: a still there, and given time to speak again before it counts as gone.
+        relays.value = 1
+        Thread.sleep(fast.goneMs / 2)
+        assertEquals("a", onLoop { w.view.value.controlling?.id })
+        hub.deaf -= "w"
+        eventually("a heard again") { w.view.value.controlling?.state?.track == track('x') }
+        assertFalse(w.player.calls.contains("play"))
+    }
+
     @Test fun aButtonPressedHereActsOnTheDevicePlaying() {
         val a = Dev("a", "Phone").start()
         val b = Dev("b", "Chrome").start()
@@ -222,6 +246,16 @@ class ConnectSessionTest {
         eventually("a seeked") { "seek 42000" in a.player.calls }
         // Nothing else playing: a's own buttons are its own.
         assertFalse(onLoop { a.session.intercept("pause") })
+    }
+
+    @Test fun previousPastTheFirstSecondsShowsTheSongFromTheStartAtOnce() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Watch").start()
+        onLoop { a.player.track = track('x'); a.player.playing = true; a.player.pos = 60_000; a.session.localChanged() }
+        eventually("b controls a") { b.view.value.controlling?.state?.pos == 60_000L }
+        assertTrue(onLoop { b.session.intercept("previous") })
+        assertTrue("shown from the start at once", b.view.value.controlling!!.positionAt(System.currentTimeMillis()) < 1_000)
+        eventually("a went back") { "previous" in a.player.calls }
     }
 
     @Test fun aDeviceThatDoesntAnswerIsNamed() {
@@ -251,6 +285,20 @@ class ConnectSessionTest {
         eventually("both show b") { a.view.value.activeId == "b" && b.view.value.activeId == "b" }
     }
 
+    @Test fun theSourcePausesAsItHandsOverNotWhenTheAnswerComes() {
+        // A watch through its phone's Bluetooth can answer after the wait is over: both mustn't play then.
+        val a = Dev("a", "Watch", timings = fast.copy(transferMs = 1)).start()
+        val b = Dev("b", "Phone").start()
+        eventually("connected") { a.others() == setOf("b") }
+        onLoop { a.player.track = track('x'); a.player.playing = true; a.session.localChanged() }
+        eventually("a is active") { a.view.value.activeId == "a" }
+        onLoop { a.session.transferTo("b") }
+        assertTrue(onLoop { !a.player.playing })
+        eventually("b plays") { b.player.playing }
+        Thread.sleep(200)
+        assertTrue(onLoop { !a.player.playing })
+    }
+
     @Test fun pausedMusicMovesAndStaysWhereItWasMoved() {
         val a = Dev("a", "Phone").start()
         val b = Dev("b", "Chrome").start()
@@ -266,6 +314,25 @@ class ConnectSessionTest {
         onLoop { a.session.localChanged() }
         Thread.sleep(200)
         eventually("both show b") { a.view.value.activeId == "b" && b.view.value.activeId == "b" }
+    }
+
+    @Test fun pausingTheDevicePlayingFromOneThatStartedLaterKeepsControllingIt() {
+        val a = Dev("a", "Phone").start()
+        onLoop { a.player.track = track('x'); a.player.playing = true; a.session.localChanged() }
+        Thread.sleep(50)
+        // The watch's Connect starts (again) while the phone plays, its own last song still loaded and paused.
+        val b = Dev("b", "Watch")
+        b.player.track = track('w')
+        b.start()
+        eventually("b controls a") { b.view.value.controlling?.id == "a" }
+        assertTrue(onLoop { b.session.intercept("pause") })
+        eventually("a paused") { "pause" in a.player.calls }
+        Thread.sleep(300) // a's reports of being paused come in
+        assertEquals("a", onLoop { b.view.value.activeId })
+        // So Play goes back to the phone rather than starting the watch's own song.
+        assertTrue(onLoop { b.session.intercept("play") })
+        eventually("a plays again") { a.player.calls.count { it == "play" } == 1 }
+        assertFalse(b.player.calls.contains("play"))
     }
 
     @Test fun aReportFromBeforeAPauseDoesNotUndoItOnScreen() {
@@ -290,6 +357,8 @@ class ConnectSessionTest {
         eventually("b controls a") { b.view.value.activeId == "a" }
         onLoop { b.session.intercept("repeat", mode = "all"); b.session.intercept("shuffle", value = 1f) }
         eventually("a set") { a.player.calls.containsAll(listOf("repeat all", "shuffle true")) }
+        onLoop { b.session.intercept("shuffle", value = 1f, mode = "smart"); b.session.intercept("autoplay", value = 0f) }
+        eventually("a set again") { a.player.calls.containsAll(listOf("shuffle true smart", "autoplay false")) }
     }
 
     @Test fun aDeviceThatMissedAMergeIsToldWhereTheOthersWent() {
@@ -314,11 +383,28 @@ class ConnectSessionTest {
         onLoop {
             b.session.intercept("shuffle", value = 1f)
             b.session.intercept("repeat", mode = "all")
+            b.session.intercept("autoplay", value = 0f)
             // a's report, sent before the presses reached it.
-            b.session.handle(ConnectMsg.State("a", Long.MAX_VALUE - 1, System.currentTimeMillis(), track = track('x'), playing = true))
+            b.session.handle(ConnectMsg.State("a", Long.MAX_VALUE - 1, System.currentTimeMillis(), track = track('x'), playing = true, autoplay = true))
         }
         assertEquals(true, onLoop { b.view.value.controlling?.state?.shuffle })
         assertEquals("all", onLoop { b.view.value.controlling?.state?.repeat })
+        assertEquals(false, onLoop { b.view.value.controlling?.state?.autoplay })
+    }
+
+    @Test fun musicStartedHereWhileAnotherPlaysGoesThere() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        eventually("connected") { a.others() == setOf("b") }
+        onLoop { a.player.track = track('x'); a.player.playing = true; a.session.localChanged() }
+        eventually("b controls a") { b.view.value.controlling?.id == "a" }
+        onLoop { b.session.playOn("a", listOf(track('p'), track('q'), track('r')), 1) }
+        // Shown on b at once, and played on a.
+        assertEquals('q', onLoop { b.view.value.controlling?.state?.track?.id?.first() })
+        eventually("a plays q") { a.player.track?.id?.first() == 'q' && a.player.queue.map { it.id.first() } == listOf('r') }
+        assertEquals(null, b.player.track)
+        onLoop { b.session.playNextOn("a", listOf(track('n'))) }
+        eventually("n next on a") { a.player.queue.firstOrNull()?.id?.first() == 'n' }
     }
 
     @Test fun upNextIsChangedFromAnotherDevice() {
@@ -329,8 +415,12 @@ class ConnectSessionTest {
         eventually("b sees a's queue") { b.view.value.controlling?.state?.queue?.size == 3 }
         onLoop { b.session.removeOn("a", 0, track('p')) }
         eventually("p gone") { a.player.queue.map { it.id.first() } == listOf('q', 'r') }
-        // b still shows p first; r is entry 2 there, and is found by its id.
-        onLoop { b.session.jumpOn("a", 2, track('r')) }
+        // Taken out on b at once too: r is entry 1 there.
+        onLoop { b.session.moveOn("a", 1, 0, track('r')) }
+        // Shown on b at once, and moved on a.
+        assertEquals(listOf('r', 'q'), onLoop { b.view.value.controlling?.state?.queue?.map { it.id.first() } })
+        eventually("r first on a") { a.player.queue.map { it.id.first() } == listOf('r', 'q') }
+        onLoop { b.session.jumpOn("a", 0, track('r')) }
         eventually("r plays") { a.player.track?.id?.first() == 'r' }
     }
 

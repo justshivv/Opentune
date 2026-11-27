@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -109,8 +110,11 @@ data class NostrEvent(
  */
 class RelayPool(
     private val urls: List<String>,
-    private val filter: JsonObject,
+    /** Every filter goes in the one subscription: an event matching any of them comes. */
+    private val filters: List<JsonObject>,
 ) : RoomTransport {
+    constructor(urls: List<String>, filter: JsonObject) : this(urls, listOf(filter))
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val client: OkHttpClient = Http.client.newBuilder()
         .pingInterval(25, TimeUnit.SECONDS)
@@ -124,6 +128,8 @@ class RelayPool(
     }
     private val jobs = mutableListOf<Job>()
     @Volatile private var closed = false
+    /** Cuts short every relay's wait before its next try (see [wake]). */
+    private val wakeups = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     private val _events = MutableSharedFlow<NostrEvent>(extraBufferCapacity = 256)
     override val events: SharedFlow<NostrEvent> = _events.asSharedFlow()
@@ -144,7 +150,7 @@ class RelayPool(
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     synchronized(open) { open += url; _connected.value = open.size }
                     backoff = 2_000L
-                    webSocket.send(buildJsonArray { add(JsonPrimitive("REQ")); add(JsonPrimitive(SUB)); add(filter) }.toString())
+                    webSocket.send(buildJsonArray { add(JsonPrimitive("REQ")); add(JsonPrimitive(SUB)); filters.forEach { add(it) } }.toString())
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) = handle(url, text)
@@ -160,8 +166,8 @@ class RelayPool(
             done.await()
             synchronized(open) { open -= url; _connected.value = open.size }
             if (closed) break
-            delay(backoff)
-            backoff = (backoff * 2).coerceAtMost(60_000L)
+            val woken = kotlinx.coroutines.withTimeoutOrNull(backoff) { wakeups.first() } != null
+            backoff = if (woken) 2_000L else (backoff * 2).coerceAtMost(60_000L)
         }
     }
 
@@ -185,6 +191,11 @@ class RelayPool(
         val targets = synchronized(open) { open.toList() }.mapNotNull { synchronized(sockets) { sockets[it] } }
         targets.forEach { it.send(frame) }
         return targets.isNotEmpty()
+    }
+
+    /** The device is back in use (its screen on): relays dropped meanwhile are tried again now. */
+    override fun wake() {
+        wakeups.tryEmit(Unit)
     }
 
     override fun close() {

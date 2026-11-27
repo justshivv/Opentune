@@ -10,4 +10,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent { WatchApp(viewModel()) }
     }
+
+    override fun onStart() {
+        super.onStart()
+        com.opentune.playback.AppOnScreen.shown.value = true
+    }
+
+    override fun onStop() {
+        com.opentune.playback.AppOnScreen.shown.value = false
+        super.onStop()
+    }
 }

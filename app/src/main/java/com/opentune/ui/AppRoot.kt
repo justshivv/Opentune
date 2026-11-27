@@ -815,6 +815,7 @@ fun AppRoot(vm: PlayerViewModel) {
                                 onOpenSpotify = { pages.open("import") },
                                 onOpenDevices = { pages.open("devices") },
                                 onOpenDiscord = { pages.open("discord-login") },
+                                onOpenConnect = { pages.open("connect") },
                             )
                         }
                         page("discord-login") { entry ->

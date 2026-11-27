@@ -35,11 +35,15 @@ internal interface ConnectPlayer {
     fun previous()
     fun seekTo(ms: Long)
     fun setVolume(v: Float)
-    fun setShuffle(on: Boolean)
+    /** [smart]: smart shuffle, where this device can; plain shuffle otherwise. */
+    fun setShuffle(on: Boolean, smart: Boolean = false)
+    fun setAutoplay(on: Boolean)
     /** "off", "all" or "one". */
     fun setRepeat(mode: String)
     fun playTrack(t: CTrack)
     fun addToQueue(ts: List<CTrack>)
+    /** [ts] right after the song playing, in their order. */
+    fun playNext(ts: List<CTrack>)
     /**
      * Plays, or takes out, entry [at] of the queue this device last told
      * ([Snapshot.queue]) when it's still [id]; otherwise the first one that
@@ -68,6 +72,10 @@ data class Snapshot(
     val volume: Float,
     val shuffle: Boolean,
     val repeat: String,
+    val smart: Boolean = false,
+    val canSmart: Boolean = false,
+    /** Null where this device has no such thing. */
+    val autoplay: Boolean? = null,
     /** How it sounds here, in this device's words; null when it can't say. */
     val quality: String? = null,
     /** Meant to play, stalled or not: starting to play is judged by this, so a stall ending isn't a start. */
@@ -122,8 +130,9 @@ internal data class Timings(
     val presenceMs: Long = 30_000,
     val goneMs: Long = 75_000,
     val stateMs: Long = 5_000,
-    val commandMs: Long = 5_000,
-    val transferMs: Long = 8_000,
+    // Long enough for a watch reached through its phone's Bluetooth, whose answers can take seconds.
+    val commandMs: Long = 10_000,
+    val transferMs: Long = 15_000,
     val tickMs: Long = 1_000,
 )
 
@@ -206,15 +215,19 @@ internal class ConnectSession(
     private class Pending(val to: String, val job: Job, val onAck: (Ack) -> Unit)
     private val pending = HashMap<String, Pending>()
     /**
-     * Pressed here for a device a moment ago: play/pause, shuffle and repeat
-     * until [until]; a place in a song (a seek, a skip, and the song skipped
-     * to as [track]) until [placeUntil], set at [placeAt].
+     * Pressed here for a device a moment ago: play/pause, shuffle, smart shuffle, repeat,
+     * autoplay and its Up Next as changed here until [until]; a place in a song (a seek, a
+     * skip, and the song skipped to as [track]) until [placeUntil], set at [placeAt].
      */
     private data class Guess(
         val until: Long = 0,
         val playing: Boolean? = null,
         val shuffle: Boolean? = null,
+        val smart: Boolean? = null,
         val repeat: String? = null,
+        val autoplay: Boolean? = null,
+        /** Its Up Next as changed here (an entry taken out or moved). */
+        val queue: List<CTrack>? = null,
         val placeUntil: Long = 0,
         val placeAt: Long = 0,
         val pos: Long? = null,
@@ -223,7 +236,7 @@ internal class ConnectSession(
     private val guesses = HashMap<String, Guess>()
 
     /** Notes a change pressed here for [id], on top of the ones still waiting to show in its reports. */
-    private fun guess(id: String, playing: Boolean? = null, shuffle: Boolean? = null, repeat: String? = null) {
+    private fun guess(id: String, playing: Boolean? = null, shuffle: Boolean? = null, smart: Boolean? = null, repeat: String? = null, autoplay: Boolean? = null, queue: List<CTrack>? = null) {
         val now = clock()
         val before = guesses[id] ?: Guess()
         val live = now < before.until
@@ -231,7 +244,10 @@ internal class ConnectSession(
             until = now + GUESS_MS,
             playing = playing ?: before.playing.takeIf { live },
             shuffle = shuffle ?: before.shuffle.takeIf { live },
+            smart = smart ?: before.smart.takeIf { live },
             repeat = repeat ?: before.repeat.takeIf { live },
+            autoplay = autoplay ?: before.autoplay.takeIf { live },
+            queue = queue ?: before.queue.takeIf { live },
         )
     }
 
@@ -264,24 +280,38 @@ internal class ConnectSession(
                 // What was said with no relay connected (at start, or after losing them all) went nowhere: said again.
                 val reached = view.value.relays == 0 && n > 0
                 view.value = view.value.copy(relays = n)
-                if (reached) { sayPresence(); sayState() }
+                if (reached) {
+                    // Not heard while this device heard nothing at all isn't gone: each gets its time
+                    // to speak again from now (a watch's connections drop when it takes Wi-Fi to download).
+                    val now = clock()
+                    for (id in devices.keys.toList()) touch(id, now)
+                    sayPresence(); sayState()
+                }
             }
         }
         jobs += scope.launch {
             transport.events.collect { event ->
-                if (event.pubkey == myPub) return@collect
+                if (event.pubkey == myPub || event.kind != KIND) return@collect
+                val heard = System.nanoTime()
                 val (msg, from) = withContext(Dispatchers.Default) {
                     group.open(event.content)?.let(ConnectMsg::decode)?.let { it to group }
                         ?: former.firstNotNullOfOrNull { g -> g.open(event.content)?.let(ConnectMsg::decode)?.let { it to g } }
                 } ?: return@collect
+                // How long a message took: its age by the sender's clock (devices' clocks differ a little),
+                // and how long it waited here to be opened and handled.
+                val opened = System.nanoTime()
                 if (from === group) handle(msg) else forward(msg, from)
+                if (msg !is Presence) timing("in ${msg::class.simpleName} from ${msg.from} age=${clock() - msg.at}ms open=${(opened - heard) / 1_000_000}ms handle=${(System.nanoTime() - opened) / 1_000_000}ms")
             }
         }
         // Not in [jobs]: it has to outlive stop() long enough to send the goodbye.
         scope.launch(Dispatchers.Default) {
             for ((m, g) in outbox) {
+                val start = System.nanoTime()
                 val event = NostrEvent.signed(key, KIND, listOf(listOf("t", g.tag)), ConnectMsg.fit(m, g))
+                val signed = System.nanoTime()
                 if (!transport.publish(event)) Log.w(TAG, "no relay connected for ${m::class.simpleName}")
+                if (m !is Presence) timing("out ${m::class.simpleName} waited=${clock() - m.at}ms sign=${(signed - start) / 1_000_000}ms")
             }
         }
         jobs += scope.launch {
@@ -292,8 +322,11 @@ internal class ConnectSession(
         }
         mine = player.snapshot()
         // Connect starting over isn't taking the music: when it was taken here is carried on.
-        // Only a device starting from nothing (the app opened afresh) counts its song from now.
-        if (has(mine)) mineAt = if (took > 0) took else clock()
+        // Only a device starting from nothing (the app opened afresh) with music playing counts it
+        // from now. A song left loaded and paused (a watch's last one, the app's restored queue)
+        // wasn't taken: counted from now, it outranked the device playing, and once that one was
+        // paused from here the next Play started the leftover here.
+        if (has(mine)) mineAt = if (took > 0) took else if (meant(mine)) clock() else 0
         sayPresence()
         sayState()
     }
@@ -355,13 +388,15 @@ internal class ConnectSession(
                 "next" -> next?.let { shown.copy(track = it, queue = shown.queue.drop(1), pos = 0, playing = false) }
                 "previous" -> shown.copy(pos = 0, playing = false)
                 "volume" -> shown.copy(volume = value)
-                "shuffle" -> shown.copy(shuffle = value > 0.5f)
+                "shuffle" -> shown.copy(shuffle = value > 0.5f, smart = value > 0.5f && mode == "smart")
+                "autoplay" -> shown.copy(autoplay = value > 0.5f)
                 "repeat" -> shown.copy(repeat = mode ?: shown.repeat)
                 else -> null
             }
             if (guess != null) setDevice(target.copy(state = guess, receivedAt = now))
             if (guess != null && (action == "play" || action == "pause")) guess(target.id, playing = guess.meant)
-            if (guess != null && action == "shuffle") guess(target.id, shuffle = guess.shuffle)
+            if (guess != null && action == "shuffle") guess(target.id, shuffle = guess.shuffle, smart = guess.smart)
+            if (guess != null && action == "autoplay") guess(target.id, autoplay = guess.autoplay)
             if (guess != null && action == "repeat") guess(target.id, repeat = guess.repeat)
             if (guess != null && action == "seek") guessPlace(target.id, pos)
             if (guess != null && action == "next") guessPlace(target.id, 0, next?.id)
@@ -392,6 +427,31 @@ internal class ConnectSession(
         command(deviceId, "playTrack", track = track) { ack -> if (!ack.ok && before != null) undoGuess(before, before.state) }
     }
     fun addToQueueOn(deviceId: String, tracks: List<CTrack>) = command(deviceId, "addToQueue", tracks = tracks)
+    fun playNextOn(deviceId: String, tracks: List<CTrack>) = command(deviceId, "playNext", tracks = tracks)
+
+    /**
+     * Starts [queue] from [index] on [deviceId], the device playing: what's
+     * started here while another device plays goes there. Shown at once.
+     */
+    fun playOn(deviceId: String, queue: List<CTrack>, index: Int) {
+        val target = devices[deviceId] ?: return
+        val shown = target.state
+        val start = queue.getOrNull(index) ?: return
+        if (shown != null) {
+            setDevice(target.copy(state = shown.copy(track = start, private = false, playing = true, pos = 0, queue = queue.drop(index + 1).take(ConnectMsg.MAX_QUEUE)), receivedAt = clock()))
+            guess(deviceId, playing = true)
+            guessPlace(deviceId, 0, start.id)
+        }
+        val id = newId()
+        send(Transfer(myId, ++seq, clock(), to = deviceId, id = id, queue = queue, index = index, pos = 0, playing = true))
+        expect(id, deviceId, timings.transferMs) { ack ->
+            if (!ack.ok) {
+                guesses.remove(deviceId)
+                devices[deviceId]?.let { d -> if (shown != null) setDevice(d.copy(state = shown)) }
+                refused(ack, deviceId)
+            }
+        }
+    }
 
     /** Plays entry [at] of [deviceId]'s Up Next ([track], so a queue changed meanwhile still finds it). */
     fun jumpOn(deviceId: String, at: Int, track: CTrack) {
@@ -399,10 +459,32 @@ internal class ConnectSession(
         command(deviceId, "jump", pos = at.toLong(), track = track) { ack -> if (!ack.ok && before != null) undoGuess(before, before.state) }
     }
     /** Takes entry [at] ([track]) out of [deviceId]'s Up Next. */
-    fun removeOn(deviceId: String, at: Int, track: CTrack) = command(deviceId, "remove", pos = at.toLong(), track = track)
-    /** Moves entry [from] of [deviceId]'s Up Next, [track], to place [to]. */
-    fun moveOn(deviceId: String, from: Int, to: Int, track: CTrack) =
-        command(deviceId, "move", pos = from.toLong(), value = to.toFloat(), track = track)
+    fun removeOn(deviceId: String, at: Int, track: CTrack) {
+        showQueue(deviceId) { q -> q.indexAt(at, track)?.let { i -> q.filterIndexed { j, _ -> j != i } } }
+        command(deviceId, "remove", pos = at.toLong(), track = track) { ack -> if (!ack.ok) guesses.remove(deviceId) }
+    }
+
+    /** Moves entry [from] of [deviceId]'s Up Next, [track], to place [to]. Shown at once. */
+    fun moveOn(deviceId: String, from: Int, to: Int, track: CTrack) {
+        showQueue(deviceId) { q ->
+            val i = q.indexAt(from, track) ?: return@showQueue null
+            if (to !in q.indices || to == i) return@showQueue null
+            q.toMutableList().apply { add(to, removeAt(i)) }
+        }
+        command(deviceId, "move", pos = from.toLong(), value = to.toFloat(), track = track) { ack -> if (!ack.ok) guesses.remove(deviceId) }
+    }
+
+    private fun List<CTrack>.indexAt(at: Int, track: CTrack): Int? =
+        at.takeIf { getOrNull(it)?.id == track.id } ?: indexOfFirst { it.id == track.id }.takeIf { it >= 0 }
+
+    /** [deviceId]'s Up Next changed by [change] on screen at once, kept there until its reports agree. */
+    private fun showQueue(deviceId: String, change: (List<CTrack>) -> List<CTrack>?) {
+        val d = devices[deviceId] ?: return
+        val shown = d.state ?: return
+        val q = change(shown.queue) ?: return
+        setDevice(d.copy(state = shown.copy(queue = q), receivedAt = clock(), lastSeen = d.lastSeen))
+        guess(deviceId, queue = q)
+    }
 
     /**
      * Moves playback to [deviceId] (this device's own id pulls it here). The
@@ -417,9 +499,17 @@ internal class ConnectSession(
             val id = newId()
             val sentAt = clock()
             // Meant to play goes over as playing: a stall here at that moment isn't a pause.
-            send(Transfer(myId, ++seq, sentAt, to = deviceId, id = id, queue = queue, index = 0, pos = snap.pos, playing = meant(snap)))
+            val wasMeant = meant(snap)
+            send(Transfer(myId, ++seq, sentAt, to = deviceId, id = id, queue = queue, index = 0, pos = snap.pos, playing = wasMeant))
+            // Paused at once, not on the answer: over a slow link (a watch through its phone) the
+            // answer can come after the wait is over, and both devices would play. Only a device
+            // that says no gives the music back; one that doesn't answer in time may well have it.
+            if (wasMeant) player.pause()
             expect(id, deviceId, timings.transferMs, answered = { tookOver(deviceId, snap.track, sentAt) }) { ack ->
-                if (ack.ok) player.pause() else refused(ack, deviceId)
+                if (!ack.ok && ack.reason != TIMEOUT) {
+                    if (wasMeant) player.play()
+                    refused(ack, deviceId)
+                }
             }
             return
         }
@@ -441,8 +531,17 @@ internal class ConnectSession(
         val id = newId()
         send(Transfer(myId, ++seq, now, to = deviceId, id = id, queue = queue, index = 0, pos = pos, playing = state.meant))
         expect(id, deviceId, timings.transferMs, answered = { tookOver(deviceId, track, now) }) { ack ->
-            if (ack.ok) command(source.id, "pause", quiet = true) else refused(ack, deviceId)
+            // No answer in time may still be a yes that's on its way: the source stops rather than both playing.
+            if (ack.ok || ack.reason == TIMEOUT) command(source.id, "pause", quiet = true) else refused(ack, deviceId)
         }
+    }
+
+    /** The screen is back: relays lost while it was off are reached again now, not after their wait. */
+    fun wake() = transport.wake()
+
+    /** Timing of the messages in and out, in logcat in every build: for finding where a slow link loses its seconds. */
+    private fun timing(text: String) {
+        runCatching { android.util.Log.i(TIMING, text) }
     }
 
     /** Whether [deviceId] says it has [track] and took it after [after]: a handover it took, its answer lost. */
@@ -542,7 +641,7 @@ internal class ConnectSession(
         // Something pressed here a moment ago: a report from before it landed doesn't undo it on screen.
         guesses[msg.from]?.let { g0 ->
             var g = g0
-            if (now >= g.until) g = g.copy(playing = null, shuffle = null, repeat = null)
+            if (now >= g.until) g = g.copy(playing = null, shuffle = null, smart = null, repeat = null, autoplay = null, queue = null)
             if (now >= g.placeUntil) g = g.copy(pos = null, track = null)
             if (g.playing != null && msg.meant != g.playing) return touch(msg.from, now)
             if (g.pos != null) {
@@ -550,9 +649,12 @@ internal class ConnectSession(
                 val off = (g.track != null && msg.track?.id != g.track) || kotlin.math.abs(msg.pos - g.pos) > PLACE_SLACK_MS + (now - g.placeAt)
                 if (off) return touch(msg.from, now)
             }
-            val confirmed = (g.shuffle == null || msg.shuffle == g.shuffle) && (g.repeat == null || msg.repeat == g.repeat)
+            val confirmed = (g.shuffle == null || msg.shuffle == g.shuffle) && (g.smart == null || msg.smart == g.smart) &&
+                (g.repeat == null || msg.repeat == g.repeat) && (g.autoplay == null || msg.autoplay == g.autoplay) &&
+                (g.queue == null || msg.queue.map { it.id } == g.queue.map { it.id })
             if (confirmed) guesses.remove(msg.from) else {
-                st = msg.copy(shuffle = g.shuffle ?: msg.shuffle, repeat = g.repeat ?: msg.repeat)
+                st = msg.copy(shuffle = g.shuffle ?: msg.shuffle, smart = g.smart ?: msg.smart, repeat = g.repeat ?: msg.repeat,
+                    autoplay = g.autoplay ?: msg.autoplay, queue = g.queue ?: msg.queue)
                 guesses[msg.from] = g.copy(playing = null, pos = null, track = null)
             }
         }
@@ -608,16 +710,33 @@ internal class ConnectSession(
             "previous" -> player.previous()
             "seek" -> player.seekTo(c.pos)
             "volume" -> player.setVolume(c.value)
-            "shuffle" -> player.setShuffle(c.value > 0.5f)
+            "shuffle" -> player.setShuffle(c.value > 0.5f, smart = c.mode == "smart")
+            "autoplay" -> player.setAutoplay(c.value > 0.5f)
             "repeat" -> player.setRepeat(c.mode?.takeIf { it in setOf("off", "all", "one") } ?: return false)
             "playTrack" -> player.playTrack(c.track ?: return false)
             "addToQueue" -> player.addToQueue(c.tracks)
+            "playNext" -> player.playNext(c.tracks)
             "jump" -> return player.playQueued(c.pos.toInt(), c.track?.id ?: return false)
             "remove" -> return player.removeQueued(c.pos.toInt(), c.track?.id ?: return false)
             "move" -> return player.moveQueued(c.pos.toInt(), c.value.roundToInt(), c.track?.id ?: return false)
             else -> return false
         }
         return true
+    }
+
+    /** The shortest gap seen between a device's clock on its messages and this one's on arrival. */
+    private val quickest = HashMap<String, Long>()
+
+    /**
+     * How much later than its quickest a message from [id] came, [gap] being its arrival time
+     * minus its own time: the clocks' difference cancels out, and what's left is how long it sat
+     * on the way (a watch through its phone's Bluetooth can hold messages back seconds). A
+     * position counted from the arrival would be that much behind.
+     */
+    private fun lateBy(id: String, gap: Long): Long {
+        val best = minOf(quickest[id] ?: gap, gap)
+        quickest[id] = best
+        return (gap - best).coerceIn(0, MAX_LATE_MS)
     }
 
     // ---- Out -------------------------------------------------------------------------------
@@ -630,11 +749,12 @@ internal class ConnectSession(
         track: CTrack? = null,
         tracks: List<CTrack> = emptyList(),
         mode: String? = null,
+        index: Int? = null,
         quiet: Boolean = false,
         onAck: (Ack) -> Unit = {},
     ) {
         val id = newId()
-        send(Command(myId, ++seq, clock(), to = to, id = id, action = action, pos = pos, value = value, track = track, tracks = tracks, mode = mode))
+        send(Command(myId, ++seq, clock(), to = to, id = id, action = action, pos = pos, value = value, track = track, tracks = tracks, mode = mode, index = index))
         if (!quiet) expect(id, to, timings.commandMs, onAck = onAck)
     }
 
@@ -649,7 +769,7 @@ internal class ConnectSession(
                 refresh()
                 if (answered()) return@launch onAck(Ack(to, 0, clock(), to = myId, id = id, ok = true))
                 notice(NOT_ANSWERING, nameOf(to))
-                onAck(Ack(to, 0, clock(), to = myId, id = id, ok = false, reason = "timeout"))
+                onAck(Ack(to, 0, clock(), to = myId, id = id, ok = false, reason = TIMEOUT))
             }
         }
         pending[id] = Pending(to, job, onAck)
@@ -658,7 +778,9 @@ internal class ConnectSession(
 
     private fun tick() {
         val now = clock()
-        val gone = devices.values.filter { now - it.lastSeen > timings.goneMs }.map { it.id }
+        // With no relay connected nobody can be heard: silence then says nothing about the others,
+        // and dropping the device playing made a watch's buttons play the watch's own song.
+        val gone = if (view.value.relays == 0) emptyList() else devices.values.filter { now - it.lastSeen > timings.goneMs }.map { it.id }
         if (gone.isNotEmpty()) {
             gone.forEach { devices.remove(it); offsets.remove(it); pinged.remove(it) }
             refresh()
@@ -684,7 +806,7 @@ internal class ConnectSession(
         mine = s
         if (s.track == null && !s.private && !force) return
         lastStateSent = clock()
-        send(State(myId, ++seq, clock(), track = s.track, private = s.private, playing = s.playing, pos = s.pos, queue = s.queue.take(ConnectMsg.MAX_QUEUE), volume = s.volume, shuffle = s.shuffle, repeat = s.repeat, since = mineAt.takeIf { it > 0 }, quality = s.quality, wants = meant(s)))
+        send(State(myId, ++seq, clock(), track = s.track, private = s.private, playing = s.playing, pos = s.pos, queue = s.queue.take(ConnectMsg.MAX_QUEUE), volume = s.volume, shuffle = s.shuffle, smart = s.smart, canSmart = s.canSmart, repeat = s.repeat, autoplay = s.autoplay, since = mineAt.takeIf { it > 0 }, quality = s.quality, wants = meant(s)))
     }
 
     private fun send(m: ConnectMsg, to: ConnectGroup = group) {
@@ -749,6 +871,12 @@ internal class ConnectSession(
         /** How long a command's change takes to show in the player's state. */
         const val SETTLE_MS = 150L
         const val KIND = 21421
+        /** Previous past this far into a song starts it again, as the players do. */
+        const val PREVIOUS_RESTARTS_MS = 3_000L
+        internal const val TIMEOUT = "timeout"
+        private const val TIMING = "ConnectTiming"
+        /** More late than this is no longer a message held up, but something else (a clock changed). */
+        private const val MAX_LATE_MS = 15_000L
         /** How long a play or pause pressed here outlasts reports from before it landed. */
         private const val GUESS_MS = 1_500L
         /** The same for a place pressed (a seek, a skip): the command goes, the player settles, its report comes back. */

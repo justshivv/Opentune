@@ -1,4 +1,4 @@
-import { Laptop, Smartphone } from 'lucide-react';
+import { Laptop, Smartphone, Watch } from 'lucide-react';
 import { meant, type Device } from './session';
 
 /** The line a device's song shows under its name: "Song · Artist", or what it's doing instead. */
@@ -10,4 +10,5 @@ export const doing = (d: Device): string | null => {
   return meant(s) ? what : `Paused · ${what}`;
 };
 
-export const DeviceIcon = ({ form, size = 20 }: { form: string; size?: number }) => (form === 'web' ? <Laptop size={size} /> : <Smartphone size={size} />);
+export const DeviceIcon = ({ form, size = 20 }: { form: string; size?: number }) =>
+  form === 'web' ? <Laptop size={size} /> : form === 'watch' ? <Watch size={size} /> : <Smartphone size={size} />;
