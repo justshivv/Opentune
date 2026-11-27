@@ -1,6 +1,6 @@
 name: Usage API query report
 # Read-only: lists the usage database's queries by rows read over the last days, from
-# Cloudflare's analytics. It runs no query against the database itself.
+# Cloudflare's analytics, and the activity tables' highest rowid (two rows read).
 on:
   workflow_dispatch:
   push:
@@ -12,6 +12,7 @@ jobs:
   insights:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -53,3 +54,11 @@ jobs:
           }
           if (day) console.log(`  UTC day ${day} total so far: ${read} read, ${written} written`);
           '
+      - name: Activity table sizes (highest rowid, two rows read)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: usage-api
+        run: |
+          npx --yes wrangler@4 d1 execute opentune-usage --remote --json \
+            --command "SELECT (SELECT MAX(rowid) FROM activity) AS activity, (SELECT MAX(rowid) FROM activity_ist) AS activity_ist" || true
