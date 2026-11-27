@@ -6,6 +6,7 @@ import { useCanvas } from '@/data/spotify/canvas';
 import { getBridge } from '@/extension/bridge';
 import { Menu, MenuHeader, MenuItem, MenuSeparator } from '@/components/Menu';
 import { LyricClock } from '@/lyrics/clock';
+import { RemoteLyricFollower } from '@/lyrics/remoteFollow';
 import { onUngrantedChange, ungrantedOrigins } from '@/lyrics/http';
 import type { SourceState } from '@/lyrics/repository';
 import { enabledSources } from '@/lyrics/settings';
@@ -164,14 +165,31 @@ function LyricsView({ ttml, full }: { ttml: string; full: boolean }) {
   useEffect(() => {
     const el = element.current;
     if (!far || !el) return;
+    // The other device's position steers a lyric clock, as the audio's does here: the words run
+    // smoothly between its reports, jump on a seek and stop on a pause (lyrics/remoteFollow.ts).
+    const start = remoteRef.current ? positionAt(remoteRef.current, Date.now()) : 0;
+    const follower = new RemoteLyricFollower(start);
     let frame = 0;
     const tick = () => {
       const d = remoteRef.current;
-      if (d) el.currentTime = positionAt(d, Date.now());
+      if (d?.state) {
+        const { ms, step } = follower.frame(
+          { trackId: d.state.track?.id, playing: !!d.state.playing, posMs: d.state.pos ?? 0, saidAtWallMs: d.receivedAt },
+          performance.now(),
+          Date.now(),
+        );
+        el.currentTime = ms;
+        if (step === 'pause') freeze(el, true);
+        else if (step === 'resume') { freeze(el, false); resync(el, ms); }
+        else if (step === 'jump') resync(el, ms);
+      }
       frame = requestAnimationFrame(tick);
     };
     tick();
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      freeze(el, false);
+    };
   }, [far, videoId, ttml]);
 
   useEffect(() => {
