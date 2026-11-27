@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.TransformOrigin
@@ -270,7 +271,13 @@ internal fun SongInfoSheets(
                         .drawWithContent {
                             drawContent()
                             val k = stacked()
-                            if (k > 0f) drawRect(Color.Black, alpha = (if (dark) 0.34f else 0.14f) * k)
+                            // The dim follows the card's round top: a plain rectangle shows square
+                            // dark corners beyond it.
+                            if (k > 0f) drawOutline(
+                                SheetShape.createOutline(size, layoutDirection, this),
+                                Color.Black,
+                                alpha = (if (dark) 0.34f else 0.14f) * k,
+                            )
                         },
                 ) {
                     SongSheetContent(song, info, songPull, actions, onAbout = ::openAbout, onClose = { closeAll() }, onLeave = { go -> closeAll(go) })
@@ -371,7 +378,7 @@ private fun SheetCard(
     modifier: Modifier,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(topStart = SHEET_CORNER, topEnd = SHEET_CORNER)
+    val shape = SheetShape
     val rim = MaterialTheme.colorScheme.onSurface.copy(alpha = if (dark) 0.08f else 0.06f)
     val scrim = MaterialTheme.colorScheme.scrim
     Box(
@@ -881,6 +888,9 @@ private fun placeholderColor(): Color = MaterialTheme.colorScheme.onSurface.copy
 
 private val CARD_SHAPE = RoundedCornerShape(22.dp)
 private val SHEET_CORNER: Dp = 32.dp
+
+/** The cards' shape: round at the top, square where they meet the bottom of the screen. */
+private val SheetShape = RoundedCornerShape(topStart = SHEET_CORNER, topEnd = SHEET_CORNER)
 /** How much of the song sheet shows above About song. */
 private val STACK_PEEK: Dp = 30.dp
 /** How much narrower the song sheet gets behind About song. */
