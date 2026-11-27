@@ -26,3 +26,30 @@ jobs:
           done
           echo "=== 1d, by number of runs"
           npx --yes wrangler@4 d1 insights opentune-usage --timePeriod 1d --sort-type sum --sort-by count --limit 15 --json || true
+      - name: Rows read and written per hour (IST), last two days
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # D1's daily limits reset at 00:00 UTC (05:30 IST); each line is one UTC hour.
+          node --input-type=module -e '
+          const since = new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10);
+          const query = `query($acc: String!, $db: String!, $since: Date!) { viewer { accounts(filter: {accountTag: $acc}) {
+            d1AnalyticsAdaptiveGroups(limit: 100, filter: {databaseId: $db, date_geq: $since}, orderBy: [datetimeHour_ASC]) {
+              sum { rowsRead rowsWritten readQueries writeQueries } dimensions { datetimeHour } } } } }`;
+          const response = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST",
+            headers: { Authorization: "Bearer " + process.env.CLOUDFLARE_API_TOKEN, "Content-Type": "application/json" },
+            body: JSON.stringify({ query, variables: { acc: process.env.CLOUDFLARE_ACCOUNT_ID, db: "0f977bd8-a4ec-46f9-985f-c1bc8bccac78", since } }) });
+          const body = await response.json();
+          if (body.errors?.length) { console.log(JSON.stringify(body.errors)); process.exit(0); }
+          const rows = body.data.viewer.accounts[0].d1AnalyticsAdaptiveGroups;
+          let day = "", read = 0, written = 0;
+          for (const { sum, dimensions } of rows) {
+            const utcDay = dimensions.datetimeHour.slice(0, 10);
+            if (utcDay !== day) { if (day) console.log(`  UTC day ${day} total: ${read} read, ${written} written`); day = utcDay; read = 0; written = 0; }
+            read += sum.rowsRead; written += sum.rowsWritten;
+            const ist = new Date(Date.parse(dimensions.datetimeHour) + 330 * 6e4).toISOString().slice(0, 16).replace("T", " ");
+            console.log(`${ist} IST  read ${sum.rowsRead}  written ${sum.rowsWritten}  (${sum.readQueries} reads, ${sum.writeQueries} writes)`);
+          }
+          if (day) console.log(`  UTC day ${day} total so far: ${read} read, ${written} written`);
+          '
