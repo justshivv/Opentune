@@ -6,7 +6,6 @@ import androidx.core.content.edit
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.innertube.InnertubeParser
-import com.opentune.data.innertube.StreamResolver
 import com.opentune.data.model.Account
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -36,6 +35,10 @@ data class SavedAccount(val id: String, val name: String, val email: String, val
  * signs requests with the active one; no other token is minted.
  */
 object AccountStore {
+    private fun onSessionChangedSafe() = runCatching {
+        Class.forName("com.opentune.data.innertube.StreamResolver")
+            .getDeclaredMethod("onSessionChanged").invoke(null)
+    }
     private const val TAG = "AccountStore"
     private const val K_LIST = "accounts_v2"
     private const val K_ACTIVE = "active_id"
@@ -142,7 +145,7 @@ object AccountStore {
         Innertube.selectChannel(null, null)
         _listeningAs.value = null
         // Verdicts and client stand-downs made under another session don't hold now.
-        StreamResolver.onSessionChanged()
+        onSessionChangedSafe()
         _signedIn.value = true
         _account.value = null
         persist()
@@ -182,7 +185,7 @@ object AccountStore {
             Innertube.cookie = null
             Innertube.selectChannel(null, null)
             _listeningAs.value = null
-            if (announce) StreamResolver.onSessionChanged()
+            if (announce) onSessionChangedSafe()
             _signedIn.value = false
             _account.value = null
             return
@@ -191,7 +194,7 @@ object AccountStore {
         // The account's chosen profile; its own when none was chosen.
         Innertube.selectChannel(a.pageId, a.dataSyncId)
         _listeningAs.value = a.channelName
-        if (announce) StreamResolver.onSessionChanged()
+        if (announce) onSessionChangedSafe()
         _signedIn.value = true
         _account.value = if (a.name.isNotBlank()) Account(a.name, a.email, a.photo) else null
     }

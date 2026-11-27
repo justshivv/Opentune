@@ -331,6 +331,7 @@ private fun Pages(
     ) { shown ->
         val opened = shown.opened
         when {
+            opened == "login" -> LoginPage(onDone = onBack)
             opened is ShelfItem && opened.browseId?.startsWith("UC") == true -> ArtistView(opened, onOpen)
             opened is ShelfItem -> CollectionPage(opened)
             opened is PlaylistKey -> PlaylistPage(opened.id, onBack = onBack)
@@ -341,7 +342,7 @@ private fun Pages(
             shown.tab == Tab.HOME -> HomePage(onOpen = onOpen, onOpenAny = onOpenAny)
             shown.tab == Tab.LIBRARY -> shown.shelf?.let { LibraryPage(it, onShelf, onPlaylist) }
                 ?: LibraryHome(onShelf = onShelf, onPlaylist = onPlaylist, onOpenAny = onOpenAny)
-            shown.tab == Tab.SETTINGS -> SettingsPage()
+            shown.tab == Tab.SETTINGS -> SettingsPage(onSignIn = { onOpenAny("login") })
             else -> SongPage("Up next", queue, "The queue is empty.", current = index, onPlay = { _, i -> Player.playAt(i) })
         }
     }

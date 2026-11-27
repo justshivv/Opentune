@@ -78,7 +78,7 @@ private enum class Group(val label: String) { LOOK("Look"), PLAYBACK("Playback")
  * own, since glass can't blur the layer it's drawn in.
  */
 @Composable
-internal fun SettingsPage() {
+internal fun SettingsPage(onSignIn: () -> Unit = {}) {
     val list = androidx.compose.foundation.lazy.rememberLazyListState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val at by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { (list.firstVisibleItemIndex - 1).coerceIn(0, Group.entries.lastIndex) } }
@@ -103,7 +103,7 @@ internal fun SettingsPage() {
                             Group.SOURCES -> SourcesSection()
                             Group.SOUND -> EqualizerSection()
                             Group.LYRICS -> LyricsSection()
-                            Group.ACCOUNTS -> ConnectedSection()
+                            Group.ACCOUNTS -> ConnectedSection(onSignIn)
                             Group.SERVER -> ServerSection()
                             Group.ABOUT -> Section("About") {
                                 Text("OpenTune ${BuildConfig.VERSION_NAME} for computers", style = MaterialTheme.typography.bodyLarge)
@@ -443,15 +443,29 @@ private fun <T> Choices(title: String, choices: List<T>, selected: T, label: (T)
 
 /** Discord's "Listening to" card and Last.fm scrobbles. */
 @Composable
-private fun ConnectedSection() {
+private fun ConnectedSection(onSignIn: () -> Unit = {}) {
     val discord by DiscordPresence.enabled.collectAsState()
     val discordStatus by DiscordPresence.status.collectAsState()
     val lastFm by LastFmDesktop.state.collectAsState()
     val waiting by LastFmDesktop.waiting.collectAsState()
+    val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
+    val account by com.opentune.data.account.AccountStore.account.collectAsState()
     var problem by remember { mutableStateOf<String?>(null) }
     var key by remember { mutableStateOf(lastFm.ownKey) }
     var secret by remember { mutableStateOf(lastFm.ownSecret) }
     Section("Discord and Last.fm") {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("YouTube Music", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    if (signedIn) account?.name?.ifBlank { "Signed in" } ?: "Signed in"
+                    else "Sign in for your playlists, liked songs, history and recommendations.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (signedIn) OutlinedButton(onClick = { com.opentune.data.account.AccountStore.signOut() }) { Text("Sign out") }
+            else Button(onClick = onSignIn) { Text("Sign in") }
+        }
         SwitchRow(
             "Show on Discord",
             when (discordStatus) {
