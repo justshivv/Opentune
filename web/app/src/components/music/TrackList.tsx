@@ -27,6 +27,11 @@ interface TrackListProps {
   onNearEnd?: () => void;
   /** Where the list comes from: playing a row queues the list from there. Without it, a row plays alone. */
   source?: ListContext['source'];
+  /**
+   * The whole list a row plays within, when [tracks] shows only part of it (a playlist's search):
+   * a row then plays the whole list from that song. Defaults to [tracks].
+   */
+  queue?: Track[];
 }
 
 /* Track lists (report §3 album rows, §14 playlist rows). */
@@ -216,11 +221,11 @@ function Header() {
  * hover fill, the number (or artwork) turning into a play button. Long lists
  * are virtualized against the page's scroll container (prompt §3).
  */
-export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, onNearEnd, source }: TrackListProps) {
+export function TrackList({ tracks, variant, fallbackArtwork, fallbackArtists, onNearEnd, source, queue }: TrackListProps) {
   const playRow = (i: number) => {
     // Rows from another catalogue that found no YouTube Music song stay out of the queue.
     if (source) {
-      const playable = tracks.filter((t) => !t.unavailable);
+      const playable = (queue ?? tracks).filter((t) => !t.unavailable);
       return playList(playable, Math.max(0, playable.indexOf(tracks[i]!)), { source, fallbackArtwork, fallbackArtists });
     }
     const track = tracks[i]!;
