@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import worker, { currentVersionsSql, tooSoon, REPORT_GAP_MS, rememberFor, ingest, summary, downloadSql, validateActivity, publicCounts, shortCount, badge } from './worker.mjs';
+import worker, { SAVE_TODAY_EVERY_MS, currentVersionsSql, tooSoon, REPORT_GAP_MS, rememberFor, ingest, summary, downloadSql, validateActivity, publicCounts, shortCount, badge } from './worker.mjs';
 
 function database() {
   const sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));
@@ -444,11 +444,27 @@ test('a day row counts an installation once, even when it updates that day, and 
   const db = database();
   await ingest(db, body(3, '0.4.2'), now);
   await ingest(db, body(2, '0.4.3'), now);                         // updated mid-day: same installation
-  await ingest(db, body(5, '0.4.2'), now);                         // more plays on the first version
+  await ingest(db, body(5, '0.4.2'), new Date(now.getTime() + SAVE_TODAY_EVERY_MS));  // more plays later on
   await ingest(db, {...body(1), installationId: id.replace(/1$/, '2')}, now);
   const s = await summary(db, now);
   assert.deepEqual({...s.today}, {active: 2, plays: 8});
   assert.deepEqual(s.daily.map(d => [d.day, d.active, d.plays]), [['2026-10-09', 2, 8]]);
+});
+
+test('today\'s row is saved at most once every two hours; a finished day always is', async () => {
+  const db = database();
+  const plays = async () => (await db.batch([db.prepare("SELECT day,plays FROM activity WHERE installation=? ORDER BY day").bind(id)]))[0].results.map(r => [r.day, r.plays]);
+  await ingest(db, body(1), now);
+  await ingest(db, body(2), new Date(now.getTime() + 60_000));            // a song later: not saved yet
+  await ingest(db, body(3), new Date(now.getTime() + 30 * 60_000));
+  assert.deepEqual(await plays(), [['2026-10-09', 1]]);
+  await ingest(db, body(6), new Date(now.getTime() + SAVE_TODAY_EVERY_MS)); // two hours on: saved
+  assert.deepEqual(await plays(), [['2026-10-09', 6]]);
+  // The next day the finished day's final count is taken straight away, however recent the last save.
+  await ingest(db, {installationId: id, days: [{day: '2026-10-09', version: '0.4.2', plays: 7}]}, new Date('2026-10-10T00:10:00Z'));
+  assert.deepEqual(await plays(), [['2026-10-09', 7]]);
+  const s = await summary(db, new Date('2026-10-10T00:10:00Z'));
+  assert.equal(s.totals.plays, 7, 'the day total follows the saved row');
 });
 
 test('the nightly clean-up drops rows past the retention but keeps the lifetime and daily figures', async () => {
