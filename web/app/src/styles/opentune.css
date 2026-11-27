@@ -502,10 +502,10 @@
  * name takes the key colour instead; on a page tinted by its artwork, where the key colour may
  * clash with the tint, it dims a little. Keyboard focus gets a ring.
  */
-.ot-link { transition: color .18s ease, opacity .18s ease; border-radius: 4px; }
+.ot-link, .ot-circle-name { transition: color .18s ease, opacity .18s ease; border-radius: 4px; }
 @media (hover: hover) {
-  .ot-link:hover { color: var(--keyColor); }
-  [data-tint] .ot-link:hover { color: inherit; opacity: .7; }
+  .ot-link:hover, .ot-circle-lockup:hover .ot-circle-name { color: var(--keyColor); }
+  [data-tint] .ot-link:hover, [data-tint] .ot-circle-lockup:hover .ot-circle-name { color: inherit; opacity: .7; }
 }
 .ot-link:focus-visible { outline: 2px solid var(--keyColor); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .ot-link { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ot-link, .ot-circle-name { transition: none; } }

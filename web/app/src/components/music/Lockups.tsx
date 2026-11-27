@@ -6,6 +6,7 @@ import { ExplicitBadge } from './ExplicitBadge';
 import { artistHref, hrefFor } from './links';
 import { playTrack } from './play';
 import { TrackMenu, useTrackContextMenu } from './TrackMenu';
+import { useCollectionContextMenu } from './CollectionMenu';
 
 const isPlayable = (item: MusicItem) => item.kind === 'song' || item.kind === 'video';
 
@@ -86,8 +87,10 @@ export function SquareLockup({ item, width = 220 }: { item: MusicItem; width?: n
   const href = hrefFor(item);
   const playable = isPlayable(item);
   const context = useTrackContextMenu(playable ? item : null);
+  // Albums and playlists have their own right-click menu: play, shuffle, queue, open, copy link.
+  const collection = useCollectionContextMenu(playable ? null : item);
   return (
-    <div className={`${lockup} group/card`} onContextMenu={playable ? context.onContextMenu : undefined}>
+    <div className={`${lockup} group/card`} onContextMenu={playable ? context.onContextMenu : collection.onContextMenu}>
       <LockupArtwork item={item} width={width} aspect={1} />
       <div className={caption}>
         <div className={title}>
@@ -106,6 +109,7 @@ export function SquareLockup({ item, width = 220 }: { item: MusicItem; width?: n
         </div>
       </div>
       {context.menu}
+      {collection.menu}
     </div>
   );
 }
@@ -134,7 +138,7 @@ export function CircleLockup({ item, width = 160 }: { item: MusicItem; width?: n
   return (
     <PrefetchLink to={hrefFor(item) ?? '#'} className="ot-circle-lockup group/circle flex min-w-0 flex-col items-center gap-2.5">
       <Artwork src={item.thumbnail} displayWidth={width} radius="50%" />
-      <span className="max-w-full truncate text-center type-body group-hover/circle:underline">{item.title}</span>
+      <span className="ot-circle-name max-w-full truncate text-center type-body">{item.title}</span>
     </PrefetchLink>
   );
 }
