@@ -251,6 +251,12 @@ export async function setListSaved(playlistId: string, saved: boolean): Promise<
   await yt.actions.execute(saved ? '/like/like' : '/like/removelike', { target: { playlistId }, client: 'YTMUSIC' });
 }
 
+/** Subscribe to an artist's channel on the signed-in account, or stop, as YouTube Music's button does. */
+export async function setArtistSubscribed(channelId: string, subscribed: boolean): Promise<void> {
+  const yt = await getSignedInnertube();
+  await yt.actions.execute(subscribed ? '/subscription/subscribe' : '/subscription/unsubscribe', { channelIds: [channelId], client: 'YTMUSIC' });
+}
+
 export interface PlaylistOption {
   playlistId: string;
   title: string;

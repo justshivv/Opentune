@@ -282,7 +282,7 @@ export function mapArtist(id: string, artist: Pick<YTMusic.Artist, 'header' | 's
   const sections = artist.sections as unknown as AnyNode[];
   const topShelf = sections.find((s) => s.type === 'MusicShelf') as YTNodes.MusicShelf | undefined;
   const subscribe = (header as YTNodes.MusicImmersiveHeader | undefined)?.subscription_button as
-    | { subscriber_count?: TextLike; short_subscriber_count?: TextLike }
+    | { subscriber_count?: TextLike; short_subscriber_count?: TextLike; channel_id?: string; subscribed?: boolean }
     | null
     | undefined;
   return {
@@ -291,6 +291,7 @@ export function mapArtist(id: string, artist: Pick<YTMusic.Artist, 'header' | 's
     description: header && 'description' in header ? text(header.description) || null : null,
     heroImage: thumbnailOf(header ?? {}),
     audience: text(subscribe?.subscriber_count) || null,
+    subscription: subscribe?.channel_id ? { channelId: subscribe.channel_id, subscribed: !!subscribe.subscribed } : null,
     topSongs: (topShelf?.contents ?? []).map(mapTrack).filter((t): t is Track => !!t),
     topSongsSeeAll: linkOf(topShelf?.endpoint) ?? linkOf(topShelf?.bottom_button?.endpoint),
     shelves: mapShelves(sections.filter((s) => s.type !== 'MusicShelf')),
