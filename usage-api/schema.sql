@@ -1,3 +1,6 @@
+-- WITHOUT ROWID: the primary key is the table, so a new row is one row written plus the day
+-- index, not also a separate key index. Databases made before this are rebuilt once by
+-- migrations/without-rowid-activity.sql and -activity_ist.sql.
 CREATE TABLE IF NOT EXISTS activity (
   installation TEXT NOT NULL,
   day TEXT NOT NULL,
@@ -5,7 +8,7 @@ CREATE TABLE IF NOT EXISTS activity (
   plays INTEGER NOT NULL CHECK (plays BETWEEN 0 AND 10000),
   received_at TEXT NOT NULL,
   PRIMARY KEY (installation, day, version)
-);
+) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS activity_day ON activity(day, installation);
 -- No query reads by version through this table any more (version_installs does), and every
 -- index costs a row written per report: D1's free plan allows 100,000 rows written a day.
@@ -19,7 +22,7 @@ CREATE TABLE IF NOT EXISTS activity_ist (
   plays INTEGER NOT NULL CHECK (plays BETWEEN 0 AND 10000),
   received_at TEXT NOT NULL,
   PRIMARY KEY (installation, day, version)
-);
+) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS activity_ist_day ON activity_ist(day, installation);
 -- No query reads by version through this table any more (version_installs does), and every
 -- index costs a row written per report: D1's free plan allows 100,000 rows written a day.
