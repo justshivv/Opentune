@@ -689,3 +689,23 @@ test('with more versions than fit in columns, the nightly count sorts by version
   assert.ok(db.log.some(q=>/GROUP BY version/.test(q)));
   await sameAsBefore(db,evening,'many versions');
 });
+
+test('the WITHOUT ROWID rebuild keeps every row, the triggers and the day index', () => {
+  const sql = new DatabaseSync(':memory:');
+  const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
+  sql.exec(schema);
+  const up = t => sql.prepare(`INSERT INTO ${t}(installation,day,version,plays,received_at) VALUES(?,?,?,?,?)
+    ON CONFLICT(installation,day,version) DO UPDATE SET plays=excluded.plays,received_at=excluded.received_at WHERE excluded.plays > ${t}.plays`);
+  for (let i = 0; i < 60; i++) for (const t of ['activity', 'activity_ist']) up(t).run(`i${i % 9}`, `2026-11-${String(1 + (i % 20)).padStart(2, '0')}`, '1.0.0', i % 7, 't');
+  const rows = () => JSON.stringify(['activity', 'activity_ist', 'daily_totals', 'installations'].map(t => sql.prepare(`SELECT * FROM ${t} ORDER BY 1,2`).all()));
+  const before = rows();
+  for (const t of ['activity', 'activity_ist']) {
+    sql.exec('BEGIN'); sql.exec(readFileSync(new URL(`./migrations/without-rowid-${t}.sql`, import.meta.url), 'utf8') + '\n' + schema); sql.exec('COMMIT');
+  }
+  assert.equal(rows(), before);
+  const names = sql.prepare("SELECT name FROM sqlite_master WHERE type IN ('index','trigger')").all().map(r => r.name);
+  for (const name of ['activity_day', 'activity_ist_day', 'summarize_activity_ist_insert', 'daily_activity_ist_insert', 'daily_activity_ist_plays', 'daily_activity_plays'])
+    assert.ok(names.includes(name), name);
+  up('activity_ist').run('new', '2026-11-20', '1.0.0', 4, 't');
+  assert.equal(sql.prepare("SELECT 1 AS ok FROM installations WHERE installation='new'").get()?.ok, 1, 'the insert trigger still runs');
+});

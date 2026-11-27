@@ -611,7 +611,9 @@ export async function housekeeping(db, now = new Date()) {
   try {
     for (const table of ['activity', 'activity_ist']) {
       for (let round = 0; round < PRUNE_ROUNDS; round++) {
-        const done = await db.prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE day < ? LIMIT ${PRUNE_ROWS})`).bind(cutoff).run();
+        // By primary key, not rowid: the activity tables are WITHOUT ROWID (see schema.sql).
+        const done = await db.prepare(`DELETE FROM ${table} WHERE (installation,day,version) IN
+          (SELECT installation,day,version FROM ${table} WHERE day < ? LIMIT ${PRUNE_ROWS})`).bind(cutoff).run();
         const n = done?.meta?.changes ?? done?.changes ?? 0;
         removed += n;
         if (n < PRUNE_ROWS) break;
