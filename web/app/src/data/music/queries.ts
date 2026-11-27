@@ -28,13 +28,14 @@ import {
   fetchPlaylistOptions,
   fetchSearch,
   fetchSuggestions,
+  setArtistSubscribed,
   setListSaved,
   setTrackLiked,
   type LikeStatus,
   type Paged,
 } from './api';
 import { isLibrarySection, LIKED_MUSIC_PLAYLIST, type LibrarySection } from './library';
-import type { AlbumPage, BrowseLink, BrowsePage, HeaderInfo, PlaylistPage, Shelf, Track } from './types';
+import type { AlbumPage, ArtistPage, BrowseLink, BrowsePage, HeaderInfo, PlaylistPage, Shelf, Track } from './types';
 
 // TanStack Query for every browse request (prompt §1: caching, dedupe,
 // retries). YouTube requests need the extension, so every query waits for it;
@@ -261,6 +262,24 @@ function markSaved(playlistId: string, saved: boolean) {
   queryClient.setQueriesData<InfiniteData<PlaylistChunk>>({ queryKey: ['music', 'playlist'] }, (data) =>
     data && { ...data, pages: data.pages.map((chunk) => ({ ...chunk, header: apply(chunk.header) ?? null })) },
   );
+}
+
+function markSubscribed(channelId: string, subscribed: boolean) {
+  queryClient.setQueriesData<ArtistPage>({ queryKey: ['music', 'artist'] }, (page) =>
+    page?.subscription?.channelId === channelId ? { ...page, subscription: { channelId, subscribed } } : page,
+  );
+}
+
+/** Subscribe on an artist page, shown at once and put back if YouTube refuses. */
+export function useSetArtistSubscribed() {
+  return useMutation({
+    mutationFn: ({ channelId, subscribed }: { channelId: string; subscribed: boolean }) => setArtistSubscribed(channelId, subscribed),
+    onMutate: ({ channelId, subscribed }) => markSubscribed(channelId, subscribed),
+    onError: (_error, { channelId, subscribed }) => markSubscribed(channelId, !subscribed),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['music', 'library'] });
+    },
+  });
 }
 
 /** "Add to Library" on an album or playlist header. */

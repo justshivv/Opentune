@@ -1,4 +1,4 @@
-import { Radio, Shuffle } from 'lucide-react';
+import { Check, Radio, Shuffle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useParams } from 'react-router';
 import { PlayIcon } from '@/components/icons/Transport';
@@ -10,14 +10,44 @@ import { usePlayer } from '@/state/player';
 import { Shelves, TrackShelf } from '@/components/music/ShelfView';
 import { LoadError, NeedsExtension } from '@/components/music/States';
 import { requestAppleAccess, useAppleArtistLookup, useUngrantedAppleOrigins, type AppleArtistArt } from '@/data/apple/artistArt';
-import { useArtist, useYouTubeReady } from '@/data/music/queries';
+import { useArtist, useSetArtistSubscribed, useSignedIn, useYouTubeReady } from '@/data/music/queries';
 import { useArtworkColor, type ArtworkColor } from '@/lib/artworkColor';
 import { usePageTint } from '@/lib/usePageTint';
+import { toast } from '@/components/Toast';
 import { ArtistSkeleton } from '@/skeletons/PageSkeletons';
 
 /** The smaller round buttons either side of Play, glass over the photograph. */
 const heroSide =
   'ot-press grid size-10 place-items-center rounded-[999px] bg-[#0000004d] text-white [backdrop-filter:blur(20px)_saturate(1.6)] transition-[scale,background-color] disabled:opacity-40 enabled:hover:bg-[#00000066]';
+
+/**
+ * Subscribe, as YouTube Music's artist page has it: the account's own subscription to the artist's
+ * channel, so it's the same here, in YouTube Music and in the app. Shown at once, put back if
+ * YouTube refuses.
+ */
+function SubscribeButton({ name, subscription }: { name: string; subscription: { channelId: string; subscribed: boolean } }) {
+  const change = useSetArtistSubscribed();
+  const { subscribed, channelId } = subscription;
+  return (
+    <button
+      className={`ot-press inline-flex h-7 items-center gap-1 rounded-[999px] px-3 type-callout-emphasized transition-[scale,background-color] disabled:opacity-60 ${
+        subscribed ? 'bg-[#0000004d] text-white enabled:hover:bg-[#00000066] [backdrop-filter:blur(20px)_saturate(1.6)]' : 'bg-white text-black enabled:hover:brightness-95'
+      }`}
+      aria-pressed={subscribed}
+      aria-label={subscribed ? `Unsubscribe from ${name}` : `Subscribe to ${name}`}
+      disabled={change.isPending}
+      onClick={() =>
+        change.mutate(
+          { channelId, subscribed: !subscribed },
+          { onError: () => toast(subscribed ? 'Couldn’t unsubscribe. Try again.' : 'Couldn’t subscribe. Try again.') },
+        )
+      }
+    >
+      {subscribed && <Check size={14} strokeWidth={2.6} />}
+      {subscribed ? 'Subscribed' : 'Subscribe'}
+    </button>
+  );
+}
 
 function luminance(color: string): number {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16) / 255);
@@ -127,6 +157,7 @@ export default function ArtistPage() {
   const youtubeTint = useArtworkColor(header && !apple ? artist.data?.heroImage : null);
   usePageTint(appleTint ?? youtubeTint);
   const heading = useRef<HTMLHeadingElement>(null);
+  const signedIn = useSignedIn();
 
   if (missing) return <NeedsExtension />;
   if (artist.isError) return <LoadError error={artist.error} onRetry={() => void artist.refetch()} />;
@@ -171,7 +202,12 @@ export default function ArtistPage() {
           className={`ot-detail-text absolute inset-x-0 bottom-6 flex flex-col items-center gap-1.5 px-(--body-gutter) text-center transition-opacity duration-300 ${header ? '' : 'opacity-0'}`}
         >
           <ArtistName name={data.name} apple={apple} heading={heading} />
-          {data.audience && <p className="type-callout-emphasized text-secondary">{data.audience}</p>}
+          {(data.audience || (signedIn && data.subscription)) && (
+            <div className="flex items-center gap-2.5">
+              {data.audience && <p className="type-callout-emphasized text-secondary">{data.audience}</p>}
+              {signedIn && data.subscription && <SubscribeButton name={data.name} subscription={data.subscription} />}
+            </div>
+          )}
           {/* Shuffle · Play · Radio: the artist's top songs in order or mixed, or a station built from them. */}
           <div className="mt-2.5 flex items-center gap-4">
             <button

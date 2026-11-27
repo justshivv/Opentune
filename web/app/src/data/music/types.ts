@@ -113,6 +113,11 @@ export interface ArtistPage {
   heroImage: string | null;
   /** "206M monthly audience" or the subscriber count. */
   audience: string | null;
+  /**
+   * The artist's channel and whether the signed-in account subscribes to it, as YouTube Music's
+   * Subscribe button has them. Null when YouTube offers no button (signed out, or no channel).
+   */
+  subscription: { channelId: string; subscribed: boolean } | null;
   topSongs: Track[];
   topSongsSeeAll: BrowseLink | null;
   shelves: Shelf[];

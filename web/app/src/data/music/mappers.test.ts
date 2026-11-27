@@ -95,6 +95,11 @@ describe('artist', () => {
     expect(artist.shelves.some((s) => s.items[0]?.kind === 'album')).toBe(true);
     expect(artist.shelves.some((s) => s.layout === 'circle')).toBe(true);
   });
+  it('reads the Subscribe button: the channel and whether the account subscribes', () => {
+    const artist = mapArtist('UCtest', new YTMusic.Artist(response('browse-artist'), actions));
+    expect(artist.subscription?.channelId).toMatch(/^UC/);
+    expect(artist.subscription?.subscribed).toBe(false);
+  });
 });
 
 describe('search', () => {
