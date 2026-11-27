@@ -48,89 +48,97 @@ import androidx.compose.ui.unit.sp
 internal val LocalArtworkSeed = staticCompositionLocalOf<Color?> { null }
 
 /**
- * The desktop's theme: calm neutral greys with white as the accent, as a Mac
- * music app looks, so the covers bring the colour; a light version in light
- * mode, and the chosen typeface. The phone's true-black setting is left to
- * the player here: a whole desktop window of black is harsh on a big screen.
+ * The desktop's theme, in NepTune's own language as the phone and the web player speak it
+ * (web/app/src/styles/opentune.css): warm tonal surfaces leaning a few percent toward the
+ * accent, a warm off-white ink, the accent as the key colour for what's chosen and playing, so
+ * the covers bring the rest of the colour; a light version in light mode, and the chosen
+ * typeface. The phone's true-black setting is left to the player here: a whole desktop window
+ * of black is harsh on a big screen.
  */
 @Composable
 fun DesktopTheme(artworkSeed: Color? = null, content: @Composable () -> Unit) {
     val settings by AppSettings.theme.collectAsState()
     val dark = when (settings.mode) { ThemeMode.DARK -> true; ThemeMode.LIGHT -> false; ThemeMode.SYSTEM -> isSystemInDarkTheme() }
-    val scheme = studioScheme(dark)
+    val scheme = studioScheme(dark, Color(settings.seedColor))
     val type = rememberType(settings)
     MaterialTheme(colorScheme = scheme, typography = type, shapes = AppShapes) {
         CompositionLocalProvider(LocalArtworkSeed provides artworkSeed, content = content)
     }
 }
 
-/** The desktop's own greys, the ones every page and bar is drawn from. */
+/** Colours that keep their meaning in either theme. */
 internal object Studio {
-    val Page = Color(0xFF1E1E20)
-    val Sidebar = Color(0xFF171719)
-    val Raised = Color(0xFF2A2A2D)
-    val Secondary = Color(0xFF8E8E93)
-    val Divider = Color(0xFF2C2C2E)
     val Destructive = Color(0xFFFF453A)
 }
 
-internal fun studioScheme(dark: Boolean): ColorScheme = if (dark) {
-    val page = Studio.Page
+/** [base] leaning [amount] of the way toward [seed], as opentune.css's color-mix does. */
+private fun lean(base: Long, seed: Color, amount: Float): Color = androidx.compose.ui.graphics.lerp(Color(base), seed, amount)
+
+/**
+ * The window's scheme from the accent [seed]: dark is a warm near-black (the web's #11100f,
+ * a step lighter for a big screen) with layers rising in small steps, light a warm white.
+ * The key colour, as the web's --keyColor, is pale on dark and deep on light.
+ */
+internal fun studioScheme(dark: Boolean, seed: Color = Color(0xFFE53935)): ColorScheme = if (dark) {
+    val page = lean(0xFF151211, seed, 0.035f)
+    val key = androidx.compose.ui.graphics.lerp(Color(0xFFFFE0D5), seed, 0.32f)
     darkColorScheme(
-        primary = Color.White,
-        onPrimary = Color.Black,
-        primaryContainer = Color.White.copy(alpha = 0.16f),
-        onPrimaryContainer = Color.White,
-        secondary = Color(0xFFD1D1D6),
-        onSecondary = Color.Black,
-        secondaryContainer = Studio.Raised,
-        onSecondaryContainer = Color.White,
-        tertiary = Color(0xFFD1D1D6),
-        tertiaryContainer = Studio.Raised,
-        onTertiaryContainer = Color.White,
+        primary = key,
+        onPrimary = Color(0xFF26110D),
+        primaryContainer = key.copy(alpha = 0.18f),
+        onPrimaryContainer = Color(0xFFF6EDE9),
+        secondary = Color(0xFFD9CCC6),
+        onSecondary = Color(0xFF211511),
+        secondaryContainer = lean(0xFF2A2422, seed, 0.05f),
+        onSecondaryContainer = Color(0xFFF6EDE9),
+        tertiary = Color(0xFFD9CCC6),
+        tertiaryContainer = lean(0xFF2A2422, seed, 0.05f),
+        onTertiaryContainer = Color(0xFFF6EDE9),
         background = page,
-        onBackground = Color.White,
+        onBackground = Color(0xFFF6EDE9),
         surface = page,
-        onSurface = Color.White,
-        surfaceVariant = Studio.Raised,
-        onSurfaceVariant = Studio.Secondary,
-        surfaceContainerLowest = Color(0xFF121214),
-        surfaceContainerLow = Studio.Sidebar,
-        surfaceContainer = Color(0xFF232325),
-        surfaceContainerHigh = Studio.Raised,
-        surfaceContainerHighest = Color(0xFF353538),
-        outline = Color(0xFF48484A),
-        outlineVariant = Studio.Divider,
+        onSurface = Color(0xFFF6EDE9),
+        surfaceVariant = lean(0xFF2A2422, seed, 0.05f),
+        onSurfaceVariant = Color(0xFFB9ACA6),
+        surfaceContainerLowest = lean(0xFF0D0B0A, seed, 0.02f),
+        surfaceContainerLow = lean(0xFF110F0E, seed, 0.03f),
+        surfaceContainer = lean(0xFF1C1817, seed, 0.04f),
+        surfaceContainerHigh = lean(0xFF25201F, seed, 0.05f),
+        surfaceContainerHighest = lean(0xFF302A28, seed, 0.05f),
+        outline = Color(0xFF5C504C),
+        outlineVariant = Color(0xFF2E2725),
         error = Studio.Destructive,
-        surfaceTint = Color.White,
+        surfaceTint = key,
     )
 } else {
+    val page = lean(0xFFFFFAF6, seed, 0.025f)
+    val key = androidx.compose.ui.graphics.lerp(Color(0xFF44211B), seed, 0.65f)
     lightColorScheme(
-        primary = Color.Black,
+        primary = key,
         onPrimary = Color.White,
-        primaryContainer = Color.Black.copy(alpha = 0.08f),
-        onPrimaryContainer = Color.Black,
-        secondary = Color(0xFF3A3A3C),
-        secondaryContainer = Color(0xFFE5E5EA),
-        onSecondaryContainer = Color.Black,
-        tertiary = Color(0xFF3A3A3C),
-        tertiaryContainer = Color(0xFFE5E5EA),
-        onTertiaryContainer = Color.Black,
-        background = Color(0xFFFAFAFC),
-        onBackground = Color(0xFF1C1C1E),
-        surface = Color(0xFFFAFAFC),
-        onSurface = Color(0xFF1C1C1E),
-        surfaceVariant = Color(0xFFE5E5EA),
-        onSurfaceVariant = Color(0xFF6E6E73),
+        primaryContainer = key.copy(alpha = 0.12f),
+        onPrimaryContainer = Color(0xFF201A19),
+        secondary = Color(0xFF4A3E3A),
+        secondaryContainer = lean(0xFFEDE4DF, seed, 0.03f),
+        onSecondaryContainer = Color(0xFF201A19),
+        tertiary = Color(0xFF4A3E3A),
+        tertiaryContainer = lean(0xFFEDE4DF, seed, 0.03f),
+        onTertiaryContainer = Color(0xFF201A19),
+        background = page,
+        onBackground = Color(0xFF201A19),
+        surface = page,
+        onSurface = Color(0xFF201A19),
+        surfaceVariant = lean(0xFFEDE4DF, seed, 0.03f),
+        onSurfaceVariant = Color(0xFF655854),
         surfaceContainerLowest = Color.White,
-        surfaceContainerLow = Color(0xFFF0F0F3),
-        surfaceContainer = Color(0xFFEBEBEF),
-        surfaceContainerHigh = Color(0xFFE5E5EA),
-        surfaceContainerHighest = Color(0xFFDCDCE0),
-        outline = Color(0xFFC7C7CC),
-        outlineVariant = Color(0xFFE0E0E5),
-        error = Color(0xFFFF3B30),
-        surfaceTint = Color.Black,
+        surfaceContainerLow = lean(0xFFF7F0EB, seed, 0.03f),
+        surfaceContainer = lean(0xFFF1E9E4, seed, 0.03f),
+        surfaceContainerHigh = lean(0xFFEBE1DB, seed, 0.03f),
+        surfaceContainerHighest = lean(0xFFE2D7D0, seed, 0.03f),
+        outline = Color(0xFFBFB1AB),
+        outlineVariant = Color(0xFFE6DCD6),
+        error = Color(0xFFE5332A),
+        surfaceTint = key,
     )
 }
 
@@ -159,12 +167,11 @@ internal fun PlayerTheme(seed: Color?, content: @Composable () -> Unit) {
 @Composable
 private fun rememberType(settings: com.opentune.data.settings.ThemeSettings): Typography {
     val family = when (settings.font) {
-        AppFont.OUTFIT -> Outfit
         AppFont.SERIF -> FontFamily.Serif
         AppFont.MONO -> FontFamily.Monospace
-        // The web player's typeface, so the two read alike: the system's own sans (DejaVu on
-        // Linux, Segoe on Windows) made the desktop look unlike the rest of OpenTune.
-        else -> DmSans
+        // NepTune's own typeface, the default here (the default choice, SYSTEM, and OUTFIT alike):
+        // the system's sans (DejaVu on Linux, Segoe on Windows) looked unlike the rest of NepTune.
+        else -> Outfit
     }
     return remember(family, settings.textWeight) { readableType(family, settings.textWeight.minimum) }
 }
@@ -254,16 +261,6 @@ private val Outfit: FontFamily by lazy {
     FontFamily(
         listOf(400, 500, 600, 700, 800).map { w ->
             Font("Outfit-$w", outfitData, FontWeight(w), variationSettings = FontVariation.Settings(FontVariation.weight(w)))
-        },
-    )
-}
-
-/** DM Sans, the web player's typeface (SIL Open Font License; see third_party/dm-sans), in its five weights. */
-private val DmSans: FontFamily by lazy {
-    FontFamily(
-        listOf(400, 500, 600, 700, 800).map { w ->
-            val bytes = Thread.currentThread().contextClassLoader.getResourceAsStream("font/dmsans_$w.ttf")!!.use { it.readBytes() }
-            Font("DMSans-$w", bytes, FontWeight(w))
         },
     )
 }

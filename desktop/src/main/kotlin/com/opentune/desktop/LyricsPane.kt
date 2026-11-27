@@ -475,7 +475,7 @@ internal fun PlayerLyricsPanel(song: Song, modifier: Modifier = Modifier, overri
 private fun playerLyricType(size: Int, line: Int, weight: FontWeight = FontWeight.Normal): androidx.compose.ui.text.TextStyle =
     MaterialTheme.typography.bodyLarge.copy(fontSize = size.sp, lineHeight = line.sp, fontWeight = weight, letterSpacing = 0.sp)
 
-/** The big lyric face: DM Sans (the theme's) at its heaviest, lines set tight. */
+/** The big lyric face: the theme's (Outfit) at its heaviest, lines set tight. */
 @Composable
 private fun playerBigLyric(size: androidx.compose.ui.unit.TextUnit): androidx.compose.ui.text.TextStyle =
     MaterialTheme.typography.displaySmall.copy(
