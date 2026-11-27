@@ -11,7 +11,7 @@ import { Shelves, TrackShelf } from '@/components/music/ShelfView';
 import { LoadError, NeedsExtension } from '@/components/music/States';
 import { requestAppleAccess, useAppleArtistLookup, useUngrantedAppleOrigins, type AppleArtistArt } from '@/data/apple/artistArt';
 import { useArtist, useYouTubeReady } from '@/data/music/queries';
-import type { ArtworkColor } from '@/lib/artworkColor';
+import { useArtworkColor, type ArtworkColor } from '@/lib/artworkColor';
 import { usePageTint } from '@/lib/usePageTint';
 import { ArtistSkeleton } from '@/skeletons/PageSkeletons';
 
@@ -118,11 +118,14 @@ export default function ArtistPage() {
   const header = useHeaderChoice(useAppleArtistLookup(artist.data?.name), !!artist.data);
   const apple = header?.apple ?? null;
   const appleUngranted = useUngrantedAppleOrigins();
-  const tint = useMemo<ArtworkColor | null>(
+  const appleTint = useMemo<ArtworkColor | null>(
     () => (apple ? { background: apple.background, dark: luminance(apple.background) < 0.6 } : null),
     [apple],
   );
-  usePageTint(tint);
+  // When Apple's header doesn't come in time (a slow lookup or photograph), the page shows
+  // YouTube's photo, and takes its colour from that photo, as album pages do from the cover.
+  const youtubeTint = useArtworkColor(header && !apple ? artist.data?.heroImage : null);
+  usePageTint(appleTint ?? youtubeTint);
   const heading = useRef<HTMLHeadingElement>(null);
 
   if (missing) return <NeedsExtension />;

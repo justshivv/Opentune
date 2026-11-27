@@ -84,7 +84,10 @@ export const detailButton = {
 
 /**
  * Album and playlist header (report §3, §14): artwork with its glow, title,
- * artist, metadata, a three-line description, then Shuffle · Play.
+ * artist, metadata, a three-line description right under them, then Shuffle ·
+ * Play level with the artwork's foot. The description row takes the spare
+ * height, so the description sits at its top: at its foot it left a gap under
+ * the title.
  */
 export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, onQueue, shareUrl }: DetailHeaderProps) {
   const [expanded, setExpanded] = useState(false);
@@ -143,7 +146,7 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, 
           <div className="mt-1 type-callout-emphasized text-secondary">{[info.subtitle, info.meta].filter(Boolean).join(' · ')}</div>
         </div>
         {info.description && (
-          <div className="mt-[38px] flex max-w-[440px] items-end type-body-tall text-secondary [grid-area:description] max-md:mt-5">
+          <div className="mt-4 flex max-w-[440px] items-end self-start type-body-tall text-secondary [grid-area:description] max-md:mt-5">
             <p className={expanded ? 'min-w-0' : 'min-w-0 line-clamp-3'}>
               {info.description}
             </p>
