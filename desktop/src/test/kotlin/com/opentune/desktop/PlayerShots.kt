@@ -67,6 +67,7 @@ class PlayerShots {
     @Test fun player() {
         assumeTrue(folder != null)
         AppSettings.init(appContext)
+        shotVault()
         AppSettings.updateTheme { it.copy(mode = ThemeMode.DARK) }
         Library.useFile(java.nio.file.Files.createTempDirectory("player").resolve("desktop.json").toFile())
         val songs = listOf(

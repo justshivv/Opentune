@@ -42,6 +42,7 @@ class ChromeShots {
     @Test fun chrome() {
         assumeTrue(folder != null)
         AppSettings.init(appContext)
+        shotVault()
         AppSettings.updateTheme { it.copy(mode = ThemeMode.DARK) }
         Library.useFile(java.nio.file.Files.createTempDirectory("chrome").resolve("desktop.json").toFile())
         // Nothing playing: the music note in the middle of the bar.

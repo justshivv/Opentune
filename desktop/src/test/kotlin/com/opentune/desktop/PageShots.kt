@@ -79,6 +79,7 @@ class PageShots {
     @Before fun setUp() {
         assumeTrue(folder != null)
         AppSettings.init(appContext)
+        shotVault()
         AppSettings.updateTheme { it.copy(mode = com.opentune.data.settings.ThemeMode.DARK) }
     }
 

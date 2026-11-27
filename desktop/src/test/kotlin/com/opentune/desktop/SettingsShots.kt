@@ -56,6 +56,7 @@ class SettingsShots {
     @Test fun settings() {
         assumeTrue(folder != null)
         AppSettings.init(appContext)
+        shotVault()
         AppSettings.updateTheme { it.copy(mode = ThemeMode.DARK) }
         shoot("settings-all-dark", 1600, 9000) { Page() }
         shoot("settings-narrow-dark", 900, 9000) { Page() }

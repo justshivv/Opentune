@@ -45,6 +45,7 @@ class DesktopShots {
     @Test fun searchAndQueue() {
         assumeTrue(folder != null)
         AppSettings.init(appContext)
+        shotVault()
         AppSettings.updateTheme { it.copy(mode = com.opentune.data.settings.ThemeMode.DARK) }
         shoot("desktop-search-results", 1400, 1700, 14_000) {
             DesktopTheme { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { SearchPage("the weeknd", {}, 1, {}, {}) } }
@@ -62,6 +63,7 @@ class DesktopShots {
     @Test fun windows() {
         assumeTrue(folder != null)
         AppSettings.init(appContext)
+        shotVault()
         AppSettings.updateTheme { it.copy(mode = com.opentune.data.settings.ThemeMode.DARK) }
         shoot("desktop-wide", 1280, 800, 9_000) { DesktopApp() }
         shoot("desktop-narrow", 640, 900, 9_000) { DesktopApp() }
