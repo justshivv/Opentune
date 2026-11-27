@@ -28,7 +28,7 @@ function Byline({ item }: { item: MusicItem }) {
           <span key={`${artist.name}-${i}`}>
             {i > 0 && ', '}
             {href ? (
-              <PrefetchLink to={href} className="hover:underline">
+              <PrefetchLink to={href} className="ot-link">
                 {artist.name}
               </PrefetchLink>
             ) : (
@@ -92,7 +92,7 @@ export function SquareLockup({ item, width = 220 }: { item: MusicItem; width?: n
       <div className={caption}>
         <div className={title}>
           {href ? (
-            <PrefetchLink to={href} className="hover:underline">
+            <PrefetchLink to={href} className="ot-link">
               {item.title}
             </PrefetchLink>
           ) : (

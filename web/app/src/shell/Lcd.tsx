@@ -17,7 +17,7 @@ import { albumPageFor, artistPageFor } from './nowPlayingLinks';
 import { useScrubber } from './useScrubber';
 
 // The title and each artist: plain until hovered, then underlined on their own.
-export const pageLink = 'cursor-pointer text-start hover:underline focus-visible:underline aria-busy:cursor-progress';
+export const pageLink = 'ot-link cursor-pointer text-start aria-busy:cursor-progress';
 
 /**
  * A name in the LCD that opens a page: a plain link when the page is known,
@@ -178,10 +178,10 @@ export function Lcd() {
           // What went wrong, and the two ways on: load it again, or move to the next song.
           <span className="flex min-w-0 items-center gap-2 type-callout-medium">
             <span className="min-w-0 truncate text-key" title={error ?? undefined}>{error}</span>
-            <button className="flex-none text-primary underline-offset-2 hover:underline" onClick={() => usePlayer.getState().togglePlay()}>
+            <button className="ot-link flex-none text-primary" onClick={() => usePlayer.getState().togglePlay()}>
               Try Again
             </button>
-            <button className="flex-none text-primary underline-offset-2 hover:underline" onClick={() => usePlayer.getState().next()}>
+            <button className="ot-link flex-none text-primary" onClick={() => usePlayer.getState().next()}>
               Skip
             </button>
           </span>

@@ -39,7 +39,7 @@ const secondary = `${cell} pe-2.5 max-md:hidden`;
 const tertiary = `${cell} pe-4 max-md:hidden`;
 // A row from another catalogue with no YouTube Music song (yet) is dimmed.
 const dimmed = 'group-data-unavailable/row:opacity-45';
-const link = 'text-inherit hover:underline group-data-current/row:text-primary';
+const link = 'ot-link text-inherit group-data-current/row:text-primary';
 
 /**
  * A hairline on top of every row, hidden on hover and around the playing row;

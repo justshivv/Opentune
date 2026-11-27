@@ -228,7 +228,7 @@ export function Sidebar() {
             <AccountButton compact />
           </div>
           <div className="ot-side-foot flex items-center justify-between">
-            <a className="ot-side-android inline-flex items-center gap-1 ps-1 type-callout text-primary hover:underline" href={config.androidAppUrl} target="_blank" rel="noreferrer">
+            <a className="ot-side-android inline-flex items-center gap-1 ps-1 type-callout text-primary ot-link" href={config.androidAppUrl} target="_blank" rel="noreferrer">
               <span>Get the Android app</span>
               <ArrowUpRight size={14} strokeWidth={2} />
             </a>
