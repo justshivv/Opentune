@@ -3,9 +3,14 @@ import { authorized, locked, privateHeaders, authRoute } from './auth.mjs';
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const VERSION = /^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]{1,32})?$/;
 const DAY = 86400000;
+// Older apps report today's plays so far after every song, and each saved change costs rows
+// written (the row and its day total): D1's free plan allows 100,000 a day. A day that's still
+// going is saved at most once every SAVE_TODAY_EVERY_MS; days that are over always are, and
+// current apps only send those. The last binds are the reporting zone's today and that cutoff.
+export const SAVE_TODAY_EVERY_MS = 2 * 3600000;
 export const activitySql = `INSERT INTO activity(installation,day,version,plays,received_at) VALUES(?,?,?,?,?)
  ON CONFLICT(installation,day,version) DO UPDATE SET plays=excluded.plays,received_at=excluded.received_at
- WHERE excluded.plays > activity.plays`;
+ WHERE excluded.plays > activity.plays AND (excluded.day < ? OR activity.received_at <= ?)`;
 const istActivitySql = activitySql.replaceAll('activity', 'activity_ist');
 export function calendarDay(now, timeZone = 'UTC') {
   return new Intl.DateTimeFormat('en-CA', {timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
@@ -58,7 +63,8 @@ export function validateActivity(body, now = new Date()) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(row.day) || !Number.isFinite(Date.parse(row.day)) ||
         new Date(row.day).toISOString().slice(0,10) !== row.day || row.day > today || row.day < earliest ||
         !VERSION.test(row.version) || !Number.isInteger(row.plays) || row.plays < 0 || row.plays > 10000) throw new Error('Invalid daily aggregate');
-    return [body.installationId.toLowerCase(), row.day, row.version, row.plays, now.toISOString()];
+    return [body.installationId.toLowerCase(), row.day, row.version, row.plays, now.toISOString(),
+      today, new Date(now.getTime() - SAVE_TODAY_EVERY_MS).toISOString()];
   });
   return rows;
 }
