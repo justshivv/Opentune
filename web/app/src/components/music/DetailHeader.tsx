@@ -132,7 +132,7 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, 
                   <span key={`${artist.name}-${i}`}>
                     {i > 0 && ', '}
                     {href ? (
-                      <PrefetchLink to={href} className="hover:underline">
+                      <PrefetchLink to={href} className="ot-link">
                         {artist.name}
                       </PrefetchLink>
                     ) : (

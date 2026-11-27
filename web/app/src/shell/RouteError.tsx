@@ -35,7 +35,7 @@ export function RouteError() {
             >
               Reload
             </button>
-            <a className="inline-flex h-9 items-center rounded-pill px-4 type-body-emphasized text-key hover:underline" href="#/home">
+            <a className="inline-flex h-9 items-center rounded-pill px-4 type-body-emphasized text-key transition-opacity hover:opacity-75" href="#/home">
               Go to Home
             </a>
           </div>

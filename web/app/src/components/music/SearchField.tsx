@@ -126,7 +126,7 @@ export function SearchField({ initial, onSearch }: { initial: string; onSearch: 
               <span>Recent</span>
               <button
                 type="button"
-                className="type-subhead text-key hover:underline"
+                className="type-subhead text-key transition-opacity hover:opacity-75"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={clearRecent}
               >

@@ -363,7 +363,7 @@ function NotResponding() {
       <span className="min-w-0 flex-1 text-pretty">
         <span className="type-callout-emphasized text-primary">The NepTune extension isn’t responding.</span> Reload it on your
         browser’s extensions page, then reload this page. If you removed it,{' '}
-        <a className="text-key underline-offset-2 hover:underline" href={here.href} download>
+        <a className="text-key transition-opacity hover:opacity-75" href={here.href} download>
           download it again
         </a>
         .
