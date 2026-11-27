@@ -1,4 +1,5 @@
 import { ArrowUpRight, ListMusic, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-react';
+import { useCollectionContextMenu } from '@/components/music/CollectionMenu';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { MdOutlineExtension } from 'react-icons/md';
 import { SiSpotify } from 'react-icons/si';
@@ -81,6 +82,23 @@ function NavList({ items, onNavigate }: { items: NavItem[]; onNavigate: () => vo
   );
 }
 
+/** One of the account's playlists in the sidebar; a right-click opens its menu (play, shuffle, queue, copy link). */
+function SidebarPlaylist({ playlist, onNavigate }: { playlist: Parameters<typeof hrefFor>[0] & { title: string }; onNavigate: () => void }) {
+  const context = useCollectionContextMenu(playlist);
+  return (
+    // Each playlist's glyph is the same one, so the folded rail leaves them out.
+    <li className="ot-side-extra" onContextMenu={context.onContextMenu}>
+      <PrefetchNavLink to={hrefFor(playlist) ?? '/library/playlists'} className={item} onClick={onNavigate}>
+        <span className={icon}>
+          <ListMusic size={17} strokeWidth={1.8} />
+        </span>
+        <span className={navLabel}>{playlist.title}</span>
+      </PrefetchNavLink>
+      {context.menu}
+    </li>
+  );
+}
+
 /** Library and Playlists (report §1), once YouTube requests are made as the user. */
 function LibraryNav({ onNavigate }: { onNavigate: () => void }) {
   const playlists = useLibraryPlaylists();
@@ -97,15 +115,7 @@ function LibraryNav({ onNavigate }: { onNavigate: () => void }) {
           </PrefetchNavLink>
         </li>
         {playlists.data?.map((playlist) => (
-          // Each playlist's glyph is the same one, so the folded rail leaves them out.
-          <li key={playlist.id} className="ot-side-extra">
-            <PrefetchNavLink to={hrefFor(playlist) ?? '/library/playlists'} className={item} onClick={onNavigate}>
-              <span className={icon}>
-                <ListMusic size={17} strokeWidth={1.8} />
-              </span>
-              <span className={navLabel}>{playlist.title}</span>
-            </PrefetchNavLink>
-          </li>
+          <SidebarPlaylist key={playlist.id} playlist={playlist} onNavigate={onNavigate} />
         ))}
       </ul>
     </>
