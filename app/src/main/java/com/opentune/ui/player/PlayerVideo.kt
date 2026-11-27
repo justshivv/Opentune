@@ -576,12 +576,26 @@ internal fun VideoCoverPane(
                 // the end. Until the cover has loaded its shape is unknown and it
                 // lands in the box's square, as it always did.
                 val intr = coverPainter.intrinsicSize
-                val filled = if (intr.width.isFinite() && intr.height.isFinite() && intr.width > 0f && intr.height > 0f) {
-                    val a = intr.width / intr.height
-                    val fw = minOf(target.width, target.height * a)
-                    Rect(Offset(target.center.x - fw / 2f, target.center.y - fw / a / 2f), Size(fw, fw / a))
+                val artAspect = if (intr.width.isFinite() && intr.height.isFinite() && intr.width > 0f && intr.height > 0f) {
+                    intr.width / intr.height
+                } else 0f
+                val filled = if (artAspect > 0f) {
+                    val fw = minOf(target.width, target.height * artAspect)
+                    Rect(Offset(target.center.x - fw / 2f, target.center.y - fw / artAspect / 2f), Size(fw, fw / artAspect))
                 } else null
-                morphFrame(cover, target, cornerPx * (1f - g), t, filled).scaledAbout(k, pivot)
+                // The cover's end of the way, in the same shape: the art at its own
+                // shape, covering the cover's square. Lerping the square itself
+                // would change the drawn shape's aspect on the way, and the painter
+                // re-cropping to it frame by frame is what reads as the art
+                // stretching; at a fixed shape the art only travels, rigid, and
+                // the moving cut reveals it. At the cover the visible part is the
+                // same centre of the art the square's own crop showed.
+                val start = if (artAspect > 0f) {
+                    val c = cover.image
+                    val w = maxOf(c.width, c.height * artAspect)
+                    cover.copy(image = Rect(Offset(c.center.x - w / 2f, c.center.y - w / artAspect / 2f), Size(w, w / artAspect)))
+                } else cover
+                morphFrame(start, target, cornerPx * (1f - g), t, filled).scaledAbout(k, pivot)
             }
             // Everything the box may be cut to, so its cut always lies inside its own layer.
             val reach = maxOf(bleed, growPx)

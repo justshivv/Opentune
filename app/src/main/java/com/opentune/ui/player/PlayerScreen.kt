@@ -1162,7 +1162,7 @@ fun PlayerLayout(
                     // Not built once the video's box has settled over it; while the box grows out
                     // of it or back into it, it fades on the same clock.
                     fullCoverArt = styleCoverBuilt,
-                    fullCoverAlpha = { if (videoBox) 1f - ((videoMorph.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f },
+                    fullCoverAlpha = { if (videoBox) 1f - videoMorph.value else 1f },
                     fullCoverVisible = { fullCover && !flight.active },
                     artworkMotion = artworkMotion,
                     fullCoverBottom = with(LocalDensity.current) {
@@ -1584,7 +1584,7 @@ fun PlayerLayout(
                                     // faded out as the box leaves it, shown again as the box lands back on it.
                                     if (styleCoverBuilt) Box(
                                         Modifier.matchParentSize().graphicsLayer {
-                                            alpha = if (videoBox) 1f - ((videoMorph.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f
+                                            alpha = if (videoBox) 1f - videoMorph.value else 1f
                                         },
                                         contentAlignment = Alignment.Center,
                                     ) {
@@ -1595,8 +1595,10 @@ fun PlayerLayout(
                                         ) { design() } else design()
                                     }
                                     // The video's pane: built as soon as the song has a video and
-                                    // kept under the cover, warm and measured, so switching to
-                                    // the video only has to reveal it (see its fade below).
+                                    // kept warm and measured under the cover. While the morph
+                                    // runs it IS the cover — the one cover, travelling to the
+                                    // box and back — and the layout's own cover underneath
+                                    // fades on the same clock (see its alpha above).
                                     if (!landscape && (state.videoAvailable || videoBox)) {
                                         val videoPane: @Composable () -> Unit = {
                                             VideoCoverPane(
@@ -1614,7 +1616,7 @@ fun PlayerLayout(
                                                 onSwipePrevious = coverPrevious,
                                                 modifier = Modifier.fillMaxSize()
                                                     .then(if (fullStyle) Modifier.onGloballyPositioned(placeEdge) else Modifier)
-                                                    .graphicsLayer { alpha = ((videoMorph.value - 0.6f) / 0.4f).coerceIn(0f, 1f) },
+                                                    .graphicsLayer { alpha = if (videoBox) 1f else 0f },
                                                 ready = videoReady,
                                                 onBox = { box ->
                                                     // Only its place at rest: not scaled down under the lists, nor carried by a finger.
