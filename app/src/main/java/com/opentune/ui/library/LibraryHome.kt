@@ -389,7 +389,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         ) {
             // The faces' pills, in a glass capsule matching the actions'; as they scroll inside it, they dissolve at its ends.
             Row(
-                Modifier.weight(1f).height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).fadingEdges(switchState),
+                Modifier.weight(1f).height(48.dp).glass(androidx.compose.foundation.shape.CircleShape).fadingEdges(switchState),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 LibrarySwitch(tab, switchState, { scope.launch { pagerState.animateScrollToPage(it, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing)) } })
@@ -416,7 +416,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     val facePadding = PaddingValues(
         start = contentPadding.calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
         end = contentPadding.calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
-        top = with(androidx.compose.ui.platform.LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() } + 76.dp,
+        top = with(androidx.compose.ui.platform.LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() } + 70.dp,
         bottom = contentPadding.calculateBottomPadding(),
     )
 
@@ -821,7 +821,6 @@ private fun LibrarySwitch(tab: Int, rowState: androidx.compose.foundation.lazy.L
     androidx.compose.foundation.lazy.LazyRow(
         state = rowState,
         modifier = modifier.fillMaxHeight().clip(androidx.compose.foundation.shape.RoundedCornerShape(50)),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -843,7 +842,7 @@ private fun SwitchPill(label: String, selected: Boolean, glyph: @Composable (Col
     val content = if (selected) scheme.surface else scheme.onSurfaceVariant
     Row(
         modifier.clip(RoundedCornerShape(50)).background(if (selected) scheme.onSurface else Color.Transparent)
-            .clickable(onClick = onClick).height(44.dp).padding(horizontal = 22.dp),
+            .clickable(onClick = onClick).fillMaxHeight().padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
