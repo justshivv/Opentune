@@ -98,7 +98,9 @@ export default function HomePage() {
     .filter((shelf) => !(recent.length > 0 && shelf.title.trim().toLowerCase() === RECENT_TITLE.toLowerCase()));
   const arranged = homeSections(shelves);
   return (
-    <>
+    <div className="ot-home">
+      {/* The accent glow behind the top of the page (Settings › Appearance; dark mode only). */}
+      <div className="ot-home-glow" aria-hidden="true"><i /><i /><i /></div>
       {heading}{banners}
       {runtime.sections.filter(s => s.enabled).map(section => {
         const title = (fallback: string) => section.title || fallback;
@@ -121,6 +123,6 @@ export default function HomePage() {
       {runtime.sections.some(s => s.id === 'recommendations' && s.enabled) && <div ref={sentinel} />}
       {home.isFetchingNextPage && <ShelfSkeleton kind="square" />}
       {home.isFetchNextPageError && <LoadMoreError onRetry={() => void home.fetchNextPage()} />}
-    </>
+    </div>
   );
 }

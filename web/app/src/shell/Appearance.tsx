@@ -18,8 +18,9 @@ export function Appearance() {
     root.dataset.black = String(settings.pureBlack);
     root.dataset.motion = String(settings.motion);
     root.dataset.playerStyle = settings.playerStyle;
+    root.dataset.homeGlow = String(settings.homeGlow);
     root.style.setProperty('--ot-seed', color?.background ?? settings.accent);
     root.style.setProperty('--ot-accent-choice', settings.accent);
-  }, [settings.mode, settings.pureBlack, settings.motion, settings.playerStyle, settings.accent, systemDark, color]);
+  }, [settings.mode, settings.pureBlack, settings.motion, settings.playerStyle, settings.homeGlow, settings.accent, systemDark, color]);
   return null;
 }
