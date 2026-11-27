@@ -335,18 +335,23 @@ internal object LyricsQuality {
 
     /**
      * Whether [chosen]'s word timings can be trusted word by word on this
-     * track. Not when its recording is a little off this one's length (the
-     * lines may fit, the words drift), when many of its lines have words out
-     * of order or spread evenly (made up from the line, not timed), or when
-     * every other source timed to this cut places its lines unevenly against
-     * these. Lit a line at a time instead, an error is far harder to see.
+     * track. Not when many of its lines have words out of order or spread
+     * evenly (made up from the line, not timed), or when every other source
+     * known to be timed to this cut places its lines unevenly against these.
+     * Lit a line at a time instead, an error is far harder to see.
+     *
+     * A recording a few seconds off this track's length isn't held against
+     * the words: a word is placed by its line, so where the lines fit (as they
+     * must, to have got this far) the words do too, and a music video's extra
+     * seconds before or after the song had every word-timed source shown a
+     * line at a time where the web player showed the words. Nor is a source
+     * that doesn't say what it was timed to: its lines may be another cut's.
      */
     fun wordsTrusted(chosen: Lyrics.Synced, references: List<Lyrics.Synced>, durationMs: Long): Boolean {
-        if (durationMs > 0 && chosen.recordingMs > 0 && abs(chosen.recordingMs - durationMs) > WORD_CUT_MS) return false
         val worded = chosen.lines.filter { it.wordSynced && it.words.size >= 2 }
         if (worded.isEmpty()) return true
         if (worded.count(::wordsShaky) * 10 > worded.size * 3) return false
-        val sameCut = references.filter { durationMs <= 0 || it.recordingMs <= 0 || abs(it.recordingMs - durationMs) <= ANCHOR_MS }
+        val sameCut = references.filter { it.recordingMs > 0 && (durationMs <= 0 || abs(it.recordingMs - durationMs) <= ANCHOR_MS) }
         val spreads = sameCut.mapNotNull { spreadAgainst(chosen, it) }
         return spreads.isEmpty() || spreads.any { it <= WORD_SPREAD_MS }
     }
@@ -370,8 +375,6 @@ internal object LyricsQuality {
         },
     )
 
-    /** A recording further than this from the track's length has lines that fit and words that drift. */
-    private const val WORD_CUT_MS = 2_000L
     /** Lines placed further than this from the steady shift, typically, aren't timed closely enough for words. */
     private const val WORD_SPREAD_MS = 450L
     private const val OUT_OF_ORDER_MS = 50L

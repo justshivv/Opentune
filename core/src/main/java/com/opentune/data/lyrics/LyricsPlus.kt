@@ -32,12 +32,11 @@ import okhttp3.Request
  * usable answer wins.
  */
 object LyricsPlus {
+    // The web player's two. prjktla.workers.dev (worker deleted) and the two vercel.app
+    // deployments (disabled, 402) only ever failed, and took a share of every lookup.
     private val SERVERS = listOf(
         "https://lyricsplus.binimum.org",
         "https://lyricsplus.prjktla.my.id",
-        "https://lyricsplus.prjktla.workers.dev",
-        "https://lyricsplus-seven.vercel.app",
-        "https://lyrics-plus-backend.vercel.app",
     )
     private const val USER_AGENT = "OpenTune (+https://github.com/justshivv/Opentune)"
     /** How long the last good server has before the rest are asked too. */
@@ -106,7 +105,10 @@ object LyricsPlus {
         // The servers fall back to a fuzzy search; a hit under another title is another song.
         if (title != null && !LyricsQuality.sameTitle(title, (meta?.get("title") as? JsonPrimitive)?.contentOrNull)) return null
         val items = (root["lyrics"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
-        val wordType = (root["type"] as? JsonPrimitive)?.contentOrNull.equals("Word", ignoreCase = true)
+        // Words timed as syllables are used unless the answer says it's timed by line: a
+        // "Syllable" answer, or one that doesn't say, lost its words to line sync, where
+        // the web player lit them.
+        val wordType = !(root["type"] as? JsonPrimitive)?.contentOrNull.equals("Line", ignoreCase = true)
         val voices = voicesOf(meta?.get("agents") as? JsonObject)
         val lines = items.mapIndexedNotNull { i, item ->
             val start = item.long("time") ?: return@mapIndexedNotNull null

@@ -1028,6 +1028,7 @@ enum class LyricsSource(val label: String, val summary: String) {
     LRCLIB("LRCLIB", "Community lyrics, line by line and sometimes word by word"),
     LYRICSPLUS("LyricsPlus", "Word-by-word lyrics from the servers behind YouLyPlus, as Echo Music uses them"),
     BETTERLYRICS("Better Lyrics", "Word-by-word lyrics from Better Lyrics, for songs its listeners have already looked up"),
+    BETTERLYRICS_PORTATO("Better Lyrics Portato", "QQ Music's word-by-word karaoke timings, through Better Lyrics"),
     SIMPMUSIC("SimpMusic", "Community lyrics for YouTube songs, line by line and word by word"),
     KUGOU("KuGou", "Line-synced lyrics from KuGou's large catalogue, strong on Asian music"),
     NETEASE("NetEase", "Line-synced lyrics from NetEase Cloud Music, a large catalogue of every kind of music"),

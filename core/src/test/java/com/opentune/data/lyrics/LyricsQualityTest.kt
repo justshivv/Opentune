@@ -216,9 +216,14 @@ class LyricsQualityTest {
         assertTrue(LyricsQuality.wordsTrusted(wordVerse(recordingMs = 200_000), listOf(timedVerse(shift = 1_200, recordingMs = 200_300)), duration))
     }
 
-    @Test fun wordTimingIsNotTrustedForANearlyMatchingCut() {
-        // Five seconds longer: close enough to pass as this recording, too far for the words.
-        assertFalse(LyricsQuality.wordsTrusted(wordVerse(recordingMs = 205_000), emptyList(), 200_000))
+    @Test fun aNearlyMatchingCutKeepsItsWordTiming() {
+        // Five seconds longer (a music video's credits, say): the lines fit, and the words with them.
+        assertTrue(LyricsQuality.wordsTrusted(wordVerse(recordingMs = 205_000), emptyList(), 200_000))
+    }
+
+    @Test fun aSourceThatDoesNotSayItsCutCannotOverruleTheWords() {
+        val scattered = synced(*verse.mapIndexed { i, t -> line(10_000L + i * 4_000L + (if (i % 2 == 0) 1_400 else -900), t) }.toTypedArray())
+        assertTrue(LyricsQuality.wordsTrusted(wordVerse(recordingMs = 200_000), listOf(scattered), 200_000))
     }
 
     @Test fun wordsSpreadEvenlyAreNotReallyTimed() {

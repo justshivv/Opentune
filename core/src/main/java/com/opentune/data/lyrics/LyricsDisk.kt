@@ -52,6 +52,47 @@ internal object LyricsDisk {
         trim(d)
     }
 
+    /** When each song's kept lyrics were last asked about again, by video id (see [LyricsRepository.lyricsUpdates]). */
+    private val checked = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    @Volatile private var checkedRead = false
+
+    /** When [videoId]'s kept lyrics were last asked about again; 0 when never. */
+    fun checkedAt(videoId: String): Long {
+        readChecked()
+        return checked[videoId] ?: 0L
+    }
+
+    /** [videoId]'s kept lyrics were asked about again [at] this time. */
+    @Synchronized fun markChecked(videoId: String, at: Long = System.currentTimeMillis()) {
+        readChecked()
+        checked[videoId] = at
+        if (checked.size > MAX_CHECKED) {
+            checked.entries.sortedBy { it.value }.take(checked.size - MAX_CHECKED).forEach { checked.remove(it.key) }
+        }
+        val f = checkedFile() ?: return
+        runCatching {
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(checked.entries.joinToString("\n") { "${it.key}\t${it.value}" })
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+        }
+    }
+
+    @Synchronized private fun readChecked() {
+        if (checkedRead) return
+        val f = checkedFile() ?: return
+        checkedRead = true
+        if (!f.exists()) return
+        runCatching {
+            f.readLines().forEach { line ->
+                val tab = line.lastIndexOf('\t')
+                if (tab > 0) line.substring(tab + 1).toLongOrNull()?.let { checked.putIfAbsent(line.substring(0, tab), it) }
+            }
+        }
+    }
+
+    /** Not a .json file, so [trim] never takes it for a song's. */
+    private fun checkedFile(): File? = dir?.let { File(it, "rechecked.tsv") }
+
     private fun trim(d: File) {
         val files = d.listFiles { f -> f.name.endsWith(".json") } ?: return
         if (files.size <= MAX_FILES) return
@@ -67,4 +108,5 @@ internal object LyricsDisk {
 
     private val UNSAFE = Regex("[^A-Za-z0-9_-]")
     private const val KEYS_PER_SONG = 4
+    private const val MAX_CHECKED = 2_000
 }

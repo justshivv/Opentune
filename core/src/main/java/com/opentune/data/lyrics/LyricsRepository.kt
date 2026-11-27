@@ -41,7 +41,8 @@ import okhttp3.Request
 /**
  * Lyrics from LRCLIB (lrclib.net): free, keyless, and mostly line-synced, with
  * word sync for some tracks; from LyricsPlus (see [LyricsPlus]), often word
- * by word; from SimpMusic (see [SimpMusic]), matched by YouTube video;
+ * by word; from Better Lyrics and its Portato (see [BetterLyrics]), word by
+ * word; from SimpMusic (see [SimpMusic]), matched by YouTube video;
  * from KuGou (see [KuGou]) and NetEase (see
  * [NetEase]), line-synced; and from YouTube Music, unsynced.
  *
@@ -54,7 +55,9 @@ import okhttp3.Request
  * the search, and while it's all there is, sources that were down are asked
  * again a little later (see [lyricsUpdates]). When the other sources agree
  * the chosen lyrics run early or late by a steady amount, that's corrected
- * through [Lyrics.Synced.autoOffsetMs]. Within
+ * through [Lyrics.Synced.autoOffsetMs]. What's found is kept (see
+ * [LyricsDisk]); kept lyrics short of word sync are asked again in the
+ * background as their song plays, now and then (see [lyricsUpdates]). Within
  * LRCLIB: an exact match on title, artist and duration; then a search on
  * title and artist, preferring synced results whose duration is closest;
  * then a free-text search on the cleaned title. YouTube Music's lyrics are
@@ -109,16 +112,38 @@ object LyricsRepository {
      * plain text (or nothing, or line sync where word sync is wanted) was
      * found while a source was down or slow, the sources are asked again
      * after each of [RETRY_WAITS_MS], answers already in being reused.
+     *
+     * [videoTimed] takes lyrics timed to the playing video itself (its own captions) onto
+     * the song's clock, the one every other source times to; by default they're the same.
      */
-    fun lyricsUpdates(videoId: String, title: String, artist: String, durationMs: Long): Flow<Lyrics?> = flow {
+    fun lyricsUpdates(
+        videoId: String, title: String, artist: String, durationMs: Long,
+        videoTimed: (Lyrics) -> Lyrics = { it },
+    ): Flow<Lyrics?> = flow {
         val asked = android.os.SystemClock.elapsedRealtime()
-        var found = find(videoId, title, artist, durationMs)
+        var found = find(videoId, title, artist, durationMs, videoTimed)
         Log.d("Preload", "$videoId: lyrics ${if (found.lyrics != null) "shown" else "not found"} in ${android.os.SystemClock.elapsedRealtime() - asked} ms")
         emit(found.lyrics)
+        // Kept from before a line at a time where word sync is wanted: the sources are asked
+        // again behind what's shown, for this one song as it plays, in case one has its words
+        // timed by now (a source added since, a song a source has learnt). See [recheckDue].
+        if (found.recheck) {
+            rechecked.add(videoId)
+            val again = find(videoId, title, artist, durationMs, videoTimed, fresh = true)
+            val better = rank(again.lyrics) > rank(found.lyrics)
+            if (again.settled) {
+                withContext(Dispatchers.IO) { LyricsDisk.markChecked(videoId) }
+                val key = found.key
+                val kept = if (better) again.lyrics else found.lyrics
+                if (key != null && kept != null) keep(videoId, key, kept)
+            }
+            if (better) emit(again.lyrics)
+            found = Found(if (better) again.lyrics else found.lyrics, true)
+        }
         for (wait in RETRY_WAITS_MS) {
             if (found.settled) break
             delay(wait)
-            val again = find(videoId, title, artist, durationMs)
+            val again = find(videoId, title, artist, durationMs, videoTimed)
             if (rank(again.lyrics) > rank(found.lyrics)) {
                 found = again
                 emit(again.lyrics)
@@ -130,10 +155,30 @@ object LyricsRepository {
 
     private val RETRY_WAITS_MS = listOf(15_000L, 45_000L)
 
-    /** What a search came to; [settled] when asking again can't do better. */
-    private class Found(val lyrics: Lyrics?, val settled: Boolean)
+    /** Kept lyrics below the sync wanted are asked again at most this often, as their song plays. */
+    private const val RECHECK_MS = 14L * 24 * 60 * 60 * 1000
 
-    private suspend fun find(videoId: String, title: String, credited: String, durationMs: Long): Found {
+    /** Songs whose kept lyrics were asked again this launch, done or under way. */
+    private val rechecked = ConcurrentHashMap.newKeySet<String>()
+
+    /** Whether [videoId]'s kept lyrics are due to be asked again (see [lyricsUpdates]). */
+    private suspend fun recheckDue(videoId: String): Boolean =
+        videoId !in rechecked && System.currentTimeMillis() - withContext(Dispatchers.IO) { LyricsDisk.checkedAt(videoId) } > RECHECK_MS
+
+    /**
+     * What a search came to; [settled] when asking again can't do better. [recheck] when
+     * it's kept lyrics that may have better since, under [key].
+     */
+    private class Found(val lyrics: Lyrics?, val settled: Boolean, val recheck: Boolean = false, val key: String? = null)
+
+    /**
+     * [fresh] passes over what's kept and keeps nothing itself: the caller compares the
+     * answer with what's kept first.
+     */
+    private suspend fun find(
+        videoId: String, title: String, credited: String, durationMs: Long,
+        videoTimed: (Lyrics) -> Lyrics = { it }, fresh: Boolean = false,
+    ): Found {
         // Songs saved before the fix carry a card's "Song" or "Video" as their artist: looked up
         // under it, the lyrics found were another song's.
         val artist = credited.takeUnless { it.trim().lowercase() in NOT_AN_ARTIST }.orEmpty()
@@ -150,21 +195,35 @@ object LyricsRepository {
         // [CLOSE_S] it's the same recording.
         fun inMemory(): Lyrics? = cache[key]
             ?: if (durationMs > 0) NEAR_SECONDS.firstNotNullOfOrNull { off -> cache["$videoId|${seconds + off}$tail"] } else null
-        inMemory()?.let { return Found(it, true) }
-        // Kept from an earlier launch (see [LyricsDisk]): read once per song a launch.
-        if (durationMs > 0 && readFromDisk.add(videoId)) {
-            withContext(Dispatchers.IO) { LyricsDisk.read(videoId) }.forEach { (k, v) -> cache.putIfAbsent(k, v) }
-            inMemory()?.let { return Found(it, true) }
-        }
-        // A source picked for this song from the player goes first, on its own, as it comes.
-        if (chosen != null) {
-            answerOf(chosen, videoId, title, artist, durationMs).await().getOrNull()?.let { LyricsQuality.tidy(it, durationMs) }?.let { picked ->
-                if (durationMs > 0) keep(videoId, key, picked)
-                return Found(picked, true)
-            }
-        }
         val enabled = settings.ordered.filter { it.enabled }.map { it.source }
         val target = if (settings.preferWordSynced) WORD_SYNCED else LINE_SYNCED
+        // Kept lyrics short of the sync wanted are shown, and asked again behind them when due
+        // (not a source picked by hand for the song: that's the one wanted, whatever it has).
+        suspend fun kept(lyrics: Lyrics, since: Boolean = false) =
+            Found(lyrics, true, recheck = chosen == null && rank(lyrics) < target && (since || recheckDue(videoId)), key = key)
+        if (!fresh) {
+            inMemory()?.let { return kept(it) }
+            // Kept from an earlier launch (see [LyricsDisk]): read once per song a launch.
+            if (durationMs > 0 && readFromDisk.add(videoId)) {
+                withContext(Dispatchers.IO) { LyricsDisk.read(videoId) }.forEach { (k, v) -> cache.putIfAbsent(k, v) }
+                inMemory()?.let { return kept(it) }
+            }
+            // Kept before a source was added: still good to show at once. Word by word, they're
+            // kept as these settings' too; short of it, the new source may have better.
+            if (durationMs > 0) keptBefore(videoId, seconds, enabled.map { it.name }, settings.preferWordSynced, chosen)?.let { before ->
+                if (rank(before) >= target) keep(videoId, key, before) else cache[key] = before
+                return kept(before, since = true)
+            }
+        }
+        // The video's own captions are timed to it; every other source to the song.
+        fun clocked(source: LyricsSource, lyrics: Lyrics) = if (source == LyricsSource.YOUTUBE_CAPTIONS) videoTimed(lyrics) else lyrics
+        // A source picked for this song from the player goes first, on its own, as it comes.
+        if (chosen != null) {
+            answerOf(chosen, videoId, title, artist, durationMs).await().getOrNull()?.let { LyricsQuality.tidy(clocked(chosen, it), durationMs) }?.let { picked ->
+                if (durationMs > 0 && !fresh) keep(videoId, key, picked)
+                return Found(picked, true, key = key)
+            }
+        }
         // Every source is asked at once, as Echo Music does, and the answers
         // are read in the user's order: a slow source no longer holds up the
         // ones after it, and the order still decides between them.
@@ -174,9 +233,17 @@ object LyricsRepository {
         suspend fun inHand(): List<LyricsQuality.Candidate> = pending.indices.mapNotNull { i ->
             val (source, answer) = pending[i]
             if (!answer.isCompleted) return@mapNotNull null
-            if (i !in vetted) vetted[i] = answer.await().getOrNull()?.let { vet(i, source, it, durationMs, videoId) }
+            if (i !in vetted) vetted[i] = answer.await().getOrNull()?.let { vet(i, source, clocked(source, it), durationMs, videoId) }
             vetted[i]
         }
+        fun referencesIn(all: List<LyricsQuality.Candidate>, of: LyricsQuality.Candidate) =
+            all.filter { it !== of }.mapNotNull { it.lyrics as? Lyrics.Synced }
+        // Word timing is held to the other sources' lines; a video's captions are timed to be
+        // read on screen, not to the singing, so they don't count against it.
+        fun trusted(c: LyricsQuality.Candidate, all: List<LyricsQuality.Candidate>): Boolean =
+            rank(c.lyrics) < WORD_SYNCED || LyricsQuality.wordsTrusted(
+                c.lyrics as Lyrics.Synced, referencesIn(all.filter { it.source != LyricsSource.YOUTUBE_CAPTIONS }, c), durationMs,
+            )
         val deadline = System.nanoTime() + BUDGET_MS * 1_000_000
         var failed = false
         for ((i, entry) in pending.withIndex()) {
@@ -191,14 +258,16 @@ object LyricsRepository {
                 continue
             }
             if (rank(outcome.getOrNull()) < target) continue
-            // Good enough to stop at, unless it doesn't fit the track or the
-            // answers in hand say it's another song.
-            val best = LyricsQuality.choose(inHand(), target)
-            if (best != null && best.order <= i && rank(best.lyrics) >= target) break
+            // Good enough to stop at, unless it doesn't fit the track, the answers in
+            // hand say it's another song, or its word timing can't be trusted (then a
+            // source further down may have words that can).
+            val hand = inHand()
+            val best = LyricsQuality.choose(hand, target)
+            if (best != null && best.order <= i && rank(best.lyrics) >= target && trusted(best, hand)) break
         }
         val all = inHand()
         val best = LyricsQuality.choose(all, target)
-        fun references(of: LyricsQuality.Candidate) = all.filter { it !== of }.mapNotNull { it.lyrics as? Lyrics.Synced }
+        fun references(of: LyricsQuality.Candidate) = referencesIn(all, of)
         // Steady early or late timing, as the other sources see it; the
         // per-song offset, once set, is used instead (see [lyricsOffset]).
         fun shifted(c: LyricsQuality.Candidate): Lyrics? {
@@ -212,13 +281,11 @@ object LyricsRepository {
         var result = best?.let(::shifted)
         // Word timing that can't be trusted on this track shows wrong words lit:
         // another source's that can be, or these same lyrics a line at a time.
-        if (best != null && result is Lyrics.Synced && rank(result) == WORD_SYNCED &&
-            !LyricsQuality.wordsTrusted(result, references(best), durationMs)
-        ) {
+        if (best != null && result is Lyrics.Synced && rank(result) == WORD_SYNCED && !trusted(best, all)) {
             val other = all.asSequence()
                 .filter { it !== best && rank(it.lyrics) == WORD_SYNCED && !LyricsQuality.outlier(it, all) }
                 .sortedBy { it.order }
-                .firstOrNull { LyricsQuality.wordsTrusted(it.lyrics as Lyrics.Synced, references(it), durationMs) }
+                .firstOrNull { trusted(it, all) }
             Log.d(TAG, "${result.source} word timing for $videoId not trusted; ${other?.source?.label ?: "showing lines"}")
             result = other?.let(::shifted) ?: LyricsQuality.asLines(result)
         }
@@ -226,8 +293,30 @@ object LyricsRepository {
         // version's lyrics can match, timed for another cut), and only ones
         // asking again couldn't better.
         val settled = !failed || rank(result) >= target
-        if (result != null && durationMs > 0 && settled) keep(videoId, key, result)
-        return Found(result, settled)
+        if (result != null && durationMs > 0 && settled && !fresh) keep(videoId, key, result)
+        return Found(result, settled, key = key)
+    }
+
+    /**
+     * What was kept for [videoId] at [seconds] (or a second or two off) under the same
+     * settings but for sources added since: the sources then, in their order, are the ones
+     * on now less the new ones. Null when nothing like that was kept.
+     */
+    private fun keptBefore(videoId: String, seconds: Long, enabled: List<String>, preferWordSynced: Boolean, chosen: LyricsSource?): Lyrics? =
+        cache.entries.firstNotNullOfOrNull { (k, v) ->
+            if (!k.startsWith("$videoId|")) return@firstNotNullOfOrNull null
+            v.takeIf { keptUnderEarlierSources(k.removePrefix("$videoId|"), seconds, enabled, preferWordSynced, chosen) }
+        }
+
+    /** Whether a kept entry's key ([rest], after the song's id) is these settings' before sources were added. */
+    internal fun keptUnderEarlierSources(rest: String, seconds: Long, enabled: List<String>, preferWordSynced: Boolean, chosen: LyricsSource?): Boolean {
+        val parts = rest.split('|')
+        if (parts.size != 4) return false
+        val at = parts[0].toLongOrNull() ?: return false
+        if (abs(at - seconds) > NEAR_SECONDS.maxOf { abs(it) }) return false
+        if (parts[2] != preferWordSynced.toString() || parts[3] != chosen.toString()) return false
+        val before = parts[1].split(',').filter { it.isNotEmpty() }
+        return before.size < enabled.size && enabled.filter { it in before } == before
     }
 
     /** Songs whose lyrics kept on disk were read this launch. */
@@ -322,6 +411,7 @@ object LyricsRepository {
             LyricsSource.LRCLIB -> lookup(title, artist, durationMs)
             LyricsSource.LYRICSPLUS -> LyricsPlus.lookup(title, artist, durationMs)
             LyricsSource.BETTERLYRICS -> BetterLyrics.lookup(title, artist, durationMs)
+            LyricsSource.BETTERLYRICS_PORTATO -> BetterLyrics.portato(title, artist, durationMs)
             LyricsSource.SIMPMUSIC -> if (!isYouTubeId(videoId)) null else runInterruptible { SimpMusic.lookup(videoId, durationMs) }
             LyricsSource.KUGOU -> runInterruptible { KuGou.lookup(title, artist, durationMs) }
             LyricsSource.NETEASE -> runInterruptible { NetEase.lookup(title, artist, durationMs) }
