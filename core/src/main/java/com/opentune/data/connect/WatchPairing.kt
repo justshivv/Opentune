@@ -74,8 +74,8 @@ data class WatchOffer(val group: String, val cookie: String?, val name: String)
 object WatchPairing {
     /** How long a code on the watch lasts. */
     const val OFFER_MS = 3 * 60_000L
-    /** How long the phone waits for the watch to answer. */
-    const val ANSWER_MS = 20_000L
+    /** How long the phone waits for the watch to answer: the person confirms on the watch meanwhile. */
+    const val ANSWER_MS = 90_000L
     /** How often the phone sends again until the watch answers (a relay may not have been connected yet). */
     internal const val RESEND_MS = 2_000L
 
@@ -113,14 +113,20 @@ object WatchPairing {
         NostrEvent.signed(signer, ConnectSession.KIND, listOf(listOf("t", key.tag)), key.seal(plain))
 
     /**
-     * The watch's side: waits up to [OFFER_MS] for the phone's offer under [key],
-     * answers it with [myName], and returns it; null when the time runs out.
+     * The watch's side: waits up to [OFFER_MS] for the phone's offer under [key].
+     * The first offer is put to the person with [confirm]: anyone who saw the code
+     * could have sent it, so nothing is answered or used before a yes. With a yes
+     * the phone hears [myName] and the offer is returned; null when the time runs
+     * out or the person says no (the key is spent either way: show a new code).
      * [onListening] says when the watch can be heard, so the code can be shown.
      */
-    suspend fun receive(key: WatchPairingKey, myName: String, onListening: () -> Unit = {}): WatchOffer? =
-        receive(key, myName, onListening, transportFor(key), OFFER_MS)
+    suspend fun receive(key: WatchPairingKey, myName: String, onListening: () -> Unit = {}, confirm: suspend (WatchOffer) -> Boolean): WatchOffer? =
+        receive(key, myName, onListening, transportFor(key), OFFER_MS, confirm)
 
-    internal suspend fun receive(key: WatchPairingKey, myName: String, onListening: () -> Unit, transport: RoomTransport, waitMs: Long): WatchOffer? {
+    internal suspend fun receive(
+        key: WatchPairingKey, myName: String, onListening: () -> Unit, transport: RoomTransport, waitMs: Long,
+        confirm: suspend (WatchOffer) -> Boolean,
+    ): WatchOffer? {
         val signer = Schnorr.newPrivateKey()
         transport.start()
         try {
@@ -130,8 +136,9 @@ object WatchPairing {
                 val heard = launch { transport.connected.first { it > 0 }; onListening() }
                 val offer = withTimeoutOrNull(waitMs) { got.await() }
                 listen.cancel(); heard.cancel()
+                if (offer == null || !confirm(offer)) return@coroutineScope null
                 // Said a few times: the phone may miss the first while its relays connect.
-                if (offer != null) repeat(3) { transport.publish(event(key, signer, ackText(myName))); delay(400) }
+                repeat(3) { transport.publish(event(key, signer, ackText(myName))); delay(400) }
                 offer
             }
         } finally {

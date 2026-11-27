@@ -62,18 +62,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Asked once per account, after signing in to YouTube: may Connect keep its
- * key in the account? Until the answer is yes, nothing is created there. An
- * account that already holds the key is joined without asking.
+ * Asked once, after signing in to YouTube: may Connect keep its key in the
+ * account? Until the answer is yes, nothing is created there.
  */
 @Composable
 fun AccountSyncAsk() {
     val answer by Connect.accountSync.collectAsState()
     val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
     val enabled by Connect.enabled.collectAsState()
-    // Asked only once the account was looked in and holds no group: one that does already said yes elsewhere.
-    val ask by Connect.askAccount.collectAsState()
-    if (answer != null || !signedIn || !enabled || !ask) return
+    if (answer != null || !signedIn || !enabled) return
     com.opentune.ui.components.FloatingDialog(
         onDismissRequest = {},
         properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),

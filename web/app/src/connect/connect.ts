@@ -74,13 +74,7 @@ export const useConnect = create<{
   link: { app: string; web: string } | null;
   view: ConnectView | null;
   notice: ConnectNotice | null;
-  /**
-   * True once the account has been looked in and holds no group yet: only
-   * then is this browser asked about account sync. An account that already
-   * holds one said yes on another device, so this browser joins without asking.
-   */
-  askAccount: boolean;
-}>(() => ({ saved: load(), link: null, view: null, notice: null, askAccount: false }));
+}>(() => ({ saved: load(), link: null, view: null, notice: null }));
 
 
 /** The other device this browser shows and controls, if any. */
@@ -408,7 +402,6 @@ export function setDeviceName(name: string): void {
 }
 
 export function setAccountSync(on: boolean): void {
-  useConnect.setState({ askAccount: false });
   update({ accountSync: on });
   if (on) void syncAccount();
 }
@@ -419,15 +412,8 @@ export function setAccountSync(on: boolean): void {
  * browser's group there regardless (a new secret after "Disconnect all").
  * Signed out or without the extension, it quietly does nothing.
  */
-let looking = false;
-
 export async function syncAccount(push = false): Promise<void> {
-  const answer = useConnect.getState().saved.accountSync;
-  if (answer === false) return;
-  if (answer === null) {
-    await lookInAccount();
-    return;
-  }
+  if (useConnect.getState().saved.accountSync !== true) return;
   try {
     // YouTube.js comes with it; loaded only when the account is used.
     const { readSecret, write: writeToAccount } = await import('./accountSync');
@@ -439,27 +425,6 @@ export async function syncAccount(push = false): Promise<void> {
     await writeToAccount(await ensureGroup());
   } catch {
     // Not signed in, or YouTube said no: the devices can still be added by hand.
-  }
-}
-
-/** Not asked yet here: a group kept in the account means yes; none means ask. A failed look (signed out) asks nothing yet. */
-async function lookInAccount(): Promise<void> {
-  if (looking) return;
-  looking = true;
-  try {
-    const { readSecret } = await import('./accountSync');
-    const kept = await readSecret();
-    if (useConnect.getState().saved.accountSync !== null) return;
-    if (kept) {
-      update({ accountSync: true });
-      joinGroup(kept);
-    } else {
-      useConnect.setState({ askAccount: true });
-    }
-  } catch {
-    // Signed out, or offline: looked at again on the next sign-in or visit.
-  } finally {
-    looking = false;
   }
 }
 

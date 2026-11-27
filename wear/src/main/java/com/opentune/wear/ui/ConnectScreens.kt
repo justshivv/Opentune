@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Laptop
 import androidx.compose.material.icons.automirrored.rounded.Logout
@@ -47,11 +49,13 @@ import com.opentune.data.account.AccountStore
 import com.opentune.data.connect.Connect
 import com.opentune.data.connect.Device
 import com.opentune.data.connect.WatchPairing
+import com.opentune.data.connect.WatchOffer
 import com.opentune.data.connect.WatchPairingKey
 import com.opentune.wear.Message
 import com.opentune.wear.Place
 import com.opentune.wear.rememberWords
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 
 /** A device's icon by its form. */
 internal fun formIcon(form: String): ImageVector = when (form) {
@@ -127,16 +131,26 @@ fun Pair(onDone: () -> Unit) {
     var status by remember { mutableStateOf("Getting ready…") }
     var paired by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
+    // An offer came: shown to the person, and used only once they tap Pair.
+    var asking by remember { mutableStateOf<WatchOffer?>(null) }
+    var answer by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
     val name by Connect.deviceName.collectAsState()
 
     LaunchedEffect(attempt) {
-        link = null; failed = false; paired = null; status = "Getting ready…"
+        link = null; failed = false; paired = null; asking = null; status = "Getting ready…"
         val key = WatchPairingKey.generate()
+        var declined = false
         try {
-            val offer = WatchPairing.receive(key, name, onListening = { link = key.link })
+            val offer = WatchPairing.receive(key, name, onListening = { link = key.link }) { offer ->
+                val yes = CompletableDeferred<Boolean>()
+                answer = yes
+                asking = offer
+                link = null
+                try { yes.await().also { declined = !it } } finally { asking = null; answer = null }
+            }
             if (offer == null) {
                 failed = true
-                status = "The code ran out. Make a new one."
+                status = if (declined) "Not paired. Make a new code to try again." else "The code ran out. Make a new one."
             } else {
                 Connect.accept(offer)
                 paired = offer.name.ifBlank { "your phone" }
@@ -156,7 +170,20 @@ fun Pair(onDone: () -> Unit) {
     ScreenScaffold(scrollState = list) { padding ->
         ScalingLazyColumn(state = list, contentPadding = padding, modifier = Modifier.fillMaxSize()) {
             val code = link
+            val offer = asking
             when {
+                offer != null -> {
+                    item { ListHeader { Text("Pair?") } }
+                    item {
+                        Message(
+                            "Pair with ${offer.name.ifBlank { "this phone" }}?" +
+                                (if (offer.cookie != null) " The watch will be signed in to its YouTube Music account too." else "") +
+                                " Tap Pair only if you just scanned the code with your own phone.",
+                        )
+                    }
+                    item { Place("Pair", Icons.Rounded.Check) { answer?.complete(true) } }
+                    item { Place("Cancel", Icons.Rounded.Close) { answer?.complete(false) } }
+                }
                 paired != null -> {
                     item { ListHeader { Text("Paired") } }
                     item { Message("Paired with $paired. Your devices can see this watch now.") }
@@ -219,7 +246,7 @@ fun Settings(onPair: () -> Unit) {
     }
 }
 
-/** Asked on Home when the account holds no group yet; one that does was joined without asking. */
+/** Asked on Home once signed in, until answered here or in Settings. */
 @Composable
 fun AccountAsk() {
     Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {

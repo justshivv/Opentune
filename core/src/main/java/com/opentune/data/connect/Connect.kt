@@ -194,17 +194,7 @@ object Connect {
         session?.rename(clean)
     }
 
-    private val _askAccount = MutableStateFlow(false)
-
-    /**
-     * True once the account has been looked in and holds no group yet: only
-     * then is this device asked about account sync. An account that already
-     * holds one said yes on another device, so this one joins without asking.
-     */
-    val askAccount: StateFlow<Boolean> = _askAccount.asStateFlow()
-
     fun setAccountSync(on: Boolean) {
-        _askAccount.value = false
         _accountSync.value = on
         prefs?.edit { putBoolean("account_consent", on) }
         if (on) syncAccount()
@@ -217,12 +207,7 @@ object Connect {
      * (a new secret after "Disconnect all").
      */
     fun syncAccount(push: Boolean = false) {
-        if (!com.opentune.data.account.AccountStore.signedIn.value) return
-        when (_accountSync.value) {
-            false -> return
-            null -> { lookInAccount(); return }
-            true -> Unit
-        }
+        if (_accountSync.value != true || !com.opentune.data.account.AccountStore.signedIn.value) return
         main.launch {
             runCatching {
                 kotlinx.coroutines.withContext(Dispatchers.IO) {
@@ -232,30 +217,6 @@ object Connect {
                 }
             }.onSuccess { kept -> if (kept != null && kept != _group.value) join(kept) }
                 .onFailure { com.opentune.data.DebugLog.w("Connect", "account sync: ${it.message}") }
-        }
-    }
-
-    private var looking = false
-
-    /** Not asked yet on this device: a group kept in the account means yes; none means ask. A failed look asks nothing yet. */
-    private fun lookInAccount() {
-        if (looking) return
-        looking = true
-        main.launch {
-            runCatching { kotlinx.coroutines.withContext(Dispatchers.IO) { ConnectAccountSync.read() } }
-                .onSuccess { kept ->
-                    if (_accountSync.value == null) {
-                        if (kept != null) {
-                            _accountSync.value = true
-                            prefs?.edit { putBoolean("account_consent", true) }
-                            if (kept != _group.value) join(kept)
-                        } else {
-                            _askAccount.value = true
-                        }
-                    }
-                }
-                .onFailure { com.opentune.data.DebugLog.w("Connect", "account look: ${it.message}") }
-            looking = false
         }
     }
 

@@ -179,13 +179,12 @@ private fun Home(player: WatchPlayer, onOpen: (String) -> Unit) {
     val shown by player.shown.collectAsState()
     val group by Connect.group.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
-    val ask by Connect.askAccount.collectAsState()
     val answer by Connect.accountSync.collectAsState()
     val list = rememberScalingLazyListState()
     ScreenScaffold(scrollState = list) { padding ->
         ScalingLazyColumn(state = list, contentPadding = padding, modifier = Modifier.fillMaxSize()) {
             item { ListHeader { Text("OpenTune") } }
-            if (signedIn && ask && answer == null) item { AccountAsk() }
+            if (signedIn && answer == null) item { AccountAsk() }
             shown?.let { s ->
                 item {
                     Button(
@@ -258,7 +257,6 @@ private fun NowPlaying(player: WatchPlayer, onOpen: (String) -> Unit) {
             Modifier
                 .fillMaxSize()
                 .onRotaryScrollEvent { e ->
-                    android.util.Log.d("WatchCrown", "turn ${e.verticalScrollPixels}")
                     val step = knob.step(e.verticalScrollPixels) ?: return@onRotaryScrollEvent true
                     player.crown(step, audio)
                     true

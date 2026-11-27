@@ -36,7 +36,7 @@ class WatchPairingTest {
         val hub = Hub()
         val key = WatchPairingKey.generate()
         var listening = false
-        val watch = async { WatchPairing.receive(key, "Pixel Watch", { listening = true }, hub.transport(), 5_000) }
+        val watch = async { WatchPairing.receive(key, "Pixel Watch", { listening = true }, hub.transport(), 5_000) { true } }
         val name = WatchPairing.send(key, WatchOffer(group.encoded, "SAPISID=x", "Pixel 9"), hub.transport(), 5_000)
         val offer = watch.await()
         assertTrue(listening)
@@ -50,16 +50,39 @@ class WatchPairingTest {
         val hub = Hub()
         val key = WatchPairingKey.generate()
         val other = WatchPairingKey.generate()
-        val watch = async { WatchPairing.receive(key, "Watch", {}, hub.transport(), 2_500) }
+        val watch = async { WatchPairing.receive(key, "Watch", {}, hub.transport(), 2_500) { true } }
         // Sent with the wrong key: the watch can't open it, and nobody answers.
         assertNull(WatchPairing.send(other, WatchOffer(group.encoded, null, "Phone"), hub.transport(), 2_000))
         assertNull(watch.await())
     }
 
+    @Test fun aNoOnTheWatchUsesNothingAndThePhoneHearsNothing() = runBlocking {
+        val hub = Hub()
+        val key = WatchPairingKey.generate()
+        var asked: WatchOffer? = null
+        val watch = async { WatchPairing.receive(key, "Watch", {}, hub.transport(), 5_000) { asked = it; false } }
+        assertNull(WatchPairing.send(key, WatchOffer(group.encoded, "SAPISID=x", "Someone"), hub.transport(), 2_500))
+        assertNull(watch.await())
+        assertEquals("Someone", asked?.name)
+    }
+
+    @Test fun thePhoneHearsNothingBeforeTheYes() = runBlocking {
+        val hub = Hub()
+        val key = WatchPairingKey.generate()
+        val yes = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        val watch = async { WatchPairing.receive(key, "Watch", {}, hub.transport(), 5_000) { yes.await() } }
+        val phone = async { WatchPairing.send(key, WatchOffer(group.encoded, null, "Phone"), hub.transport(), 5_000) }
+        kotlinx.coroutines.delay(1_500)
+        assertTrue(phone.isActive)
+        yes.complete(true)
+        assertEquals("Watch", phone.await())
+        assertEquals(group.encoded, watch.await()?.group)
+    }
+
     @Test fun noAccountMeansNoCookie() = runBlocking {
         val hub = Hub()
         val key = WatchPairingKey.generate()
-        val watch = async { WatchPairing.receive(key, "Watch", {}, hub.transport(), 5_000) }
+        val watch = async { WatchPairing.receive(key, "Watch", {}, hub.transport(), 5_000) { true } }
         WatchPairing.send(key, WatchOffer(group.encoded, null, "Phone"), hub.transport(), 5_000)
         assertNull(watch.await()?.cookie)
     }

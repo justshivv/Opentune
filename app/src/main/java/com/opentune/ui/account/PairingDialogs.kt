@@ -99,7 +99,7 @@ fun ConfirmWatch() {
             }
             status?.let { Text(it) }
             if (!busy) SheetButton("Add watch", tone = SheetTone.Primary, onClick = {
-                busy = true; status = "Sending to the watch…"
+                busy = true; status = "Now tap Pair on your watch…"
                 scope.launch {
                     try {
                         val name = com.opentune.data.connect.Connect.addWatch(current, withAccount)
@@ -108,7 +108,7 @@ fun ConfirmWatch() {
                             current.forget()
                             PairingLinks.dismissWatch()
                             com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("{0} is one of your devices now", name.ifBlank { "Your watch" }))
-                        } else status = "The watch didn't answer. Scan a fresh code from it."
+                        } else status = "The watch didn't pair. Scan a fresh code from it."
                     } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                     catch (_: Exception) { status = "Couldn't reach the watch. Check this phone's connection and try again." }
                     finally { busy = false }
