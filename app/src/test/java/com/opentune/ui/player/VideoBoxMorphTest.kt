@@ -52,8 +52,9 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The music video's box: how big it is in each layout, when the picture is cut to fit and
- * when it shows whole, and the change between the song and its video as one continuous
- * morph out of the cover, exactly where and as the layout draws it, and back.
+ * when it shows whole, and the change between the song and its video as a clean crossfade
+ * from the cover, exactly where and as the layout draws it, to the box at the picture's own
+ * shape, and back: no frame that jumps or goes black on the way.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -122,22 +123,38 @@ class VideoBoxMorphTest {
     @Test fun theMorphStartsOnTheCoverEndsOnTheBoxAndNeverJumps() {
         val at = EdgeCoverAt(Offset(84f, 180f), playerWidth = 1233f, coverHeight = 1400f, solid = 0.55f)
         val box = Rect(-30f, 0f, 1095f, 975f)
-        for (cover in listOf(edgeCoverPlace(at), squareCoverPlace(1065f, 975f, 84f))) {
-            val first = morphFrame(cover, box, 36f, 0f)
+        // The cover's own shape in the box, as the pane asks for it once the cover has loaded.
+        val filled = Rect(60f, 0f, 1005f, 975f)
+        for (cover in listOf(edgeCoverPlace(at), squareCoverPlace(1065f, 975f, 84f))) for (end in listOf(null, filled)) {
+            val first = morphFrame(cover, box, 36f, 0f, end)
             assertEquals(cover.clip, first.clip)
             assertEquals(cover.image, first.image)
             assertEquals(cover.corner, first.corner, 0.001f)
-            val last = morphFrame(cover, box, 36f, 1f)
+            val last = morphFrame(cover, box, 36f, 1f, end)
             assertEquals(box, last.clip)
             assertEquals(36f, last.corner, 0.001f)
-            // At the end the image fills the box, centred.
-            assertEquals(box.center.x, last.image.center.x, 0.01f)
-            assertEquals(maxOf(box.width, box.height), last.image.width, 0.01f)
-            // Sampled finely, every edge moves by a sliver at a time: one shape on its way, no step.
+            if (end != null) {
+                // The image lands in the box at the cover's own shape, so nothing swaps at the end.
+                assertEquals(end, last.image)
+            } else {
+                // Its shape not known yet: the image fills the box, centred, as a square.
+                assertEquals(box.center.x, last.image.center.x, 0.01f)
+                assertEquals(maxOf(box.width, box.height), last.image.width, 0.01f)
+            }
+            // The corner leads the way: it is the box's own for the morph's last stretch,
+            // so the box never shows with its rounding still catching up.
+            assertEquals(36f, morphFrame(cover, box, 36f, 0.6f, end).corner, 0.001f)
+            // Sampled finely, every edge and the corner move by a sliver at a time, one way
+            // only: one shape on its way, no step.
+            val edges = edgeGap(first, last)
+            val corner = last.corner - first.corner
             var prev = first
             for (i in 1..200) {
-                val f = morphFrame(cover, box, 36f, i / 200f)
-                assertTrue(gap(prev, f) <= gap(first, last) / 200f * 1.01f + 0.01f)
+                val f = morphFrame(cover, box, 36f, i / 200f, end)
+                assertTrue("an edge stepped at $i", edgeGap(prev, f) <= edges / 200f * 1.01f + 0.01f)
+                val dc = f.corner - prev.corner
+                assertTrue("the corner stepped $dc at $i", abs(dc) <= abs(corner) / 120f * 1.01f + 0.01f)
+                assertTrue("the corner turned back at $i", dc * corner >= 0f)
                 prev = f
             }
         }
@@ -155,9 +172,9 @@ class VideoBoxMorphTest {
 
     // The morph, in the player.
 
-    @Test fun edgeToEdgeTheSwitchIsOneMorphOutOfTheFullCoverAndBack() = switchBothWays("edge", fullCover = true)
+    @Test fun edgeToEdgeTheSwitchIsACleanCrossfadeFromTheFullCoverAndBack() = switchBothWays("edge", fullCover = true)
 
-    @Test fun inTheSquareLayoutTheSwitchIsOneMorphOutOfTheCoverAndBack() = switchBothWays("square", fullCover = false)
+    @Test fun inTheSquareLayoutTheSwitchIsACleanCrossfadeFromTheCoverAndBack() = switchBothWays("square", fullCover = false)
 
     @Test fun aTallVideoInTheEdgeToEdgeLayoutShowsWhole() {
         val bitmap = frame(720, 1280)
@@ -209,20 +226,29 @@ class VideoBoxMorphTest {
         assertTrue("the switch's first frame changed the cover by $start", start < 0.02f)
         val cover = VideoMorphProbe.last ?: error("the box drew no frame")
 
-        // Then frame by frame, the video slow to load (no frame drawn yet): one shape on its way.
+        // Then frame by frame, the video slow to load (no frame drawn yet): the box's place
+        // moves as one shape, and on screen the cover crossfades to the box, the cover still in it.
         val frames = mutableListOf(cover)
+        val shots = mutableListOf(Look.of(switched, region))
+        var prevShot = switched
+        val steps = mutableListOf<Float>()
         var elapsed = 0L
         while (elapsed < VIDEO_BOX_MS + 120L) {
             compose.mainClock.advanceTimeByFrame()
             elapsed += 16
             frames += VideoMorphProbe.last!!
-            if (elapsed in setOf(64L, 128L, 208L, 320L)) shoot(capture(), "$name-2-to-video-${elapsed}ms")
+            val shot = capture()
+            shots += Look.of(shot, region)
+            steps += difference(prevShot, shot, region)
+            prevShot = shot
+            if (elapsed in setOf(64L, 128L, 208L, 320L)) shoot(shot, "$name-2-to-video-${elapsed}ms")
         }
         assertContinuous(frames)
         val box = frames.last()
         // Settled on the box, the cover still in it: nothing of the picture before its first frame.
         val waiting = capture()
         shoot(waiting, "$name-3-box-waiting-for-first-frame")
+        assertCleanCrossfade("to the video", shots, steps, difference(song, waiting, region))
         compose.mainClock.advanceTimeBy(500)
         assertTrue("the picture showed before its first frame", difference(waiting, capture(), region) < 0.01f)
 
@@ -236,19 +262,26 @@ class VideoBoxMorphTest {
         assertTrue("the picture never came in", difference(waiting, video, region) > 0.03f)
         assertEquals(box.clip, VideoMorphProbe.last!!.clip)
 
-        // And back: the picture fades to the cover as the box grows back into it.
+        // And back: the picture fades to the cover and the box crossfades back to the layout's cover.
         p.mode.value = false
         p.ready.value = false
         val back = mutableListOf(VideoMorphProbe.last!!)
+        val backShots = mutableListOf(Look.of(video, region))
+        val backSteps = mutableListOf<Float>()
+        prevShot = video
         elapsed = 0L
         while (elapsed < VIDEO_BOX_MS + 120L) {
             compose.mainClock.advanceTimeByFrame()
             elapsed += 16
             back += VideoMorphProbe.last!!
-            if (elapsed in setOf(64L, 128L, 208L, 320L)) shoot(capture(), "$name-6-to-song-${elapsed}ms")
+            val shot = capture()
+            backShots += Look.of(shot, region)
+            backSteps += difference(prevShot, shot, region)
+            prevShot = shot
+            if (elapsed in setOf(64L, 128L, 208L, 320L)) shoot(shot, "$name-6-to-song-${elapsed}ms")
         }
         assertContinuous(back)
-        // The last frame of the box was the cover's own place, then the cover itself, unmoved.
+        // The box's place ends where the cover is drawn, so it is there for the next switch.
         assertEquals(cover.clip.left, back.last().clip.left, 1f)
         assertEquals(cover.clip.top, back.last().clip.top, 1f)
         assertEquals(cover.clip.right, back.last().clip.right, 1f)
@@ -256,9 +289,51 @@ class VideoBoxMorphTest {
         settle()
         val after = capture()
         shoot(after, "$name-7-song-again")
-        compose.onNodeWithTag("video-cover-box").assertDoesNotExist()
+        assertCleanCrossfade("back to the song", backShots, backSteps, difference(video, after, region))
+        // The video's pane stays built under the cover, warm for the next switch, but none of
+        // the video shows: no picture, no buttons, and the screen is the song's as it was.
+        compose.onNodeWithTag("video-picture").assertDoesNotExist()
+        compose.onNodeWithTag("video-pip-button").assertDoesNotExist()
         val end = difference(song, after, region)
         assertTrue("back on the song, the cover differs by $end", end < 0.02f)
+    }
+
+    /** The cover region's brightness and how much of it is near black, in one shot. */
+    private data class Look(val light: Float, val dark: Float) {
+        companion object {
+            fun of(b: Bitmap, r: android.graphics.Rect): Look {
+                var sum = 0.0
+                var dark = 0L
+                var n = 0L
+                for (y in r.top until r.bottom step 3) for (x in r.left until r.right step 3) {
+                    val p = b.getPixel(x, y)
+                    val l = (0.2126f * (p shr 16 and 0xFF) + 0.7152f * (p shr 8 and 0xFF) + 0.0722f * (p and 0xFF)) / 255f
+                    sum += l
+                    if (l < 0.06f) dark++
+                    n++
+                }
+                return Look((sum / n).toFloat(), dark.toFloat() / n)
+            }
+        }
+    }
+
+    /**
+     * A switch shown frame by frame ([looks], and the change from each frame to the next in
+     * [steps]) is a clean crossfade between where it began and where it settled: no frame
+     * goes black or dark on its way, and no frame jumps a large part of the whole change at once.
+     */
+    private fun assertCleanCrossfade(what: String, looks: List<Look>, steps: List<Float>, whole: Float) {
+        val from = looks.first()
+        val to = looks.last()
+        val floor = minOf(from.light, to.light)
+        val darkest = maxOf(from.dark, to.dark)
+        looks.forEachIndexed { i, l ->
+            assertTrue("$what: frame $i went dark, ${l.light} against $floor", l.light >= floor - CROSSFADE_DIP)
+            assertTrue("$what: frame $i went black, ${l.dark} of it against $darkest", l.dark <= darkest + CROSSFADE_BLACK)
+        }
+        steps.forEachIndexed { i, s ->
+            assertTrue("$what: frame ${i + 1} jumped $s of $whole", s <= whole * CROSSFADE_STEP + 0.004f)
+        }
     }
 
     /** No edge of the box moves more than a fifth of its whole way in one frame, nor turns back. */
@@ -279,6 +354,12 @@ class VideoBoxMorphTest {
             }
         }
     }
+
+    /** How far the box's cut and the image in it moved between two frames, its corner left out. */
+    private fun edgeGap(a: MorphFrame, b: MorphFrame): Float = maxOf(
+        maxOf(abs(a.clip.left - b.clip.left), abs(a.clip.top - b.clip.top), abs(a.clip.right - b.clip.right), abs(a.clip.bottom - b.clip.bottom)),
+        maxOf(abs(a.image.left - b.image.left), abs(a.image.top - b.image.top), abs(a.image.right - b.image.right), abs(a.image.bottom - b.image.bottom)),
+    )
 
     private fun gap(a: MorphFrame, b: MorphFrame): Float = maxOf(
         abs(a.clip.left - b.clip.left), abs(a.clip.top - b.clip.top), abs(a.clip.right - b.clip.right), abs(a.clip.bottom - b.clip.bottom),
@@ -315,7 +396,7 @@ class VideoBoxMorphTest {
         File(SHOTS, "$name.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    private val song = Song("x", "Jo Tum Mere Ho", "Anuv Jain", "https://covers.invalid/jtmh.jpg", "4:11")
+    private val song = Song("x", "Salt on the Window", "Ferris Morrow", "https://covers.invalid/salt.jpg", "4:11")
 
     private fun state(videoMode: Boolean, fullCover: Boolean) = PlayerUiState(
         song = song, isPlaying = true, isSounding = true, isBuffering = false, hasNext = true, shuffle = false,
@@ -363,6 +444,19 @@ class VideoBoxMorphTest {
     }
 
     private companion object {
-        val SHOTS = File("/tmp/claude-0/-home-user-Opentune/cb396347-e5a5-515e-abbd-8501f88d5f1d/scratchpad/video-box-shots")
+        val SHOTS = File("build/screenshots/player/video-box-morph")
+
+        /** How much darker than both its ends a frame of the crossfade may be, in brightness 0 to 1. */
+        const val CROSSFADE_DIP = 0.06f
+
+        /** How much more of the region than at either end may be near black in a frame of it. */
+        const val CROSSFADE_BLACK = 0.05f
+
+        /**
+         * The most of the whole change one frame of it may make: a cut makes all of it at
+         * once; a crossfade spreads it over frames. (Going back to the song it runs on the
+         * clock's quick first stretch, a few frames; going to the video, a third of a second.)
+         */
+        const val CROSSFADE_STEP = 0.5f
     }
 }

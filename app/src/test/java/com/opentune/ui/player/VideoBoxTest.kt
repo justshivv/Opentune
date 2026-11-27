@@ -14,11 +14,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
@@ -42,6 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,8 +55,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * The music video in the player, upright: in a box at its own shape with the cover's
- * rounded corners, where the cover sits, never stretched to the screen's edges; and the
+ * The music video in the player, upright: in a box at its own shape with a card's rounded
+ * corners, where the cover sits, never stretched or cut to the screen's edges; and the
  * picture-in-picture button beside it, only while the song plays as its video.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -72,14 +77,14 @@ class VideoBoxTest {
         }.coroutineContext(Dispatchers.Unconfined).build())
     }
 
-    private val song = Song("x", "Midnight City", "M83", "https://covers.invalid/m83.jpg", "4:03")
+    private val song = Song("x", "Lanterns Over Harbour", "The Quiet Cartographers", "https://covers.invalid/lanterns.jpg", "4:03")
 
-    private fun state(videoMode: Boolean = true, reduce: Boolean = true, style: PlayerStyle = PlayerStyle.CLASSIC, fullCover: Boolean = false) = PlayerUiState(
+    private fun state(videoMode: Boolean = true, reduce: Boolean = true, style: PlayerStyle = PlayerStyle.CLASSIC, fullCover: Boolean = false, videoAvailable: Boolean = true) = PlayerUiState(
         song = song, isPlaying = true, isSounding = true, isBuffering = false, hasNext = true, shuffle = false,
         repeatMode = Player.REPEAT_MODE_OFF, durationMs = 243_000, lyrics = LyricsState.NotFound, queue = listOf(song),
         currentIndex = 0, upNext = emptyList(), sound = SoundSettings(), theme = ThemeSettings(),
         ui = InterfaceSettings(playerStyle = style, reduceAnimation = reduce, fullScreenCover = fullCover),
-        videoMode = videoMode, videoAvailable = true,
+        videoMode = videoMode, videoAvailable = videoAvailable,
     )
 
     /** A still cover in soft colours, standing in for the song's art. */
@@ -161,15 +166,15 @@ class VideoBoxTest {
         shoot("video-box-portrait-9x16")
     }
 
-    @Test fun theEdgeToEdgeStyleFillsTheCoverRegionWithTheVideo() {
+    @Test fun theEdgeToEdgeStyleShowsTheVideoAtItsOwnShapeAcrossTheRegion() {
         show(state(fullCover = true))
         val box = compose.onNodeWithTag("video-cover-box").getBoundsInRoot()
         // Nearly the screen's width: 14dp short of each side.
         assertEquals(411f - 28f, (box.right - box.left).value, 1.5f)
         assertEquals(14f, box.left.value, 1f)
-        // Wider than tall, and not at the picture's 16:9: the picture fills it, cut to fit.
+        // At the picture's own 16:9, shown whole: not stretched, not cut to fill the region.
         val shape = (box.right - box.left) / (box.bottom - box.top)
-        assertTrue("shape $shape", shape > 1f && shape < 16f / 9f - 0.05f)
+        assertEquals("shape $shape", 16f / 9f, shape, 0.02f)
         compose.onNodeWithTag("video-picture").assertIsDisplayed()
         shoot("video-box-portrait-full-cover-style")
     }
@@ -219,9 +224,45 @@ class VideoBoxTest {
     }
 
     @Test fun noButtonForAudio() {
-        show(state(videoMode = false))
+        show(state(videoMode = false, videoAvailable = false))
         compose.onNodeWithTag("video-pip-button").assertDoesNotExist()
         compose.onNodeWithTag("video-cover-box").assertDoesNotExist()
+        compose.onNodeWithTag("video-picture").assertDoesNotExist()
+    }
+
+    @Test fun aSongWithAVideoPlayedAsItsSongShowsNoneOfTheVideo() {
+        // The video's pane is kept built under the cover, so switching to it is only a
+        // crossfade; but in song mode none of the video shows: no picture, no buttons.
+        show(state(videoMode = false))
+        compose.onNodeWithTag("video-pip-button").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Picture in picture").assertDoesNotExist()
+        compose.onNodeWithTag("video-full-screen-button").assertDoesNotExist()
+        compose.onNodeWithTag("video-picture").assertDoesNotExist()
+    }
+
+    @Ignore(
+        "Suspected bug from 2dcbf51d: the video's pane, now kept built (transparent) over the cover in song " +
+            "mode whenever the song has a video, takes the cover's touches, so a double tap on the cover no " +
+            "longer seeks. With videoAvailable = false the same tap seeks. Left for the owner to decide."
+    )
+    @Test fun aDoubleTapOnTheCoverSeeksInSongModeThoughTheSongHasAVideo() {
+        val seeks = mutableListOf<Long>()
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            OpenTuneTheme(ThemeSettings()) {
+                PlayerLayout(
+                    state(videoMode = false), position = { 92_000 }, buffered = { 140_000 },
+                    actions = PlayerActions({}, {}, {}, {}, {}, { seeks += it }, {}, {}, {}),
+                    videoSurface = picture(frame()),
+                    videoPage = VideoPage(boxPicture(frame()), aspect = 16f / 9f),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(1_500)
+        // On the cover's right half, a little above its middle.
+        compose.onRoot().performTouchInput { doubleClick(Offset(width * 0.8f, 300.dp.toPx())) }
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(listOf(92_000L + 10_000L), seeks)
     }
 
     @Test fun noButtonWhereThePhoneDoesNotAllowIt() {

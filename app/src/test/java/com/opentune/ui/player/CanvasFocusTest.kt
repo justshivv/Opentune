@@ -19,6 +19,7 @@ import com.opentune.ui.LyricsState
 import com.opentune.ui.components.PlayerMorph
 import com.opentune.ui.theme.OpenTuneTheme
 import kotlinx.coroutines.Dispatchers
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -30,6 +31,7 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * While a Canvas plays on the cover, the controls slide down after a few seconds and leave
  * the title; a short swipe up brings them back without going on to the lyrics or queue.
+ * The few seconds count only once a frame of the Canvas has been drawn.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -69,8 +71,34 @@ class CanvasFocusTest {
         compose.mainClock.advanceTimeBy(100)
     }
 
+    /**
+     * The Canvas's shared player, as the backdrop will take it up, so a test can say when
+     * its first frame has been drawn: Robolectric never renders one.
+     */
+    private fun canvasLoop(url: String): SharedLoops.Entry =
+        SharedLoops.acquire(ApplicationProvider.getApplicationContext(), url, null, maxPx = 1920, maxBitrate = 8_000_000)
+            .also { held += it }
+
+    private val held = mutableListOf<SharedLoops.Entry>()
+
+    @After fun letGo() {
+        // Left undrawn, so a later test that shows the same clip starts as the app would.
+        held.forEach { it.drawn.value = false; SharedLoops.release(it) }
+        held.clear()
+    }
+
     @Test fun controlsGoOverACanvasAndASwipeUpBringsThemBack() {
-        show("https://canvas.invalid/loop.mp4")
+        val url = "https://canvas.invalid/loop.mp4"
+        val loop = canvasLoop(url)
+        show(url)
+        compose.onNodeWithContentDescription("Queue").assertExists()
+        // Until a frame of the Canvas has been drawn it isn't really playing: the controls stay.
+        compose.mainClock.advanceTimeBy(6_000)
+        compose.onNodeWithContentDescription("Queue").assertExists()
+
+        // Its first frame is drawn: now the countdown runs and the controls slide away.
+        loop.drawn.value = true
+        compose.mainClock.advanceTimeBy(100)
         compose.onNodeWithContentDescription("Queue").assertExists()
         compose.mainClock.advanceTimeBy(6_000)
         compose.onNodeWithContentDescription("Queue").assertDoesNotExist()
@@ -97,7 +125,10 @@ class CanvasFocusTest {
     }
 
     @Test fun theSettingTurnsItOff() {
-        show("https://canvas.invalid/loop.mp4", focus = false)
+        val url = "https://canvas.invalid/loop.mp4"
+        // Drawn and playing, so only the setting holds the controls.
+        canvasLoop(url).drawn.value = true
+        show(url, focus = false)
         compose.mainClock.advanceTimeBy(6_000)
         compose.onNodeWithContentDescription("Queue").assertExists()
     }
