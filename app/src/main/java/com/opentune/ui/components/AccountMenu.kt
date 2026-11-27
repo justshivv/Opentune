@@ -106,15 +106,18 @@ fun AccountMenu(nav: AccountMenuNav, anchor: androidx.compose.ui.geometry.Rect? 
                 exit = if (calm) fadeOut(tween(100)) else fadeOut(tween(140)) + scaleOut(tween(160), targetScale = 0.92f, transformOrigin = TransformOrigin(1f, 0f)),
             ) {
                 BoxWithConstraints {
-                    // The card never outgrows the screen: on a short screen (landscape, a small
-                    // phone) it stops short of the bottom edge and its content scrolls instead.
-                    val cardMaxHeight = maxHeight - 64.dp
                     // From the button it was opened from: the card's top and its right edge are
                     // the button's own, measured off the screen this dialog fills. With no
                     // button known, the card keeps the screen's top corner as before.
                     val density = androidx.compose.ui.platform.LocalDensity.current
                     val cardTop = anchor?.let { with(density) { it.top.toDp() } }
                     val cardEnd = anchor?.let { (maxWidth - with(density) { it.right.toDp() }).coerceAtLeast(0.dp) }
+                    // The card never outgrows the screen: its height is what is left under
+                    // its top, with 64.dp kept clear at the bottom — a cap measured from
+                    // the screen's top alone let it run past the bottom edge of a short
+                    // (landscape) screen and over the phone's navigation area. Its
+                    // content scrolls when it does not all fit.
+                    val cardMaxHeight = maxHeight - (cardTop ?: 0.dp) - 64.dp
                     Column(
                         Modifier
                             .then(if (cardTop == null) Modifier.windowInsetsPadding(WindowInsets.statusBars) else Modifier)
