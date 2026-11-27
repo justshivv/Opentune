@@ -363,10 +363,10 @@ internal fun QueuePage(queue: List<Song>, index: Int) {
  * end of the queue, or its link copied; then [more], what else the list allows (rename, delete).
  */
 @Composable
-internal fun ListMoreButton(songs: List<Song>, link: String?, size: androidx.compose.ui.unit.Dp = 62.dp, more: (@Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit)? = null) {
+internal fun ListMoreButton(songs: List<Song>, link: String?, size: androidx.compose.ui.unit.Dp = 44.dp, more: (@Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit)? = null) {
     var open by remember { mutableStateOf(false) }
     Box {
-        PageRoundButton(Icons.Rounded.MoreHoriz, "More options", size = size, enabled = songs.isNotEmpty() || link != null || more != null) { open = true }
+        PageRoundButton(Icons.Rounded.MoreHoriz, "More options", size = size, iconSize = 20.dp, enabled = songs.isNotEmpty() || link != null || more != null) { open = true }
         if (open) WebMenu(MenuAnchor.BelowEnd, onDismiss = { open = false }, label = "More options") {
             WebMenuItem("Play next", Icons.AutoMirrored.Rounded.PlaylistPlay, enabled = songs.isNotEmpty()) { Player.playNext(songs); Notice.show("Playing next") }
             WebMenuItem("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic, enabled = songs.isNotEmpty()) { Player.addToQueue(songs); Notice.show("Added to queue") }

@@ -213,7 +213,7 @@ internal fun ShelfHeader(title: String, onSeeAll: (() -> Unit)? = null, subtitle
                 }
             }
             subtitle?.takeIf { it.isNotBlank() }?.let {
-                Text(it.uppercase(), style = PageType.meta, color = PageInk.grey, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                Text(it, style = PageType.meta, color = PageInk.grey, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
             }
         }
         action?.let { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) { it() } }
@@ -253,8 +253,8 @@ internal fun <T> LazyListScope.shelfItems(items: List<T>, kind: ShelfKind, since
 
 // ---- Lockups -----------------------------------------------------------------
 
-/** A card's corners. */
-internal val CardShape = RoundedCornerShape(6.dp)
+/** A card's corners: generous, as the phone's and the web's artwork. */
+internal val CardShape = RoundedCornerShape(14.dp)
 
 /**
  * A card's artwork: under the pointer it lifts a little with a soft shadow, the cover eases
@@ -278,14 +278,15 @@ internal fun LockupArt(
     clickable: Boolean = true,
 ) {
     val still = stillMotion()
-    val lift by animateFloatAsState(if (hovered && !still) 1f else 0f, tween(160, easing = Web.Settle), label = "lift")
-    val zoom by animateFloatAsState(if (hovered && !still) 1.04f else 1f, tween(260, easing = Web.Settle), label = "zoom")
-    val shade by animateFloatAsState(if (hovered) 1f else 0f, tween(if (still) 0 else 140), label = "shade")
+    // As the web's .ot-lockup-art: 4dp of lift with a long soft shadow, the cover easing larger in its frame.
+    val lift by animateFloatAsState(if (hovered && !still) 1f else 0f, tween(320, easing = Web.Settle), label = "lift")
+    val zoom by animateFloatAsState(if (hovered && !still) 1.05f else 1f, tween(560, easing = Web.Settle), label = "zoom")
+    val shade by animateFloatAsState(if (hovered) 1f else 0f, tween(if (still) 0 else 200), label = "shade")
     val source = remember { MutableInteractionSource() }
     Box(
         modifier.fillMaxWidth().aspectRatio(aspect)
-            .graphicsLayer { translationY = -3.dp.toPx() * lift }
-            .shadow(12.dp * lift, shape, ambientColor = WebInk.radiosity, spotColor = WebInk.radiosity)
+            .graphicsLayer { translationY = -4.dp.toPx() * lift }
+            .shadow(18.dp * lift, shape, ambientColor = WebInk.radiosity, spotColor = WebInk.radiosity)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .then(
@@ -443,10 +444,12 @@ internal fun TrackLockup(
     val pickedFill = keyColour().copy(alpha = 0.16f)
     val fill by animateColorAsState(if (picked) pickedFill else if (lit) PageInk.hover else PageInk.hover.copy(alpha = 0f), tween(PAGE_HOVER_MS), label = "row fill")
     val mark by animateFloatAsState(if (lit && !picking) 1f else 0f, tween(PAGE_HOVER_MS), label = "row mark")
-    val shape = RoundedCornerShape(4.dp)
+    val shape = RoundedCornerShape(10.dp)
+    // The ⋯ menu comes up with the pointer, so at rest the row is only its cover and names.
+    val tools by animateFloatAsState(if (lit) 1f else 0f, tween(PAGE_HOVER_MS), label = "row tools")
     SongContextMenu(song) {
         Row(
-            modifier.width(LocalColumnWidth.current).height(76.dp).clip(RoundedCornerShape(6.dp)).background(fill)
+            modifier.width(LocalColumnWidth.current).height(68.dp).clip(RoundedCornerShape(Web.TrackRow)).background(fill)
                 .hoverable(hover)
                 .then(pick?.capture ?: Modifier)
                 .clickable(interactionSource = hover, indication = null, role = Role.Button) { pick?.click(onPlay) ?: onPlay() }
@@ -454,7 +457,7 @@ internal fun TrackLockup(
                 .padding(start = 8.dp, end = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(60.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(52.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
                 CoverFill(song.thumbnailUrl, Modifier.fillMaxSize())
                 // The play mark under the pointer; bars while it's the song playing.
                 Box(Modifier.matchParentSize().graphicsLayer { alpha = if (current) 1f else mark }.background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
@@ -472,7 +475,8 @@ internal fun TrackLockup(
                 }
                 if (line.isNotBlank()) Text(line, style = PageType.cardLine, color = PageInk.grey, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
             }
-            SongMoreButton(song, size = 36.dp, vertical = true)
+            // Always there, only faded out, so its menu stays open once the pointer moves onto it.
+            Box(Modifier.graphicsLayer { alpha = tools }) { SongMoreButton(song, size = 34.dp) }
         }
     }
 }
@@ -556,7 +560,7 @@ internal fun MoodTile(title: String, colour: Color, cover: String?, onOpen: () -
     val still = stillMotion()
     val grow by animateFloatAsState(if (lit && !still) 1.02f else 1f, tween(160, easing = Web.Settle), label = "tile grow")
     val glow by animateFloatAsState(if (lit) 1f else 0f, tween(PAGE_HOVER_MS), label = "tile glow")
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(16.dp)
     val deep = androidx.compose.ui.graphics.lerp(colour, Color.Black, 0.35f)
     Box(
         modifier.height(height)

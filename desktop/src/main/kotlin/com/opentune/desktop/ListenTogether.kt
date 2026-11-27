@@ -236,7 +236,7 @@ private fun RoomHeader(r: Together.Room, title: String) {
     var confirm by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("LISTEN TOGETHER", style = PageType.kicker, color = PageInk.grey)
+            Text("Listen together", style = PageType.kicker, color = PageInk.grey)
             Text(title, style = PageType.pageTitle, color = PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp).semantics { heading() })
             Box(Modifier.padding(top = 10.dp)) { LiveStatus(r) }
         }
@@ -317,7 +317,7 @@ private fun NowInRoom(r: Together.Room) {
                 if (cover != null) CoverFill(cover, Modifier.fillMaxSize()) else Icon(Icons.Rounded.MusicNote, null, tint = PageInk.grey, modifier = Modifier.size(44.dp))
             }
             Column(Modifier.weight(1f).padding(start = 20.dp)) {
-                Text("PLAYING IN THE ROOM", style = PageType.kicker, color = PageInk.text.copy(alpha = 0.7f))
+                Text("Playing in the room", style = PageType.kicker, color = PageInk.text.copy(alpha = 0.7f))
                 Text(
                     title ?: if (r.hostPrivate) "A song only on the host's device" else "Nothing yet",
                     style = PageType.heading, color = PageInk.text, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp),
@@ -350,7 +350,7 @@ private fun NowInRoom(r: Together.Room) {
         // What's next in the room: the host's queue, which a guest's follows.
         val next = if (r.hosting || r.following) queue.drop(index + 1).take(5) else emptyList()
         if (next.isNotEmpty()) {
-            Text("UP NEXT", style = PageType.kicker, color = PageInk.text.copy(alpha = 0.7f), modifier = Modifier.padding(top = 18.dp, bottom = 6.dp))
+            Text("Up next", style = PageType.kicker, color = PageInk.text.copy(alpha = 0.7f), modifier = Modifier.padding(top = 18.dp, bottom = 6.dp))
             next.forEach { s -> NextRow(s) }
         }
     }
@@ -479,7 +479,7 @@ private fun Invite(r: Together.Room) {
                 )
                 Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     KeyPill(if (copied == "link") "Copied" else "Copy invite link", if (copied == "link") Icons.Rounded.Check else Icons.Rounded.Link) {
-                        copyText("Listen with me on OpenTune. Room code: ${r.code.pretty}\n${r.code.link}"); copied = "link"
+                        copyText("Listen with me on NepTune. Room code: ${r.code.pretty}\n${r.code.link}"); copied = "link"
                     }
                     QuietPill(if (copied == "code") "Copied" else "Copy code", if (copied == "code") Icons.Rounded.Check else Icons.Rounded.ContentCopy) {
                         copyText(r.code.pretty); copied = "code"
@@ -581,7 +581,7 @@ private fun RoomCard(modifier: Modifier, glow: Boolean = false, inset: Dp = 20.d
 
 @Composable
 private fun PageTitle(title: String, line: String) {
-    Text("LISTEN TOGETHER", style = PageType.kicker, color = PageInk.grey)
+    Text("Listen together", style = PageType.kicker, color = PageInk.grey)
     Text(title, style = PageType.pageTitle, color = PageInk.text, modifier = Modifier.padding(top = 4.dp).semantics { heading() })
     Text(line, style = PageType.cardLine, color = PageInk.grey, modifier = Modifier.padding(top = 6.dp))
 }

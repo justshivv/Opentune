@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -46,6 +47,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -72,28 +74,30 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 /**
- * The content pages' own measures: a 20dp gutter, bold 26sp headings, 17sp rows, round 62dp
- * buttons by a list's head, striped rows. Shared by Home, Explore, the Library and the album and
- * playlist pages, so they read as one.
+ * The content pages' own measures: a 28dp gutter, bold 24sp section titles with a quiet subtitle
+ * in sentence case, 15sp rows, round buttons by a list's head, rows that only fill under the
+ * pointer. Shared by Home, Explore, the Library and the album and playlist pages, so they read as
+ * one. A 1.2 step between sizes, as product type wants: no tiny spaced-out capitals anywhere.
  */
 internal object PageType {
-    val heading @Composable get() = webType(26f, 32f, 700)
-    val pageTitle @Composable get() = webType(30f, 36f, 700)
-    /** The small capitals over a list's title ("PLAYLIST"), spaced out. */
-    val kicker @Composable get() = webType(14f, 18f, 600, 0.12f)
-    @Composable fun bigTitle(size: Float) = webType(size, size * 1.12f, 700, -0.01f)
-    val owner @Composable get() = webType(17f, 22f, 500)
-    val meta @Composable get() = webType(14f, 18f, 500, 0.04f)
-    val rowTitle @Composable get() = webType(17f, 22f, 500)
-    val row @Composable get() = webType(17f, 22f)
-    val small @Composable get() = webType(14f, 18f)
-    val cardTitle @Composable get() = webType(17f, 22f, 700)
-    val cardLine @Composable get() = webType(15f, 20f)
-    val tab @Composable get() = webType(16f, 20f, 500)
-    val field @Composable get() = webType(16f, 20f)
-    val emptyTitle @Composable get() = webType(22f, 28f, 700)
-    val emptyLine @Composable get() = webType(17f, 22f)
-    val button @Composable get() = webType(15f, 20f, 600)
+    val heading @Composable get() = webType(24f, 30f, 700, -0.005f)
+    val pageTitle @Composable get() = webType(34f, 40f, 700, -0.01f)
+    /** The quiet line over a list's title ("Playlist"), in sentence case. */
+    val kicker @Composable get() = webType(13f, 18f, 600)
+    @Composable fun bigTitle(size: Float) = webType(size, size * 1.1f, 700, -0.012f)
+    val owner @Composable get() = webType(16f, 22f, 600)
+    /** A section's subtitle and a list's facts: quiet, never shouting in capitals. */
+    val meta @Composable get() = webType(14f, 19f)
+    val rowTitle @Composable get() = webType(15f, 20f, 500)
+    val row @Composable get() = webType(14f, 19f)
+    val small @Composable get() = webType(13f, 17f)
+    val cardTitle @Composable get() = webType(15f, 20f, 600)
+    val cardLine @Composable get() = webType(13f, 18f)
+    val tab @Composable get() = webType(15f, 20f, 600)
+    val field @Composable get() = webType(15f, 20f)
+    val emptyTitle @Composable get() = webType(20f, 26f, 700, -0.01f)
+    val emptyLine @Composable get() = webType(15f, 21f)
+    val button @Composable get() = webType(14f, 20f, 600)
 }
 
 /** The pages' ink and fills, from the theme's own text colour so a light theme works too. */
@@ -104,22 +108,22 @@ internal object PageInk {
     val grey @Composable get() = on.copy(alpha = 0.6f)
     /** A row's artist column, between white and grey. */
     val soft @Composable get() = on.copy(alpha = 0.78f)
-    /** Every other row of a track list. */
-    val stripe @Composable get() = on.copy(alpha = 0.04f)
+    /** What a track list's rows stand on at rest: nothing, so the list reads as one calm column. */
+    val stripe @Composable get() = on.copy(alpha = 0f)
     /** A row under the pointer. */
-    val hover @Composable get() = on.copy(alpha = 0.085f)
-    /** The row playing now. */
-    val current @Composable get() = on.copy(alpha = 0.11f)
+    val hover @Composable get() = on.copy(alpha = 0.065f)
+    /** The row playing now: a breath of the key colour. */
+    val current @Composable get() = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     /** A round button at rest, and under the pointer. */
-    val button @Composable get() = on.copy(alpha = 0.12f)
-    val buttonHover @Composable get() = on.copy(alpha = 0.19f)
+    val button @Composable get() = on.copy(alpha = 0.09f)
+    val buttonHover @Composable get() = on.copy(alpha = 0.16f)
     /** A text field's fill. */
-    val field @Composable get() = on.copy(alpha = 0.07f)
-    val hairline @Composable get() = on.copy(alpha = 0.12f)
+    val field @Composable get() = on.copy(alpha = 0.065f)
+    val hairline @Composable get() = on.copy(alpha = 0.1f)
 }
 
-/** The pages' side margin. */
-internal val PageGutter = 20.dp
+/** The pages' side margin: room to breathe, as the web's 40px gutter on a wide window. */
+internal val PageGutter = 32.dp
 
 /** Hover and press changes: quick, as the reference's are. */
 internal const val PAGE_HOVER_MS = 130
@@ -133,7 +137,7 @@ internal fun PageRoundButton(
     icon: ImageVector,
     label: String,
     solid: Boolean = false,
-    size: Dp = 62.dp,
+    size: Dp = 52.dp,
     iconSize: Dp = size * 0.45f,
     enabled: Boolean = true,
     onClick: () -> Unit,
@@ -205,7 +209,7 @@ internal fun PageSearchField(
 ) {
     val ink = PageInk.text
     Row(
-        modifier.height(44.dp).clip(RoundedCornerShape(8.dp)).background(PageInk.field).padding(start = if (icon) 12.dp else 14.dp, end = 6.dp),
+        modifier.height(44.dp).clip(RoundedCornerShape(14.dp)).background(PageInk.field).padding(start = if (icon) 12.dp else 14.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon) Icon(Icons.Rounded.Search, null, tint = PageInk.grey, modifier = Modifier.padding(end = 10.dp).size(20.dp))
@@ -259,29 +263,43 @@ internal fun PageTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Un
             }
             Box(Modifier.fillMaxWidth().height(3.dp)) {
                 Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(1.dp).background(PageInk.hairline))
-                Box(Modifier.offset(x = at).width(each).height(3.dp).background(PageInk.text))
+                Box(Modifier.offset(x = at + each * 0.25f).width(each * 0.5f).height(3.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
             }
         }
     }
 }
 
-/** A list with nothing in it: an icon, a bold line and a grey one under it, centred, 90dp down. */
+/**
+ * A list with nothing in it: its icon on a soft disc of the key colour with a faint ring around
+ * it, a bold line and a quieter one under it, centred and rising in, 72dp down.
+ */
 @Composable
 internal fun PageEmpty(icon: ImageVector, title: String, line: String?, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth().padding(top = 90.dp, bottom = 40.dp, start = PageGutter, end = PageGutter), horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, tint = PageInk.text, modifier = Modifier.size(40.dp))
-        Text(title, style = PageType.emptyTitle, color = PageInk.text, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 18.dp))
-        line?.let { Text(it, style = PageType.emptyLine, color = PageInk.grey, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp).widthIn(max = 520.dp)) }
+    val key = MaterialTheme.colorScheme.primary
+    Column(
+        modifier.fillMaxWidth().padding(top = 72.dp, bottom = 40.dp, start = PageGutter, end = PageGutter).riseIn(distance = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier.size(88.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(key.copy(alpha = 0.16f), key.copy(alpha = 0.04f)))),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.size(56.dp).clip(CircleShape).background(key.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = key, modifier = Modifier.size(28.dp))
+            }
+        }
+        Text(title, style = PageType.emptyTitle, color = PageInk.text, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 20.dp))
+        line?.let { Text(it, style = PageType.emptyLine, color = PageInk.grey, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp).widthIn(max = 440.dp)) }
     }
 }
 
-/** A section's heading: bold 26sp, with an optional grey strapline under it and [actions] at its end. */
+/** A section's heading: bold 24sp, with an optional quiet subtitle under it and [actions] at its end. */
 @Composable
 internal fun PageHeading(title: String, strapline: String? = null, modifier: Modifier = Modifier, actions: (@Composable () -> Unit)? = null) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = PageType.heading, color = PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
-            strapline?.takeIf { it.isNotBlank() }?.let { Text(it.uppercase(), style = PageType.meta, color = PageInk.grey, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
+            strapline?.takeIf { it.isNotBlank() }?.let { Text(it, style = PageType.meta, color = PageInk.grey, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
         }
         actions?.let { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) { it() } }
     }
@@ -325,17 +343,21 @@ internal fun PageButton(label: String, primary: Boolean = false, destructive: Bo
 }
 
 /**
- * A small dialog in the pages' look rather than stock Material: a raised panel with 12dp corners,
- * its title in bold 22sp, [content] under it and [buttons] at its foot on the right. Escape or a
- * click outside closes it.
+ * A small dialog in the pages' look rather than stock Material: a raised panel with 24dp corners,
+ * a soft shadow and a hairline rim, its title in bold 20sp, [content] under it and [buttons] at
+ * its foot on the right. Escape or a click outside closes it.
  */
 @Composable
 internal fun PageDialog(title: String, onDismiss: () -> Unit, buttons: @Composable () -> Unit, content: @Composable () -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val shape = RoundedCornerShape(24.dp)
         Column(
-            Modifier.widthIn(min = 360.dp, max = 440.dp).clip(RoundedCornerShape(12.dp))
+            Modifier.widthIn(min = 360.dp, max = 460.dp)
+                .shadow(28.dp, shape, ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.5f))
+                .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(24.dp),
+                .border(0.75.dp, PageInk.hairline, shape)
+                .padding(28.dp),
         ) {
             Text(title, style = PageType.emptyTitle, color = PageInk.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Box(Modifier.padding(top = 14.dp)) { content() }

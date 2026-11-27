@@ -202,7 +202,7 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
             }) {
                 val since = remember { System.nanoTime() }
                 ShelfScroller(ShelfKind.SQUARE) {
-                    shelfItems(featured.map { p -> ShelfItem(p.title, "Playlist • OpenTune picks", p.artwork, null, p.browseId) }, ShelfKind.SQUARE, since) { _, card ->
+                    shelfItems(featured.map { p -> ShelfItem(p.title, "Playlist • NepTune picks", p.artwork, null, p.browseId) }, ShelfKind.SQUARE, since) { _, card ->
                         SquareLockup(card, onOpen = { onOpen(card) }, onPlay = rememberCardPlay(card))
                     }
                 }
@@ -814,7 +814,7 @@ private fun LibHead(title: String, songs: List<Song>, line: String? = null, extr
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = PageType.pageTitle, color = PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val facts = listOfNotNull(songs.takeIf { it.isNotEmpty() }?.let(::pageLengthLine), line).joinToString(" • ")
+            val facts = listOfNotNull(songs.takeIf { it.isNotEmpty() }?.let(::lengthLine), line).joinToString(" • ")
             if (facts.isNotBlank()) Text(facts, style = PageType.meta, color = PageInk.grey, modifier = Modifier.padding(top = 4.dp))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -930,14 +930,14 @@ internal fun LibraryShelfPage(shelf: Shelf, onShelf: (Shelf) -> Unit, onPlaylist
         Shelf.LIKED -> LibraryFrame(
             label = "Liked songs", songs = liked, tabs = listOf(LibTab.SONGS, LibTab.ARTISTS, LibTab.ALBUMS),
             empty = Triple(Icons.Rounded.FavoriteBorder, "No liked songs", "Click the heart on any song and it shows up here."),
-            head = { LibHead("Liked songs", liked, line = if (account.signedIn) "ON THIS COMPUTER AND YOUTUBE MUSIC" else null) },
+            head = { LibHead("Liked songs", liked, line = if (account.signedIn) "On this computer and YouTube Music" else null) },
             loading = account.loading,
         )
         Shelf.RECENT -> LibraryFrame(
             label = "Recently played", songs = played, tabs = listOf(LibTab.SONGS, LibTab.ARTISTS, LibTab.ALBUMS),
             empty = Triple(Icons.Rounded.History, "Nothing here yet", "Songs you play show up here."),
             head = {
-                LibHead("Recently played", played, line = "ON THIS COMPUTER", extra = if (account.signedIn) ({
+                LibHead("Recently played", played, line = "On this computer", extra = if (account.signedIn) ({
                     // What the account played anywhere, as YouTube Music keeps it: its own page.
                     PageRoundButton(Icons.Rounded.History, "Your YouTube Music history", size = 52.dp) {
                         onOpenAny(ShelfItem("Your YouTube Music history", "History • YouTube Music", null, null, "FEmusic_history"))
@@ -1008,7 +1008,7 @@ private fun YearCard(summary: Wrapped.Summary) {
     ) {
         Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("YOUR ${java.time.Year.now().value} SO FAR", style = PageType.kicker, color = Color.White.copy(alpha = 0.8f))
+                Text("Your ${java.time.Year.now().value} so far", style = PageType.kicker, color = Color.White.copy(alpha = 0.8f))
                 if (summary.isEmpty) {
                     Text("Play some music and your year shows here", style = PageType.heading, color = Color.White, modifier = Modifier.padding(top = 8.dp))
                 } else {

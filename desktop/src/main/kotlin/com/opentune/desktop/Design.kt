@@ -153,16 +153,6 @@ internal class PageListFilter {
 
 internal val LocalListFilter = compositionLocalOf<PageListFilter?> { null }
 
-/** "75 SONGS • 4 HR 17 MIN", from the songs' own lengths. */
-internal fun pageLengthLine(songs: List<Song>): String {
-    val seconds = songs.sumOf { s -> s.durationText?.let { Player.seconds(it) }?.toInt() ?: 0 }
-    val count = if (songs.size == 1) "1 SONG" else "${songs.size} SONGS"
-    if (seconds <= 0) return count
-    val h = seconds / 3600
-    val m = (seconds % 3600) / 60
-    return "$count • " + if (h > 0) "$h HR $m MIN" else if (m > 0) "$m MIN" else "${seconds % 60} SEC"
-}
-
 /**
  * The head of an album, playlist or mix page: the cover large and square on the left (360dp on a
  * wide window, smaller as it narrows) and beside it, centred, what kind of list it is in small
@@ -187,34 +177,38 @@ internal fun CollectionHero(
     val stacked = width < 600.dp
     val coverSize = if (stacked) 240.dp else (width * 0.27f).coerceIn(200.dp, 360.dp)
     val titleSize = if (stacked) 30f else (width.value * 0.033f).coerceIn(30f, 44f)
-    val shape: Shape = if (round) CircleShape else RoundedCornerShape(6.dp)
+    val shape: Shape = if (round) CircleShape else RoundedCornerShape(Web.ArtMedium)
     val ready = !songs.isNullOrEmpty()
     val kinds = kind.split(" • ", " · ").map { it.trim() }.filter { it.isNotEmpty() }
-    val kicker = kinds.firstOrNull()?.uppercase().orEmpty()
-    val meta = (kinds.map { it.uppercase() } + listOfNotNull(songs?.takeIf { it.isNotEmpty() }?.let(::pageLengthLine))).joinToString(" • ")
+    val kicker = kinds.firstOrNull().orEmpty()
+    // The facts after the kind ("2020"), then how much there is, in plain words: "2020 • 14 songs, 56 min".
+    val meta = (kinds.drop(1) + listOfNotNull(songs?.takeIf { it.isNotEmpty() }?.let(::lengthLine))).joinToString(" • ")
     val filter = LocalListFilter.current
     val align = if (stacked) Alignment.CenterHorizontally else Alignment.Start
     val textAlign = if (stacked) TextAlign.Center else TextAlign.Start
+    // The cover stands on a soft glow of its own colour rather than a grey shadow.
+    val glow = coverAccent(coverUrl).copy(alpha = if (darkTheme()) 0.55f else 0.35f)
 
     val art = @Composable {
         Box(Modifier.riseIn(durationMs = 500, distance = 12.dp, fromScale = 0.96f).size(coverSize)) {
+            Box(Modifier.matchParentSize().shadow(36.dp, shape, ambientColor = glow, spotColor = glow))
             cover(Modifier.matchParentSize().clip(shape).semantics { contentDescription = "$title cover" })
             Box(Modifier.matchParentSize().border(0.5.dp, WebInk.artworkStroke, shape))
         }
     }
     val words = @Composable {
         Column(Modifier.riseIn(delayMs = 60), horizontalAlignment = align) {
-            if (kicker.isNotBlank()) Text(kicker, style = PageType.kicker, color = PageInk.grey, maxLines = 1)
+            if (kicker.isNotBlank()) Text(kicker, style = PageType.kicker, color = PageInk.text.copy(alpha = 0.72f), maxLines = 1)
             Text(
                 title, style = PageType.bigTitle(titleSize), color = PageInk.text, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                textAlign = textAlign, modifier = Modifier.padding(top = 6.dp).semantics { heading() },
+                textAlign = textAlign, modifier = Modifier.padding(top = 4.dp).semantics { heading() },
             )
-            if (subtitle.isNotBlank()) Text(subtitle, style = PageType.owner, color = PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = textAlign, modifier = Modifier.padding(top = 12.dp))
-            if (meta.isNotBlank()) Text(meta, style = PageType.meta, color = PageInk.grey, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = textAlign, modifier = Modifier.padding(top = 6.dp))
-            Row(Modifier.padding(top = 26.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                PageRoundButton(Icons.Rounded.Shuffle, "Shuffle", enabled = ready) { songs?.let { Player.playAll(it.shuffled(), 0) } }
-                PageRoundButton(Icons.Rounded.PlayArrow, "Play", solid = true, iconSize = 32.dp, enabled = ready) { songs?.let { Player.playAll(it, 0) } }
-                if (filter != null) PageRoundButton(Icons.Rounded.Search, if (filter.open) "Close search" else "Search in $title", enabled = ready) {
+            if (subtitle.isNotBlank()) Text(subtitle, style = PageType.owner, color = PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = textAlign, modifier = Modifier.padding(top = 10.dp))
+            if (meta.isNotBlank()) Text(meta, style = PageType.meta, color = PageInk.grey, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = textAlign, modifier = Modifier.padding(top = 4.dp))
+            Row(Modifier.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                PageRoundButton(Icons.Rounded.PlayArrow, "Play", solid = true, size = 56.dp, iconSize = 30.dp, enabled = ready) { songs?.let { Player.playAll(it, 0) } }
+                PageRoundButton(Icons.Rounded.Shuffle, "Shuffle", size = 44.dp, iconSize = 20.dp, enabled = ready) { songs?.let { Player.playAll(it.shuffled(), 0) } }
+                if (filter != null) PageRoundButton(Icons.Rounded.Search, if (filter.open) "Close search" else "Search in $title", size = 44.dp, iconSize = 20.dp, enabled = ready) {
                     filter.open = !filter.open
                     if (!filter.open) filter.query = ""
                 }
@@ -318,8 +312,12 @@ internal fun SecondaryButton(label: String, icon: ImageVector, enabled: Boolean 
  */
 internal data class PageTrackColumns(val title: Dp, val artist: Dp?, val album: Dp?, val right: Dp)
 
-/** Index (40), a gap, the 56dp cover and the gap after it. */
-private val TRACK_LEAD = 40.dp + 8.dp + 56.dp + 16.dp
+/** A track row's cover, and how tall the row is around it. */
+private val TRACK_COVER = 44.dp
+private val TRACK_HEIGHT = 60.dp
+
+/** Index (40), a gap, the 44dp cover and the gap after it. */
+private val TRACK_LEAD = 40.dp + 6.dp + TRACK_COVER + 14.dp
 private const val TRACK_MIN_COLUMN = 110
 
 internal fun pageTrackColumns(rowWidth: Dp, buttons: Int): PageTrackColumns {
@@ -376,13 +374,15 @@ internal fun TrackRow(i: Int, song: Song, songs: List<Song>, onRemove: ((Song) -
         tween(PAGE_HOVER_MS), label = "row fill",
     )
     val gutter = LocalGutter.current
-    val cols = pageTrackColumns(LocalPageWidth.current - gutter * 2, if (onRemove != null) 3 else 2)
+    val cols = pageTrackColumns(LocalPageWidth.current - gutter * 2, if (onRemove != null) 4 else 3)
     val play = { if (current) Player.toggle() else Player.playAll(songs, i) }
     var adding by remember { mutableStateOf(false) }
+    // The row's buttons come up with the pointer (a liked heart stays), so at rest it's only its names.
+    val tools by animateFloatAsState(if (lit || adding) 1f else 0f, tween(PAGE_HOVER_MS), label = "row tools")
     SongContextMenu(song) {
         Row(
-            Modifier.padding(horizontal = gutter).fillMaxWidth().height(70.dp)
-                .clip(RoundedCornerShape(4.dp)).background(fill)
+            Modifier.padding(horizontal = gutter - 8.dp).fillMaxWidth().height(TRACK_HEIGHT)
+                .clip(RoundedCornerShape(Web.TrackRow)).background(fill)
                 .hoverable(source)
                 .then(pick?.capture ?: Modifier)
                 .clickable(interactionSource = source, indication = null, role = Role.Button) { pick?.click(play) ?: play() }
@@ -397,15 +397,15 @@ internal fun TrackRow(i: Int, song: Song, songs: List<Song>, onRemove: ((Song) -
                     else -> Text("${i + 1}", style = PageType.small.copy(fontFeatureSettings = "tnum"), color = PageInk.grey, maxLines = 1)
                 }
             }
-            Spacer(Modifier.width(8.dp))
-            Box(Modifier.size(56.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
+            Spacer(Modifier.width(6.dp))
+            Box(Modifier.size(TRACK_COVER).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
                 CoverFill(song.thumbnailUrl, Modifier.fillMaxSize())
                 // The number's place holds the box then, so the play mark comes up over the cover.
                 if (pick != null && lit && !picking) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
-                    Icon(if (current && playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                    Icon(if (current && playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             }
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(14.dp))
             Column(Modifier.width(cols.title)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(song.title, style = PageType.rowTitle, color = if (current) WebInk.key else PageInk.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -429,14 +429,20 @@ internal fun TrackRow(i: Int, song: Song, songs: List<Song>, onRemove: ((Song) -
                     textAlign = TextAlign.End, modifier = Modifier.width(56.dp),
                 )
                 Spacer(Modifier.width(12.dp))
-                if (onRemove != null) PageIconButton(Icons.Rounded.RemoveCircleOutline, "Remove ${song.title} from this playlist") { onRemove(song) }
-                PageIconButton(if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (isLiked) "Unlike ${song.title}" else "Like ${song.title}", lit = isLiked) {
-                    Library.setLiked(song, !isLiked)
+                // Faded out rather than left out, so they keep their places and stay in reach of the keyboard.
+                if (onRemove != null) Box(Modifier.graphicsLayer { alpha = tools }) {
+                    PageIconButton(Icons.Rounded.RemoveCircleOutline, "Remove ${song.title} from this playlist", iconSize = 18.dp) { onRemove(song) }
                 }
-                Box {
-                    PageIconButton(Icons.Rounded.Add, "Add ${song.title} to a playlist or the queue") { adding = true }
+                Box(Modifier.graphicsLayer { alpha = if (isLiked) 1f else tools }) {
+                    PageIconButton(if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (isLiked) "Unlike ${song.title}" else "Like ${song.title}", lit = isLiked, iconSize = 18.dp) {
+                        Library.setLiked(song, !isLiked)
+                    }
+                }
+                Box(Modifier.graphicsLayer { alpha = tools }) {
+                    PageIconButton(Icons.Rounded.Add, "Add ${song.title} to a playlist or the queue", iconSize = 18.dp) { adding = true }
                     AddToPlaylistMenu(song, adding, withQueue = true) { adding = false }
                 }
+                Box(Modifier.graphicsLayer { alpha = tools }) { SongMoreButton(song, size = 34.dp) }
                 Spacer(Modifier.width(6.dp))
             }
         }
@@ -463,13 +469,12 @@ private fun albumLink(song: Song): (() -> Unit)? {
 internal fun LazyListScope.trackPlaceholders() {
     items(8) { i ->
         Row(
-            Modifier.padding(horizontal = LocalGutter.current).fillMaxWidth().height(70.dp).clip(RoundedCornerShape(4.dp))
-                .background(if (i % 2 == 0) PageInk.stripe else Color.Transparent),
+            Modifier.padding(horizontal = LocalGutter.current - 8.dp).fillMaxWidth().height(TRACK_HEIGHT),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Spacer(Modifier.width(48.dp))
-            Placeholder(Modifier.size(56.dp), RoundedCornerShape(4.dp))
-            Column(Modifier.padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Spacer(Modifier.width(46.dp))
+            Placeholder(Modifier.size(TRACK_COVER), RoundedCornerShape(8.dp))
+            Column(Modifier.padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Placeholder(Modifier.width(240.dp).height(14.dp), RoundedCornerShape(6.dp))
                 Placeholder(Modifier.width(150.dp).height(12.dp), RoundedCornerShape(5.dp))
             }
@@ -508,8 +513,22 @@ internal fun CollectionLayout(
     // On your own playlist, the picked rows can be taken out of it from the selection bar.
     PageSelectionRemover(onRemove)
     BoxWithConstraints(Modifier.fillMaxSize().background(base)) {
-        // A faint wash of the cover's colour behind the head only; the page itself stays flat.
-        Box(Modifier.fillMaxWidth().height(520.dp).background(Brush.verticalGradient(0f to tint(accent, base, 0.16f), 1f to base)))
+        // A wash of the cover's colour behind the head, as the web's .ot-wash: strongest at the top
+        // left behind the cover, easing into the page's own colour by the first rows.
+        val strength = if (darkTheme()) 0.38f else 0.2f
+        Box(
+            Modifier.fillMaxWidth().height(640.dp)
+                .background(Brush.verticalGradient(0f to tint(accent, base, strength), 0.55f to tint(accent, base, strength * 0.45f), 1f to base))
+                // A brighter breath of it behind the cover, gone well before the foot so it never ends on a line.
+                .drawBehind {
+                    drawRect(
+                        Brush.radialGradient(
+                            listOf(accent.copy(alpha = strength * 0.55f), Color.Transparent),
+                            center = Offset(size.height * 0.4f, size.height * 0.2f), radius = size.height * 0.7f,
+                        ),
+                    )
+                },
+        )
         CompositionLocalProvider(
             LocalGutter provides Web.gutter(maxWidth), LocalPageWidth provides maxWidth, LocalTrackHover provides hover, LocalListFilter provides filter,
         ) {
