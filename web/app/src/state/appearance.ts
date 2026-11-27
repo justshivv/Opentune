@@ -18,10 +18,12 @@ export interface Appearance {
   liquidGlass: boolean;
   /** A soft glow of the accent colour behind the top of Home, in dark mode. */
   homeGlow: boolean;
+  /** Artist, album and playlist pages: the artwork's own colour, or always a dark or light shade of it. */
+  pageTone: 'auto' | 'dark' | 'light';
 }
 export const DEFAULT_APPEARANCE: Appearance = {
   mode: 'system', accent: '#e53935', pureBlack: true, artworkColors: true,
-  playerBackground: 'mesh', playerStyle: 'classic', motion: true, liquidGlass: true, homeGlow: false,
+  playerBackground: 'mesh', playerStyle: 'classic', motion: true, liquidGlass: true, homeGlow: false, pageTone: 'auto',
 };
 export function appearanceOf(value: unknown): Appearance {
   const v = (value && typeof value === 'object' ? value : {}) as Partial<Appearance>;
@@ -35,6 +37,7 @@ export function appearanceOf(value: unknown): Appearance {
     motion: typeof v.motion === 'boolean' ? v.motion : true,
     liquidGlass: typeof v.liquidGlass === 'boolean' ? v.liquidGlass : true,
     homeGlow: typeof v.homeGlow === 'boolean' ? v.homeGlow : false,
+    pageTone: ['auto', 'dark', 'light'].includes(v.pageTone ?? '') ? v.pageTone! : 'auto',
   };
 }
 const KEY = 'opentune:appearance';
