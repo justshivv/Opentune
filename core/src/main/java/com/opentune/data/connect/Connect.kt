@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -114,6 +115,8 @@ object Connect {
                     combine(player.currentSong, player.isPlaying, player.queue, player.upNext, player.volume) { _, _, _, _, _ -> Unit },
                     // A stall starting or ending too: other devices' clocks for this one stop and start with it.
                     combine(player.shuffleMode, player.repeatMode, player.audioFormat, com.opentune.data.NerdStats.playbackSource, player.isSounding) { _, _, _, _, _ -> Unit },
+                    // The song's length once the player knows it (see snapshot), for others' seek bars.
+                    player.durationOf.map { (id, ms) -> id to (ms > 0) }.distinctUntilChanged().map { },
                 ).debounce(300),
                 // A seek goes out at once: held back with the rest, the other devices ran on from the old
                 // place meanwhile, and a stall or a quality label changing kept putting it off.
@@ -305,12 +308,26 @@ object Connect {
     }
 }
 
+/** [ms] as a listing writes a length: "3:45", or "1:02:03" from an hour. */
+internal fun lengthText(ms: Long): String {
+    val total = ms / 1000
+    val h = total / 3600
+    val m = total % 3600 / 60
+    val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
 /** The app's player, as Connect sees it. */
 internal class ConnectionConnectPlayer(private val c: PlayerConnection) : ConnectPlayer {
     override fun snapshot(): Snapshot? {
         val song = c.currentSong.value ?: return null
         val queue = c.queue.value
-        val track = CTrack.of(song)
+        // Many songs come without a length in their listing; the player's own, once it knows it,
+        // goes in its place, or other devices showed no seek bar and a click on it went to 0:00.
+        val track = CTrack.of(song)?.let { t ->
+            val (id, ms) = c.durationOf.value
+            if (t.length.isNullOrBlank() && id == song.videoId && ms > 0) t.copy(length = lengthText(ms)) else t
+        }
         return Snapshot(
             track = track,
             private = track == null,
