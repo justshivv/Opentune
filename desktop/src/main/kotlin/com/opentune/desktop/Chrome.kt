@@ -192,7 +192,7 @@ internal fun railAccent(): Color {
     return Color(theme.seedColor)
 }
 
-/** The chrome's type, in the theme's own face (DM Sans unless another is chosen). */
+/** The chrome's type, in the theme's own face (Outfit unless another is chosen). */
 private object ChromeType {
     @Composable fun body(size: Int = 13, line: Int = 16, weight: FontWeight = FontWeight.Normal): TextStyle =
         MaterialTheme.typography.bodyMedium.copy(fontSize = size.sp, lineHeight = line.sp, fontWeight = weight, letterSpacing = 0.sp)
@@ -206,9 +206,11 @@ internal object ChromeAnchor {
 // ---- The sidebar -------------------------------------------------------------
 
 /** How tall one row of the sidebar is, how far apart, and how far in from its sides. */
-private val CHROME_ROW = 42.dp
+private val CHROME_ROW = 40.dp
 private val CHROME_ROW_GAP = 2.dp
-private val CHROME_SIDE_INSET = 10.dp
+private val CHROME_SIDE_INSET = 12.dp
+/** The corners of a row and of the pill under the page showing. */
+private val CHROME_ROW_RADIUS = 12.dp
 
 /**
  * Where each of the sidebar's rows sits on the window, so the grey pill can slide from the row
@@ -264,7 +266,6 @@ internal fun Sidebar(
     // "/" or Ctrl F: the cursor goes into the field at the top, while it's there to take it.
     val asked by Shortcuts.searchFocus.collectAsState()
     LaunchedEffect(asked) { if (asked > 0 && !folded) runCatching { field.requestFocus() } }
-    val hairline = ChromeInk.hairline()
     val row = @Composable { icon: ImageVector, label: String, key: Any ->
         ChromeNavRow(icon, label, key, selected == key, folded, names, track) {
             onPick(key)
@@ -274,15 +275,10 @@ internal fun Sidebar(
     Box(Modifier.width(if (folded) SIDEBAR_FOLDED else SIDEBAR_WIDTH).fillMaxHeight()) {
         Box(
             // Drawn at its easing width, which can run past the room it has while it folds; the page
-            // slides along beside it rather than being laid out again on every frame.
+            // slides along beside it rather than being laid out again on every frame. No line where it
+            // meets the page: its own slightly deeper tone is the edge.
             Modifier.wrapContentWidth(Alignment.Start, unbounded = true).width(drawn).fillMaxHeight()
                 .chromeSidebarSurface(haze)
-                // The 1px hairline where the sidebar meets the page.
-                .drawWithContent {
-                    drawContent()
-                    val w = 1.dp.toPx()
-                    drawRect(hairline, Offset(size.width - w, 0f), Size(w, size.height))
-                }
                 .onGloballyPositioned { track.origin = it.positionInWindow() }
                 .semantics { contentDescription = "Main" },
         ) {
@@ -296,28 +292,30 @@ internal fun Sidebar(
                         WindowButtons(Modifier.align(if (folded) Alignment.Center else Alignment.CenterStart).padding(start = if (folded) 0.dp else 16.dp))
                     }
                 } else {
-                    Box(Modifier.fillMaxWidth().height(12.dp).windowDrag())
+                    Box(Modifier.fillMaxWidth().height(10.dp).windowDrag())
                 }
+                // NepTune's mark and name, which go Home; folded, the mark alone in the middle of the rail.
+                ChromeWordmark(folded, fold, names) { onPick(Tab.HOME) }
                 ChromeSearchField(
                     query, onQuery, onSearch, folded, fold, names, field,
                     Modifier.padding(horizontal = 12.dp),
                     onOpen = { onPick(Tab.SEARCH) },
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(14.dp))
                 Column(Modifier.padding(horizontal = CHROME_SIDE_INSET).selectableGroup(), verticalArrangement = Arrangement.spacedBy(CHROME_ROW_GAP)) {
                     row(Icons.Outlined.Home, "Home", Tab.HOME)
                     row(Icons.Outlined.Explore, "Explore", Tab.NEW)
                     row(Icons.Outlined.LibraryMusic, "Library", Tab.LIBRARY)
                     row(Icons.Outlined.Search, "Search", Tab.SEARCH)
                 }
-                ChromeDivider()
+                ChromeGroupLabel("Your music", names, fold)
                 Column(Modifier.padding(horizontal = CHROME_SIDE_INSET).selectableGroup(), verticalArrangement = Arrangement.spacedBy(CHROME_ROW_GAP)) {
                     row(Icons.Outlined.History, "History", Shelf.RECENT)
                     row(Icons.Outlined.FavoriteBorder, "Liked songs", Shelf.LIKED)
                     row(if (playlists.isEmpty()) Icons.Rounded.Add else Icons.AutoMirrored.Outlined.QueueMusic, if (playlists.isEmpty()) "New playlist" else "Playlists", Shelf.PLAYLISTS)
                     row(Icons.Outlined.Groups, "Listen together", Tab.TOGETHER)
                 }
-                if (playlists.isNotEmpty()) ChromeDivider(Modifier.graphicsLayer { alpha = 1f - fold })
+                if (playlists.isNotEmpty()) ChromeGroupLabel("Playlists", names, fold, Modifier.graphicsLayer { alpha = 1f - fold })
                 // Each playlist has the same glyph, so the folded rail leaves them out.
                 LazyColumn(
                     Modifier.weight(1f).fillMaxWidth().selectableGroup().onGloballyPositioned { track.list = it.boundsInWindow() },
@@ -339,21 +337,20 @@ internal fun Sidebar(
                         }
                     }
                 }
-                Box(Modifier.fillMaxWidth().height(1.dp).background(hairline))
                 // Settings, always in reach, and the button that folds the sidebar.
                 if (!folded) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = CHROME_SIDE_INSET, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = CHROME_SIDE_INSET, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { row(Icons.Outlined.Settings, "Settings", Tab.SETTINGS) }
                         Spacer(Modifier.width(4.dp))
                         HoverIcon(
-                            Icons.AutoMirrored.Rounded.MenuOpen, "Collapse sidebar", size = 34.dp, iconSize = 18.dp, shape = RoundedCornerShape(8.dp),
+                            Icons.AutoMirrored.Rounded.MenuOpen, "Collapse sidebar", size = 36.dp, iconSize = 18.dp, shape = RoundedCornerShape(CHROME_ROW_RADIUS),
                             modifier = Modifier.graphicsLayer { alpha = names }, onClick = onFold,
                         )
                     }
                 } else {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = CHROME_SIDE_INSET, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(CHROME_ROW_GAP)) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = CHROME_SIDE_INSET, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(CHROME_ROW_GAP)) {
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            HoverIcon(Icons.Rounded.Menu, "Expand sidebar", size = 38.dp, iconSize = 18.dp, shape = RoundedCornerShape(8.dp), onClick = onFold)
+                            HoverIcon(Icons.Rounded.Menu, "Expand sidebar", size = 36.dp, iconSize = 18.dp, shape = RoundedCornerShape(CHROME_ROW_RADIUS), onClick = onFold)
                         }
                         row(Icons.Outlined.Settings, "Settings", Tab.SETTINGS)
                     }
@@ -363,20 +360,58 @@ internal fun Sidebar(
     }
 }
 
-/** A hairline between the sidebar's groups, as wide as its rows. */
+/**
+ * A group's name over its rows, small and quiet in sentence case, with room above it: the
+ * groups read as groups without lines between them. Folded, the name fades and its room shrinks
+ * to a short gap between the icons.
+ */
 @Composable
-private fun ChromeDivider(modifier: Modifier = Modifier) {
-    Box(modifier.padding(horizontal = CHROME_SIDE_INSET + 4.dp, vertical = 10.dp).fillMaxWidth().height(1.dp).background(ChromeInk.hairline()))
+private fun ChromeGroupLabel(label: String, names: Float, fold: Float, modifier: Modifier = Modifier) {
+    Box(
+        modifier.fillMaxWidth().height(lerp(42.dp, 14.dp, fold)).padding(start = CHROME_SIDE_INSET + 14.dp, end = CHROME_SIDE_INSET, bottom = 6.dp),
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        Text(
+            label, maxLines = 1, softWrap = false, color = ChromeInk.secondary(),
+            style = ChromeType.body(12, 16, FontWeight.SemiBold),
+            modifier = Modifier.graphicsLayer { alpha = names }.semantics { heading() },
+        )
+    }
+}
+
+/** NepTune's mark and name at the top of the sidebar; it goes Home. Folded, the mark alone, centred in the rail. */
+@Composable
+private fun ChromeWordmark(folded: Boolean, fold: Float, names: Float, onHome: () -> Unit) {
+    val hover = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(CHROME_ROW_RADIUS)
+    Box(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = CHROME_SIDE_INSET), contentAlignment = Alignment.CenterStart) {
+        Row(
+            Modifier.height(40.dp).pressGive(hover).clip(shape).hoverable(hover)
+                .clickable(interactionSource = hover, indication = FocusRing(shape), role = Role.Button, onClick = onHome)
+                .semantics { contentDescription = "NepTune, Home" }
+                .padding(start = lerp(10.dp, 11.dp, fold), end = if (folded) 11.dp else 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(26.dp).clip(RoundedCornerShape(8.dp)).background(keyColour()), contentAlignment = Alignment.Center) {
+                LogoMark(18.dp, MaterialTheme.colorScheme.onPrimary)
+            }
+            if (!folded) Text(
+                "NepTune", maxLines = 1, softWrap = false, color = MaterialTheme.colorScheme.onSurface,
+                style = ChromeType.body(18, 22, FontWeight.Bold).copy(letterSpacing = (-0.2).sp),
+                modifier = Modifier.padding(start = 10.dp).graphicsLayer { alpha = names },
+            )
+        }
+    }
 }
 
 /**
- * The grey pill under the page showing. Picking another row slides it there over 340ms, its
+ * The pill under the page showing, a soft wash of the key colour. Picking another row slides it there over 340ms, its
  * height and width easing too; with nothing in the sidebar showing (an album opened), it fades.
  * Under a playlist, it's cut to the playlists' list, so it scrolls out of sight with its row.
  */
 @Composable
 private fun ChromePill(track: ChromePillTrack, selected: Any?, still: Boolean) {
-    val fill = ChromeInk.pill()
+    val fill = selectedFill()
     val present = selected != null && track.rows[selected] != null
     val shown by animateFloatAsState(if (present) 1f else 0f, tween(if (still) 0 else 160), label = "pill shown")
     // Where this slide starts, read as the choice changes, so the first frame of it is already right.
@@ -395,7 +430,7 @@ private fun ChromePill(track: ChromePillTrack, selected: Any?, still: Boolean) {
             } ?: return@drawBehind
             track.drawn = rect
             val local = rect.translate(-track.origin)
-            val r = CornerRadius(8.dp.toPx())
+            val r = CornerRadius(CHROME_ROW_RADIUS.toPx())
             val ink = fill.copy(alpha = fill.alpha * shown)
             val cut = track.list?.takeIf { selected is PlaylistKey || selected is AccountPlaylistKey }?.translate(-track.origin)
             if (cut != null) clipRect(cut.left, cut.top, cut.right, cut.bottom) { drawRoundRect(ink, local.topLeft, local.size, r) }
@@ -425,9 +460,9 @@ private fun ChromeNavRow(
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     val ink by animateColorAsState(if (selected || hovered) MaterialTheme.colorScheme.onSurface else ChromeInk.idle(), tween(160), label = "side ink")
-    val wash by animateColorAsState(if (hovered && !selected) ChromeInk.hover() else ChromeInk.hover().copy(alpha = 0f), tween(if (hovered) 0 else 150), label = "side wash")
+    val wash by animateColorAsState(if (hovered && !selected) ChromeInk.hover() else ChromeInk.hover().copy(alpha = 0f), tween(if (hovered) 90 else 180), label = "side wash")
     DisposableEffect(key) { onDispose { track.rows.remove(key) } }
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(CHROME_ROW_RADIUS)
     val body = @Composable {
         Row(
             Modifier.fillMaxWidth().height(CHROME_ROW)
@@ -439,13 +474,13 @@ private fun ChromeNavRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = ink, modifier = Modifier.size(iconSize))
+                Icon(icon, null, tint = if (selected) keyColour() else ink, modifier = Modifier.size(iconSize))
             }
             Spacer(Modifier.width(12.dp))
             // Folded, the name only fades: it stays for screen readers, and the tooltip names the icon.
             Text(
                 label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, color = ink,
-                style = ChromeType.body(15, 20, if (selected) FontWeight.Medium else FontWeight.Normal),
+                style = ChromeType.body(14, 20, if (selected) FontWeight.SemiBold else FontWeight.Medium),
                 modifier = Modifier.graphicsLayer { alpha = names },
             )
         }
@@ -485,7 +520,7 @@ private fun ChromeSearchField(
 ) {
     val ink = MaterialTheme.colorScheme.onSurface
     val muted = ChromeInk.secondary()
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(CHROME_ROW_RADIUS)
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     var focused by remember { mutableStateOf(false) }
@@ -531,13 +566,13 @@ private fun ChromeSearchField(
 // ---- The player bar ----------------------------------------------------------
 
 /**
- * Across the top of the page, 64dp, over what scrolls under it: OpenTune's mark (it goes Home),
- * then back, shuffle, previous, play, next and repeat as plain icons; the song in the middle
- * in a wide box (cover flush at its left, the names centred, a thin line along its foot that
+ * Across the top of the page, 64dp, over what scrolls under it: back, then shuffle, previous,
+ * play (a solid disc), next and repeat, every one a 36dp button; the song in the middle in a
+ * rounded pill (its cover inset at the left, the names centred, a slim line along its foot that
  * seeks; click it for the full player); then the speaker and a slim volume slider, where the
  * sound goes, the lyrics, Up next and your account's picture, which opens the account menu.
- * As the bar narrows, the slider goes first, then shuffle and repeat, then the mark and the
- * output button, so the song keeps its room.
+ * As the bar narrows, the slider goes first, then shuffle and repeat, then the output button,
+ * so the song keeps its room. NepTune's mark is at the top of the sidebar.
  */
 @Composable
 internal fun TopBar(
@@ -550,7 +585,6 @@ internal fun TopBar(
     modifier: Modifier = Modifier,
     /** Whether the window has room for the column beside the page; without it, lyrics open the player and Up next its page. */
     panelRoom: Boolean = true,
-    onHome: () -> Unit = {},
     onQueuePage: () -> Unit = {},
     onAccount: () -> Unit = {},
     accountOpen: Boolean = false,
@@ -584,23 +618,18 @@ internal fun TopBar(
             Modifier.fillMaxSize().padding(top = DesktopWindow.topInset).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (roomy) {
-                ChromeLogoButton(onHome)
-                Spacer(Modifier.width(14.dp))
-            }
+            // Back stands apart from the music's own controls.
+            ChromeBarIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", enabled = canGoBack, onClick = onBack)
+            Spacer(Modifier.width(if (roomy) 14.dp else 6.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(CHROME_ICON_GAP)) {
-                ChromeBarIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", enabled = canGoBack, onClick = onBack)
-                if (full) ChromeBarIcon(Icons.Rounded.Shuffle, if (shuffled) "Shuffle on" else "Shuffle", enabled = has, lit = shuffled, onClick = Player::toggleShuffle)
+                if (full) ChromeBarIcon(Icons.Rounded.Shuffle, if (shuffled) "Shuffle on" else "Shuffle", enabled = has, lit = shuffled, iconSize = 18.dp, onClick = Player::toggleShuffle)
                 ChromeBarIcon(Icons.Rounded.SkipPrevious, "Previous", enabled = has, iconSize = 22.dp, onClick = Player::previous)
-                ChromeBarButton(if (playing) "Pause" else "Play", enabled = has, onClick = Player::toggle) { ink ->
-                    if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurface)
-                    else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = ink, modifier = Modifier.size(26.dp))
-                }
+                ChromePlayButton(playing, loading, has)
                 ChromeBarIcon(Icons.Rounded.SkipNext, "Next", enabled = has, iconSize = 22.dp, onClick = Player::next)
                 if (full) ChromeBarIcon(
                     if (repeat == Player.Repeat.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                     when (repeat) { Player.Repeat.OFF -> "Repeat off"; Player.Repeat.ALL -> "Repeat all"; Player.Repeat.ONE -> "Repeat this song" },
-                    enabled = has, lit = repeat != Player.Repeat.OFF, onClick = Player::cycleRepeat,
+                    enabled = has, lit = repeat != Player.Repeat.OFF, iconSize = 18.dp, onClick = Player::cycleRepeat,
                 )
             }
             // The song, centred in what's left between the controls either side.
@@ -628,27 +657,41 @@ internal fun TopBar(
     }
 }
 
-/** How far apart the bar's icons are: 32dp places with 8dp between, so 20dp glyphs stand about 20dp apart. */
-private val CHROME_ICON_GAP = 8.dp
+/** How far apart the bar's buttons are: 36dp discs with 4dp between, so 20dp glyphs stand about 20dp apart. */
+private val CHROME_ICON_GAP = 4.dp
 
-/** OpenTune's wave at the bar's left end; it goes Home. */
+/** Every button on the bar is this size, its glyph 20dp (22 for previous and next), so they line up and are as easy to hit. */
+private val CHROME_HIT = 36.dp
+
+/**
+ * Play and pause, the one solid thing on the bar: a disc in the page's ink with the page's colour
+ * on it, a touch lighter under the pointer, giving a little when pressed; a spinner while loading.
+ */
 @Composable
-private fun ChromeLogoButton(onHome: () -> Unit) {
+private fun ChromePlayButton(playing: Boolean, loading: Boolean, enabled: Boolean) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
-    val ink by animateColorAsState(MaterialTheme.colorScheme.onSurface.copy(alpha = if (hovered) 1f else 0.92f), tween(150), label = "logo ink")
+    val ink = MaterialTheme.colorScheme.onSurface
+    val page = MaterialTheme.colorScheme.background
+    val fill by animateColorAsState(
+        when { !enabled -> ink.copy(alpha = 0.18f); hovered -> androidx.compose.ui.graphics.lerp(ink, page, 0.12f); else -> ink },
+        tween(150), label = "play fill",
+    )
     Box(
-        Modifier.size(34.dp).pressGive(hover).clip(RoundedCornerShape(8.dp)).hoverable(hover)
-            .clickable(interactionSource = hover, indication = FocusRing(RoundedCornerShape(8.dp)), role = Role.Button, onClick = onHome)
-            .semantics { contentDescription = "OpenTune, Home" },
+        Modifier.size(CHROME_HIT).pressGive(hover, enabled).clip(CircleShape).background(fill).hoverable(hover)
+            .clickable(enabled = enabled, interactionSource = hover, indication = FocusRing(CircleShape), role = Role.Button, onClick = Player::toggle)
+            .semantics { contentDescription = if (playing) "Pause" else "Play" },
         contentAlignment = Alignment.Center,
-    ) { LogoMark(26.dp, ink) }
+    ) {
+        if (loading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = page)
+        else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = if (enabled) page else ink.copy(alpha = 0.4f), modifier = Modifier.size(22.dp))
+    }
 }
 
 /**
- * A plain icon on the bar, with no circle behind it: a grey-white that turns white under the
- * pointer and gives a little when pressed; tinted the key colour when it's a switch that's on,
- * with a small dot under it; faded while it can't be used.
+ * A plain icon on the bar: a grey-white that turns to the full ink under the pointer with a soft
+ * disc coming up behind it, giving a little when pressed; tinted the key colour on a faint disc
+ * of it when it's a switch that's on; faded while it can't be used.
  */
 @Composable
 private fun ChromeBarButton(label: String, enabled: Boolean = true, lit: Boolean = false, onClick: () -> Unit, content: @Composable (Color) -> Unit) {
@@ -664,16 +707,20 @@ private fun ChromeBarButton(label: String, enabled: Boolean = true, lit: Boolean
         },
         tween(150), label = "bar ink",
     )
-    val shape = RoundedCornerShape(8.dp)
+    val wash by animateColorAsState(
+        when {
+            lit && enabled -> key.copy(alpha = if (hovered) 0.22f else 0.14f)
+            hovered && enabled -> ChromeInk.hover().copy(alpha = ChromeInk.hover().alpha * 1.8f)
+            else -> Color.Transparent
+        },
+        tween(150), label = "bar wash",
+    )
     Box(
-        Modifier.size(32.dp).pressGive(hover, enabled).clip(shape).hoverable(hover)
-            .clickable(enabled = enabled, interactionSource = hover, indication = FocusRing(shape), role = Role.Button, onClick = onClick)
+        Modifier.size(CHROME_HIT).pressGive(hover, enabled).clip(CircleShape).background(wash).hoverable(hover)
+            .clickable(enabled = enabled, interactionSource = hover, indication = FocusRing(CircleShape), role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
-    ) {
-        content(ink)
-        if (lit) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 1.dp).size(3.dp).clip(CircleShape).background(ink))
-    }
+    ) { content(ink) }
 }
 
 @Composable
@@ -804,17 +851,23 @@ internal fun ChromeAccountPicture(url: String?, name: String?, size: Dp) {
     }
 }
 
+/** The now-playing pill: how tall, how round, and how far its cover sits in from its edges. */
+private val LCD_HEIGHT = 52.dp
+private val LCD_RADIUS = 16.dp
+private val LCD_INSET = 6.dp
+
 /**
- * The song in the middle of the bar: a box up to 650dp wide and 56dp tall with 6dp corners on a
- * faint white fill. Playing, the cover sits square and flush at its left (dimmed under the
- * pointer, with the sign that it opens the full player), the title over the artist centred in
- * the rest, and a thin line along its foot that seeks; with the pointer on the line the names
- * soften and the time gone and the time left show at its ends. A heart comes up at the right
- * end under the pointer, and stays on a liked song. Idle, a music note in the middle.
+ * The song in the middle of the bar: a pill up to 650dp wide and 52dp tall with 16dp corners on a
+ * faint fill with a hairline rim. Playing, the cover sits inset at its left with its own rounded
+ * corners (dimmed under the pointer, with the sign that it opens the full player), the title over
+ * the artist centred in the rest, and a slim rounded line along its foot that seeks; with the
+ * pointer on the line the names soften and the time gone and the time left show at its ends. A
+ * heart comes up at the right end under the pointer, and stays on a liked song. Idle, a music
+ * note in the middle.
  */
 @Composable
 private fun ChromeLcd(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier) {
-    val shape = RoundedCornerShape(6.dp)
+    val shape = RoundedCornerShape(LCD_RADIUS)
     val error by Player.error.collectAsState()
     val loading by Player.loading.collectAsState()
     val ui by AppSettings.ui.collectAsState()
@@ -827,7 +880,7 @@ private fun ChromeLcd(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier)
     val base = ChromeInk.lcd()
     val fill by animateColorAsState(base.copy(alpha = base.alpha + if (hovered && song != null) 0.025f else 0f), tween(150), label = "lcd fill")
     BoxWithConstraints(
-        modifier.height(56.dp).clip(shape).background(fill)
+        modifier.height(LCD_HEIGHT).clip(shape).background(fill).border(0.75.dp, glassEdge(), shape)
             .hoverable(hover)
             .clickable(enabled = song != null, interactionSource = hover, indication = FocusRing(shape), role = Role.Button, onClickLabel = "Open the player", onClick = onOpenPlayer)
             .semantics { contentDescription = song?.let { "${it.title}, ${it.artist}" } ?: "Nothing playing" },
@@ -845,7 +898,7 @@ private fun ChromeLcd(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier)
         val roomy = maxWidth >= 300.dp
         val heart by animateFloatAsState(if (roomy && (hovered || isLiked)) 1f else 0f, tween(150), label = "lcd heart")
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(56.dp)) {
+            Box(Modifier.padding(start = LCD_INSET).size(LCD_HEIGHT - LCD_INSET * 2).clip(RoundedCornerShape(LCD_RADIUS - LCD_INSET))) {
                 AnimatedContent(song.thumbnailUrl, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(160)) }, label = "bar cover") { url ->
                     Artwork(url, Modifier.fillMaxSize(), RectangleShape)
                 }
@@ -895,14 +948,14 @@ private fun ChromeLcd(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier)
                 LikeButton(isLiked, { Library.setLiked(song, !isLiked) }, idle = ChromeInk.secondary(), size = 18.dp)
             }
         }
-        ChromeLcdLine(progress, Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 56.dp), onLine) { scrub = it }
+        ChromeLcdLine(progress, Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = LCD_HEIGHT + 8.dp, end = 14.dp), onLine) { scrub = it }
         if (soften > 0f) {
             val at = scrub?.let { (it * progress.durationMs).toLong() } ?: progress.positionMs
             val timeStyle = ChromeType.body(11, 13, FontWeight.SemiBold)
-            Text(Time.format(at), style = timeStyle, modifier = Modifier.align(Alignment.BottomStart).padding(start = 66.dp, bottom = 9.dp).graphicsLayer { alpha = soften })
+            Text(Time.format(at), style = timeStyle, modifier = Modifier.align(Alignment.BottomStart).padding(start = LCD_HEIGHT + 8.dp, bottom = 10.dp).graphicsLayer { alpha = soften })
             Text(
                 "-" + Time.format((progress.durationMs - at).coerceAtLeast(0)), style = timeStyle,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 9.dp).graphicsLayer { alpha = soften },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 10.dp).graphicsLayer { alpha = soften },
             )
         }
     }
@@ -919,8 +972,10 @@ private fun ChromeLcdLine(progress: Progress, modifier: Modifier, hover: Mutable
     var dragging by remember { mutableStateOf<Float?>(null) }
     val hovered by hover.collectIsHoveredAsState()
     val thick by animateFloatAsState(if (hovered || dragging != null) 1f else 0.5f, tween(150, easing = Motion.Emphasized), label = "lcd line")
-    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
-    val played = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    val played by animateColorAsState(
+        if (hovered || dragging != null) keyColour() else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f), tween(150), label = "lcd played",
+    )
     val shown = dragging ?: progress.fraction()
     fun seekTo(f: Float) { if (progress.durationMs > 0) Player.seekTo((f.coerceIn(0f, 1f) * progress.durationMs).toLong()) }
     fun scrub(f: Float?) { dragging = f; onScrub(f) }
@@ -936,10 +991,12 @@ private fun ChromeLcdLine(progress: Progress, modifier: Modifier, hover: Mutable
                 ) { change, _ -> scrub((change.position.x / width).coerceIn(0f, 1f)) }
             }
             .drawBehind {
-                val h = 4.dp.toPx() * thick
-                val y = size.height - h
-                drawRect(track, Offset(0f, y), Size(size.width, h))
-                drawRect(played, Offset(0f, y), Size(size.width * shown.coerceIn(0f, 1f), h))
+                // A rounded line a few dp above the pill's foot, 3dp thick and 5dp under the pointer.
+                val h = 5.dp.toPx() * (0.4f + 0.6f * thick)
+                val y = size.height - 4.dp.toPx() - h
+                val r = CornerRadius(h / 2)
+                drawRoundRect(track, Offset(0f, y), Size(size.width, h), r)
+                drawRoundRect(played, Offset(0f, y), Size(size.width * shown.coerceIn(0f, 1f), h), r)
             },
     )
 }
@@ -978,8 +1035,13 @@ internal fun RightPanel(
     val ui by AppSettings.ui.collectAsState()
     val lift = with(LocalDensity.current) { 10.dp.toPx() }
     val edge = ChromeInk.hairline()
+    // The column takes the playing cover's colour: a wash from its top that eases out down its length.
+    val surface = MaterialTheme.colorScheme.surfaceContainerLow
+    val cover = rememberCoverColor(song.thumbnailUrl, surface)
+    val wash by animateColorAsState(vivid(cover).copy(alpha = if (darkTheme()) 0.24f else 0.14f), tween(700), label = "panel wash")
     Column(
         Modifier.width(PANEL_WIDTH).fillMaxHeight().chromeSidebarSurface(haze)
+            .background(Brush.verticalGradient(0f to wash, 0.6f to wash.copy(alpha = wash.alpha * 0.35f), 1f to Color.Transparent))
             // The hairline where the glass meets the page.
             .drawBehind { drawRect(edge, size = androidx.compose.ui.geometry.Size(1.dp.toPx(), size.height)) }
             .padding(top = DesktopWindow.topInset)
@@ -1010,8 +1072,8 @@ private fun PanelSwitch(selected: SidePanel, modifier: Modifier, onPick: (SidePa
     val still = AppSettings.ui.collectAsState().value.reduceAnimation
     val at by animateFloatAsState(selected.ordinal.toFloat(), if (still) snap() else tween(340, easing = Motion.Settle), label = "switch thumb")
     val dark = darkTheme()
-    val thumb = if (dark) Color(0xFF4B4B50) else Color.White
-    BoxWithConstraints(modifier.height(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (dark) 0.10f else 0.07f)).padding(3.dp)) {
+    val thumb = if (dark) androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.onSurface, 0.12f) else Color.White
+    BoxWithConstraints(modifier.height(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (dark) 0.08f else 0.06f)).padding(3.dp)) {
         // Each section as wide as its name needs, so "Now playing" isn't squeezed into a third.
         val total = SWITCH_WEIGHTS.sum()
         val widths = SWITCH_WEIGHTS.map { maxWidth * (it / total) }
@@ -1087,10 +1149,13 @@ private fun UpNextPanel(queue: List<Song>, index: Int) {
                 Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(bottom = 80.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
             ) {
-                Text("Nothing in Up next", style = ChromeType.body(12, 16, FontWeight.SemiBold))
+                Box(Modifier.padding(bottom = 14.dp).size(56.dp).clip(CircleShape).background(key.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Rounded.QueueMusic, null, tint = key, modifier = Modifier.size(26.dp))
+                }
+                Text("Nothing in Up next", style = ChromeType.body(15, 20, FontWeight.Bold))
                 Text(
                     if (playback.autoplay) "AutoPlay will find similar music when this song ends." else "Songs you play next show here.",
-                    style = ChromeType.body(12, 16), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = ChromeType.body(13, 18), color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp),
                 )
             }
@@ -1194,12 +1259,19 @@ private fun UpNextRow(song: Song, at: Int, modifier: Modifier, lifted: Boolean) 
 private fun NowPlayingCards(song: Song, queue: List<Song>, index: Int, onLyrics: () -> Unit, onOpenArtist: (ShelfItem) -> Unit) {
     val base = MaterialTheme.colorScheme.surfaceContainer
     val colour = rememberCoverColor(song.thumbnailUrl, base)
+    val dark = darkTheme()
+    // Every card wears the cover's colour, not a flat grey: the lyrics deep in it under light text,
+    // the others a softer tint of it that the theme's own ink reads on.
+    val lyricsFill by animateColorAsState(
+        if (dark) tint(vivid(colour), base, 0.42f) else androidx.compose.ui.graphics.lerp(vivid(colour), Color.Black, 0.28f), tween(700), label = "lyrics card",
+    )
+    val cardFill by animateColorAsState(tint(vivid(colour), base, if (dark) 0.16f else 0.1f), tween(700), label = "panel card")
     val liked by LikedSongs.ids.collectAsState()
     val isLiked = song.videoId in liked
     val card = RoundedCornerShape(20.dp)
     LazyColumn(
         contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item(key = "cover") {
             Box(Modifier.fillMaxWidth().clip(card)) {
@@ -1216,12 +1288,12 @@ private fun NowPlayingCards(song: Song, queue: List<Song>, index: Int, onLyrics:
                 }
             }
         }
-        item(key = "lyrics") { LyricsPreview(song, tint(colour, base, 0.42f), onLyrics) }
-        item(key = "artist") { AboutArtist(song, onOpenArtist) }
+        item(key = "lyrics") { LyricsPreview(song, lyricsFill, onLyrics) }
+        item(key = "artist") { AboutArtist(song, cardFill, onOpenArtist) }
         val next = queue.drop(index + 1).take(4)
         if (next.isNotEmpty()) item(key = "next") {
-            Column(Modifier.fillMaxWidth().clip(card).background(quinaryFill()).padding(vertical = 10.dp)) {
-                Text("Next up", style = ChromeType.body(15, 20, FontWeight.SemiBold), modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            Column(Modifier.fillMaxWidth().clip(card).background(cardFill).padding(vertical = 12.dp)) {
+                Text("Next up", style = ChromeType.body(15, 20, FontWeight.Bold), modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 next.forEachIndexed { i, s ->
                     val hover = remember { MutableInteractionSource() }
                     Row(
@@ -1300,7 +1372,7 @@ private fun CardChip(text: String, onClick: () -> Unit, ink: Color = Color.White
 
 /** The artist: their photo, monthly listeners and the start of their story, and a way to their page. */
 @Composable
-private fun AboutArtist(song: Song, onOpenArtist: (ShelfItem) -> Unit) {
+private fun AboutArtist(song: Song, fill: Color, onOpenArtist: (ShelfItem) -> Unit) {
     val artistId = song.artistId
     val page by produceState<ArtistPage?>(null, artistId) {
         value = artistId?.let { id -> runCatching { InnertubeParser.parseArtistPage(Innertube.browse(id)) }.getOrNull() }
@@ -1313,7 +1385,7 @@ private fun AboutArtist(song: Song, onOpenArtist: (ShelfItem) -> Unit) {
         value = runCatching { com.opentune.data.covers.AppleArtistArtRepository.artFor(name, artistId ?: "", titles)?.heroUrl }.getOrNull()
     }
     val card = RoundedCornerShape(20.dp)
-    Column(Modifier.fillMaxWidth().clip(card).background(quinaryFill())) {
+    Column(Modifier.fillMaxWidth().clip(card).background(fill)) {
         Box(Modifier.fillMaxWidth().height(170.dp)) {
             Artwork(apple ?: page?.thumbnailUrl ?: song.thumbnailUrl, Modifier.fillMaxSize(), RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f))))
