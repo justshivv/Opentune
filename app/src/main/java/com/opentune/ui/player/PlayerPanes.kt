@@ -354,12 +354,12 @@ private fun QueueMenu(songs: List<Song>, canClear: Boolean, onClear: () -> Unit)
         }
         androidx.compose.material3.DropdownMenu(open, { open = false }, shape = RoundedCornerShape(20.dp)) {
             if (songs.isNotEmpty()) androidx.compose.material3.DropdownMenuItem(
-                text = { Text("Save queue as playlist") },
+                text = { Text(com.opentune.ui.theme.tr("Save queue as playlist")) },
                 leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.PlaylistAdd), null) },
                 onClick = { open = false; saving = songs },
             )
             if (clearable) androidx.compose.material3.DropdownMenuItem(
-                text = { Text("Clear Up next") },
+                text = { Text(com.opentune.ui.theme.tr("Clear Up next")) },
                 leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.DeleteSweep), null) },
                 onClick = { open = false; onClear() },
             )

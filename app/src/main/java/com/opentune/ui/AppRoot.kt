@@ -496,14 +496,14 @@ fun AppRoot(vm: PlayerViewModel) {
                 kotlinx.coroutines.withTimeoutOrNull(5_000) { com.opentune.data.library.LibraryStore.ready.first { it } }
                 val liked = com.opentune.data.library.LibraryStore.liked.value.map { it.toSong() }
                 if (liked.isNotEmpty()) { vm.playAll(liked, 0, true, "Liked Music"); playerOpen = true }
-                else com.opentune.data.Pills.info("No liked songs yet")
+                else com.opentune.data.Pills.info(com.opentune.i18n.Tr.t("No liked songs yet"))
             }
             is LinkTarget.ShuffleDownloads -> {
                 vm.player.connected.first { it }
                 val ready = com.opentune.data.download.Downloads.entries.value.values
                     .filter { it.state == com.opentune.data.download.DownloadState.DONE }.map { it.song.toSong() }
                 if (ready.isNotEmpty()) { vm.playAll(ready, 0, true, "Downloads"); playerOpen = true }
-                else com.opentune.data.Pills.info("No downloaded songs yet")
+                else com.opentune.data.Pills.info(com.opentune.i18n.Tr.t("No downloaded songs yet"))
             }
             is LinkTarget.PlaySearch -> {
                 vm.player.connected.first { it }
