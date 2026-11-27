@@ -421,12 +421,12 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Shortcut(ImageVector.vectorResource(AppIcons.Favorite), "Liked", com.opentune.i18n.Tr.f("{0} songs", liked.size), nav.liked, Modifier.weight(1f))
-                    Shortcut(ImageVector.vectorResource(AppIcons.Download), "Downloads", if (doneCount == 0) "Offline songs" else com.opentune.i18n.Tr.f("{0} songs", doneCount), nav.downloads, Modifier.weight(1f))
+                    Shortcut(ImageVector.vectorResource(AppIcons.Favorite), "Liked Music",com.opentune.i18n.Tr.f("{0} songs", liked.size), nav.liked, Modifier.weight(1f), listOf(Color(0xFFF07CA0), Color(0xFFCE3E6C)))
+                    Shortcut(ImageVector.vectorResource(AppIcons.Download), "Downloads", if (doneCount == 0) "Offline songs" else com.opentune.i18n.Tr.f("{0} songs", doneCount), nav.downloads, Modifier.weight(1f), listOf(Color(0xFF4A90F5), Color(0xFF2A4BD7)))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Shortcut(ImageVector.vectorResource(AppIcons.LibraryMusic), "On this phone", localCount?.takeIf { it > 0 }?.let { com.opentune.i18n.Tr.f("{0} songs", it) } ?: "Local files", nav.local, Modifier.weight(1f))
-                    Shortcut(ImageVector.vectorResource(AppIcons.History), "Replay", "Your top songs", nav.replay, Modifier.weight(1f))
+                    Shortcut(ImageVector.vectorResource(AppIcons.LibraryMusic), "On this phone", localCount?.takeIf { it > 0 }?.let { com.opentune.i18n.Tr.f("{0} songs", it) } ?: "Local files", nav.local, Modifier.weight(1f), listOf(Color(0xFF15BFA8), Color(0xFF0A6E4F)))
+                    Shortcut(ImageVector.vectorResource(AppIcons.History), "Replay", "Your top songs", nav.replay, Modifier.weight(1f), listOf(Color(0xFFF7A83C), Color(0xFFE2572B)))
                 }
                 val server by Subsonic.server.collectAsState()
                 val room by com.opentune.data.together.Together.room.collectAsState()
@@ -437,6 +437,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         server?.let { it.url.substringAfter("://") } ?: "Subsonic, lossless",
                         nav.server,
                         Modifier.weight(1f),
+                        listOf(Color(0xFF8B5CF6), Color(0xFF5521A8)),
                     )
                     Shortcut(
                         ImageVector.vectorResource(AppIcons.Groups),
@@ -444,6 +445,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         room?.let { if (it.hosting) com.opentune.i18n.Tr.f("Your room · {0} in", it.members.size) else com.opentune.i18n.Tr.f("In {0}'s room", it.hostName ?: com.opentune.i18n.Tr.t("a friend")) } ?: com.opentune.i18n.Tr.t("Rooms with friends, in sync"),
                         nav.together,
                         Modifier.weight(1f),
+                        listOf(Color(0xFF3ED598), Color(0xFF0B7A44)),
                     )
                 }
                 // Live stations are on the Radio tab; with that tab turned off, they're reached from here.
@@ -456,9 +458,10 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         if (podcastShows.isEmpty()) com.opentune.i18n.Tr.t("Your shows and episodes") else com.opentune.i18n.Tr.f("{0} shows", podcastShows.size),
                         nav.podcasts,
                         Modifier.weight(1f),
+                        listOf(Color(0xFFCB6CE6), Color(0xFF7C2CBF)),
                     )
                     if (radioTab) androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-                    else Shortcut(ImageVector.vectorResource(AppIcons.Radio), "Radio", "Live stations", nav.radio, Modifier.weight(1f))
+                    else Shortcut(ImageVector.vectorResource(AppIcons.Radio), "Radio", "Live stations", nav.radio, Modifier.weight(1f), listOf(Color(0xFFF66D6D), Color(0xFFBE3455)))
                 }
             }
         }
@@ -939,27 +942,26 @@ private fun TileText(title: String, subtitle: String) {
     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
-/** One of the four library shortcuts: an accent badge, a name and a count. */
+/** One of the library shortcuts: a gradient of its own across the whole card, its icon over it, a name and a count. */
 @Composable
-private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier, logo: Int? = null) {
+private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier, gradient: List<Color>, logo: Int? = null) {
     Row(
         modifier
             .height(72.dp)
             .pressable(onClick, 0.96f)
             .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .background(androidx.compose.ui.graphics.Brush.linearGradient(gradient))
+            .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.08f), Color.Black.copy(alpha = 0.50f))))
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (logo != null) {
             // A service's own mark, in its own colours.
             androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(logo), null, Modifier.size(40.dp))
-        } else Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(MaterialTheme.colorScheme.primary), Alignment.Center) {
-            Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
-        }
+        } else Icon(icon, null, Modifier.size(27.dp), tint = Color.White)
         Column(Modifier.padding(start = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
