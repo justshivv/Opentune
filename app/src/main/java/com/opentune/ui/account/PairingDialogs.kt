@@ -20,7 +20,6 @@ import com.opentune.data.account.PairingExtras
 import com.opentune.data.account.PairingOffer
 import com.opentune.data.account.PairingReceiver
 import com.opentune.data.account.PairingSender
-import com.opentune.data.account.WebShare
 import com.opentune.data.account.WebShareOffer
 import com.opentune.data.discord.DiscordRpc
 import com.opentune.data.innertube.Innertube
@@ -44,18 +43,30 @@ object PairingLinks {
     val pendingWeb = MutableStateFlow<WebShareOffer?>(null)
     /** Why the last sign-in code scanned couldn't be used, until it's read. */
     val problem = MutableStateFlow<String?>(null)
+    /**
+     * The web player's codes already put away (signed in, cancelled or swiped down), by tag:
+     * the same link coming in again doesn't bring its sheet back. A fresh code has a new key,
+     * so a new tag.
+     */
+    private val doneWeb = object : LinkedHashMap<String, Unit>(16, .75f, false) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Unit>?) = size > 32
+    }
 
     fun receive(intent: Intent?): Boolean {
         val uri = intent?.data ?: return false
         val own = uri.scheme == "opentune" && uri.host == "pair"
         val site = uri.scheme == "https" && uri.host == "justshivv.github.io" && uri.path == "/Opentune/pair/"
+        if (!own && !site) return false
+        // Opened again from Recents, Android hands back the link the app was first opened
+        // with: a code already dealt with (or run out), not a new scan.
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return true
         if (own && uri.path == "/web") {
             val offer = runCatching { WebShareOffer.parse(uri.fragment.orEmpty()) }.getOrNull()
+            if (offer != null && synchronized(doneWeb) { offer.tag in doneWeb }) return true
             pendingWeb.value = offer
-            if (offer == null) problem.value = "That code from the web player has run out or didn't scan whole. Make a new one there and scan it again."
+            if (offer == null) problem.value = WebSignIn.EXPIRED
             return true
         }
-        if (!own && !site) return false
         val read = runCatching {
             PairingOffer.parse(uri.fragment.orEmpty(), take = uri.getQueryParameter("take"), also = uri.getQueryParameter("also"))
         }
@@ -67,7 +78,13 @@ object PairingLinks {
         return true
     }
     fun dismiss() { pending.value = null }
-    fun dismissWeb() { pendingWeb.value = null }
+
+    /** Puts [offer]'s sheet away for good: only a fresh code from the web player opens one again. */
+    fun dismissWeb(offer: WebShareOffer? = pendingWeb.value) {
+        if (offer == null) return
+        synchronized(doneWeb) { doneWeb[offer.tag] = Unit }
+        pendingWeb.compareAndSet(offer, null)
+    }
 }
 
 /** What the phone says when it couldn't sign a device in, in plain words for each reason. */
@@ -100,24 +117,45 @@ private fun names(kinds: Set<String>): String =
  * The phone's other sign-ins a code asked for, each a tick that starts on: nothing more than
  * the ticked ones leaves the phone, and only for this one scan.
  */
-private class ShareChoices(take: Set<String>, discord: DiscordRpc.Account?, lastFm: LastFm.Account?) {
-    val discordName = discord?.name?.takeIf { PairingExtras.DISCORD in take }
+private class ShareChoices(take: Set<String>, private val discordAccount: DiscordRpc.Account?, lastFm: LastFm.Account?) {
+    val hasDiscord = discordAccount != null && PairingExtras.DISCORD in take
+    /** Whose Discord it is, for its tick ([discordLabel]); null when there's nothing to name it by. */
+    val discordName = discordAccount?.takeIf { hasDiscord }?.let(::discordLabel)
     val lastFmName = lastFm?.user?.takeIf { PairingExtras.LASTFM in take && LastFm.shared() != null }
-    var discord by mutableStateOf(discordName != null)
+    var discord by mutableStateOf(hasDiscord)
     var lastFm by mutableStateOf(lastFmName != null)
-    val offered: Boolean get() = discordName != null || lastFmName != null
+    val offered: Boolean get() = hasDiscord || lastFmName != null
+    /** Something ticked to send. */
+    val any: Boolean get() = (discord && hasDiscord) || (lastFm && lastFmName != null)
 
     fun extras() = PairingExtras(
-        DiscordRpc.account.value?.token?.takeIf { discord && discordName != null }?.let(PairingExtras::Discord),
+        discordAccount?.token?.takeIf { discord && hasDiscord }?.let(PairingExtras::Discord),
         if (lastFm && lastFmName != null) LastFm.shared() else null,
     )
 }
 
+/**
+ * The phone's Discord account as its owner knows it: the display name with the @handle
+ * (only one of them when they're the same, or one is missing), or null with neither.
+ */
+internal fun discordLabel(account: DiscordRpc.Account): String? {
+    val name = account.name.trim()
+    val handle = account.username.trim().removePrefix("@")
+    return when {
+        handle.isEmpty() -> name.ifEmpty { null }
+        name.isEmpty() || name.equals(handle, ignoreCase = true) -> "@$handle"
+        else -> "$name · @$handle"
+    }
+}
+
 @Composable
-private fun rememberShareChoices(key: Any, take: Set<String>): ShareChoices {
-    val discord by DiscordRpc.account.collectAsState()
+private fun rememberShareChoices(
+    key: Any,
+    take: Set<String>,
+    discord: DiscordRpc.Account? = DiscordRpc.account.collectAsState().value,
+): ShareChoices {
     val lastFm by LastFm.account.collectAsState()
-    return remember(key, discord?.id, lastFm?.user) { ShareChoices(take, discord, lastFm) }
+    return remember(key, discord, lastFm?.user) { ShareChoices(take, discord, lastFm) }
 }
 
 @Composable
@@ -133,7 +171,10 @@ private fun AlsoShare(label: String, checked: Boolean, enabled: Boolean, onChang
 
 @Composable
 private fun ShareChoiceRows(choices: ShareChoices, enabled: Boolean) {
-    choices.discordName?.let { AlsoShare(com.opentune.i18n.Tr.f("Also sign in to Discord ({0})", it), choices.discord, enabled) { on -> choices.discord = on } }
+    if (choices.hasDiscord) {
+        val label = choices.discordName?.let { Tr.f("Also sign in to Discord ({0})", it) } ?: Tr.t("Also sign in to Discord")
+        AlsoShare(label, choices.discord, enabled) { on -> choices.discord = on }
+    }
     choices.lastFmName?.let { AlsoShare(com.opentune.i18n.Tr.f("Also sign in to Last.fm ({0})", it), choices.lastFm, enabled) { on -> choices.lastFm = on } }
 }
 
@@ -213,43 +254,48 @@ fun ConfirmPairing() {
  * only the integrations it asks for, sealed for the OpenTune extension in that browser.
  */
 @Composable
-private fun ConfirmWebShare() {
+internal fun ConfirmWebShare(
+    send: WebSender = WebSignIn.OVER_RELAYS,
+    discord: DiscordRpc.Account? = DiscordRpc.account.collectAsState().value,
+) {
     val offer by PairingLinks.pendingWeb.collectAsState()
     val current = offer ?: return
     val scope = rememberCoroutineScope()
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val choices = rememberShareChoices(current, current.take)
-    var busy by remember(current) { mutableStateOf(false) }
-    var status by remember(current) { mutableStateOf<String?>(null) }
-    FloatingCard(onDismiss = { if (!busy) PairingLinks.dismissWeb() }, title = "Sign in the web player") {
+    val sheet = remember(current) { WebSignIn(current, scope, send) }
+    val step by sheet.step.collectAsState()
+    val choices = rememberShareChoices(current, current.take, discord)
+    val sending = step == WebSignIn.Step.Sending
+    // A swipe down, back or a tap outside is Cancel, whatever the sheet is doing: never kept
+    // open (the card would come straight back), and the code isn't asked about again.
+    FloatingCard(onDismiss = sheet::cancel, title = "Sign in the web player") {
         Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Share this phone's sign-ins with the NepTune web player? Approve only if you just scanned the code in your own browser.")
-            if (choices.offered) Column { ShareChoiceRows(choices, enabled = !busy) }
-            else Text("This phone isn't signed in to anything the web player asked for. Sign in to Discord on this phone first.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                "Sealed so that only the NepTune extension in that browser can open it. The web page and the relays that carry it see none of it.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            status?.let { Text(it) }
-            if (!busy && choices.offered) SheetButton(
-                "Sign it in", tone = SheetTone.Primary,
-                enabled = (choices.discord && choices.discordName != null) || (choices.lastFm && choices.lastFmName != null),
-                onClick = {
-                    busy = true; status = "Connecting securely…"
-                    scope.launch {
-                        try {
-                            val extras = choices.extras()
-                            val took = withContext(Dispatchers.IO) { WebShare.send(current, extras) }
-                            if (took.isEmpty()) status = "The web player didn't take it. Make a new code there and try again."
-                            else { Pills.done(com.opentune.i18n.Tr.f("The web player is signed in to {0}.", names(took)), context); PairingLinks.dismissWeb() }
-                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                        catch (_: Exception) { status = "Couldn't reach the web player. Keep its page open, make a fresh code there and scan it again." }
-                        finally { busy = false }
+            when (val now = step) {
+                is WebSignIn.Step.Done -> {
+                    val card = com.opentune.ui.components.LocalFloatingCard.current
+                    LaunchedEffect(now) {
+                        kotlinx.coroutines.delay(WebSignIn.DONE_SHOWN_MS)
+                        card?.close() ?: sheet.cancel()
                     }
-                },
-            )
-            if (!busy) SheetButton("Cancel", onClick = { PairingLinks.dismissWeb() }, closes = true)
+                    Text("Signed in", style = MaterialTheme.typography.titleMedium)
+                    Text(Tr.f("The web player is signed in to {0}.", names(now.took)), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    SheetButton("Done", onClick = sheet::cancel, tone = SheetTone.Primary, closes = true)
+                }
+                else -> {
+                    Text("Share this phone's sign-ins with the NepTune web player? Approve only if you just scanned the code in your own browser.")
+                    if (choices.offered) Column { ShareChoiceRows(choices, enabled = !sending) }
+                    else Text("This phone isn't signed in to anything the web player asked for. Sign in to Discord on this phone first.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "Sealed so that only the NepTune extension in that browser can open it. The web page and the relays that carry it see none of it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (sending) Text("Connecting securely…")
+                    (now as? WebSignIn.Step.Failed)?.let { Text(it.message) }
+                    val canSend = choices.offered && (now == WebSignIn.Step.Asking || (now is WebSignIn.Step.Failed && now.retry))
+                    if (canSend) SheetButton("Sign it in", tone = SheetTone.Primary, enabled = choices.any, onClick = { sheet.approve(choices.extras()) })
+                    SheetButton(if (now is WebSignIn.Step.Failed && !now.retry) "OK" else "Cancel", onClick = sheet::cancel, closes = true)
+                }
+            }
         }
     }
 }

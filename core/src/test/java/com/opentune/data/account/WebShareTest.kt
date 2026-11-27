@@ -54,10 +54,10 @@ class WebShareTest {
     }
 
     /** Relays that hand every event to an extension stand-in, which answers as the real one does. */
-    private class FakeRelays(private val extension: (NostrEvent) -> NostrEvent?) : RoomTransport {
+    private class FakeRelays(relays: Int = 1, private val extension: (NostrEvent) -> NostrEvent?) : RoomTransport {
         private val _events = MutableSharedFlow<NostrEvent>(extraBufferCapacity = 16)
         override val events: SharedFlow<NostrEvent> = _events
-        override val connected: StateFlow<Int> = MutableStateFlow(1)
+        override val connected: StateFlow<Int> = MutableStateFlow(relays)
         val published = mutableListOf<NostrEvent>()
         var closed = false
         override fun start() {}
@@ -83,12 +83,45 @@ class WebShareTest {
             val ack = ShareCrypto.seal(key, "discord".toByteArray(), "ack")
             NostrEvent.signed(Schnorr.newPrivateKey(), WebShare.KIND, event.tags, buildJsonObject { put("a", PairingCrypto.encode(ack)) }.toString())
         }
-        val extras = PairingExtras(PairingExtras.Discord("mfa.NotARealToken_0123456789-abcdef"), PairingExtras.LastFm("abc", "shiv"))
+        val extras = PairingExtras(PairingExtras.Discord("mfa.NotARealToken_0123456789-abcdef"), PairingExtras.LastFm("abc", "wrenfield"))
         val took = WebShare.send(offer, extras) { _: JsonObject -> relays }
         assertEquals(setOf("discord"), took)
         assertEquals("mfa.NotARealToken_0123456789-abcdef", opened?.discord?.token)
         assertEquals(null, opened?.lastFm) // the web player didn't ask for Last.fm, so it never left the phone
         assertTrue(relays.closed)
         assertTrue(relays.published.none { it.content.contains("NotARealToken") })
+    }
+
+    private fun freshOffer(): WebShareOffer {
+        val extPub = ShareCrypto.raw(ShareCrypto.keyPair().public as ECPublicKey)
+        return WebShareOffer.parse(PairingCrypto.encode("w1|${System.currentTimeMillis() + 60_000}|${PairingCrypto.encode(extPub)}|discord".toByteArray()))
+    }
+
+    private val token = PairingExtras(PairingExtras.Discord("mfa.NotARealToken_0123456789-abcdef"))
+
+    @Test fun sentButNeverAnsweredIsUnconfirmedNotACancel() = runBlocking {
+        val relays = FakeRelays { null }
+        val failure = runCatching { WebShare.send(freshOffer(), token, waitMs = 300) { relays } }.exceptionOrNull()
+        // Not a CancellationException (what withTimeout throws), which the sheet passed on and never showed.
+        assertTrue(failure.toString(), failure is WebShare.Unconfirmed)
+        assertTrue(relays.published.isNotEmpty())
+        assertTrue(relays.closed)
+    }
+
+    @Test fun noRelayReachedIsUnsent() = runBlocking {
+        val relays = FakeRelays(relays = 0) { null }
+        val failure = runCatching { WebShare.send(freshOffer(), token, waitMs = 300) { relays } }.exceptionOrNull()
+        assertTrue(failure.toString(), failure is WebShare.Unsent)
+        assertTrue(relays.published.isEmpty())
+    }
+
+    @Test fun anAnswerSealedUnderAnotherKeyIsNoAnswer() {
+        val key = ByteArray(32) { 7 }
+        val other = ByteArray(32) { 8 }
+        fun ack(k: ByteArray) = buildJsonObject { put("a", PairingCrypto.encode(ShareCrypto.seal(k, "discord".toByteArray(), "ack"))) }.toString()
+        assertEquals(setOf("discord"), WebShare.took(key, ack(key)))
+        assertEquals(null, WebShare.took(key, ack(other)))
+        // The phone's own packet coming back is no answer either.
+        assertEquals(null, WebShare.took(key, buildJsonObject { put("k", "x"); put("s", "y") }.toString()))
     }
 }

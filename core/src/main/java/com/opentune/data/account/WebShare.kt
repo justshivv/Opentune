@@ -20,6 +20,7 @@ import java.security.spec.ECParameterSpec
 import java.security.spec.ECPoint
 import java.security.spec.ECPrivateKeySpec
 import java.security.spec.ECPublicKeySpec
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
 import javax.crypto.Mac
@@ -32,7 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -132,7 +133,8 @@ internal object ShareCrypto {
  * Hands the web player's extension the sign-ins the person ticked, over the public Nostr
  * relays Listen together uses, as an ephemeral event the relays pass on and don't keep. The
  * event holds the phone's one-use public key and the sealed sign-ins; the relays and the web
- * page see only that. The extension answers with a sealed list of what it kept.
+ * page see only that. The extension answers with a sealed list of what it kept: only the
+ * kinds ("discord"), never a token, and sealed under the same key, so a relay can't fake it.
  */
 object WebShare {
     const val KIND = 21422
@@ -140,11 +142,22 @@ object WebShare {
     private const val WAIT_MS = 45_000L
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** Which of [extras] the web player took. Throws when it didn't answer in time. */
+    /** It went out to at least one relay, but no answer came in time: the web player may have taken it or not. */
+    class Unconfirmed : Exception("The web player didn't confirm the sign-in")
+
+    /** No relay was reached in time, so nothing left the phone. */
+    class Unsent : Exception("No relay carried the sign-in")
+
+    /** Which of [extras] the web player took. Throws [Unconfirmed] or [Unsent] when it didn't answer in time. */
     suspend fun send(offer: WebShareOffer, extras: PairingExtras): Set<String> =
         send(offer, extras) { filter -> RelayPool(Together.RELAYS, filter) }
 
-    internal suspend fun send(offer: WebShareOffer, extras: PairingExtras, transport: (JsonObject) -> RoomTransport): Set<String> {
+    internal suspend fun send(
+        offer: WebShareOffer,
+        extras: PairingExtras,
+        waitMs: Long = WAIT_MS,
+        transport: (JsonObject) -> RoomTransport,
+    ): Set<String> {
         val wanted = extras.only(offer.take)
         require(offer.valid() && !wanted.isEmpty)
         val mine = ShareCrypto.keyPair()
@@ -164,18 +177,22 @@ object WebShare {
             put("since", System.currentTimeMillis() / 1000 - 10)
         }
         val pool = transport(filter)
+        val sent = AtomicBoolean(false)
         try {
             pool.start()
-            return withTimeout(WAIT_MS) {
+            // Not withTimeout: its TimeoutCancellationException is a CancellationException, which
+            // callers pass on as their own cancelling rather than show as a failure.
+            val took = withTimeoutOrNull(waitMs) {
                 coroutineScope {
                     val answer = async(start = CoroutineStart.UNDISPATCHED) {
                         pool.events.mapNotNull { e -> if (e.kind == KIND && e.id != event.id) took(key, e.content) else null }.first()
                     }
                     // Sent again until it's answered: a relay that connects late still carries it.
-                    val resend = launch { while (true) { if (pool.connected.value > 0) pool.publish(event); delay(RESEND_MS) } }
-                    answer.await().also { resend.cancel() } intersect wanted.kinds
+                    val resend = launch { while (true) { if (pool.connected.value > 0 && pool.publish(event)) sent.set(true); delay(RESEND_MS) } }
+                    answer.await().also { resend.cancel() }
                 }
             }
+            return took?.intersect(wanted.kinds) ?: throw if (sent.get()) Unconfirmed() else Unsent()
         } finally {
             pool.close()
             key.fill(0)
