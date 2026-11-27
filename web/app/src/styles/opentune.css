@@ -526,7 +526,7 @@
 .ot-home { position: relative; isolation: isolate; }
 .ot-home-glow { display: none; }
 :root[data-appearance='dark'][data-home-glow='true'] .ot-home-glow {
-  --ot-glow: var(--ot-seed);
+  --ot-glow: var(--ot-glow-source, var(--ot-seed));
   transition: --ot-glow 1.6s ease;
   display: block; position: absolute; z-index: -1; pointer-events: none; overflow: hidden;
   inset: calc(-1 * var(--ot-home-glow-top, 64px)) 0 auto 0; height: 760px;

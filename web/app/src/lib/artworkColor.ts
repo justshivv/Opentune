@@ -11,6 +11,60 @@ export interface ArtworkColor {
    * player's dark backdrop. Absent for a grey cover.
    */
   accent?: string;
+  /**
+   * The cover's most vivid colour, set bright enough to glow on a dark page (Home's accent glow):
+   * its strongest hue rather than its average, which for most covers is a muddy dark. A soft
+   * silver for a black-and-white cover.
+   */
+  glow?: string;
+}
+
+/**
+ * The glow colour from a cover's pixels (RGBA, 0–255): each pixel's hue, weighted by how
+ * colourful and how mid-bright it is (near-black, near-white and grey pixels count for little),
+ * summed in 24 hue buckets; the strongest bucket and its neighbours give the hue and colour,
+ * then lightness and saturation are set where a glow reads well on near-black. A cover with
+ * almost no colour gives silver.
+ */
+export function vibrantGlow(data: Uint8ClampedArray | number[]): string {
+  const BUCKETS = 24;
+  const weight = new Array<number>(BUCKETS).fill(0);
+  const sums = Array.from({ length: BUCKETS }, () => [0, 0, 0]);
+  let total = 0;
+  for (let i = 0; i + 2 < data.length; i += 4) {
+    const r = data[i]!, g = data[i + 1]!, b = data[i + 2]!;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), chroma = max - min;
+    const l = (max + min) / 510;
+    const sat = chroma === 0 ? 0 : chroma / 255 / (1 - Math.abs(2 * l - 1) || 1);
+    // Colourful and neither too dark nor washed out: the pixels that carry the cover's colour.
+    const w = sat * sat * Math.max(0, 1 - Math.abs(l - 0.5) * 1.7) * (chroma / 255);
+    total += 1;
+    if (w <= 0) continue;
+    let hue = max === r ? ((g - b) / chroma) % 6 : max === g ? (b - r) / chroma + 2 : (r - g) / chroma + 4;
+    hue = (hue * 60 + 360) % 360;
+    const k = Math.floor(hue / (360 / BUCKETS)) % BUCKETS;
+    weight[k]! += w;
+    sums[k]![0]! += r * w; sums[k]![1]! += g * w; sums[k]![2]! += b * w;
+  }
+  let best = 0;
+  let bestScore = -1;
+  for (let k = 0; k < BUCKETS; k++) {
+    const score = weight[k]! + 0.5 * (weight[(k + 1) % BUCKETS]! + weight[(k + BUCKETS - 1) % BUCKETS]!);
+    if (score > bestScore) { bestScore = score; best = k; }
+  }
+  // Too little colour anywhere: a soft silver rather than a muddy or black glow.
+  if (total === 0 || bestScore / total < 0.003) return 'hsl(220 8% 72%)';
+  let r = 0, g = 0, b = 0, w = 0;
+  for (const k of [best, (best + 1) % BUCKETS, (best + BUCKETS - 1) % BUCKETS]) {
+    r += sums[k]![0]!; g += sums[k]![1]!; b += sums[k]![2]!; w += weight[k]!;
+  }
+  [r, g, b] = [r / w, g / w, b / w];
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), chroma = max - min || 1;
+  let hue = max === r ? ((g - b) / chroma) % 6 : max === g ? (b - r) / chroma + 2 : (r - g) / chroma + 4;
+  hue = Math.round((hue * 60 + 360) % 360);
+  const l = (max + min) / 510;
+  const sat = chroma / 255 / (1 - Math.abs(2 * l - 1) || 1);
+  return `hsl(${hue} ${Math.round(Math.min(0.9, Math.max(sat, 0.55)) * 100)}% ${Math.round(Math.min(0.62, Math.max(l, 0.5)) * 100)}%)`;
 }
 
 /**
@@ -51,10 +105,11 @@ async function measure(url: string): Promise<ArtworkColor> {
   image.src = artworkAtPixels(url, 60);
   await image.decode();
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 8;
+  canvas.width = canvas.height = 24;
   const context = canvas.getContext('2d', { willReadFrequently: true })!;
-  context.drawImage(image, 0, 0, 8, 8);
-  const { data } = context.getImageData(0, 0, 8, 8);
+  context.drawImage(image, 0, 0, 24, 24);
+  // 24×24 for the glow's colour search; the average below is the same at any size.
+  const { data } = context.getImageData(0, 0, 24, 24);
   let r = 0;
   let g = 0;
   let b = 0;
@@ -71,7 +126,7 @@ async function measure(url: string): Promise<ArtworkColor> {
   const k = dark ? Math.min(1, 0.55 / Math.max(luminance, 0.05)) * 0.6 : 1;
   const scale = (v: number) => Math.round(dark ? Math.min(v * k, 90) : v);
   const accent = likeAccent(r, g, b) ?? undefined;
-  return { background: `rgb(${scale(r)}, ${scale(g)}, ${scale(b)})`, dark, accent };
+  return { background: `rgb(${scale(r)}, ${scale(g)}, ${scale(b)})`, dark, accent, glow: vibrantGlow(data) };
 }
 
 export function useArtworkColor(url: string | null | undefined): ArtworkColor | null {

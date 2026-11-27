@@ -21,6 +21,8 @@ export function Appearance() {
     root.dataset.homeGlow = String(settings.homeGlow);
     root.style.setProperty('--ot-seed', color?.background ?? settings.accent);
     root.style.setProperty('--ot-accent-choice', settings.accent);
+    // Home's accent glow: the playing song's most vivid colour, or the chosen accent.
+    root.style.setProperty('--ot-glow-source', color?.glow ?? settings.accent);
   }, [settings.mode, settings.pureBlack, settings.motion, settings.playerStyle, settings.homeGlow, settings.accent, systemDark, color]);
   return null;
 }
