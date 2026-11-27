@@ -64,12 +64,13 @@ class AccountMenuNav(
 val LocalAccountMenu = staticCompositionLocalOf<AccountMenuNav?> { null }
 
 /**
- * The account button's menu, from the top corner it was opened from: the accounts on this
- * phone with a tick on the one in use (tap another to switch), then Add account, Manage
- * accounts and Settings.
+The account button's menu, from the button it was opened from: the card is set down
+with its top corner on the button's own, covering it as it grows out of it. Inside:
+the accounts on this phone with a tick on the one in use (tap another to switch),
+then Add account, Manage accounts and Settings.
  */
 @Composable
-fun AccountMenu(nav: AccountMenuNav, onDismiss: () -> Unit) {
+fun AccountMenu(nav: AccountMenuNav, anchor: androidx.compose.ui.geometry.Rect? = null, onDismiss: () -> Unit) {
     val accounts by AccountStore.accounts.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     val calm = AppSettings.ui.collectAsState().value.reduceAnimation
@@ -108,10 +109,16 @@ fun AccountMenu(nav: AccountMenuNav, onDismiss: () -> Unit) {
                     // The card never outgrows the screen: on a short screen (landscape, a small
                     // phone) it stops short of the bottom edge and its content scrolls instead.
                     val cardMaxHeight = maxHeight - 64.dp
+                    // From the button it was opened from: the card's top and its right edge are
+                    // the button's own, measured off the screen this dialog fills. With no
+                    // button known, the card keeps the screen's top corner as before.
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val cardTop = anchor?.let { with(density) { it.top.toDp() } }
+                    val cardEnd = anchor?.let { (maxWidth - with(density) { it.right.toDp() }).coerceAtLeast(0.dp) }
                     Column(
                         Modifier
-                            .windowInsetsPadding(WindowInsets.statusBars)
-                            .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                            .then(if (cardTop == null) Modifier.windowInsetsPadding(WindowInsets.statusBars) else Modifier)
+                            .padding(start = 16.dp, end = cardEnd ?: 16.dp, top = cardTop ?: 8.dp)
                             .widthIn(max = 420.dp)
                             .fillMaxWidth()
                             .heightIn(max = cardMaxHeight)

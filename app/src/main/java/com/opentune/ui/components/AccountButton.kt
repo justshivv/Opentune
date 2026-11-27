@@ -13,6 +13,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.unit.dp
 import com.opentune.data.account.AccountStore
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -34,7 +36,11 @@ fun AccountButton(
     val menu = LocalAccountMenu.current
     val menuOpenState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var menuOpen by menuOpenState
-    if (menuOpen && menu != null) AccountMenu(menu, onDismiss = { menuOpen = false })
+    // The menu opens from this button: the button's place on the window is kept as
+    // it is laid out, and the menu sets its card down on that very spot.
+    var anchor by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    val track = Modifier.onGloballyPositioned { anchor = it.boundsInWindow() }
+    if (menuOpen && menu != null) AccountMenu(menu, anchor = anchor, onDismiss = { menuOpen = false })
     @Suppress("NAME_SHADOWING")
     val onClick: () -> Unit = if (menu != null) ({ menuOpen = true }) else onClick
     if (plain) {
@@ -42,7 +48,7 @@ fun AccountButton(
             // Named for a screen reader whether it shows the account's photo or the cog.
             val said = com.opentune.i18n.Tr.t("Settings")
             androidx.compose.foundation.layout.Box(
-                Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = "Settings", role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+                Modifier.size(44.dp).clip(CircleShape).then(track).clickable(onClickLabel = "Settings", role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
                     .clearAndSetSemantics { contentDescription = said; role = androidx.compose.ui.semantics.Role.Button },
                 contentAlignment = androidx.compose.ui.Alignment.Center,
             ) {
@@ -54,7 +60,7 @@ fun AccountButton(
         return
     }
     WithUpdateDot {
-        GlassIconButton(ImageVector.vectorResource(AppIcons.Settings), "Settings", onClick) {
+        GlassIconButton(ImageVector.vectorResource(AppIcons.Settings), "Settings", onClick, track) {
             val photo = account?.thumbnailUrl
             if (photo != null) Artwork(photo, Modifier.size(44.dp), CircleShape)
             else Icon(ImageVector.vectorResource(AppIcons.Settings), "Settings", Modifier.size(26.dp))
