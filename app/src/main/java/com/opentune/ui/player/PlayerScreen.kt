@@ -504,9 +504,16 @@ fun PlayerLayout(
             ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
     // A Canvas playing on the cover takes the screen the same way: the controls slide down
     // and leave the title over the video. A tap or a short swipe up brings them back.
-    val canvasFocusable = state.ui.canvasFocus && pane == Pane.COVER && state.canvasVideo != null && state.isSounding &&
+    // The takeovers wait until the picture is really on screen, as the video's grow does:
+    // the Canvas counts only once a frame of it has been drawn, and the video likewise.
+    var canvasDrawn by remember(state.canvasVideo) { mutableStateOf(false) }
+    val canvasFocusable = state.ui.canvasFocus && pane == Pane.COVER && state.canvasVideo != null && canvasDrawn && state.isSounding && !state.videoMode &&
             !docked && !state.ui.reduceAnimation && state.ui.playerStyle != PlayerStyle.LYRICS_FIRST
-    val focusable = lyricsFocusable || canvasFocusable
+    // A video playing on the cover takes the screen the same way, under its own setting,
+    // apart from the Canvas': the controls slide down and leave the title over the picture.
+    val videoFocusable = state.ui.videoFocus && pane == Pane.COVER && state.videoMode && state.isPlaying && videoReady() &&
+            !docked && !state.ui.reduceAnimation && state.ui.playerStyle != PlayerStyle.LYRICS_FIRST
+    val focusable = lyricsFocusable || canvasFocusable || videoFocusable
     // Read only inside the countdown below, never while composing: a sheet opening or
     // closing (the "…" menu) and every touch (the tap that opens it) composed this whole
     // player again, in the very frame the sheet began to move; see SheetSlot.
@@ -1155,7 +1162,7 @@ fun PlayerLayout(
                     // Not built once the video's box has settled over it; while the box grows out
                     // of it or back into it, it fades on the same clock.
                     fullCoverArt = styleCoverBuilt,
-                    fullCoverAlpha = { if (videoBox) edgeCoverAlpha(videoMorph.value) else 1f },
+                    fullCoverAlpha = { if (videoBox) 1f - ((videoMorph.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f },
                     fullCoverVisible = { fullCover && !flight.active },
                     artworkMotion = artworkMotion,
                     fullCoverBottom = with(LocalDensity.current) {
@@ -1174,6 +1181,7 @@ fun PlayerLayout(
                     },
                     // Lyrics and the queue are read over the whole page, so the Canvas frosts top to bottom.
                     canvasBehindText = pane != Pane.COVER,
+                    onCanvasDrawn = { canvasDrawn = it },
                 )
             }
 
@@ -1563,6 +1571,7 @@ fun PlayerLayout(
                                                     index = state.currentIndex,
                                                     onSeekBy = seekBy.takeIf { state.ui.doubleTapSeek },
                                                     glow = state.ui.coverGlow && !state.ui.reduceAnimation && !amoled && !apple,
+                                                    position = position,
                                                     video = state.coverVideo,
                                                     musicVideo = styleVideo,
                                                     videoSurface = inlineVideo,
@@ -1572,10 +1581,10 @@ fun PlayerLayout(
                                         }
                                     }
                                     // The layout's own cover: kept built under the video's box while it morphs,
-                                    // hidden the moment the box leaves it, shown again as the box lands back on it.
+                                    // faded out as the box leaves it, shown again as the box lands back on it.
                                     if (styleCoverBuilt) Box(
                                         Modifier.matchParentSize().graphicsLayer {
-                                            alpha = if (videoBox && videoMorph.value > 0f) 0f else 1f
+                                            alpha = if (videoBox) 1f - ((videoMorph.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f
                                         },
                                         contentAlignment = Alignment.Center,
                                     ) {
@@ -1585,9 +1594,10 @@ fun PlayerLayout(
                                             Modifier.matchParentSize()
                                         ) { design() } else design()
                                     }
-                                    // In video mode every style shows the picture in its own
-                                    // rounded box in the cover's region, grown out of the cover itself.
-                                    if (videoBox) {
+                                    // The video's pane: built as soon as the song has a video and
+                                    // kept under the cover, warm and measured, so switching to
+                                    // the video only has to reveal it (see its fade below).
+                                    if (!landscape && (state.videoAvailable || videoBox)) {
                                         val videoPane: @Composable () -> Unit = {
                                             VideoCoverPane(
                                                 current.thumbnailUrl,
@@ -1603,7 +1613,8 @@ fun PlayerLayout(
                                                 onSwipeNext = coverNext,
                                                 onSwipePrevious = coverPrevious,
                                                 modifier = Modifier.fillMaxSize()
-                                                    .then(if (fullStyle) Modifier.onGloballyPositioned(placeEdge) else Modifier),
+                                                    .then(if (fullStyle) Modifier.onGloballyPositioned(placeEdge) else Modifier)
+                                                    .graphicsLayer { alpha = ((videoMorph.value - 0.6f) / 0.4f).coerceIn(0f, 1f) },
                                                 ready = videoReady,
                                                 onBox = { box ->
                                                     // Only its place at rest: not scaled down under the lists, nor carried by a finger.
@@ -1618,7 +1629,7 @@ fun PlayerLayout(
                                                 picture = boxPicture,
                                             )
                                         }
-                                        if (state.ui.doubleTapSeek) SeekTaps(seekBy, 1f, Modifier.matchParentSize()) { videoPane() } else videoPane()
+                                        if (state.ui.doubleTapSeek && videoBox) SeekTaps(seekBy, 1f, Modifier.matchParentSize()) { videoPane() } else videoPane()
                                     }
                                 }
                                 if (state.videoAvailable) {
@@ -1667,7 +1678,8 @@ fun PlayerLayout(
                                 // With the controls away over a Canvas, the title sits a little up from the bottom edge —
                                 // unless the lyric line is staying behind under it (canvasLyricsLine): then the
                                 // line takes the foot's place, at the exact distance it had before the slide.
-                                val lyricLineStays = controlsAway && state.ui.canvasLyricsLine && state.ui.lyricsPreview &&
+                                val lyricLineStays = controlsAway && state.ui.lyricsPreview &&
+                                        ((state.canvasVideo != null && !state.videoMode && state.ui.canvasLyricsLine) || (state.videoMode && state.ui.videoLyricsLine)) &&
                                         ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced || state.lyrics is LyricsState.Loading)
                                 val footRoom by androidx.compose.animation.core.animateDpAsState(
                                     if (controlsHidden && !lyricLineStays) CANVAS_TITLE_FOOT else 0.dp,
@@ -1914,7 +1926,7 @@ fun PlayerLayout(
                     // stay behind under the title (canvasLyricsLine) as they slide away.
                     // The queue and the lyrics page still take it away, as before.
                     AnimatedVisibility(
-                        pane != Pane.LYRICS && pane != Pane.QUEUE && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST) && (!controlsHidden || (controlsAway && state.ui.canvasLyricsLine)),
+                        pane != Pane.LYRICS && pane != Pane.QUEUE && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST) && (!controlsHidden || (controlsAway && ((state.canvasVideo != null && !state.videoMode && state.ui.canvasLyricsLine) || (state.videoMode && state.ui.videoLyricsLine)))),
                         enter = expandVertically(
                             spring(
                                 dampingRatio = 0.9f,
@@ -2271,8 +2283,22 @@ fun PlayerLayout(
             // Before the header is back (a swipe still under the finger), where it was last.
             val to = if (flying) flight.target(smallCover, bigCover()) else (smallCover
                 ?: flight.lastSmall)
-            if (from != null && to != null && (flying || flies)) {
-                // The big end's corners: none edge to edge, the video box's own, else the cover's.
+                if (from != null && to != null && (flying || flies)) {
+                    // The video's box is wide and the header's cover square: flown between those
+                    // two shapes, the still cover is scaled a different amount each way and
+                    // stretches. In video mode it flies from the square at the box's heart
+                    // instead — hidden at the wide end anyway, it appears only as it shrinks,
+                    // already the cover's own shape. (A square passes through unchanged.)
+                    fun coverEnd(r: androidx.compose.ui.geometry.Rect) =
+                        if (videoBox) {
+                            val side = minOf(r.width, r.height)
+                            val left = r.left + (r.width - side) / 2f
+                            val top = r.top + (r.height - side) / 2f
+                            androidx.compose.ui.geometry.Rect(left, top, left + side, top + side)
+                        } else r
+                    val artFrom = coverEnd(from)
+                    val artTo = coverEnd(to)
+                    // The big end's corners: none edge to edge, the video box's own, else the cover's.
                 val bigCorner = when {
                     videoBox -> videoBoxCorner(fullStyle, state.ui.coverCornerDp.dp).value
                     fullStyle -> 0f
@@ -2295,7 +2321,7 @@ fun PlayerLayout(
                     com.opentune.ui.components.MorphBox(
                         current.thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
                         current.thumbnailUrl.artworkAt(ROW_ART_PX),
-                        from, to,
+                        artFrom, artTo,
                         p = { flight.progress },
                         startCornerDp = if (flight.toSmall) bigCorner else 10f,
                         endCornerDp = if (flight.toSmall) 10f else bigCorner,

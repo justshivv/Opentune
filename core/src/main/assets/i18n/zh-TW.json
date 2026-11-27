@@ -3708,5 +3708,9 @@
 "{0} songs downloaded · plays offline": "已下載 {0} 首 · 可離線播放",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "在播放清單或專輯頁面下載它，或下載其中超過五首歌曲，它就會顯示在這裡。",
 "Grow video while playing": "播放時放大影片",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "影片播放時，會在 3 秒後擴展到螢幕邊緣，暫停時收縮回去"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "影片播放時，會在 3 秒後擴展到螢幕邊緣，暫停時收縮回去",
+"Video takes the screen": "影片填滿螢幕",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "播放影片時，幾秒後控制項會向下滑出，只留下標題。向上滑動或輕觸即可恢復。",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "當影片佔滿螢幕時，目前歌詞行會保留在標題下方，而不是隨控制項一起滑走。",
+"Only with Video takes the screen on": "僅當「Video takes the screen」開啟時"
 }

@@ -162,9 +162,9 @@ data class DspParams(
 ) {
     private val eqActive: Boolean
         get() = equalizer.enabled && (
-            equalizer.bands.any { it != 0f } || equalizer.preampDb != 0f ||
-                equalizer.bassDb != 0f || equalizer.trebleDb != 0f || equalizer.balance != 0f
-            )
+                equalizer.bands.any { it != 0f } || equalizer.preampDb != 0f ||
+                        equalizer.bassDb != 0f || equalizer.trebleDb != 0f || equalizer.balance != 0f
+                )
 
     /** The headphone correction from AutoEq, when one is chosen; independent of [eqActive]. */
     private val headphone get() = equalizer.headphone?.takeIf { it.filters.isNotEmpty() }
@@ -178,8 +178,8 @@ data class DspParams(
      */
     val canBoost: Boolean
         get() = spatial || clarity || bassBoost > 0 || eightDPeriod > 0f || spacePeriod > 0f || headphone?.filters?.any { it.gainDb > 0 } == true || (eqActive && (
-            equalizer.preampDb > 0 || equalizer.bassDb > 0 || equalizer.trebleDb > 0 || equalizer.bands.any { it > 0 }
-            ))
+                equalizer.preampDb > 0 || equalizer.bassDb > 0 || equalizer.trebleDb > 0 || equalizer.bands.any { it > 0 }
+                ))
 
     /** The filter stages to run, given the sample rate. */
     fun stages(sampleRate: Int): List<() -> Biquad> {
@@ -350,15 +350,6 @@ class DspAudioProcessor : BaseAudioProcessor() {
         if (p !== applied) rebuild(p)
         val size = inputBuffer.remaining()
         if (meter && channels > 0) measureSilence(inputBuffer)
-        // The song's loudness for the on-screen lights, read without moving the buffer.
-        if (com.opentune.playback.AudioLevels.listening && channels > 0) {
-            val view = inputBuffer.duplicate().order(inputBuffer.order())
-            val base = view.position()
-            val width = if (isFloat) 4 else 2
-            com.opentune.playback.AudioLevels.measure(size / (channels * width), channels, sampleRate) { i ->
-                if (isFloat) view.getFloat(base + i * 4) else view.getShort(base + i * 2) / 32768f
-            }
-        }
         val out = replaceOutputBuffer(size)
         if (silenced) {
             // Casting: the phone keeps time for the queue while another device makes the sound.
@@ -536,7 +527,6 @@ class DspAudioProcessor : BaseAudioProcessor() {
         filters.forEach { ch -> ch.forEach { it.reset() } }
         cut.forEach { it.reset() }
         space?.reset()
-        com.opentune.playback.AudioLevels.flush()
     }
 
     override fun onReset() {

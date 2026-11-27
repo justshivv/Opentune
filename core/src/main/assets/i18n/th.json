@@ -3660,5 +3660,9 @@
 "{0} songs downloaded · plays offline": "ดาวน์โหลดแล้ว {0} เพลง · เล่นแบบออฟไลน์ได้",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "ดาวน์โหลดเพลย์ลิสต์หรืออัลบั้มจากหน้าของมัน หรือเพลงในนั้นมากกว่าห้าเพลง แล้วจะแสดงที่นี่",
 "Grow video while playing": "ขยายวิดีโอขณะเล่น",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "ขณะเล่นวิดีโอ วิดีโอจะขยายไปถึงขอบหน้าจอหลังจาก 3 วินาที และหดกลับเมื่อหยุดชั่วคราว"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "ขณะเล่นวิดีโอ วิดีโอจะขยายไปถึงขอบหน้าจอหลังจาก 3 วินาที และหดกลับเมื่อหยุดชั่วคราว",
+"Video takes the screen": "วิดีโอเต็มหน้าจอ",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "ขณะที่วิดีโอเล่น ปุ่มควบคุมจะเลื่อนลงหลังผ่านไปไม่กี่วินาที เหลือไว้แต่ชื่อเพลง ปัดขึ้นหรือแตะเพื่อเรียกกลับมา",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "ขณะที่วิดีโอแสดงเต็มหน้าจอ บรรทัดเนื้อเพลงปัจจุบันจะยังคงอยู่ใต้ชื่อเพลง แทนที่จะเลื่อนหายไปพร้อมกับปุ่มควบคุม",
+"Only with Video takes the screen on": "เฉพาะเมื่อเปิด 'Video takes the screen' เท่านั้น"
 }

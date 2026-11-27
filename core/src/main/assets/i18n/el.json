@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0} τραγούδια λήφθηκαν · παίζουν εκτός σύνδεσης",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Κατεβάστε μια λίστα ή ένα άλμπουμ από τη σελίδα του, ή πάνω από πέντε τραγούδια του, και θα εμφανιστεί εδώ.",
 "Grow video while playing": "Μεγέθυνση βίντεο κατά την αναπαραγωγή",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Κατά την αναπαραγωγή, το βίντεο επεκτείνεται στις άκρες της οθόνης μετά από 3 δευτερόλεπτα και συρρικνώνεται στην παύση"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Κατά την αναπαραγωγή, το βίντεο επεκτείνεται στις άκρες της οθόνης μετά από 3 δευτερόλεπτα και συρρικνώνεται στην παύση",
+"Video takes the screen": "Το βίντεο καλύπτει την οθόνη",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Όσο παίζει ένα βίντεο, τα στοιχεία ελέγχου κατεβαίνουν μετά από λίγα δευτερόλεπτα και μένει ο τίτλος. Σύρετε προς τα πάνω ή πατήστε για να επιστρέψουν.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Όταν το βίντεο καταλαμβάνει την οθόνη, η τρέχουσα γραμμή στίχων παραμένει κάτω από τον τίτλο αντί να εξαφανίζεται μαζί με τα χειριστήρια.",
+"Only with Video takes the screen on": "Μόνο με ενεργοποιημένο το «Video takes the screen»"
 }

@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0} أغانٍ مُنزّلة · تعمل دون اتصال",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "نزّل قائمة أو ألبومًا من صفحته، أو أكثر من خمس من أغانيه، ليظهر هنا.",
 "Grow video while playing": "تكبير الفيديو أثناء التشغيل",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "أثناء تشغيل الفيديو، يتمدد إلى حواف الشاشة بعد 3 ثوانٍ، وينكمش عند الإيقاف المؤقت"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "أثناء تشغيل الفيديو، يتمدد إلى حواف الشاشة بعد 3 ثوانٍ، وينكمش عند الإيقاف المؤقت",
+"Video takes the screen": "الفيديو يملأ الشاشة",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "أثناء تشغيل الفيديو، تنزلق عناصر التحكم إلى الأسفل بعد بضع ثوانٍ ويبقى العنوان. اسحب لأعلى أو انقر لإعادتها.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "بينما يستحوذ الفيديو على الشاشة، يبقى سطر الكلمات الحالي تحت العنوان بدلاً من أن ينزلق بعيدًا مع عناصر التحكم.",
+"Only with Video takes the screen on": "فقط مع تشغيل «Video takes the screen»"
 }

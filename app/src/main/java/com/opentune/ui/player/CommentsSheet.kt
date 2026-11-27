@@ -25,6 +25,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -64,6 +65,30 @@ private class Replies(token: String?) {
     var open by mutableStateOf(true)
 }
 
+/** A video's comments as they were when their panel closed: the thread, the pages loaded so far, what the reader did and where the list was, so opening them again shows them at once instead of loading them again. */
+private class SavedComments(
+    val thread: SongComments.Thread,
+    val comments: List<SongComments.Comment>,
+    val next: String?,
+    val createParams: String?,
+    val likedNow: Map<String, Boolean>,
+    val replies: Map<String, Replies>,
+    val firstVisible: Int,
+    val firstOffset: Int,
+)
+
+/** The last few videos' comments, kept for the session: the big apps keep a thread once it has loaded and only ever load it the first time. */
+private object CommentsStore {
+    private const val KEEP = 6
+    private val saved = LinkedHashMap<String, SavedComments>()
+    fun get(videoId: String): SavedComments? = saved[videoId]
+    fun put(videoId: String, value: SavedComments) {
+        saved.remove(videoId)
+        saved[videoId] = value
+        while (saved.size > KEEP) saved.remove(saved.keys.first())
+    }
+}
+
 /** Who a reply being written answers: [to], in the thread of the comment [threadId]. */
 private data class ReplyTarget(val to: SongComments.Comment, val threadId: String)
 
@@ -77,9 +102,9 @@ private data class ReplyTarget(val to: SongComments.Comment, val threadId: Strin
 internal fun CommentsSheet(
     song: Song,
     onDismiss: () -> Unit,
-    /** Where the comments come from: YouTube, or made-up ones in a test. */
-    open: suspend (String) -> SongComments.Thread? = { SongComments.open(it) },
-    pageOf: suspend (String) -> SongComments.Page? = { SongComments.page(it) },
+    /** Where the comments come from: YouTube when null, or made-up ones in a test. */
+    open: (suspend (String) -> SongComments.Thread?)? = null,
+    pageOf: (suspend (String) -> SongComments.Page?)? = null,
 ) {
     // The card's subtitle follows the thread the content loads.
     var fromVideo by remember(song.videoId) { mutableStateOf(false) }
@@ -107,42 +132,60 @@ internal fun CommentsSheet(
 @Composable
 internal fun ColumnScope.CommentsContent(
     song: Song,
-    open: suspend (String) -> SongComments.Thread? = { SongComments.open(it) },
-    pageOf: suspend (String) -> SongComments.Page? = { SongComments.page(it) },
+    open: (suspend (String) -> SongComments.Thread?)? = null,
+    pageOf: (suspend (String) -> SongComments.Page?)? = null,
     /** Told where the comments come from once the thread lands. */
     onFromVideo: (Boolean) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    // YouTube's own loaders, or ones handed in (a test's): only YouTube's come with the
+    // session's keeping below — a handed-in loader always loads afresh.
+    val caching = open == null && pageOf == null
+    val openFn = open ?: { SongComments.open(it) }
+    val pageFn = pageOf ?: { SongComments.page(it) }
     val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
-    var thread by remember(song.videoId) { mutableStateOf<SongComments.Thread?>(null) }
-    var loading by remember(song.videoId) { mutableStateOf(true) }
+    // Opened before in this session: everything comes back as it was, with no load at all.
+    val saved = remember(song.videoId) { if (caching) CommentsStore.get(song.videoId) else null }
+    var thread by remember(song.videoId) { mutableStateOf<SongComments.Thread?>(saved?.thread) }
+    var loading by remember(song.videoId) { mutableStateOf(saved == null) }
     var failed by remember(song.videoId) { mutableStateOf(false) }
-    val comments = remember(song.videoId) { mutableStateListOf<SongComments.Comment>() }
-    var next by remember(song.videoId) { mutableStateOf<String?>(null) }
-    var createParams by remember(song.videoId) { mutableStateOf<String?>(null) }
+    val comments = remember(song.videoId) { mutableStateListOf<SongComments.Comment>().apply { saved?.let { addAll(it.comments) } } }
+    var next by remember(song.videoId) { mutableStateOf<String?>(saved?.next) }
+    var createParams by remember(song.videoId) { mutableStateOf<String?>(saved?.createParams) }
     var more by remember(song.videoId) { mutableStateOf(false) }
     // What the reader did here, over what YouTube said when the page came.
-    val likedNow = remember(song.videoId) { mutableStateMapOf<String, Boolean>() }
-    val replies = remember(song.videoId) { mutableStateMapOf<String, Replies>() }
+    val likedNow = remember(song.videoId) { mutableStateMapOf<String, Boolean>().apply { saved?.let { putAll(it.likedNow) } } }
+    val replies = remember(song.videoId) { mutableStateMapOf<String, Replies>().apply { saved?.let { putAll(it.replies) } } }
     var replyingTo by remember(song.videoId) { mutableStateOf<ReplyTarget?>(null) }
     var deleting by remember(song.videoId) { mutableStateOf<SongComments.Comment?>(null) }
 
     LaunchedEffect(song.videoId) {
-        val t = open(song.videoId)
+        if (saved != null) { onFromVideo(saved.thread.fromVideo); return@LaunchedEffect }
+        val t = openFn(song.videoId)
         thread = t
         onFromVideo(t?.fromVideo == true)
         if (t == null) { failed = true; loading = false; return@LaunchedEffect }
         val first = t.first
         if (first != null) {
-            val page = pageOf(first)
+            val page = pageFn(first)
             if (page == null) failed = true
             else { comments += page.comments; next = page.next; createParams = page.createParams }
         }
         loading = false
     }
 
-    val list = rememberLazyListState()
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = saved?.firstVisible ?: 0, initialFirstVisibleItemScrollOffset = saved?.firstOffset ?: 0)
+    // Leaving keeps what was loaded, for this video's next opening.
+    DisposableEffect(song.videoId) {
+        onDispose {
+            val t = thread ?: return@onDispose
+            if (caching) CommentsStore.put(
+                song.videoId,
+                SavedComments(t, comments.toList(), next, createParams, likedNow.toMap(), replies.toMap(), list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset),
+            )
+        }
+    }
     // Near the end of what's loaded: the next page.
     val nearEnd by remember { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index?.let { it >= list.layoutInfo.totalItemsCount - 4 } == true } }
     LaunchedEffect(nearEnd, next) {
@@ -152,7 +195,7 @@ internal fun ColumnScope.CommentsContent(
         // In finally: scrolling up while a page loads restarts this effect, and a flag left
         // set by the cancelled run kept every later page from loading, the spinner spinning.
         try {
-            pageOf(token)?.let { page ->
+            pageFn(token)?.let { page ->
                 val seen = comments.map { it.id }.toHashSet()
                 comments += page.comments.filter { it.id !in seen }
                 next = page.next
@@ -171,7 +214,7 @@ internal fun ColumnScope.CommentsContent(
         if (r.loading) return
         r.loading = true
         scope.launch {
-            val page = pageOf(token)
+            val page = pageFn(token)
             if (page == null) Pills.error("Replies didn't load", context)
             else {
                 val seen = r.list.map { it.id }.toHashSet()

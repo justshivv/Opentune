@@ -67,7 +67,7 @@ internal val SETTINGS_CATEGORIES = listOf(
             "Loading ahead" to listOf("Preload upcoming songs", "Preload whole lossless songs", "Boost preloading on Wi-Fi"),
             "Autoplay and suggestions" to listOf("Autoplay", "Recommendations", "Smart shuffle", "Songs, not music videos", "Don't repeat songs in current session"),
             "Headphones and background" to listOf("Resume when headphones connect", "Pause at zero volume", "Background playback", "Stop music on close from recents"),
-            "Music videos" to listOf("Video mode", "Grow video while playing", "Video quality on Wi-Fi", "Video quality on mobile data", "SponsorBlock", "SponsorBlock categories"),
+            "Music videos" to listOf("Video mode", "Grow video while playing", "Video takes the screen", "Lyrics line stays", "Video quality on Wi-Fi", "Video quality on mobile data", "SponsorBlock", "SponsorBlock categories"),
         ),
     ),
     SettingsCategory(

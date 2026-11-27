@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0} పాటలు డౌన్‌లోడ్ అయ్యాయి · ఆఫ్‌లైన్‌లో ప్లే అవుతాయి",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "ప్లేలిస్ట్ లేదా ఆల్బమ్‌ను దాని పేజీ నుంచి డౌన్‌లోడ్ చేయండి, లేదా దానిలోని ఐదు కంటే ఎక్కువ పాటలు, అప్పుడు అది ఇక్కడ కనిపిస్తుంది.",
 "Grow video while playing": "ప్లే అవుతున్నప్పుడు వీడియోను పెద్దది చేయండి",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "వీడియో ప్లే అవుతున్నప్పుడు, అది 3 సెకన్ల తర్వాత స్క్రీన్ అంచుల వరకు విస్తరిస్తుంది మరియు పాజ్ చేసినప్పుడు కుదించబడుతుంది"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "వీడియో ప్లే అవుతున్నప్పుడు, అది 3 సెకన్ల తర్వాత స్క్రీన్ అంచుల వరకు విస్తరిస్తుంది మరియు పాజ్ చేసినప్పుడు కుదించబడుతుంది",
+"Video takes the screen": "వీడియో స్క్రీన్ అంతా",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "వీడియో ప్లే అవుతున్నప్పుడు, కొన్ని సెకన్ల తర్వాత నియంత్రణలు కిందికి జారి, శీర్షిక మాత్రమే మిగులుతుంది. వాటిని తిరిగి తీసుకురావడానికి పైకి స్వైప్ చేయండి లేదా నొక్కండి.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "వీడియో స్క్రీన్‌ను ఆక్రమించినప్పుడు, ప్రస్తుత పాట లైన్ నియంత్రణలతో పాటు జారిపోకుండా శీర్షిక క్రింద అలాగే ఉంటుంది.",
+"Only with Video takes the screen on": "'Video takes the screen' ఆన్‌లో ఉన్నప్పుడు మాత్రమే"
 }

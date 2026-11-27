@@ -33,6 +33,8 @@ class PrecisionAudioSink(
     private val dsp: DspAudioProcessor,
     /** Whether to put out float for a song whose decoder gives this [C] encoding. */
     private val floatWanted: (sourceEncoding: Int) -> Boolean,
+    /** The main player's sink only: it alone feeds the on-screen levels. */
+    private val meterLevels: Boolean = false,
 ) : ForwardingAudioSink(delegate) {
 
     private var precise = false
@@ -46,6 +48,15 @@ class PrecisionAudioSink(
     /** Output [delegate] hasn't taken yet, and the time it starts at. */
     private var pending: ByteBuffer? = null
     private var pendingTimeUs = 0L
+    // The levels' clock: the decoder's stamps run on a base of their own (some
+    // streams start it at a round million seconds). The service notes where
+    // the player jumped to, from the player's own thread; the note pairs with
+    // the head of the next stretch — the first buffers after a flush — and
+    // the base falls out of the pair. The pairing runs on every buffer, heard
+    // or not, so it is already true whenever the lights come on.
+    private var levelsBaseUs = 0L
+    private var awaitingAnchor = true
+    private var skippedUs = 0L
 
     /** Whether this format comes through here: linear PCM in an encoding [decode] reads. */
     private fun readable(format: Format) =
@@ -108,8 +119,11 @@ class PrecisionAudioSink(
             pending = null
         }
         if (!buffer.hasRemaining()) return true
+        // The levels are tracked here, on the decoder's own samples, before
+        // the effects or the untouched pass alike, and stamped with where in
+        // the song they'll be heard.
+        if (meterLevels) trackLevels(buffer, presentationTimeUs)
         if (untouched()) {
-            if (com.opentune.playback.AudioLevels.listening) measure(buffer)
             return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
         }
         val made = process(buffer)
@@ -122,7 +136,7 @@ class PrecisionAudioSink(
     /** The effects are off and the output is the decoder's own format: nothing to do to the samples. */
     private fun untouched(): Boolean =
         inputEncoding == outputEncoding && dsp.params.isNeutral &&
-            DspAudioProcessor.masterGain >= 0.999f && !DspAudioProcessor.silenced
+                DspAudioProcessor.masterGain >= 0.999f && !DspAudioProcessor.silenced
 
     /** [input], all of it, through the effects and into [out], in the output's encoding. */
     private fun process(input: ByteBuffer): ByteBuffer {
@@ -166,12 +180,37 @@ class PrecisionAudioSink(
     }
 
     /** The decoder's samples as levels for the on-screen lights, read without moving [buffer]. */
-    private fun measure(buffer: ByteBuffer) {
+    private fun trackLevels(buffer: ByteBuffer, presentationTimeUs: Long) {
+        // A buffer with no time of its own can't be stamped; it isn't measured.
+        if (presentationTimeUs == androidx.media3.common.C.TIME_UNSET || presentationTimeUs < 0L) return
         val view = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
         val base = view.position()
         val width = bytesPerSample(inputEncoding)
         if (channels == 0 || width == 0) return
-        com.opentune.playback.AudioLevels.measure(view.remaining() / (channels * width), channels, sampleRate) { i ->
+        val frames = view.remaining() / (channels * width)
+        if (awaitingAnchor) {
+            val jumpedTo = com.opentune.playback.AudioLevels.takePendingPosition()
+            when {
+                jumpedTo != null -> {
+                    levelsBaseUs = presentationTimeUs - jumpedTo - skippedUs
+                    awaitingAnchor = false
+                }
+                skippedUs > 300_000L -> {
+                    // No jump was noted for this stretch: it began at the song's head.
+                    levelsBaseUs = presentationTimeUs - skippedUs
+                    awaitingAnchor = false
+                }
+                else -> {
+                    // The jump's note is still on its way from the player's
+                    // thread; these buffers wait rather than be mis-stamped.
+                    skippedUs += frames * 1_000_000L / sampleRate
+                    return
+                }
+            }
+        }
+        if (!com.opentune.playback.AudioLevels.listening) return
+        val songUs = presentationTimeUs - levelsBaseUs
+        com.opentune.playback.AudioLevels.measure(songUs, frames, channels, sampleRate) { i ->
             when (inputEncoding) {
                 C.ENCODING_PCM_16BIT -> view.getShort(base + i * 2) / 32768f
                 C.ENCODING_PCM_FLOAT -> view.getFloat(base + i * 4)
@@ -196,6 +235,9 @@ class PrecisionAudioSink(
 
     override fun flush() {
         pending = null
+        awaitingAnchor = true
+        skippedUs = 0L
+        if (meterLevels) com.opentune.playback.AudioLevels.flush()
         if (precise) dsp.flush()
         super.flush()
     }
@@ -203,6 +245,9 @@ class PrecisionAudioSink(
     override fun reset() {
         pending = null
         precise = false
+        awaitingAnchor = true
+        skippedUs = 0L
+        if (meterLevels) com.opentune.playback.AudioLevels.flush()
         dsp.reset()
         super.reset()
     }

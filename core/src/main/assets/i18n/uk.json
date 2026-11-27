@@ -3672,5 +3672,9 @@
 "{0} songs downloaded · plays offline": "Завантажено пісень: {0} · грають офлайн",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Завантажте плейлист чи альбом з його сторінки або понад п’ять його пісень, і він з’явиться тут.",
 "Grow video while playing": "Збільшувати відео під час відтворення",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Під час відтворення відео через 3 секунди розширюється до країв екрана, а на паузі стискається назад"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Під час відтворення відео через 3 секунди розширюється до країв екрана, а на паузі стискається назад",
+"Video takes the screen": "Відео на весь екран",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Поки грає відео, за кілька секунд елементи керування з'їжджають донизу, залишаючи назву. Проведіть угору або торкніться, щоб повернути їх.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Поки відео займає екран, поточний рядок тексту залишається під назвою, а не зникає разом з елементами керування.",
+"Only with Video takes the screen on": "Лише з увімкненою опцією «Video takes the screen»"
 }

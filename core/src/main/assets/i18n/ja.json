@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0} 曲をダウンロード済み · オフラインで再生",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "プレイリストやアルバムをそのページからダウンロードするか、その曲を6曲以上ダウンロードすると、ここに表示されます。",
 "Grow video while playing": "再生中に動画を拡大",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "動画の再生中、3秒後に画面の端まで拡大し、一時停止すると元に戻ります"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "動画の再生中、3秒後に画面の端まで拡大し、一時停止すると元に戻ります",
+"Video takes the screen": "動画を全画面に",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "動画の再生中は、数秒後に操作ボタンが下にスライドしてタイトルだけが残ります。上にスワイプするかタップすると戻ります。",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "動画が画面いっぱいに表示されている間、現在の歌詞ラインはコントロールと一緒に消えず、タイトルの下に残ります。",
+"Only with Video takes the screen on": "「Video takes the screen」がオンの場合のみ"
 }

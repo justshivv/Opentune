@@ -1113,6 +1113,13 @@ private fun settingsSections(
                 if (pb.videoModeEnabled) Entry("Grow video while playing", "video grow fill cover expand playing full") {
                     ToggleRow("Grow video while playing", ui.videoGrow, { v -> AppSettings.updateUi { it.copy(videoGrow = v) } }, summary = "While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused", icon = ImageVector.vectorResource(AppIcons.Fullscreen), beta = true)
                 } else null,
+                if (pb.videoModeEnabled) Entry("Video takes the screen", "video takes screen controls hide focus playing title") {
+                    ToggleRow("Video takes the screen", ui.videoFocus, { v -> AppSettings.updateUi { it.copy(videoFocus = v) } }, summary = "While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.", icon = ImageVector.vectorResource(AppIcons.Animation), beta = true)
+                } else null,
+                if (pb.videoModeEnabled) Entry("Lyrics line stays", "video lyrics line stays title controls screen") {
+                    ToggleRow("Lyrics line stays", ui.videoLyricsLine, { v -> AppSettings.updateUi { it.copy(videoLyricsLine = v) } }, summary = "While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.", icon = ImageVector.vectorResource(AppIcons.Lyrics),
+                        enabled = ui.videoFocus && !reduced, disabledReason = if (reduced) "Off while Reduce animation is on" else "Only with Video takes the screen on")
+                } else null,
                 if (pb.videoModeEnabled) Entry("Video quality on Wi-Fi", "music video resolution 1080p 720p hd size") {
                     NavRow("Video quality on Wi-Fi", { videoQualityDialog = true }, summary = if (!metered) "In use now" else null, icon = ImageVector.vectorResource(AppIcons.Wifi), value = com.opentune.data.innertube.VideoQuality.label(pb.wifiVideoQuality))
                 } else null,

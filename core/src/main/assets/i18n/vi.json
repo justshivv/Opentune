@@ -3660,5 +3660,9 @@
 "{0} songs downloaded · plays offline": "Đã tải {0} bài · nghe ngoại tuyến",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Tải một danh sách phát hoặc album từ trang của nó, hoặc hơn năm bài trong đó, và nó sẽ hiện ở đây.",
 "Grow video while playing": "Phóng to video khi phát",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Khi video đang phát, video sẽ mở rộng ra các cạnh màn hình sau 3 giây và thu nhỏ lại khi tạm dừng"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Khi video đang phát, video sẽ mở rộng ra các cạnh màn hình sau 3 giây và thu nhỏ lại khi tạm dừng",
+"Video takes the screen": "Video chiếm màn hình",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Khi video đang phát, các nút điều khiển trượt xuống sau vài giây, chỉ để lại tiêu đề. Vuốt lên hoặc chạm để đưa chúng trở lại.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Khi video chiếm toàn màn hình, dòng lời bài hát hiện tại vẫn ở dưới tiêu đề thay vì trượt đi cùng các nút điều khiển.",
+"Only with Video takes the screen on": "Chỉ khi bật 'Video takes the screen'"
 }

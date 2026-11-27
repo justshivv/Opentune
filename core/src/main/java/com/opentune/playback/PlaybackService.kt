@@ -414,7 +414,7 @@ class PlaybackService : MediaLibraryService() {
         // The main player and the bridge decode the same way: the bridge used to
         // take the phone's default FLAC decoder, which some phones can't play
         // add-on FLAC with, so the swap to it failed and the song stayed on YouTube.
-        fun renderersFor(effects: DspAudioProcessor, exclusive: Boolean, allowFloat: Boolean = true) = object : DefaultRenderersFactory(context) {
+        fun renderersFor(effects: DspAudioProcessor, exclusive: Boolean, allowFloat: Boolean = true, meterLevels: Boolean = false) = object : DefaultRenderersFactory(context) {
             // The main player measures its song's bitrate from the audio (see MeasuredBitrate); the others don't.
             override fun buildAudioRenderers(
                 context: Context,
@@ -477,9 +477,10 @@ class PlaybackService : MediaLibraryService() {
                                     }) && source != C.ENCODING_PCM_16BIT && source != C.ENCODING_PCM_8BIT)
                             )
                 },
+                meterLevels = meterLevels,
             )
         }
-        val renderers = renderersFor(dsp, exclusive = true)
+        val renderers = renderersFor(dsp, exclusive = true, meterLevels = true)
 
         // Start as soon as a little audio is in: the defaults wait for 2.5 s,
         // which is video-sized caution. A stream starts after half a second buffered
@@ -697,7 +698,7 @@ class PlaybackService : MediaLibraryService() {
             scope, player,
             canFade = {
                 !BitPerfectUsb.active && castMirror?.active != true && crossfade?.blending != true &&
-                    !swapRamping && swappingTo == null
+                        !swapRamping && swappingTo == null
             },
             blend = { target, ms, fallback -> crossfade?.blendSkip(target, ms, fallback) == true },
         )
@@ -1358,6 +1359,11 @@ class PlaybackService : MediaLibraryService() {
                 )
             ) {
                 refreshButtons()
+            }
+            if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_POSITION_DISCONTINUITY)) {
+                // The levels learn the new stretch's place from here, on the
+                // player's own thread — the sink's thread may not ask it.
+                com.opentune.playback.AudioLevels.notePosition(player.currentPosition * 1_000L)
             }
             if (events.containsAny(
                     Player.EVENT_MEDIA_ITEM_TRANSITION,
@@ -2141,7 +2147,7 @@ class PlaybackService : MediaLibraryService() {
             PreloadSteps.forQueue(chances, unmetered = !AppSettings.onMeteredNetwork(), boost = pb.preloadBoostOnWifi).also { plan ->
                 if (plan != queuePlan) com.opentune.data.DebugLog.d("Preload", "Queue ahead: chances " +
                         chances.joinToString(" ") { "%.2f".format(it) } + "; " + plan.sources.entries.joinToString(", ") { (tier, at) -> "$tier at ${at.sorted()}" } + ", " +
-                    "addresses at ${plan.warm.sorted()}, lyrics at ${plan.lyrics.sorted()}, next song's buffer ${plan.nextBufferUs / 1_000_000} s")
+                        "addresses at ${plan.warm.sorted()}, lyrics at ${plan.lyrics.sorted()}, next song's buffer ${plan.nextBufferUs / 1_000_000} s")
             }
         }
         val bufferChanged = plan.nextBufferUs != queuePlan.nextBufferUs
@@ -2958,8 +2964,10 @@ class PlaybackService : MediaLibraryService() {
                 skipped += segment.uuid
                 Log.i(TAG, "SponsorBlock: skipping ${segment.category} ${segment.startMs}-${segment.endMs} ms")
                 if (duration > 0 && segment.endMs >= duration - SEGMENT_END_SLACK_MS) {
-                    // The segment runs to the end: that's the song over.
-                    if (player.hasNextMediaItem()) player.seekToNextMediaItem() else player.seekTo(duration)
+                    // The segment runs to the end: that's the song over, so it ends the way
+                    // the song itself would. Seeking to the next song outright steamrollers
+                    // repeat one, which a natural end honours.
+                    player.seekTo(duration)
                 } else {
                     player.seekTo(segment.endMs)
                 }

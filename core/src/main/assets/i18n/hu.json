@@ -3731,5 +3731,9 @@
 "{0} songs downloaded · plays offline": "{0} dal letöltve · offline is szól",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Tölts le egy lejátszási listát vagy albumot az oldaláról, vagy több mint öt dalát, és itt megjelenik.",
 "Grow video while playing": "Videó nagyítása lejátszás közben",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Lejátszás közben a videó 3 másodperc után a képernyő széléig tágul, szünetkor pedig visszaugrik"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Lejátszás közben a videó 3 másodperc után a képernyő széléig tágul, szünetkor pedig visszaugrik",
+"Video takes the screen": "A videó kitölti a képernyőt",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Amíg egy videó fut, a vezérlők néhány másodperc után lecsúsznak, és csak a cím marad. Húzz felfelé vagy koppints a visszahozásukhoz.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Amikor a videó átveszi a képernyőt, az aktuális dalszövegsor a cím alatt marad, ahelyett hogy a vezérlőkkel együtt elcsúszna.",
+"Only with Video takes the screen on": "Csak bekapcsolt «Video takes the screen» esetén"
 }

@@ -3660,5 +3660,9 @@
 "{0} songs downloaded · plays offline": "{0} şarkı indirildi · çevrimdışı çalar",
 "Download a playlist or album from its page, or more than five of its songs, and it shows here.": "Bir çalma listesini veya albümü sayfasından indir ya da beşten fazla şarkısını indir, burada görünsün.",
 "Grow video while playing": "Oynatılırken videoyu büyüt",
-"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Bir video oynatılırken, 3 saniye sonra ekranın kenarlarına kadar genişler ve duraklatıldığında geri küçülür"
+"While a video plays, it expands to the edges of the screen after 3 seconds, and shrinks back when paused": "Bir video oynatılırken, 3 saniye sonra ekranın kenarlarına kadar genişler ve duraklatıldığında geri küçülür",
+"Video takes the screen": "Video ekranı kaplar",
+"While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Bir video oynarken kontroller birkaç saniye sonra aşağı kayar ve başlık kalır. Geri getirmek için yukarı kaydırın veya dokunun.",
+"While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Video ekranı kaplarken, geçerli şarkı sözü satırı kontrollerle birlikte kaybolmak yerine başlığın altında kalır.",
+"Only with Video takes the screen on": "Yalnızca 'Video takes the screen' açıkken"
 }
