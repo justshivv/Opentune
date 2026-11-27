@@ -1,6 +1,7 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { DetailHeader } from '@/components/music/DetailHeader';
+import { FindInList, findInList } from '@/components/music/FindInList';
 import { playList, queueList, shuffleList } from '@/components/music/play';
 import { LoadError, LoadMoreError, NeedsExtension } from '@/components/music/States';
 import { TrackList } from '@/components/music/TrackList';
@@ -23,11 +24,21 @@ export default function PlaylistPage() {
     if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError) void fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
+  // Search within the playlist: while there's a query, the rest of a long playlist is loaded so
+  // the search covers every song, not only the pages scrolled to so far.
+  const [query, setQuery] = useState('');
+  const searching = query.trim().length > 0;
+  useEffect(() => {
+    if (searching) onNearEnd();
+  }, [searching, onNearEnd, playlist.data?.pages.length]);
+  const tracks = useMemo(() => playlist.data?.pages.flatMap((page) => page.tracks) ?? [], [playlist.data]);
+  const shown = useMemo(() => findInList(tracks, query), [tracks, query]);
+  const moreComing = !!hasNextPage && !isFetchNextPageError;
+
   if (missing) return <NeedsExtension />;
   if (playlist.isError && !playlist.data) return <LoadError error={playlist.error} onRetry={() => void playlist.refetch()} />;
   if (!playlist.data || !header) return <PlaylistSkeleton />;
 
-  const tracks = playlist.data.pages.flatMap((page) => page.tracks);
   const context = { source: { title: header.title, type: 'playlist' as const, id } };
   return (
     <>
@@ -39,7 +50,26 @@ export default function PlaylistPage() {
         onQueue={(next) => queueList(tracks, context, next)}
         shareUrl={`https://music.youtube.com/playlist?list=${encodeURIComponent(id.replace(/^VL/, ''))}`}
       />
-      <TrackList tracks={tracks} variant="playlist" onNearEnd={onNearEnd} source={context.source} />
+      {tracks.length > 0 && (
+        <div className="mx-(--body-gutter) mb-3 flex items-center justify-between gap-4">
+          <p className="min-w-0 truncate type-callout text-secondary" aria-live="polite">
+            {searching &&
+              (shown.length
+                ? `${shown.length} of ${tracks.length} songs${moreComing ? ', searching the rest…' : ''}`
+                : moreComing
+                  ? 'Searching the rest of the playlist…'
+                  : `No songs match “${query.trim()}”`)}
+          </p>
+          <FindInList query={query} onQuery={setQuery} label="Find in playlist" />
+        </div>
+      )}
+      <TrackList
+        tracks={shown}
+        queue={tracks}
+        variant="playlist"
+        onNearEnd={searching ? undefined : onNearEnd}
+        source={context.source}
+      />
       {isFetchingNextPage && <div className="flex justify-center py-5 type-callout text-secondary">Loading more songs…</div>}
       {playlist.isFetchNextPageError && <LoadMoreError onRetry={() => void fetchNextPage()} />}
       <footer className={detailFooter}>
