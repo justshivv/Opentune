@@ -3,10 +3,10 @@ import { authorized, locked, privateHeaders, authRoute } from './auth.mjs';
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const VERSION = /^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]{1,32})?$/;
 const DAY = 86400000;
-// Older apps report today's plays so far after every song, and each saved change costs rows
-// written (the row and its day total): D1's free plan allows 100,000 a day. A day that's still
-// going is saved at most once every SAVE_TODAY_EVERY_MS; days that are over always are, and
-// current apps only send those. The last binds are the reporting zone's today and that cutoff.
+// Older apps report today's plays so far after every song, and each saved change costs a row
+// written (daily_totals is recounted nightly, not by a trigger): D1's free plan allows 100,000 a
+// day. A day that's still going is saved at most once every SAVE_TODAY_EVERY_MS; days that are
+// over always are, and current apps only send those. The last binds are the reporting zone's today and that cutoff.
 export const SAVE_TODAY_EVERY_MS = 2 * 3600000;
 export const activitySql = `INSERT INTO activity(installation,day,version,plays,received_at) VALUES(?,?,?,?,?)
  ON CONFLICT(installation,day,version) DO UPDATE SET plays=excluded.plays,received_at=excluded.received_at
@@ -377,6 +377,45 @@ async function cohortRows({ db, zone, window, today }, daily, recent) {
   return daily.map(live => rows.get(live.day)).filter(Boolean);
 }
 
+// Each day's active installations and plays per zone (daily_totals, see schema.sql). No trigger keeps
+// it: that cost a row written on every report. The cron recounts each zone's last RECOUNT_DAYS days
+// and today, and the dashboard reads the days since that recount may have missed (yesterday, as a
+// report for it can still come in after the count, and today) straight from the activity rows.
+// A late report for an older day (apps send up to 30 days back) shows once the next nightly
+// recount has run; until then that day's row in daily_totals is short of it. Reports for a day
+// are accepted until it is 30 days old, so the recount on the night it is 31 days old sees it final.
+export const RECOUNT_DAYS = 31;
+/**
+ * Recounts each zone's days from today-RECOUNT_DAYS to today: one grouped pass over the day index,
+ * writing only the days whose figures changed. Counted as the triggers did: an installation that
+ * reported a day under two versions (an update mid-day) is one installation, with both rows' plays.
+ */
+export async function recountDailyTotals(db, now = new Date()) {
+  let written = 0;
+  for (const zone of ['Asia/Kolkata', 'UTC']) {
+    const today = calendarDay(now, zone);
+    const done = await db.prepare(`INSERT INTO daily_totals(zone,day,installations,plays)
+      SELECT ?1,day,COUNT(DISTINCT installation),SUM(plays) FROM ${activityTable(zone)} WHERE day BETWEEN ?2 AND ?3 GROUP BY day
+      ON CONFLICT(zone,day) DO UPDATE SET installations=excluded.installations,plays=excluded.plays
+      WHERE daily_totals.installations<>excluded.installations OR daily_totals.plays<>excluded.plays`)
+      .bind(zone, addDays(today, -RECOUNT_DAYS), today).run();
+    written += done?.meta?.changes ?? done?.changes ?? 0;
+  }
+  return written;
+}
+// The live days of [zone] (yesterday on, so also a day ahead of this clock), as daily_totals rows.
+const liveSql = table => `SELECT day,COUNT(DISTINCT installation) AS active,SUM(plays) AS plays FROM ${table} WHERE day>=?1 GROUP BY day ORDER BY day`;
+function liveDays(db, zone, now, shared) {
+  const from = addDays(calendarDay(new Date(now), zone), -1);
+  const count = async () => ({ from, rows: (await db.batch([db.prepare(liveSql(activityTable(zone))).bind(from)]))[0].results });
+  // A dashboard load's summary and analytics share the read when they meet in one instance; never
+  // written to report_cache, which would cost a row written for a few thousand rows read.
+  return shared ? reuse(db, `days:${zone}:${from}`, entry => now - entry.at < REPORT_TTL_MS, count, { now, shared: false }) : count();
+}
+/** daily_totals [rows] before the live days, then the live days in [from, to]. */
+const withLiveDays = (rows, live, from, to) =>
+  [...rows.filter(row => row.day < live.from), ...live.rows.filter(row => row.day >= from && row.day <= to)];
+
 // Lifetime figures, counted nightly. Rows only ever get added to version_installs, downloads and
 // version_transitions, so each count goes on from the last one by rowid (from scratch once a week).
 function growth(db, ids) {
@@ -402,7 +441,8 @@ function grown(life, [installs, releases, [browsers], moves]) {
 export async function countLifetime(db, now = Date.now(), previous = null) {
   const fresh = !previous || now - previous.full >= 7 * DAY;
   const last = fresh ? { full: now, ids: { installs: 0, downloads: 0, moves: 0 }, versions: {}, downloads: {}, browsers: 0, updates: {}, cutoff: '', plays: 0 } : previous;
-  // Days at least 32 days old can't change any more: their plays are added up once.
+  // Days at least 32 days old can't change any more: their plays are added up once. Each was last
+  // recounted the night it was 31 days old (RECOUNT_DAYS), with every report it can get.
   const cutoff = calendarDay(new Date(now - 32 * DAY), 'UTC');
   const [current, ...rest] = (await db.batch([
     db.prepare(currentVersionsSql),
@@ -419,24 +459,32 @@ function lifetime(db, now) {
 export async function summary(db, now = new Date(), timeZone = 'UTC', { shared = false } = {}) {
   const zone = reportZone(timeZone), at = now.getTime();
   const day = calendarDay(now, zone), from = addDays(day, -29);
-  const [life, c] = await Promise.all([lifetime(db, at), dashboardContext(db, zone, now, shared)]);
-  const [[{installs}], [{plays}], [{since}], daily, seen, ...added] = (await db.batch([
+  const [life, c, ist, utc] = await Promise.all([lifetime(db, at), dashboardContext(db, zone, now, shared),
+    liveDays(db, 'Asia/Kolkata', at, shared), liveDays(db, 'UTC', at, shared)]);
+  const live = zone === 'UTC' ? utc : ist;
+  const [[{installs}], [{plays}], [{since}], counted, seen, ...added] = (await db.batch([
     // Lifetime installations come from the count a trigger keeps; lifetime plays are the nightly
-    // sum of the days that can't change any more, plus the last few days' rows of daily_totals.
+    // sum of the days that can't change any more, the last few days' rows of daily_totals up to
+    // each zone's live days, and those days themselves (added below).
     db.prepare('SELECT installations AS installs FROM totals WHERE id=1'),
-    db.prepare("SELECT COALESCE(SUM(plays),0) AS plays FROM daily_totals WHERE zone IN ('UTC','Asia/Kolkata') AND day>=?1").bind(life.cutoff),
-    db.prepare("SELECT MIN(day) AS since FROM (SELECT MIN(day) AS day FROM daily_totals WHERE zone='UTC' UNION ALL SELECT MIN(day) FROM daily_totals WHERE zone='Asia/Kolkata')"),
+    db.prepare(`SELECT (SELECT COALESCE(SUM(plays),0) FROM daily_totals WHERE zone='UTC' AND day>=?1 AND day<?2)
+      + (SELECT COALESCE(SUM(plays),0) FROM daily_totals WHERE zone='Asia/Kolkata' AND day>=?1 AND day<?3) AS plays`).bind(life.cutoff, utc.from, ist.from),
+    // The first day of each table, through its day index (one row each): a day not recounted yet counts too.
+    db.prepare(`SELECT MIN(day) AS since FROM (SELECT MIN(day) AS day FROM daily_totals WHERE zone='UTC' UNION ALL SELECT MIN(day) FROM daily_totals WHERE zone='Asia/Kolkata'
+      UNION ALL SELECT MIN(day) FROM activity UNION ALL SELECT MIN(day) FROM activity_ist)`),
     // A day's figures are one row of daily_totals (see schema.sql), not every report that day.
-    db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=?1 AND day>=?2 AND day<=?3 ORDER BY day').bind(zone, from, day),
+    db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=?1 AND day>=?2 AND day<=?3 AND day<?4 ORDER BY day').bind(zone, from, day, live.from),
     db.prepare('SELECT version FROM versions_seen ORDER BY last_day DESC'),
     ...growth(db, life.ids),
   ])).map(result => result.results);
   const sofar = grown(life, added);
+  const daily = withLiveDays(counted, live, from, day);
+  const livePlays = [...ist.rows, ...utc.rows].reduce((n, row) => n + row.plays, 0);
   const today = daily.at(-1)?.day === day ? daily.at(-1) : { active: 0, plays: 0 };
   const weekly = await rangeCount(c, mondayOf(day), day, { versions: false }), monthly = await rangeCount(c, monthOf(day), day, { versions: false });
   const recent = [weekly.recent, monthly.recent].filter(Boolean).sort((a, b) => a.r0 < b.r0 ? -1 : 1)[0];
   return { asOf: new Date(recent?.at ?? at).toISOString(), timeZone,
-    totals: { installs, plays: life.plays + plays, since }, today: { active: today.active, plays: today.plays },
+    totals: { installs, plays: life.plays + plays + livePlays, since }, today: { active: today.active, plays: today.plays },
     week: weekly.active, month: monthly.active,
     daily, cohorts: await cohortRows(c, daily, recent),
     versions: seen.map(({version}) => ({ version, installations: sofar.versions[version] || 0 })),
@@ -465,11 +513,15 @@ export function validateRange(params, now = new Date(), timeZone = 'UTC') {
 
 export async function analytics(db, range, now = new Date(), timeZone = 'UTC', { shared = false } = {}) {
   const { from, to } = range, zone = reportZone(timeZone);
-  const c = await dashboardContext(db, zone, now, shared);
-  const [daily, [{since}]] = (await db.batch([
-    db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=?1 AND day BETWEEN ?2 AND ?3 ORDER BY day').bind(zone, from, to),
-    db.prepare('SELECT MIN(day) AS since FROM daily_totals WHERE zone=?1').bind(zone),
+  const liveFrom = addDays(calendarDay(now, zone), -1);
+  const [c, live] = await Promise.all([dashboardContext(db, zone, now, shared),
+    to >= liveFrom ? liveDays(db, zone, now.getTime(), shared) : { from: liveFrom, rows: [] }]);
+  const [stored, [{since}]] = (await db.batch([
+    // daily_totals up to the live days (yesterday and today), which are read from the activity rows.
+    db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=?1 AND day BETWEEN ?2 AND ?3 AND day<?4 ORDER BY day').bind(zone, from, to, live.from),
+    db.prepare(`SELECT MIN(day) AS since FROM (SELECT MIN(day) AS day FROM daily_totals WHERE zone=?1 UNION ALL SELECT MIN(day) FROM ${activityTable(zone)})`).bind(zone),
   ])).map(result => result.results);
+  const daily = withLiveDays(stored, live, from, to);
   const counted = await rangeCount(c, from, to);
   const plays = daily.reduce((n, row) => n + row.plays, 0);
   return { asOf: new Date(counted.recent?.at ?? c.now).toISOString(), range, timeZone, totals: { active: counted.active, plays },
@@ -490,8 +542,10 @@ export async function refreshDashboard(db, now = new Date()) {
     const window = await countWindow(db, zone, addDays(calendarDay(now, zone), -1));
     await keepCopy(db, 'window:' + zone, window, at);
     hold(db, 'window:' + zone, { at, value: window }, at);
-    // Reports for the window's first day are no longer accepted: its row is final.
-    const [{results: [live]}] = await db.batch([db.prepare('SELECT day,installations AS active,plays FROM daily_totals WHERE zone=?1 AND day=?2').bind(zone, window.start)]);
+    // Reports for the window's first day are no longer accepted: its row is final. Counted from its
+    // activity rows (one day, through the day index), so it is right even if tonight's recount failed.
+    const [{results: [live]}] = await db.batch([db.prepare(`SELECT day,COUNT(DISTINCT installation) AS active,SUM(plays) AS plays
+      FROM ${activityTable(zone)} WHERE day=?1 GROUP BY day`).bind(window.start)]);
     if (live) await keepCohorts(db, zone, [windowDay(window, window.start, live)]);
   }
   const life = await countLifetime(db, at, (await keptCopy(db, 'lifetime'))?.value);
@@ -600,9 +654,9 @@ export async function sharedCounts(db, zone, now = Date.now()) {
 // Each installation's day-by-day rows are kept for [KEEP_DAYS] (past the dashboard's longest range
 // of 366 days); the lifetime figures and daily_totals keep everything. Run nightly by the cron in
 // wrangler.jsonc, a few thousand rows at a time so a first clean-up of a long history spreads over
-// some nights instead of spending a day's writes at once. Then the public counts and the
-// dashboard's counts are worked out for the new day, so no visitor's request has to. Each step
-// runs even if one before it failed (a clean-up is a write D1 may refuse).
+// some nights instead of spending a day's writes at once. Then the public counts, the last month
+// of daily_totals and the dashboard's counts are worked out for the new day, so no visitor's
+// request has to. Each step runs even if one before it failed (a clean-up is a write D1 may refuse).
 export const KEEP_DAYS = 400;
 const PRUNE_ROWS = 5000, PRUNE_ROUNDS = 2;
 export async function housekeeping(db, now = new Date()) {
@@ -625,8 +679,12 @@ export async function housekeeping(db, now = new Date()) {
     ]);
   } catch { /* tomorrow night */ }
   try { await sharedCounts(db, 'Asia/Kolkata', now.getTime()); } catch { /* counted at the first request instead */ }
+  // Before the dashboard's counts, which read daily_totals. Refused or failed, the next night's
+  // recount covers the same days again.
+  let recounted = 0;
+  try { recounted = await recountDailyTotals(db, now); } catch { /* tomorrow night */ }
   try { await refreshDashboard(db, now); } catch { /* counted at the first dashboard load instead */ }
-  return { removed, cutoff };
+  return { removed, cutoff, recounted };
 }
 
 // Apps before 1.0.x send their totals after every song. The totals are

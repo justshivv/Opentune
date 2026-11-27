@@ -174,30 +174,14 @@ CREATE TABLE IF NOT EXISTS daily_totals (
   plays INTEGER NOT NULL,
   PRIMARY KEY (zone, day)
 );
--- A new row is a new installation for the day unless that installation already has the day under
--- another version (an update mid-day): one primary-key lookup.
-CREATE TRIGGER IF NOT EXISTS daily_activity_insert AFTER INSERT ON activity
-BEGIN
-  INSERT OR IGNORE INTO daily_totals(zone, day, installations, plays) VALUES ('UTC', new.day, 0, 0);
-  UPDATE daily_totals SET plays = plays + new.plays,
-    installations = installations + NOT EXISTS (SELECT 1 FROM activity a WHERE a.installation = new.installation AND a.day = new.day AND a.version <> new.version)
-  WHERE zone = 'UTC' AND day = new.day;
-END;
-CREATE TRIGGER IF NOT EXISTS daily_activity_ist_insert AFTER INSERT ON activity_ist
-BEGIN
-  INSERT OR IGNORE INTO daily_totals(zone, day, installations, plays) VALUES ('Asia/Kolkata', new.day, 0, 0);
-  UPDATE daily_totals SET plays = plays + new.plays,
-    installations = installations + NOT EXISTS (SELECT 1 FROM activity_ist a WHERE a.installation = new.installation AND a.day = new.day AND a.version <> new.version)
-  WHERE zone = 'Asia/Kolkata' AND day = new.day;
-END;
-CREATE TRIGGER IF NOT EXISTS daily_activity_plays AFTER UPDATE OF plays ON activity
-BEGIN
-  UPDATE daily_totals SET plays = plays + new.plays - old.plays WHERE zone = 'UTC' AND day = new.day;
-END;
-CREATE TRIGGER IF NOT EXISTS daily_activity_ist_plays AFTER UPDATE OF plays ON activity_ist
-BEGIN
-  UPDATE daily_totals SET plays = plays + new.plays - old.plays WHERE zone = 'Asia/Kolkata' AND day = new.day;
-END;
+-- Recounted nightly, not kept by triggers: a trigger here cost a row written on every report (its
+-- day's total), and D1's free plan allows 100,000 rows written a day. The cron (housekeeping in
+-- worker.mjs) recounts each zone's last 31 days from the activity rows and writes only the days
+-- whose figures changed; the dashboard reads today and yesterday straight from the activity rows.
+DROP TRIGGER IF EXISTS daily_activity_insert;
+DROP TRIGGER IF EXISTS daily_activity_ist_insert;
+DROP TRIGGER IF EXISTS daily_activity_plays;
+DROP TRIGGER IF EXISTS daily_activity_ist_plays;
 -- Built once from the history already recorded, the same way as the summaries above.
 INSERT OR IGNORE INTO daily_totals(zone, day, installations, plays)
   SELECT 'UTC', day, COUNT(DISTINCT installation), SUM(plays)
