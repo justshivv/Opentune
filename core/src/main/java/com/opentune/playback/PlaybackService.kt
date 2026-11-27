@@ -606,11 +606,20 @@ class PlaybackService : MediaLibraryService() {
             override fun onEvents(p: Player, events: Player.Events) {
                 if (events.containsAny(
                         Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_IS_PLAYING_CHANGED, Player.EVENT_POSITION_DISCONTINUITY,
-                        Player.EVENT_PLAYBACK_PARAMETERS_CHANGED, Player.EVENT_MEDIA_METADATA_CHANGED,
+                        Player.EVENT_PLAYBACK_PARAMETERS_CHANGED, Player.EVENT_MEDIA_METADATA_CHANGED, Player.EVENT_PLAYBACK_STATE_CHANGED,
                     )
                 ) tellDiscord(p)
             }
         })
+        // While a song plays, the card is re-anchored on a slow beat: Discord
+        // runs its bar from the last timestamps it was given, and over a long
+        // song those would otherwise drift from the player's own place.
+        scope.launch {
+            while (true) {
+                delay(DISCORD_REANCHOR_MS)
+                if (player.isPlaying) tellDiscord(player)
+            }
+        }
         crossfade = Crossfade(
             scope = scope,
             main = player,
@@ -1089,15 +1098,25 @@ class PlaybackService : MediaLibraryService() {
         if (AppSettings.playback.value.stopOnTaskRemoved) {
             player.pause()
             player.stop()
+            // The Discord session closes here, while the process is certainly
+            // alive: a swipe from recents can kill it without onDestroy ever
+            // running, and a socket left to die on its own keeps the card up
+            // until Discord's heartbeat gives up on it, a minute or more.
+            com.opentune.data.discord.DiscordRpc.closeSession()
             stopSelf()
             return
         }
         if (!player.playWhenReady || player.mediaItemCount == 0) {
+            com.opentune.data.discord.DiscordRpc.closeSession()
             stopSelf()
         }
     }
 
     override fun onDestroy() {
+        // The card comes down with the service, and the session closes with it,
+        // now: a socket left to die on its own keeps the card up until Discord's
+        // heartbeat gives up on it, the best part of a minute.
+        com.opentune.data.discord.DiscordRpc.closeSession()
         PreloadPlanner.detach(preloadHost)
         PlayingHereNotice.cancel(this)
         ExternalStreams.playing(null, null)
@@ -3754,6 +3773,8 @@ class PlaybackService : MediaLibraryService() {
         /** Boosted preload duration ahead on Wi-Fi (20s). */
         const val PRELOAD_WIFI_US = 20_000_000L
         const val DISCORD_SETTLE_MS = 800L
+        /** How often a playing song's Discord card is re-anchored to the player's place. */
+        const val DISCORD_REANCHOR_MS = 20_000L
 
         /** Codecs that are lossless whatever the stream around them says. */
         val DISCORD_LOSSLESS_CODECS = listOf("FLAC", "ALAC", "WAV", "AIFF", "DSD", "WavPack", "APE")

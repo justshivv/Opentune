@@ -44,7 +44,9 @@ import org.json.JSONObject
  *
  * The gateway client follows the web player's (web/extension/lib/discord.ts):
  * reconnect with a doubling back-off, a heartbeat watchdog, and the last card
- * replayed onto each new session. Paused or stopped, the card comes down.
+ * replayed onto each new session. Paused or loading, the card stays and
+ * waits frozen, without a clock; it comes down when nothing is loaded,
+ * and the session dies with the app either way.
  */
 object DiscordRpc {
     data class Account(val token: String, val id: String, val name: String, val username: String, val avatarUrl: String?)
@@ -165,6 +167,15 @@ object DiscordRpc {
             _status.value = Status.Off
         } else last?.let { update(it) }
     }
+    /** The app is going away: the card comes down and the session closes at once. */
+    fun closeSession() {
+        pending?.cancel()
+        idle?.cancel()
+        gateway?.clear()
+        gateway?.close()
+        gateway = null
+        _status.value = Status.Off
+    }
 
     private var last: NowPlaying? = null
     private var gateway: Gateway? = null
@@ -178,7 +189,10 @@ object DiscordRpc {
         if (!_enabled.value) return
         pending?.cancel()
         pending = scope.launch {
-            if (now == null || !now.playing) {
+            // Nothing loaded at all: the card comes down, and the session
+            // follows it after a while. A loaded song, playing or not, keeps
+            // its card — presence() leaves the clock off a paused one.
+            if (now == null) {
                 gateway?.clear()
                 idle?.cancel()
                 idle = scope.launch {
@@ -240,10 +254,12 @@ object DiscordRpc {
             .put("name", heading)
             .put("type", 2)
             .put("details", fit(if (rate != 1f) "${now.title} [${"%.2f".format(rate)}x]" else now.title, TEXT_MAX))
-            // The artist, with the stream's quality after them when it's known.
+            // The artist, with the stream's quality after them when it's known —
+            // or, while the song stands still, simply that it is paused.
             .put("state", fit(
-                listOfNotNull(now.artist.ifBlank { "Unknown artist" }, now.quality?.takeIf { it.isNotBlank() })
-                    .joinToString(" · "),
+                if (now.playing) listOfNotNull(now.artist.ifBlank { "Unknown artist" }, now.quality?.takeIf { it.isNotBlank() })
+                    .joinToString(" · ")
+                else "Paused",
                 TEXT_MAX,
             ))
             // 0 names the activity itself: the status line reads the name,
@@ -257,9 +273,13 @@ object DiscordRpc {
                     put("small_image", externalAsset(token, LOGO_URL) ?: LOGO_URL)
                     put("small_text", APP_NAME)
                 }
-                now.album?.takeIf { it.isNotBlank() }?.let { put("large_text", fit(it, TEXT_MAX)) }
+                if (now.playing) now.album?.takeIf { it.isNotBlank() }?.let { put("large_text", fit(it, TEXT_MAX)) }
             })
-        if (now.durationMs > 0) {
+        // The timestamps are the card's clock: Discord runs the bar and the
+        // counter from them. A song that is not playing — paused, or loading —
+        // gets none, so its card stands still at the song instead of ticking
+        // on without it or coming down.
+        if (now.playing && now.durationMs > 0) {
             activity.put("timestamps", JSONObject()
                 .put("start", wall - (now.positionMs / rate).toLong())
                 .put("end", wall + ((now.durationMs - now.positionMs).coerceAtLeast(0) / rate).toLong()))

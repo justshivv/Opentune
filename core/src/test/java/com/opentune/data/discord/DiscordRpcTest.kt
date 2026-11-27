@@ -52,4 +52,10 @@ class DiscordRpcTest {
         assertEquals(120_000.0, (t.getLong("end") - t.getLong("start")).toDouble(), 50.0)
         assertTrue(a.getString("details").endsWith("[2.00x]"))
     }
+    @Test fun aPausedSongKeepsItsCardWithoutAClock() {
+        val a = DiscordRpc.presence("token", now().copy(playing = false))
+            .getJSONArray("activities").getJSONObject(0)
+        assertEquals("Labon Ko", a.getString("details"))
+        assertTrue(a.isNull("timestamps"))
+    }
 }
