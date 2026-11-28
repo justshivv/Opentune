@@ -35,7 +35,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -740,6 +747,52 @@ internal fun ListHero(
 ) {
     // The colour the buttons take when Settings › Page buttons asks for the accent.
     val accent = LocalListAccent.current
+    // Beside the songs (a tablet on its side, see ListPageList): the framed cover
+    // over the name and buttons, all in the column at the page's start.
+    if (LocalListSide.current) {
+        Column(
+            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = 64.dp, start = 28.dp, end = 20.dp, bottom = 24.dp + footPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            val frame = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+            Box(
+                Modifier.fillMaxWidth().widthIn(max = SIDE_COVER_MAX).aspectRatio(1f)
+                    .shadow(22.dp, frame, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
+                    .clip(frame),
+            ) { cover(Modifier.fillMaxSize()) }
+            Spacer(Modifier.height(22.dp))
+            HeaderButtonsScope(rememberHeaderBackdrop(null), accent) { info() }
+        }
+        return
+    }
+    val spread = com.opentune.ui.currentPageSpread()
+    // A large screen with the framed cover: the cover at the start and the name, counts and
+    // buttons beside it, so the songs start well up the page rather than under a cover as
+    // wide as the page.
+    if (spread != com.opentune.ui.PageSpread.PHONE && !fullListCover()) {
+        androidx.compose.foundation.layout.BoxWithConstraints(
+            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = 64.dp, start = 24.dp, end = 24.dp, bottom = 12.dp + footPadding),
+        ) {
+            val side = (maxWidth * ROW_COVER_SHARE).coerceIn(ROW_COVER_MIN, ROW_COVER_MAX)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val frame = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+                Box(
+                    Modifier.size(side)
+                        .shadow(22.dp, frame, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
+                        .clip(frame),
+                ) { cover(Modifier.fillMaxSize()) }
+                Spacer(Modifier.width(24.dp))
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                    androidx.compose.runtime.CompositionLocalProvider(LocalHeroTextAlign provides TextAlign.Start) {
+                        HeaderButtonsScope(rememberHeaderBackdrop(null), accent) { info() }
+                    }
+                }
+            }
+        }
+        return
+    }
     if (fullListCover()) {
         val heroHeight = collectionHeroHeight()
         // The cover drifts down at a fraction of the scroll, so the list rises
@@ -795,6 +848,79 @@ internal fun ListHero(
 /** How much of the page's width a framed cover takes, with Full-screen playlist covers off. */
 private const val FRAMED_COVER_WIDTH = 0.68f
 
+/** The cover beside the name in a large screen's header row: its share of the page, and its bounds. */
+private const val ROW_COVER_SHARE = 0.34f
+private val ROW_COVER_MIN = 168.dp
+private val ROW_COVER_MAX = 280.dp
+
+/** The largest the cover gets in the column beside the songs. */
+private val SIDE_COVER_MAX = 400.dp
+
+/** The share of the page the header's column takes beside the songs, and its bounds. */
+private const val SIDE_COLUMN_SHARE = 0.4f
+private val SIDE_COLUMN_MIN = 280.dp
+private val SIDE_COLUMN_MAX = 440.dp
+
+/** Set inside [ListPageList]'s column beside the songs, where [ListHero] draws its side shape. */
+internal val LocalListSide = androidx.compose.runtime.compositionLocalOf { false }
+
+/** How a list hero's name and counts line up: centred under a cover, at the start beside one. */
+internal val LocalHeroTextAlign = androidx.compose.runtime.compositionLocalOf { TextAlign.Center }
+
+/**
+ * A list page's songs with its [header] (the hero) as the list's first row,
+ * as on a phone; on a tablet held sideways (see [PageSpread.SIDE_BY_SIDE])
+ * the header stands in a column at the page's start instead, still while
+ * the songs scroll beside it. [searching] takes the header out of the list
+ * while a search shows its results there; beside the songs it stays.
+ * Everything else is the LazyColumn's own.
+ */
+@Composable
+internal fun ListPageList(
+    state: LazyListState,
+    contentPadding: PaddingValues,
+    modifier: Modifier = Modifier,
+    band: com.opentune.ui.components.RubberBandOverscroll? = null,
+    searching: Boolean = false,
+    headerKey: String = "header",
+    header: (@Composable () -> Unit)?,
+    content: LazyListScope.() -> Unit,
+) {
+    if (com.opentune.ui.currentPageSpread() != com.opentune.ui.PageSpread.SIDE_BY_SIDE) {
+        LazyColumn(state = state, overscrollEffect = band, contentPadding = contentPadding, modifier = modifier) {
+            if (header != null && !searching) item(key = headerKey) { header() }
+            content()
+        }
+        return
+    }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val sideWidth = (maxWidth * SIDE_COLUMN_SHARE).coerceIn(SIDE_COLUMN_MIN, SIDE_COLUMN_MAX)
+        Row(Modifier.fillMaxSize()) {
+            Column(
+                Modifier.width(sideWidth).fillMaxHeight()
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+            ) {
+                if (header != null) androidx.compose.runtime.CompositionLocalProvider(LocalListSide provides true) { header() }
+            }
+            // The songs start under the page's top bar; a search's own header pads them itself.
+            val top = if (searching) 0.dp else WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp
+            val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
+            LazyColumn(
+                state = state,
+                overscrollEffect = band,
+                contentPadding = PaddingValues(
+                    start = contentPadding.calculateStartPadding(direction),
+                    end = contentPadding.calculateEndPadding(direction),
+                    top = contentPadding.calculateTopPadding() + top,
+                    bottom = contentPadding.calculateBottomPadding(),
+                ),
+                modifier = modifier.weight(1f),
+                content = content,
+            )
+        }
+    }
+}
+
 /**
  * A full-width square for the complete cover. Wide artwork is fitted within it;
  * the title follows below, and a light edge scrim keeps the top controls readable.
@@ -830,10 +956,17 @@ private val COLLECTION_HERO_MIN_HEIGHT = 340.dp
  * the same minimum.
  */
 @Composable
-internal fun collectionHeroHeight(fraction: Float = COLLECTION_HERO_FRACTION) = maxOf(
-    (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * fraction).dp,
-    COLLECTION_HERO_MIN_HEIGHT,
-)
+internal fun collectionHeroHeight(fraction: Float = COLLECTION_HERO_FRACTION): androidx.compose.ui.unit.Dp {
+    val share = maxOf(
+        (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * fraction).dp,
+        COLLECTION_HERO_MIN_HEIGHT,
+    )
+    // A large screen's share of its height is a wall of cover: kept to a hero's size there.
+    return if (com.opentune.ui.currentPageSpread() == com.opentune.ui.PageSpread.PHONE) share else minOf(share, COLLECTION_HERO_MAX_LARGE)
+}
+
+/** The tallest the full-cover hero gets on a large screen. */
+private val COLLECTION_HERO_MAX_LARGE = 480.dp
 private const val LIST_PARALLAX = 0.4f
 private const val COLLECTION_PAGE_SIZE = 50
 
@@ -1119,7 +1252,7 @@ internal fun CollectionHero(
         band = band,
         listState = listState,
     ) {
-        Text(title, style = MaterialTheme.typography.displaySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(title, style = MaterialTheme.typography.displaySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = LocalHeroTextAlign.current, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (poster) {
             // The title, who it's by in spaced capitals, the buttons, then what it is and how long:
             // "ALBUM · 9 SONGS · 42 MIN", over a hairline where the songs begin.
@@ -1137,11 +1270,11 @@ internal fun CollectionHero(
                 subtitle,
                 explicit = explicit,
                 style = MaterialTheme.typography.titleMedium,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = LocalHeroTextAlign.current,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
-        Text(meta, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+        Text(meta, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = LocalHeroTextAlign.current, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(20.dp))
         buttons()
         Spacer(Modifier.height(16.dp))
@@ -1309,8 +1442,13 @@ fun CollectionScreen(
                         // Keyed by the song (and which copy of it), not its place: sorting or a song
                         // taken out moved every place, and each row was then made again from nothing.
                         val pagedKeys = remember(paged) { com.opentune.ui.library.songKeys(paged) }
-                        LazyColumn(state = listState, overscrollEffect = band, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else PaddingValues(bottom = contentPadding.calculateBottomPadding()), modifier = Modifier.fillMaxSize().playlistSearchResults(search)) {
-                            if (!searching) item(key = "header") {
+                        ListPageList(
+                            state = listState,
+                            band = band,
+                            contentPadding = if (searching) PaddingValues(bottom = 16.dp) else PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                            modifier = Modifier.fillMaxSize().playlistSearchResults(search),
+                            searching = searching,
+                            header = {
                                 if (c == null) {
                                     // The hero's loading shape: the cover across the
                                     // whole top, then the title, the counts and the
@@ -1376,7 +1514,8 @@ fun CollectionScreen(
                                         },
                                     )
                                 }
-                            }
+                            },
+                        ) {
                             if (firstPage != null && loadingState is UiState.Error) item(key = "retry-pages") {
                                 androidx.compose.material3.TextButton(onClick = { loader.reload() }) { Text("Some tracks couldn't load. Retry") }
                             }

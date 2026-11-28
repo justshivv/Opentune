@@ -1729,18 +1729,14 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 com.opentune.ui.browse.ListPageWash()
                 // The hero runs to the very top of the screen, so the list keeps only the
                 // bottom inset (room for the dock); the hero carries its own top shade.
-                LazyColumn(
+                com.opentune.ui.browse.ListPageList(
                     state = listState,
-                    overscrollEffect = band,
+                    band = band,
                     contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
                     modifier = Modifier.fillMaxSize().playlistSearchResults(search),
-                ) {
-                    if (!storeReady) {
-                        item { LikedSkeleton(band, listState) }
-                        items(8) { com.opentune.ui.components.SongRowPlaceholder() }
-                        return@LazyColumn
-                    }
-                    if (!searching) item(key = "liked-hero") {
+                    searching = searching,
+                    headerKey = "liked-hero",
+                    header = if (!storeReady) ({ LikedSkeleton(band, listState) }) else ({
                         LikedHero(
                             songs.firstOrNull(), songs.size, totalSeconds,
                             onPlay = { actions.playAll(shown, 0, false, "Liked Music") },
@@ -1752,13 +1748,17 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                             band = band,
                             listState = listState,
                         )
+                    }),
+                ) {
+                    if (!storeReady) {
+                        items(8) { com.opentune.ui.components.SongRowPlaceholder() }
+                        return@ListPageList
                     }
-
                     if (songs.isEmpty()) {
                         item {
                             MessageState(ImageVector.vectorResource(AppIcons.Favorite), "No liked songs", Modifier.padding(top = 32.dp), message = "Tap the heart in the player, or Like in a song's menu.")
                         }
-                        return@LazyColumn
+                        return@ListPageList
                     }
                     if (shown.isEmpty()) item { Text(com.opentune.ui.theme.tr("No matching songs"), Modifier.padding(24.dp)) }
                     itemsIndexed(shown.take(shownCount), key = { _, s -> s.videoId }) { i, song ->
@@ -1972,9 +1972,9 @@ private fun PlaylistHero(
         listState = listState,
     ) {
         run {
-            Text(name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (source.isNotBlank()) Text(source, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
-            Text(meta, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+            Text(name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = com.opentune.ui.browse.LocalHeroTextAlign.current, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (source.isNotBlank()) Text(source, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = com.opentune.ui.browse.LocalHeroTextAlign.current, modifier = Modifier.padding(top = 4.dp))
+            Text(meta, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = com.opentune.ui.browse.LocalHeroTextAlign.current, modifier = Modifier.padding(top = 6.dp))
             Spacer(Modifier.height(20.dp))
             buttons()
             tools(Modifier.fillMaxWidth().padding(top = 12.dp))
@@ -2213,9 +2213,13 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 com.opentune.ui.browse.ListPageWash()
                 var shownCount by remember { androidx.compose.runtime.mutableIntStateOf(PAGE_SIZE) }
                 val paged = shown.take(shownCount)
-                LazyColumn(state = listState, overscrollEffect = band, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else PaddingValues(bottom = contentPadding.calculateBottomPadding()),
-                    modifier = Modifier.fillMaxSize().playlistSearchResults(search)) {
-                    if (!searching) item(key = "header") {
+                com.opentune.ui.browse.ListPageList(
+                    state = listState,
+                    band = band,
+                    contentPadding = if (searching) PaddingValues(bottom = 16.dp) else PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                    modifier = Modifier.fillMaxSize().playlistSearchResults(search),
+                    searching = searching,
+                    header = {
                         PlaylistHero(
                             name = playlist.name,
                             source = if (playlist.spotifyId != null) "" else if (playlist.synced) "YouTube Music" else "On this phone",
@@ -2242,12 +2246,13 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                             band = band,
                             listState = listState,
                         )
-                    }
+                    },
+                ) {
                     if (songs.isEmpty()) {
                         item {
                             MessageState(ImageVector.vectorResource(AppIcons.QueueMusic), "Nothing here yet", Modifier.padding(top = 32.dp), message = if (playlist.spotifyId != null) "Songs added in Spotify appear after the next sync." else "Add songs here, or use Add to playlist in any song's menu.")
                         }
-                        return@LazyColumn
+                        return@ListPageList
                     }
                     // Keyed by the song (and which copy of it), not its place, so a row taken out pops
                     // alone and the rows below slide up rather than every row after it being redrawn.
