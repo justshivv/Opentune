@@ -52,9 +52,12 @@ object ShareCard {
     const val SIZE = 1080
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    /** Shares [song]'s link with its card attached; just the link if the card can't be made. */
-    fun share(context: Context, song: Song, positionMs: Long = 0, durationMs: Long = 0) {
-        val link = "https://music.youtube.com/watch?v=${song.videoId}"
+    /**
+     * Shares [song]'s link with its card attached; just the link if the card can't be made.
+     * With [fromHere], the link starts where the song is now ([positionMs]).
+     */
+    fun share(context: Context, song: Song, positionMs: Long = 0, durationMs: Long = 0, fromHere: Boolean = false) {
+        val link = com.opentune.ui.Links.songLink(song.videoId, if (fromHere) positionMs else 0)
         scope.launch {
             val bitmap = runCatching {
                 val cover = loadImage(context, song.thumbnailUrl, SIZE)

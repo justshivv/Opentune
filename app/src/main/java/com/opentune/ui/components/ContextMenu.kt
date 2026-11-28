@@ -384,6 +384,13 @@ fun SongContextMenu(
             val (at, length) = actions?.progressOf?.invoke(song) ?: (0L to 0L)
             com.opentune.ui.share.ShareCard.share(context, song, at, length)
         })
+        // The song playing, some way in: its link can start right here.
+        if (!local) {
+            val (at, length) = actions?.progressOf?.invoke(song) ?: (0L to 0L)
+            if (at >= SHARE_FROM_MIN_MS) add(MenuEntry(com.opentune.i18n.Tr.f("Share from {0}", com.opentune.ui.formatTime(at)), ImageVector.vectorResource(AppIcons.Share)) {
+                com.opentune.ui.share.ShareCard.share(context, song, at, length, fromHere = true)
+            })
+        }
         add(MenuEntry("More options", ImageVector.vectorResource(AppIcons.MoreHoriz)) { next = "more" })
     }
     ContextMenu(anchor, onDismiss = { if (next == null) onDismiss() }, entries = entries, liftCorner = liftCorner, preview = preview)

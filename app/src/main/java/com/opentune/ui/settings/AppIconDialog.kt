@@ -65,6 +65,8 @@ internal fun selectAppIcon(context: Context, choice: AppIcon) {
     AppIcon.entries.filter { it != choice }.forEach {
         pm.setComponentEnabledSetting(it.component(context), PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
     }
+    // The icon's shortcuts belong to the launcher entry: they move to the new one.
+    com.opentune.ui.LauncherShortcuts.publish(context)
 }
 
 @Composable

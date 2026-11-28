@@ -129,6 +129,8 @@ fun QueuePane(
     shuffled: Boolean = false,
     /** Apple Music's words for what comes after the queue. */
     appleWords: Boolean = false,
+    /** Empties Up Next, the song playing keeps on. */
+    onClearUpNext: () -> Unit = {},
 ) {
     // A song started on its own carries on with its radio even with AutoPlay off (see PlaybackService.radioWanted).
     val autoplay = AppSettings.playback.collectAsState().value.autoplay ||
@@ -208,7 +210,7 @@ fun QueuePane(
         item(key = "autoplay") {
             Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(ImageVector.vectorResource(AppIcons.AllInclusive), null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
-                Column(Modifier.padding(start = 14.dp)) {
+                Column(Modifier.weight(1f).padding(start = 14.dp)) {
                     Text(if (appleWords && autoplay && !shuffle && !shuffled && !smartShuffle) "AutoPlay" else "Up next",
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
@@ -224,6 +226,13 @@ fun QueuePane(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                QueueMenu(
+                    songs = remember(queue, currentIndex, upNext) {
+                        (listOf(currentIndex) + upNext).mapNotNull { queue.getOrNull(it) }.filter { keepsInPlaylist(it.videoId) }
+                    },
+                    canClear = upNext.isNotEmpty(),
+                    onClear = onClearUpNext,
+                )
             }
         }
         itemsIndexed(order, key = { _, index -> "q" + rowKeys.getOrElse(index) { "$index" } }) { pos, index ->
@@ -319,6 +328,46 @@ internal fun queueDragMove(started: List<Int>, from: Int, to: Int, upNext: List<
     val onto = started.getOrNull(to) ?: return null
     if (moved == onto || moved !in upNext || onto !in upNext) return null
     return moved to onto
+}
+
+/**
+ * Whether a song in the queue can go into a playlist: a radio station, a podcast episode or an
+ * audiobook chapter can't. Songs on this phone or your own server can, in a playlist here.
+ */
+internal fun keepsInPlaylist(id: String): Boolean =
+    !id.startsWith("pod:") && !id.startsWith("book:") && !com.opentune.data.radio.Radio.isRadio(id)
+
+/**
+ * The queue's ⋯ menu: save the song playing and everything after it as a playlist, or clear Up
+ * next. Clearing is for this device's own queue only, so it's left out while controlling another.
+ */
+@Composable
+private fun QueueMenu(songs: List<Song>, canClear: Boolean, onClear: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf<List<Song>?>(null) }
+    val remote by com.opentune.data.connect.Connect.controlling.collectAsState()
+    val clearable = canClear && remote == null
+    if (songs.isEmpty() && !clearable) return
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(ImageVector.vectorResource(AppIcons.MoreVert), com.opentune.ui.theme.tr("Queue options"), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        androidx.compose.material3.DropdownMenu(open, { open = false }, shape = RoundedCornerShape(20.dp)) {
+            if (songs.isNotEmpty()) androidx.compose.material3.DropdownMenuItem(
+                text = { Text(com.opentune.ui.theme.tr("Save queue as playlist")) },
+                leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.PlaylistAdd), null) },
+                onClick = { open = false; saving = songs },
+            )
+            if (clearable) androidx.compose.material3.DropdownMenuItem(
+                text = { Text(com.opentune.ui.theme.tr("Clear Up next")) },
+                leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.DeleteSweep), null) },
+                onClick = { open = false; onClear() },
+            )
+        }
+    }
+    saving?.let { these ->
+        com.opentune.ui.components.AddAllToPlaylistDialog(these, onDismiss = { saving = null }, onDone = { saving = null })
+    }
 }
 
 @Composable

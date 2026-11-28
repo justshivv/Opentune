@@ -264,6 +264,14 @@ fun SongMenuSheet(
                 top?.invoke(this, close)
                 tools?.invoke(this, close)
             }
+            // The song playing, some way in: its link can start right here.
+            if (!local) {
+                val (at, length) = remember(song.videoId) { actions?.progressOf?.invoke(song) ?: (0L to 0L) }
+                if (at >= SHARE_FROM_MIN_MS) MenuRow(ImageVector.vectorResource(AppIcons.Share), com.opentune.i18n.Tr.f("Share from {0}", com.opentune.ui.formatTime(at))) {
+                    com.opentune.ui.share.ShareCard.share(context, song, at, length, fromHere = true)
+                    close()
+                }
+            }
             if (download?.state == DownloadState.DONE || (local && Ringtones.canUse(song))) {
                 MenuRow(ImageVector.vectorResource(AppIcons.NotificationsActive), "Set as ringtone") { ringtone = true }
             }
@@ -522,6 +530,9 @@ fun MenuGroupBreak() {
     if (posterLayout()) androidx.compose.foundation.layout.Spacer(Modifier.height(10.dp))
     else HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
+
+/** How far into a song it has to be before Share offers a link from that moment. */
+internal const val SHARE_FROM_MIN_MS = 10_000L
 
 @Composable
 fun MenuRow(icon: ImageVector, label: String, summary: String? = null, onClick: () -> Unit) {

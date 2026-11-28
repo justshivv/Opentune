@@ -222,6 +222,8 @@ class PlayerActions(
     val setVideoMode: (Boolean) -> Unit = {},
     /** Sends the music video into a small window over other apps; null where the phone doesn't allow it. */
     val pictureInPicture: (() -> Unit)? = null,
+    /** Empties Up next on this device. */
+    val clearUpNext: () -> Unit = {},
 )
 
 @Composable
@@ -288,6 +290,7 @@ fun PlayerScreen(
             openDevices = onDevices,
             setVideoMode = vm::setVideoMode,
             pictureInPicture = if (pipAllowed && pipHost != null) ({ pipHost.enterPictureInPicture(); Unit }) else null,
+            clearUpNext = vm::clearUpNext,
         )
     }
     // One output for the picture wherever it shows, the player, full screen or the small
@@ -1281,6 +1284,7 @@ fun PlayerLayout(
                                     onPlayIndex = actions.playIndex,
                                     onRemoveIndex = actions.removeIndex,
                                     onMove = actions.moveIndex,
+                                    onClearUpNext = actions.clearUpNext,
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }
@@ -1858,6 +1862,7 @@ fun PlayerLayout(
                                                     onPlayIndex = actions.playIndex,
                                                     onRemoveIndex = actions.removeIndex,
                                                     onMove = actions.moveIndex,
+                                                    onClearUpNext = actions.clearUpNext,
                                                     modifier = Modifier.weight(1f).fillMaxWidth(),
                                                     appleWords = apple,
                                                 )
