@@ -197,9 +197,11 @@ fun FollowCoverPages(nav: NavHostController, allowed: Boolean, routes: Set<Strin
     }
     // The whole stack is only public as this restricted, long-stable flow; it's
     // brought up to date after the listener above has heard of a move.
-    @android.annotation.SuppressLint("RestrictedApi")
-    LaunchedEffect(nav) { nav.currentBackStack.collect { stack -> CoverMorph.stackIs(stack.map { it.id }) } }
+    LaunchedEffect(nav) { nav.backStackFlow().collect { stack -> CoverMorph.stackIs(stack.map { it.id }) } }
 }
+
+@android.annotation.SuppressLint("RestrictedApi")
+private fun NavController.backStackFlow() = currentBackStack
 
 /** A cover that can open its page out of itself: call [tap] as it's tapped, and put [coverMorphCard] on the cover. */
 @Stable

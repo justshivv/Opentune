@@ -615,7 +615,7 @@ private fun SmartMoreSheet(
         contentPadding = PaddingValues(0.dp),
         header = {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                SmartCover(playlist.name, songs.map { it.thumbnailUrl }, Modifier.size(56.dp), RoundedCornerShape(14.dp), markSize = 0.45f)
+                SmartCover(playlist.name, remember(songs) { songs.map { it.thumbnailUrl } }, Modifier.size(56.dp), RoundedCornerShape(14.dp), markSize = 0.45f)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(playlist.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -767,7 +767,7 @@ internal fun SmartEditorPage(
     val seed = existing?.id?.hashCode()?.toLong() ?: 0L
     // Counted without the limit, so the count can say how many the limit keeps.
     val matches = rememberSmartSongs(rules.copy(limit = null), seed, facts)
-    val cleaned = rules.copy(conditions = rules.conditions.map { if (it is SmartRule.Artist) SmartRule.Artist(it.name.trim()) else it })
+    val cleaned = remember(rules) { rules.copy(conditions = rules.conditions.map { if (it is SmartRule.Artist) SmartRule.Artist(it.name.trim()) else it }) }
     val changed = name.trim() != startName || cleaned != startRules
     val problem = smartProblem(name, rules)
     val presetNames = remember { SmartPlaylists.presets.map { it.first }.toSet() }
