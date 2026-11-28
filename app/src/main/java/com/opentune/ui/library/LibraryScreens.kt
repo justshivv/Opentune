@@ -1,8 +1,5 @@
 package com.opentune.ui.library
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -47,7 +44,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.opentune.data.history.History
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.model.CARD_ART_PX
@@ -87,9 +83,7 @@ internal fun PlayButtons(onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Mo
     }
 }
 
-private val audioPermission =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO
-    else Manifest.permission.READ_EXTERNAL_STORAGE
+private val audioPermission = LocalMusic.audioPermission
 
 /** The device page's own colour, for its tint when no cover colours it. */
 private val DEVICE_SEED = androidx.compose.ui.graphics.Color(0xFF5E7A8C)
@@ -109,22 +103,26 @@ private const val LOCAL_PAGE_SIZE = 50
 fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
     val context = LocalContext.current
     val library by AppSettings.library.collectAsState()
-    var granted by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED)
-    }
+    // Access to every audio file, or to the one folder picked instead (see MusicFolder).
+    var granted by remember(library.localTree) { mutableStateOf(LocalMusic.canRead(context, library)) }
     // Refused: Android may not ask again, so the button opens the app's settings instead.
     var refused by remember { mutableStateOf(false) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it; refused = !it }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        // Every audio file allowed: a folder picked earlier gives way to them.
+        if (ok && AppSettings.library.value.localTree != null) com.opentune.data.local.MusicFolder.forget(context)
+        granted = ok; refused = !ok
+    }
+    val pickFolder = rememberMusicFolderPicker()
     // Allowed (or taken away) in the app's settings while away: read again on coming back, or
     // the page kept asking for access it already had.
-    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
-        granted = ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED
+    androidx.lifecycle.compose.LifecycleResumeEffect(library.localTree) {
+        granted = LocalMusic.canRead(context, AppSettings.library.value)
         onPauseOrDispose { }
     }
     var songs by remember { mutableStateOf<List<Song>?>(null) }
     var dated by remember { mutableStateOf<List<Pair<Song, Long>>>(emptyList()) }
     var heroSong by remember { mutableStateOf<Song?>(null) }
-    LaunchedEffect(granted, library.localFolder, library.filterNonMusic) {
+    LaunchedEffect(granted, library.localTree, library.localFolder, library.filterNonMusic) {
         if (granted) {
             val loaded = runCatching { LocalMusic.tracksDated(context, library) }.getOrDefault(emptyList())
             dated = loaded
@@ -232,16 +230,23 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
                                         ImageVector.vectorResource(AppIcons.Folder),
                                         "Play music saved on your phone",
                                         Modifier.padding(top = 32.dp),
-                                        message = if (refused) "Access to audio files is off for NepTune. You can allow it in the app's settings."
-                                            else "NepTune needs permission to read audio files. Nothing leaves your device.",
+                                        message = when {
+                                            library.localTree != null -> "NepTune can't open the folder you picked any more. Pick it again, or allow access to all audio files."
+                                            refused -> "Access to audio files is off for NepTune. You can allow it in the app's settings, or pick one folder for NepTune to read."
+                                            else -> "Allow NepTune to read your audio files, or pick one folder for it to read instead. Nothing leaves your device."
+                                        },
                                         action = {
-                                            if (refused) Button(onClick = {
-                                                runCatching {
-                                                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                                        android.net.Uri.parse("package:${context.packageName}")))
-                                                }
-                                            }) { Text("Open settings") }
-                                            else Button(onClick = { launcher.launch(audioPermission) }) { Text("Allow access") }
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                if (refused) Button(onClick = {
+                                                    runCatching {
+                                                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                                            android.net.Uri.parse("package:${context.packageName}")))
+                                                    }
+                                                }) { Text("Open settings") }
+                                                else Button(onClick = { launcher.launch(audioPermission) }) { Text("Allow access") }
+                                                // Only this folder and its subfolders: no access to the phone's other audio.
+                                                androidx.compose.material3.OutlinedButton(onClick = pickFolder) { Text("Choose a folder") }
+                                            }
                                         },
                                     )
                                 }
@@ -253,7 +258,7 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
                             else -> {
                                 if (!searching) item(key = "local-hero") {
                                     LocalMusicHero(
-                                        heroSong, all, library.localFolder,
+                                        heroSong, all, if (library.localTree != null) library.localTreeName else library.localFolder,
                                         onPlay = { actions.playAll(shown, 0, false, "On this device") },
                                         onShuffle = { actions.playAll(shown, 0, true, "On this device") },
                                         onSmartShuffle = { actions.smartShuffle(shown, "On this device") },

@@ -3752,5 +3752,13 @@
 "Video takes the screen": "视频铺满屏幕",
 "While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "播放视频时，几秒后控件会向下滑出，只留下标题。向上滑动或点按即可恢复。",
 "While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "当视频占满屏幕时，当前歌词行会保留在标题下方，而不是随控件一起滑走。",
-"Only with Video takes the screen on": "仅当“Video takes the screen”开启时"
+"Only with Video takes the screen on": "仅当“Video takes the screen”开启时",
+"This phone has no folder picker": "此手机没有文件夹选择器",
+"NepTune can't open the folder you picked any more. Pick it again, or allow access to all audio files.": "NepTune 无法再打开你选择的文件夹。请重新选择，或允许访问所有音频文件。",
+"Access to audio files is off for NepTune. You can allow it in the app's settings, or pick one folder for NepTune to read.": "NepTune 的音频文件访问权限已关闭。你可以在应用设置中允许，或选择一个文件夹供 NepTune 读取。",
+"Allow NepTune to read your audio files, or pick one folder for it to read instead. Nothing leaves your device.": "允许 NepTune 读取你的音频文件，或改为选择一个文件夹供其读取。所有内容都不会离开你的设备。",
+"Choose a folder": "选择文件夹",
+"Choose a folder… · NepTune reads only that folder and its subfolders": "选择文件夹… · NepTune 只读取该文件夹及其子文件夹",
+"{0} · The folder you picked": "{0} · 你选择的文件夹",
+"Picked folder": "已选文件夹"
 }

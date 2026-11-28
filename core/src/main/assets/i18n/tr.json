@@ -3681,5 +3681,13 @@
 "Video takes the screen": "Video ekranı kaplar",
 "While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Bir video oynarken kontroller birkaç saniye sonra aşağı kayar ve başlık kalır. Geri getirmek için yukarı kaydırın veya dokunun.",
 "While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Video ekranı kaplarken, geçerli şarkı sözü satırı kontrollerle birlikte kaybolmak yerine başlığın altında kalır.",
-"Only with Video takes the screen on": "Yalnızca 'Video takes the screen' açıkken"
+"Only with Video takes the screen on": "Yalnızca 'Video takes the screen' açıkken",
+"This phone has no folder picker": "Bu telefonda klasör seçici yok",
+"NepTune can't open the folder you picked any more. Pick it again, or allow access to all audio files.": "NepTune seçtiğin klasörü artık açamıyor. Klasörü yeniden seç veya tüm ses dosyalarına erişim izni ver.",
+"Access to audio files is off for NepTune. You can allow it in the app's settings, or pick one folder for NepTune to read.": "NepTune için ses dosyalarına erişim kapalı. Uygulama ayarlarından izin verebilir ya da NepTune'un okuyacağı tek bir klasör seçebilirsin.",
+"Allow NepTune to read your audio files, or pick one folder for it to read instead. Nothing leaves your device.": "NepTune'un ses dosyalarını okumasına izin ver ya da bunun yerine okuyacağı tek bir klasör seç. Hiçbir şey cihazından çıkmaz.",
+"Choose a folder": "Klasör seç",
+"Choose a folder… · NepTune reads only that folder and its subfolders": "Klasör seç… · NepTune yalnızca o klasörü ve alt klasörlerini okur",
+"{0} · The folder you picked": "{0} · Seçtiğin klasör",
+"Picked folder": "Seçilen klasör"
 }

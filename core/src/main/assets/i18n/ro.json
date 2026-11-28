@@ -3681,5 +3681,13 @@
 "Video takes the screen": "Videoclipul ocupă ecranul",
 "While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Cât timp rulează un videoclip, comenzile coboară după câteva secunde și lasă titlul. Glisează în sus sau atinge ca să le readuci.",
 "While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Cât timp un videoclip ocupă ecranul, versul curent rămâne sub titlu în loc să dispară odată cu comenzile.",
-"Only with Video takes the screen on": "Numai cu „Video takes the screen” activat"
+"Only with Video takes the screen on": "Numai cu „Video takes the screen” activat",
+"This phone has no folder picker": "Acest telefon nu are selector de dosare",
+"NepTune can't open the folder you picked any more. Pick it again, or allow access to all audio files.": "NepTune nu mai poate deschide dosarul ales. Alege-l din nou sau permite accesul la toate fișierele audio.",
+"Access to audio files is off for NepTune. You can allow it in the app's settings, or pick one folder for NepTune to read.": "Accesul la fișierele audio este dezactivat pentru NepTune. Îl poți permite în setările aplicației sau poți alege un dosar pe care să-l citească NepTune.",
+"Allow NepTune to read your audio files, or pick one folder for it to read instead. Nothing leaves your device.": "Permite-i lui NepTune să-ți citească fișierele audio sau alege în schimb un dosar pe care să-l citească. Nimic nu părăsește dispozitivul.",
+"Choose a folder": "Alege un dosar",
+"Choose a folder… · NepTune reads only that folder and its subfolders": "Alege un dosar… · NepTune citește doar acel dosar și subdosarele lui",
+"{0} · The folder you picked": "{0} · Dosarul ales",
+"Picked folder": "Dosar ales"
 }

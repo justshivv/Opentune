@@ -924,6 +924,14 @@ enum class LyricsAlign(val label: String) {
 data class LibrarySettings(
     /** A MediaStore relative path ("Music/"), or null for every folder. */
     val localFolder: String? = null,
+    /**
+     * One folder the user picked through Android's folder picker (a tree uri). While set,
+     * the phone's songs are read from it and its subfolders only, without access to every
+     * audio file on the phone; see [com.opentune.data.local.MusicFolder].
+     */
+    val localTree: String? = null,
+    /** [localTree]'s name, as the picker showed it. */
+    val localTreeName: String? = null,
     val filterNonMusic: Boolean = true,
     val songCacheMb: Int = 512,
     val downloadQuality: AudioQuality = AudioQuality.MAX,
