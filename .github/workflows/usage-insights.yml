@@ -62,3 +62,10 @@ jobs:
         run: |
           npx --yes wrangler@4 d1 execute opentune-usage --remote --json \
             --command "SELECT (SELECT MAX(rowid) FROM activity) AS activity, (SELECT MAX(rowid) FROM activity_ist) AS activity_ist" || true
+      - name: Day totals against the activity rows (last 3 IST days, a few thousand rows read)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: usage-api
+        run: |
+          npx --yes wrangler@4 d1 execute opentune-usage --remote --json --command "SELECT t.day, t.installations AS stored_installs, t.plays AS stored_plays, (SELECT COUNT(DISTINCT installation) FROM activity_ist a WHERE a.day = t.day) AS counted_installs, (SELECT COALESCE(SUM(plays),0) FROM activity_ist a WHERE a.day = t.day) AS counted_plays FROM daily_totals t WHERE t.zone = 'Asia/Kolkata' AND t.day >= date('now', '-3 days') ORDER BY t.day" || true
