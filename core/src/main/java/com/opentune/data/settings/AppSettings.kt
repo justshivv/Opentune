@@ -569,6 +569,8 @@ data class InterfaceSettings(
     val separateExplore: Boolean = true,
     /** On large screens, the player stays docked beside the page while a song is loaded. */
     val sidePlayer: Boolean = true,
+    /** Dynamic Island-style floating pill over the camera cutout while playing in the background. */
+    val floatingNotchPlayer: Boolean = false,
     /** Your top songs play behind the Wrapped story; off is its mute button, kept for next time. */
     val wrappedMusic: Boolean = true,
 )

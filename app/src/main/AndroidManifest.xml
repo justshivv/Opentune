@@ -35,6 +35,8 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <!-- Installing an update downloaded from GitHub Releases; Android still asks each time. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Dynamic Notch Mini-Player overlay when OpenTune plays in the background. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <!-- The phone's own equalizer, opened from the Equalizer page. -->
     <queries>
@@ -219,6 +221,12 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Dynamic Notch Mini-Player overlay bound while OpenTune plays in the background. -->
+        <service
+            android:name=".overlay.NotchOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <!-- Cover art for Android Auto, which only loads content:// artwork.
              Not exported: the browser that lists items is granted read access. -->
