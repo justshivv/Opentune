@@ -90,4 +90,34 @@ class WindowLayoutTest {
         assertEquals(2, gridColumns(0f))
     }
 
+    @Test fun phonesKeepThePhonesPagesEitherWayUp() {
+        assertEquals(PageSpread.PHONE, appLayout(411, 891, hasSong = true).spread)
+        assertEquals(PageSpread.PHONE, appLayout(411, 891, hasSong = false).spread)
+        // On its side a phone is wide (expanded, with the rail) but short: still a phone's pages.
+        assertEquals(PageSpread.PHONE, appLayout(891, 411, hasSong = true).spread)
+        assertEquals(PageSpread.PHONE, appLayout(891, 411, hasSong = false).spread)
+        assertEquals(PageSpread.PHONE, appLayout(1280, 800, hasSong = true, wideLayout = false).spread)
+        assertEquals(PageSpread.PHONE, appLayout(0, 0, hasSong = false).spread)
+    }
+
+    @Test fun aTabletOnItsSideSetsListsBesideTheirHeaders() {
+        // Beside the docked player the page has 780dp; without a song, its 840dp column.
+        assertEquals(PageSpread.SIDE_BY_SIDE, appLayout(1280, 880, hasSong = true).spread)
+        assertEquals(PageSpread.SIDE_BY_SIDE, appLayout(1280, 880, hasSong = false).spread)
+        assertEquals(PageSpread.SIDE_BY_SIDE, appLayout(1280, 880, hasSong = true, paneCollapsed = true).spread)
+        // An unfolded foldable on its side: room for both with nothing playing; beside the
+        // docked player the page is a phone's width and keeps a phone's layout.
+        assertEquals(PageSpread.SIDE_BY_SIDE, appLayout(841, 673, hasSong = false).spread)
+        assertEquals(PageSpread.PHONE, appLayout(841, 673, hasSong = true).spread)
+    }
+
+    @Test fun uprightLargeScreensGetTheRoomyPage() {
+        assertEquals(PageSpread.ROOMY, appLayout(673, 841, hasSong = true).spread)
+        assertEquals(PageSpread.ROOMY, appLayout(800, 1280, hasSong = true).spread)
+        assertEquals(PageSpread.ROOMY, appLayout(880, 1280, hasSong = false).spread)
+        // Upright beside the docked player the page is a phone's width, so it keeps a phone's layout.
+        assertEquals(NowPlaying.PANE, appLayout(880, 1280, hasSong = true).nowPlaying)
+        assertEquals(PageSpread.PHONE, appLayout(880, 1280, hasSong = true).spread)
+    }
+
 }

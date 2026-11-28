@@ -634,6 +634,8 @@ fun AppRoot(vm: PlayerViewModel) {
         LocalSongMenu provides songMenu,
         com.opentune.ui.components.LocalCollectionMenu provides collectionMenu,
         LocalChromeScroll provides chromeScroll,
+        // The window's chrome, for pages that spread out on a large screen.
+        LocalAppLayout provides layout,
         // iOS-style rubber band at the ends of every list.
         LocalOverscrollFactory provides RubberBandOverscrollFactory,
     ) {
