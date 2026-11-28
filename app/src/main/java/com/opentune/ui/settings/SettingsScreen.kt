@@ -582,6 +582,8 @@ private fun settingsSections(
     var audioAddons by remember { mutableStateOf(false) }
     if (audioAddons) AudioAddonsSheet { audioAddons = false }
     var folderDialog by remember { mutableStateOf(false) }
+    // Outside the sheet: the sheet closes as the picker opens, and the picker's answer still lands.
+    val pickMusicFolder = com.opentune.ui.library.rememberMusicFolderPicker()
     var cacheBytes by remember { mutableLongStateOf(0L) }
     var message by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { cacheBytes = withContext(Dispatchers.IO) { AudioCache.usedBytes(context) } }
@@ -901,17 +903,37 @@ private fun settingsSections(
     if (folderDialog) {
         var folders by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
         LaunchedEffect(Unit) { folders = runCatching { LocalMusic.folders(context) }.getOrDefault(emptyList()) }
+        // Besides the phone's audio folders: the folder picked through Android's picker (read on
+        // its own, without access to every audio file), and a row to pick one.
+        // Never one of MediaStore's folders: those don't start with "//".
+        val pickedRow = "//picked"
+        val pickRow = "//pick"
         ChoiceSheet(
             title = "Local music folder",
-            options = listOf<String?>(null) + folders.map { it.first },
-            selected = lib.localFolder,
+            options = listOf<String?>(null) + folders.map { it.first } + listOfNotNull(lib.localTree?.let { pickedRow }) + pickRow,
+            selected = if (lib.localTree != null) pickedRow else lib.localFolder,
             label = { f ->
-                f?.let { name ->
-                    val n = folders.firstOrNull { it.first == name }?.second ?: 0
-                    "$name · $n ${if (n == 1) "song" else "songs"}"
-                } ?: "All audio folders · Every song on the phone"
+                when (f) {
+                    null -> "All audio folders · Every song on the phone"
+                    pickRow -> "Choose a folder… · NepTune reads only that folder and its subfolders"
+                    pickedRow -> com.opentune.i18n.Tr.f("{0} · The folder you picked", lib.localTreeName ?: com.opentune.i18n.Tr.t("Picked folder"))
+                    else -> {
+                        val n = folders.firstOrNull { it.first == f }?.second ?: 0
+                        "$f · $n ${if (n == 1) "song" else "songs"}"
+                    }
+                }
             },
-            onSelect = { f -> AppSettings.updateLibrary { it.copy(localFolder = f) } },
+            onSelect = { f ->
+                when (f) {
+                    pickRow -> pickMusicFolder()
+                    pickedRow -> Unit
+                    else -> {
+                        // One of the phone's own folders: the picked folder steps aside.
+                        if (lib.localTree != null) com.opentune.data.local.MusicFolder.forget(context)
+                        AppSettings.updateLibrary { it.copy(localFolder = f) }
+                    }
+                }
+            },
             onDismiss = { folderDialog = false },
         )
     }
@@ -1987,8 +2009,12 @@ private fun settingsSections(
         Section(
             "Local music",
             listOf(
-                Entry("Local music folder", "device files") {
-                    NavRow("Local music folder", { folderDialog = true }, summary = lib.localFolder ?: "All audio folders", icon = ImageVector.vectorResource(AppIcons.Folder))
+                Entry("Local music folder", "device files pick choose folder privacy storage access") {
+                    NavRow(
+                        "Local music folder", { folderDialog = true },
+                        summary = if (lib.localTree != null) lib.localTreeName ?: "Picked folder" else lib.localFolder ?: "All audio folders",
+                        icon = ImageVector.vectorResource(AppIcons.Folder),
+                    )
                 },
                 Entry("Filter non-music audio", "recordings voice notes") {
                     ToggleRow("Filter non-music audio", lib.filterNonMusic, { v -> AppSettings.updateLibrary { it.copy(filterNonMusic = v) } }, summary = "Hides short clips, voice notes and system sounds", icon = ImageVector.vectorResource(AppIcons.FilterAlt))

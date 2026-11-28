@@ -3681,5 +3681,13 @@
 "Video takes the screen": "วิดีโอเต็มหน้าจอ",
 "While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "ขณะที่วิดีโอเล่น ปุ่มควบคุมจะเลื่อนลงหลังผ่านไปไม่กี่วินาที เหลือไว้แต่ชื่อเพลง ปัดขึ้นหรือแตะเพื่อเรียกกลับมา",
 "While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "ขณะที่วิดีโอแสดงเต็มหน้าจอ บรรทัดเนื้อเพลงปัจจุบันจะยังคงอยู่ใต้ชื่อเพลง แทนที่จะเลื่อนหายไปพร้อมกับปุ่มควบคุม",
-"Only with Video takes the screen on": "เฉพาะเมื่อเปิด 'Video takes the screen' เท่านั้น"
+"Only with Video takes the screen on": "เฉพาะเมื่อเปิด 'Video takes the screen' เท่านั้น",
+"This phone has no folder picker": "โทรศัพท์นี้ไม่มีตัวเลือกโฟลเดอร์",
+"NepTune can't open the folder you picked any more. Pick it again, or allow access to all audio files.": "NepTune เปิดโฟลเดอร์ที่คุณเลือกไม่ได้อีกแล้ว เลือกใหม่อีกครั้ง หรืออนุญาตให้เข้าถึงไฟล์เสียงทั้งหมด",
+"Access to audio files is off for NepTune. You can allow it in the app's settings, or pick one folder for NepTune to read.": "การเข้าถึงไฟล์เสียงของ NepTune ปิดอยู่ คุณอนุญาตได้ในการตั้งค่าแอป หรือเลือกโฟลเดอร์เดียวให้ NepTune อ่าน",
+"Allow NepTune to read your audio files, or pick one folder for it to read instead. Nothing leaves your device.": "อนุญาตให้ NepTune อ่านไฟล์เสียงของคุณ หรือเลือกโฟลเดอร์เดียวให้อ่านแทน ไม่มีข้อมูลใดออกจากอุปกรณ์ของคุณ",
+"Choose a folder": "เลือกโฟลเดอร์",
+"Choose a folder… · NepTune reads only that folder and its subfolders": "เลือกโฟลเดอร์… · NepTune อ่านเฉพาะโฟลเดอร์นั้นและโฟลเดอร์ย่อย",
+"{0} · The folder you picked": "{0} · โฟลเดอร์ที่คุณเลือก",
+"Picked folder": "โฟลเดอร์ที่เลือก"
 }

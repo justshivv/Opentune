@@ -3752,5 +3752,13 @@
 "Video takes the screen": "El vídeo ocupa la pantalla",
 "While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Mientras suena un vídeo, los controles bajan tras unos segundos y dejan el título. Desliza hacia arriba o toca para que vuelvan.",
 "While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Mientras un vídeo ocupa la pantalla, la línea actual de la letra permanece bajo el título en lugar de deslizarse con los controles.",
-"Only with Video takes the screen on": "Solo con «Video takes the screen» activado"
+"Only with Video takes the screen on": "Solo con «Video takes the screen» activado",
+"This phone has no folder picker": "Este teléfono no tiene selector de carpetas",
+"NepTune can't open the folder you picked any more. Pick it again, or allow access to all audio files.": "NepTune ya no puede abrir la carpeta que elegiste. Vuelve a elegirla o permite el acceso a todos los archivos de audio.",
+"Access to audio files is off for NepTune. You can allow it in the app's settings, or pick one folder for NepTune to read.": "El acceso a los archivos de audio está desactivado para NepTune. Puedes permitirlo en los ajustes de la app o elegir una carpeta para que NepTune la lea.",
+"Allow NepTune to read your audio files, or pick one folder for it to read instead. Nothing leaves your device.": "Permite que NepTune lea tus archivos de audio o, en su lugar, elige una carpeta para que la lea. Nada sale de tu dispositivo.",
+"Choose a folder": "Elegir una carpeta",
+"Choose a folder… · NepTune reads only that folder and its subfolders": "Elegir una carpeta… · NepTune solo lee esa carpeta y sus subcarpetas",
+"{0} · The folder you picked": "{0} · La carpeta que elegiste",
+"Picked folder": "Carpeta elegida"
 }

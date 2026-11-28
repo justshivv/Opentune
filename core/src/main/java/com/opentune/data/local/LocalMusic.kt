@@ -12,17 +12,29 @@ import com.opentune.data.settings.LibrarySettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** Audio files on the device, read from MediaStore. */
+/** Audio files on the device: read from MediaStore, or from one folder the user picked ([MusicFolder]). */
 object LocalMusic {
     const val PREFIX = "local:"
     private val ALBUM_ART = "content://media/external/audio/albumart".toUri()
 
     fun isLocal(videoId: String) = videoId.startsWith(PREFIX)
 
-    fun contentUri(videoId: String): Uri = ContentUris.withAppendedId(
-        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-        videoId.removePrefix(PREFIX).toLong(),
-    )
+    fun contentUri(videoId: String): Uri =
+        if (MusicFolder.isFolderSong(videoId)) MusicFolder.documentOf(videoId)
+        else ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, videoId.removePrefix(PREFIX).toLong())
+
+    /** The permission for every audio file on the phone. */
+    val audioPermission: String =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) android.Manifest.permission.READ_MEDIA_AUDIO
+        else android.Manifest.permission.READ_EXTERNAL_STORAGE
+
+    /**
+     * Whether the phone's songs can be read as [settings] ask: the picked folder while one is
+     * picked (no other permission needed), every audio file otherwise.
+     */
+    fun canRead(context: Context, settings: LibrarySettings): Boolean =
+        if (settings.localTree != null) MusicFolder.canRead(context, settings.localTree)
+        else androidx.core.content.ContextCompat.checkSelfPermission(context, audioPermission) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
     data class Track(val song: Song, val folder: String, val mimeType: String?, val durationMs: Long, val isMusic: Boolean, val dateAdded: Long)
 
@@ -36,7 +48,7 @@ object LocalMusic {
     // filter, the two settings that change what counts.
     @Volatile private var countCache: Pair<String, Int>? = null
 
-    private fun countKey(settings: LibrarySettings) = settings.localFolder + "|" + settings.filterNonMusic
+    private fun countKey(settings: LibrarySettings) = settings.localTree + "|" + settings.localFolder + "|" + settings.filterNonMusic
 
     fun cachedCount(settings: LibrarySettings): Int? = countCache?.takeIf { it.first == countKey(settings) }?.second
 
@@ -51,9 +63,10 @@ object LocalMusic {
         filtered(context, settings).map { it.song to it.dateAdded }
     }
 
-    private fun filtered(context: Context, settings: LibrarySettings): List<Track> =
-        query(context)
-            .filter { settings.localFolder == null || it.folder == settings.localFolder }
+    private suspend fun filtered(context: Context, settings: LibrarySettings): List<Track> =
+        // A picked folder stands in for MediaStore (and its folder choice) entirely.
+        (if (settings.localTree != null) MusicFolder.tracks(context, settings)
+        else query(context).filter { settings.localFolder == null || it.folder == settings.localFolder })
             .filter { !settings.filterNonMusic || looksLikeMusic(it) }
 
     /**

@@ -31,7 +31,9 @@ object Ringtones {
     }
 
     /** Whether [song] has audio on the phone to make a ringtone from. */
-    fun canUse(song: Song) = LocalMusic.isLocal(song.videoId) || Downloads.fileFor(song.videoId) != null
+    // A song from a picked folder can't be: only this app may read that folder, not the phone's ringer.
+    fun canUse(song: Song) = (LocalMusic.isLocal(song.videoId) && !com.opentune.data.local.MusicFolder.isFolderSong(song.videoId)) ||
+        Downloads.fileFor(song.videoId) != null
 
     /** Android only lets an app change the default sounds once the user allows "Modify system settings". */
     fun allowed(context: Context) = Settings.System.canWrite(context)

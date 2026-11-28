@@ -3752,5 +3752,13 @@
 "Video takes the screen": "La vidéo prend l'écran",
 "While a video plays, the controls slide down after a few seconds, leaving the title. Swipe up or tap to bring them back.": "Pendant qu'une vidéo joue, les commandes descendent au bout de quelques secondes et laissent le titre. Balayez vers le haut ou touchez pour les faire revenir.",
 "While a video takes the screen, the current lyrics line stays under the title instead of sliding away with the controls.": "Quand une vidéo occupe l'écran, la ligne actuelle des paroles reste sous le titre au lieu de disparaître avec les commandes.",
-"Only with Video takes the screen on": "Uniquement avec « Video takes the screen » activé"
+"Only with Video takes the screen on": "Uniquement avec « Video takes the screen » activé",
+"This phone has no folder picker": "Ce téléphone n'a pas de sélecteur de dossier",
+"NepTune can't open the folder you picked any more. Pick it again, or allow access to all audio files.": "NepTune ne peut plus ouvrir le dossier choisi. Choisissez-le à nouveau ou autorisez l'accès à tous les fichiers audio.",
+"Access to audio files is off for NepTune. You can allow it in the app's settings, or pick one folder for NepTune to read.": "L'accès aux fichiers audio est désactivé pour NepTune. Vous pouvez l'autoriser dans les paramètres de l'appli, ou choisir un dossier que NepTune lira.",
+"Allow NepTune to read your audio files, or pick one folder for it to read instead. Nothing leaves your device.": "Autorisez NepTune à lire vos fichiers audio, ou choisissez plutôt un dossier qu'il lira. Rien ne quitte votre appareil.",
+"Choose a folder": "Choisir un dossier",
+"Choose a folder… · NepTune reads only that folder and its subfolders": "Choisir un dossier… · NepTune ne lit que ce dossier et ses sous-dossiers",
+"{0} · The folder you picked": "{0} · Le dossier choisi",
+"Picked folder": "Dossier choisi"
 }

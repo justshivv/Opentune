@@ -325,12 +325,12 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     // the tile keeps its plain label). Follows the Local music settings, so
     // the count matches the page the tile opens.
     val librarySettings by AppSettings.library.collectAsState()
-    val localPermission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) android.Manifest.permission.READ_MEDIA_AUDIO else android.Manifest.permission.READ_EXTERNAL_STORAGE
-    val localGranted = androidx.core.content.ContextCompat.checkSelfPermission(context, localPermission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    // Every audio file, or the one folder picked instead.
+    val localGranted = com.opentune.data.local.LocalMusic.canRead(context, librarySettings)
     // Seeded from the last scan's count, so a return visit paints the number
     // at once; the scan below still runs and only moves it if it changed.
     var localCount by remember { mutableStateOf(if (localGranted) com.opentune.data.local.LocalMusic.cachedCount(librarySettings) else null) }
-    LaunchedEffect(librarySettings.localFolder, librarySettings.filterNonMusic) {
+    LaunchedEffect(librarySettings.localTree, librarySettings.localFolder, librarySettings.filterNonMusic) {
         localCount = if (localGranted) {
             runCatching { com.opentune.data.local.LocalMusic.count(context, librarySettings) }.getOrNull() ?: localCount
         } else {
