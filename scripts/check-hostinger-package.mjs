@@ -25,14 +25,17 @@ try {
   body:new URLSearchParams({username:'test-owner',password:'test-package-password-only'})});
  assert.equal(login.status,303);
  const cookie=login.headers.get('set-cookie').split(';')[0];
- for(const route of ['/usage/','/usage/dashboard.js','/usage/model.mjs','/usage/session.mjs','/usage/dashboard.css','/usage/v1/summary']) {
+ // The summary is read once, after the report below: the Worker keeps it for REPORT_TTL_MS.
+ for(const route of ['/usage/','/usage/dashboard.js','/usage/model.mjs','/usage/session.mjs','/usage/dashboard.css']) {
   const response=await request(base+route,{headers:{Cookie:cookie},redirect:'manual'});
   assert.equal(response.status,200,route);
   assert.ok((await response.text()).length>0,route+' should not be empty');
  }
  const activity=await request(base+'/v1/activity',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({installationId:'00000000-0000-4000-8000-000000000001',days:[{day:new Date().toISOString().slice(0,10),version:'1.0.3',plays:3}]})});
  assert.equal(activity.status,200);
- const summary=await (await request(base+'/usage/v1/summary',{headers:{Cookie:cookie}})).json();
+ const read=await request(base+'/usage/v1/summary',{headers:{Cookie:cookie}});
+ assert.equal(read.status,200,'/usage/v1/summary');
+ const summary=await read.json();
  assert.equal(summary.totals.plays,3);assert.equal(summary.totals.installs,1);
  console.log('Extracted ZIP: startup, strict rejection, owner login, usage assets and exact counts passed.');
 } finally {
