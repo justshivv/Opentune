@@ -603,15 +603,24 @@ private fun TopSongs(page: ArtistPage, actions: SongActions, onShowAll: (() -> U
     val songs = page.songs
     val columns = remember(songs) { songs.indices.chunked(SONGS_PER_COLUMN) }
     val rowState = rememberLazyListState()
+    val spread = com.opentune.ui.currentPageSpread() != com.opentune.ui.PageSpread.PHONE
     Column {
         SectionHeader("Top songs", action = onShowAll?.let { { ShowAll(it) } })
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // On a large screen two columns stand side by side where there's room for both,
+        // rather than one column of rows stretched across the page.
+        val share = when {
+            columns.size <= 1 -> 1f
+            spread && maxWidth >= WIDE_COLUMNS_MIN -> WIDE_COLUMN_WIDTH
+            else -> COLUMN_WIDTH
+        }
         LazyRow(
             state = rowState,
             flingBehavior = rememberSnapFlingBehavior(rowState, snapPosition = SnapPosition.Start),
             modifier = Modifier.fillMaxWidth(),
         ) {
             items(columns.size, key = { it }) { c ->
-                Column(Modifier.fillParentMaxWidth(if (columns.size > 1) COLUMN_WIDTH else 1f)) {
+                Column(Modifier.fillParentMaxWidth(share)) {
                     columns[c].forEach { i ->
                         val song = songs[i]
                         SongListItem(
@@ -628,8 +637,13 @@ private fun TopSongs(page: ArtistPage, actions: SongActions, onShowAll: (() -> U
                 }
             }
         }
+        }
     }
 }
+
+/** Top songs' column on a large screen: just under half the row, so the next pair peeks in. */
+private const val WIDE_COLUMN_WIDTH = 0.47f
+private val WIDE_COLUMNS_MIN = 640.dp
 
 /** One of the page's rows: Albums, Singles & EPs, Featured on, playlists, related artists. */
 @Composable

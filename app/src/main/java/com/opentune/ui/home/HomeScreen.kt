@@ -682,12 +682,16 @@ private fun QuickPicks(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, actio
     Column {
         SectionHeader(shelf.title, subtitle = shelf.subtitle, action = action)
         val pages = rememberPagerState(pageCount = { (shelf.items.size + 3) / 4 })
+        // On a large screen as many columns of four as fit a row's comfortable width side by
+        // side, rather than one column of rows stretched across the whole page.
+        val spread = com.opentune.ui.currentPageSpread() != com.opentune.ui.PageSpread.PHONE
         HorizontalPager(
             state = pages,
             modifier = Modifier.fillMaxWidth().height(64.dp * 4),
             verticalAlignment = Alignment.Top,
             // The next column's covers peek at the edge, so there's clearly more.
             contentPadding = PaddingValues(end = 40.dp),
+            pageSize = if (spread) QUICK_PICKS_COLUMNS else androidx.compose.foundation.pager.PageSize.Fill,
         ) { page ->
             Column(Modifier.fillMaxWidth()) {
                 for (item in shelf.items.drop(page * 4).take(4)) {
@@ -719,7 +723,16 @@ private fun QuickPicks(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, actio
     }
 }
 
-private const val MIXES_LINE = "Daily mixes from what you play, new each day"
+/** Quick picks' columns on a large screen: as many as are at least [QUICK_PICKS_COLUMN_MIN] wide. */
+private val QUICK_PICKS_COLUMN_MIN = 340.dp
+private val QUICK_PICKS_COLUMNS = object : androidx.compose.foundation.pager.PageSize {
+    override fun androidx.compose.ui.unit.Density.calculateMainAxisPageSize(availableSpace: Int, pageSpacing: Int): Int {
+        val columns = (availableSpace / QUICK_PICKS_COLUMN_MIN.toPx()).toInt().coerceAtLeast(1)
+        return (availableSpace - pageSpacing * (columns - 1)) / columns
+    }
+}
+
+private const val MIXES_LINE ="Daily mixes from what you play, new each day"
 private const val GENRE_MIXES_LINE = "What you play, sorted by genre, in a new order each day"
 private const val DISCOVER_LINE = "Songs you haven't played, from the radios of your favourites in each genre"
 /** How many of the most played artists have their genre looked up. */
