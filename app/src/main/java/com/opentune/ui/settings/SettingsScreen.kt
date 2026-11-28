@@ -1246,8 +1246,10 @@ private fun settingsSections(
                                 )
                                 runCatching { overlayPermissionLauncher.launch(intent) }
                                     .onFailure {
-                                        awaitingOverlayPermission = false
-                                        context.launchSafely(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+                                        overlayPermissionLauncher.launchSafely(
+                                            context,
+                                            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
+                                        )
                                     }
                             }
                         },

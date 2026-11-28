@@ -6,6 +6,8 @@ import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.ContextThemeWrapper
 import android.view.DisplayCutout
@@ -130,6 +132,7 @@ class NotchOverlayManager(
     private val actions: NotchOverlayActions,
 ) {
     private val windowManager = serviceContext.getSystemService(WindowManager::class.java)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val _state = MutableStateFlow(NotchOverlayState())
     val state: StateFlow<NotchOverlayState> = _state.asStateFlow()
@@ -137,12 +140,17 @@ class NotchOverlayManager(
     private val _cutout = MutableStateFlow(measureCutout(insetsCutout = null))
     val cutout: StateFlow<CutoutGeometry> = _cutout.asStateFlow()
 
+    private val _visible = MutableStateFlow(false)
+    val visible: StateFlow<Boolean> = _visible.asStateFlow()
+
     private var rootContainer: FrameLayout? = null
     private var lifecycleOwner: OverlayLifecycleOwner? = null
     private var landscape: Boolean = isLandscape(serviceContext.resources.configuration)
+    private var isWidened: Boolean = false
+    private var pendingDetachRunnable: Runnable? = null
 
     val isShowing: Boolean
-        get() = rootContainer != null
+        get() = rootContainer != null && _visible.value
 
     fun updateState(newState: NotchOverlayState) {
         val expandedChanged = _state.value.expanded != newState.expanded
@@ -167,11 +175,11 @@ class NotchOverlayManager(
             if (_state.value.expanded) {
                 _state.value = _state.value.copy(expanded = false)
             }
-            detachWindow()
+            hide(immediate = true)
         } else {
             refreshCutout(insetsCutout = null)
             if (_state.value.hasActiveMedia && rootContainer == null) {
-                attachWindow()
+                show()
             } else if (rootContainer != null) {
                 applyLayoutParams(expanded = _state.value.expanded)
             }
@@ -182,18 +190,67 @@ class NotchOverlayManager(
         landscape = isLandscape(serviceContext.resources.configuration)
         if (landscape || !_state.value.hasActiveMedia) return
         if (!Settings.canDrawOverlays(serviceContext)) return
+        cancelPendingDetach()
         if (rootContainer != null) {
+            _visible.value = true
             applyLayoutParams(expanded = _state.value.expanded)
             return
         }
         attachWindow()
     }
 
-    fun hide() {
+    fun hide(immediate: Boolean = false, onHidden: (() -> Unit)? = null) {
         if (_state.value.expanded) {
             _state.value = _state.value.copy(expanded = false)
         }
-        detachWindow()
+        cancelPendingDetach()
+        val container = rootContainer
+        if (container == null) {
+            _visible.value = false
+            onHidden?.invoke()
+            return
+        }
+        if (immediate) {
+            _visible.value = false
+            detachWindow()
+            onHidden?.invoke()
+            return
+        }
+        _visible.value = false
+        val detachTask = Runnable {
+            pendingDetachRunnable = null
+            if (!_visible.value) {
+                detachWindow()
+                onHidden?.invoke()
+            }
+        }
+        pendingDetachRunnable = detachTask
+        mainHandler.postDelayed(detachTask, EXIT_DETACH_FALLBACK_MS)
+    }
+
+    private fun cancelPendingDetach() {
+        pendingDetachRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingDetachRunnable = null
+    }
+
+    private fun onExitAnimationFinished() {
+        if (!_visible.value && rootContainer != null) {
+            val pending = pendingDetachRunnable
+            cancelPendingDetach()
+            if (pending != null) {
+                pending.run()
+            } else {
+                detachWindow()
+            }
+        }
+    }
+
+    private fun onWidenedChanged(widened: Boolean) {
+        if (isWidened == widened) return
+        isWidened = widened
+        if (rootContainer != null) {
+            applyLayoutParams(expanded = _state.value.expanded)
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -201,6 +258,7 @@ class NotchOverlayManager(
         val wm = windowManager ?: return
         if (!Settings.canDrawOverlays(serviceContext)) return
         refreshCutout(insetsCutout = null)
+        _visible.value = false
 
         val themedContext = ContextThemeWrapper(
             AppLanguages.wrap(serviceContext),
@@ -235,10 +293,14 @@ class NotchOverlayManager(
             setContent {
                 val overlayState by state.collectAsState()
                 val geometry by cutout.collectAsState()
+                val isVisible by visible.collectAsState()
                 NotchPlayerOverlay(
                     state = overlayState,
                     cutout = geometry,
+                    visible = isVisible,
                     actions = actions,
+                    onWidenedChanged = ::onWidenedChanged,
+                    onExitAnimationFinished = ::onExitAnimationFinished,
                 )
             }
         }
@@ -267,9 +329,16 @@ class NotchOverlayManager(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             container.requestApplyInsets()
         }
+        container.post {
+            if (rootContainer === container) {
+                _visible.value = true
+            }
+        }
     }
 
     private fun detachWindow() {
+        cancelPendingDetach()
+        isWidened = false
         val container = rootContainer
         rootContainer = null
         if (container != null) {
@@ -326,21 +395,21 @@ class NotchOverlayManager(
     }
 
     private fun computeHorizontalOffsetPx(geometry: CutoutGeometry, expanded: Boolean): Int {
-        if (expanded || !geometry.hasCutout) return 0
+        if (expanded || isWidened || !geometry.hasCutout) return 0
         val screenCenterX = geometry.screenWidthPx / 2
         val rawOffset = geometry.cutoutCenterXPx - screenCenterX
-        val estimatedHalfPillPx = ((geometry.cutoutWidthDp + 96f) * 0.5f * geometry.density).roundToInt()
+        val estimatedHalfPillPx = ((geometry.cutoutWidthDp + 128f) * 0.5f * geometry.density).roundToInt()
         val edgeMarginPx = (8f * geometry.density).roundToInt()
         val maxOffset = (screenCenterX - estimatedHalfPillPx - edgeMarginPx).coerceAtLeast(0)
         return rawOffset.coerceIn(-maxOffset, maxOffset)
     }
 
     private fun computeVerticalOffsetPx(geometry: CutoutGeometry): Int {
-        val minTopPx = (4f * geometry.density).roundToInt()
+        val minTopPx = (3f * geometry.density).roundToInt()
         if (!geometry.hasCutout) {
             return (8f * geometry.density).roundToInt()
         }
-        val pillHeightPx = ((geometry.cutoutHeightDp + 6f).coerceIn(36f, 48f) * geometry.density).roundToInt()
+        val pillHeightPx = ((geometry.cutoutHeightDp + 6f).coerceIn(34f, 42f) * geometry.density).roundToInt()
         val centeredOnCutout = geometry.cutoutTopPx + (geometry.cutoutHeightPx - pillHeightPx) / 2
         return centeredOnCutout.coerceAtLeast(minTopPx)
     }
@@ -429,5 +498,6 @@ class NotchOverlayManager(
     private companion object {
         const val TAG = "NotchOverlayManager"
         const val WINDOW_TITLE = "OpenTuneNotchOverlay"
+        const val EXIT_DETACH_FALLBACK_MS = 320L
     }
 }

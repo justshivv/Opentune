@@ -140,7 +140,7 @@ class NotchOverlayService : Service() {
         connectJob?.cancel()
         settingsJob?.cancel()
         releaseAudioLevels()
-        overlayManager.hide()
+        overlayManager.hide(immediate = true)
         controller?.removeListener(playerListener)
         controller?.release()
         controller = null
@@ -154,9 +154,10 @@ class NotchOverlayService : Service() {
             launch {
                 AppSettings.ui.collect { ui ->
                     if (!ui.floatingNotchPlayer || !Settings.canDrawOverlays(this@NotchOverlayService)) {
-                        overlayManager.hide()
                         releaseAudioLevels()
-                        sync(applicationContext)
+                        overlayManager.hide(immediate = false) {
+                            sync(applicationContext)
+                        }
                     }
                 }
             }
@@ -228,9 +229,10 @@ class NotchOverlayService : Service() {
             player.playbackState != Player.STATE_IDLE
 
         if (!hasMedia) {
-            overlayManager.hide()
             releaseAudioLevels()
-            onNoActiveMedia(applicationContext)
+            overlayManager.hide(immediate = false) {
+                onNoActiveMedia(applicationContext)
+            }
             return
         }
 
@@ -319,9 +321,10 @@ class NotchOverlayService : Service() {
     }
 
     private fun dismissOverlayForSession() {
-        overlayManager.hide()
         releaseAudioLevels()
-        markDismissedForSession(applicationContext)
+        overlayManager.hide(immediate = false) {
+            markDismissedForSession(applicationContext)
+        }
     }
 
     private fun updateAudioLevelsHold() {
