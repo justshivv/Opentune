@@ -800,7 +800,7 @@ private fun DockPill(
             Modifier
                 .layout { measurable, constraints ->
                     val inset = DOCK_INSET.roundToPx()
-                    val w = (full - DOCK_INSET * 2).roundToPx()
+                    val w = (full - DOCK_INSET * 2).roundToPx().coerceAtLeast(0)
                     val h = (constraints.maxHeight - inset * 2).coerceAtLeast(0)
                     val placeable = measurable.measure(Constraints.fixed(w, h))
                     // From the open tab's own place to [anchor].
