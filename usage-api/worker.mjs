@@ -662,6 +662,14 @@ export async function sharedCounts(db, zone, now = Date.now()) {
 export const KEEP_DAYS = 400;
 const PRUNE_ROWS = 5000, PRUNE_ROUNDS = 2;
 export async function housekeeping(db, now = new Date()) {
+  // Cheapest and most needed first: a scheduled run on Workers' free plan gets about 10 ms of CPU,
+  // and one stopped part-way skips whatever comes after. The recount is one statement per zone
+  // (the database does the work); the public counts feed the badges; the clean-up can wait a night;
+  // the dashboard's counts, the heaviest in JavaScript, come last and are also made at the first
+  // dashboard load. On 28 Nov the run stopped after the public counts and the recount never ran.
+  let recounted = 0;
+  try { recounted = await recountDailyTotals(db, now); } catch { /* tomorrow night */ }
+  try { await sharedCounts(db, 'Asia/Kolkata', now.getTime()); } catch { /* counted at the first request instead */ }
   const cutoff = calendarDay(new Date(now.getTime() - KEEP_DAYS * DAY), 'UTC');
   let removed = 0;
   try {
@@ -680,11 +688,6 @@ export async function housekeeping(db, now = new Date()) {
       db.prepare('DELETE FROM active_months WHERE month < ?').bind(cutoff.slice(0, 7)),
     ]);
   } catch { /* tomorrow night */ }
-  try { await sharedCounts(db, 'Asia/Kolkata', now.getTime()); } catch { /* counted at the first request instead */ }
-  // Before the dashboard's counts, which read daily_totals. Refused or failed, the next night's
-  // recount covers the same days again.
-  let recounted = 0;
-  try { recounted = await recountDailyTotals(db, now); } catch { /* tomorrow night */ }
   try { await refreshDashboard(db, now); } catch { /* counted at the first dashboard load instead */ }
   return { removed, cutoff, recounted };
 }
