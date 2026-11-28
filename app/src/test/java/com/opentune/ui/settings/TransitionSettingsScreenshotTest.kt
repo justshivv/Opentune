@@ -22,6 +22,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Rule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -65,6 +67,9 @@ class TransitionSettingsScreenshotTest {
         assertEquals(8, AppSettings.playback.value.automixSeconds)
         compose.onNodeWithText("Each blend lasts about 8 s, kept to whole bars").assertExists()
 
+        // Between songs shows its first rows; the rest come with "See N more".
+        compose.onAllNodesWithText("See ", substring = true).onFirst().performClick()
+        compose.waitForIdle()
         list().performScrollToNode(hasText("Tempo match"))
         compose.onNodeWithText("Gentle").performClick()
         compose.waitForIdle()

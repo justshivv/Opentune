@@ -43,7 +43,7 @@ class HomePicksTest {
         val heading = compose.onNodeWithText("Quick picks").fetchSemanticsNode().boundsInRoot
         val history = compose.onNodeWithContentDescription("Recently played").fetchSemanticsNode().boundsInRoot
         val recognize = compose.onNodeWithContentDescription("Name a song playing nearby").fetchSemanticsNode().boundsInRoot
-        val account = compose.onNodeWithContentDescription("Account and settings").fetchSemanticsNode().boundsInRoot
+        val account = compose.onNodeWithContentDescription("Settings").fetchSemanticsNode().boundsInRoot
         assertTrue("History must align with Quick picks", kotlin.math.abs(heading.center.y - history.center.y) < 2f)
         assertTrue("Top actions must be separated", recognize.right < account.left)
         assertTrue("History must be below the top actions", history.top > recognize.bottom)
