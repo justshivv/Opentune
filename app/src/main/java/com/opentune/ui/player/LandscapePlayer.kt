@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -112,12 +113,19 @@ internal fun LandscapePlayer(
     var showCast by remember { mutableStateOf(false) }
     var showOutput by remember { mutableStateOf(false) }
     val outputRoute = rememberOutputRoute()
+    // A tablet on its side, not a phone: the cover and the controls kept to a size that
+    // reads as one group in the middle of the screen, rather than a cover the screen's
+    // whole height and a narrow column whose parts drift to its far ends.
+    val large = androidx.compose.ui.platform.LocalConfiguration.current.let { minOf(it.screenWidthDp, it.screenHeightDp) } >= com.opentune.ui.LARGE_SCREEN_MIN_DP
+    // Lyrics or the queue in the cover's place run the screen's height, and the controls with them.
+    val groupHeight = if (large && side == null) LARGE_GROUP_HEIGHT_SHARE else 1f
     Row(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout))
-            .padding(horizontal = 28.dp, vertical = 18.dp),
+            .padding(horizontal = if (large) 48.dp else 28.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (large) Arrangement.Center else Arrangement.Start,
     ) {
         if (side != null) {
             Box(Modifier.weight(1.1f).fillMaxHeight()) { side() }
@@ -147,7 +155,7 @@ internal fun LandscapePlayer(
             ArtworkSwipeArea(
                 onSwipeNext = actions.next,
                 onSwipePrevious = actions.previous,
-                modifier = Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true),
+                modifier = Modifier.fillMaxHeight(groupHeight).aspectRatio(1f, matchHeightConstraintsFirst = true),
             ) {
                 Artwork(
                     song.thumbnailUrl.artworkAt(1080),
@@ -156,8 +164,11 @@ internal fun LandscapePlayer(
                 )
             }
         }
-        Spacer(Modifier.width(32.dp))
-        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().focusGroup()) {
+        Spacer(Modifier.width(if (large) 48.dp else 32.dp))
+        BoxWithConstraints(
+            (if (large) Modifier.weight(1f, fill = false).widthIn(max = LARGE_CONTROLS_MAX_WIDTH) else Modifier.weight(1f))
+                .fillMaxHeight(groupHeight).focusGroup(),
+        ) {
             // Short screens drop the coming lines first, then the volume.
             val roomy = maxHeight >= 300.dp
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
@@ -247,6 +258,12 @@ internal fun LandscapePlayer(
         }
     }
 }
+
+/** On a large screen, the share of the height the cover and the controls beside it take. */
+private const val LARGE_GROUP_HEIGHT_SHARE = 0.78f
+
+/** On a large screen, the widest the controls beside the cover get. */
+private val LARGE_CONTROLS_MAX_WIDTH = 520.dp
 
 /** Where the song is in its synced lyrics: the line being sung and the one after it. */
 private data class PeekLines(val index: Int, val now: String, val next: String)

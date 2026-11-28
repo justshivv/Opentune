@@ -621,6 +621,13 @@ fun PlayerLayout(
     // On its side the player has its own layout.
     val landscape =
         !docked && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // Upright on a large screen (a tablet, an unfolded foldable) the player's column keeps
+    // to a phone-like width in the middle, its backdrop still the whole screen: stretched
+    // across it, the skip buttons sat a hand's width from Play and the cover filled the top.
+    val uprightSide = LocalConfiguration.current.let { config ->
+        if (docked || minOf(config.screenWidthDp, config.screenHeightDp) < com.opentune.ui.LARGE_SCREEN_MIN_DP) 24.dp
+        else maxOf(24.dp, (config.screenWidthDp.dp - UPRIGHT_MAX_WIDTH) / 2)
+    }
     // Full-screen cover only fits the layouts built around a plain square cover.
     // The Full-screen cover art switch decides, in the Apple-inspired style too (choosing that style turns it on).
     // The Poster layout always gives the player its cover edge to edge, as its pages have.
@@ -1282,7 +1289,7 @@ fun PlayerLayout(
                 } else Column(
                     Modifier.fillMaxSize()
                         .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility)
-                        .padding(horizontal = 24.dp)
+                        .padding(horizontal = uprightSide)
                         // Every touch anywhere on the player, seen before the parts under it
                         // handle it and never taken from them: it counts as being looked at.
                         .pointerInput(Unit) {
@@ -1731,7 +1738,8 @@ fun PlayerLayout(
                                             isLiked,
                                             onLike = { LibraryStore.setLiked(current, !isLiked) },
                                             onMore = { showMenu = true },
-                                            compact = true
+                                            compact = true,
+                                            wrapTitle = docked,
                                         )
                                     }
                                 }
@@ -2727,7 +2735,14 @@ private fun RowScope.TitleRow(
     liked: Boolean,
     onLike: () -> Unit,
     onMore: () -> Unit,
-    compact: Boolean = false
+    compact: Boolean = false,
+    /**
+     * The title on up to two lines, cut with an ellipsis, rather than one scrolling line:
+     * for a slot too narrow for a scrolling title to be read, where it spent nearly all
+     * its time part-way along and showed only the middle of the name (the docked
+     * player's header over the lyrics and queue, about 140dp across).
+     */
+    wrapTitle: Boolean = false,
 ) {
     val apple = AppSettings.ui.collectAsState().value.playerStyle == PlayerStyle.APPLE_MUSIC
     // The Poster layout: the title heavy, who it's by in spaced capitals, the menu in clear glass.
@@ -2745,14 +2760,21 @@ private fun RowScope.TitleRow(
             menu.viewAlbum != null -> ({ menu.viewAlbum.invoke(song) })
             else -> null
         }
-        MarqueeText(
+        val titleTap = Modifier.fillMaxWidth().then(
+            if (openAlbum != null) Modifier.clickable(
+                onClickLabel = if (songSheet != null) "Song info" else "Open album",
+                onClick = openAlbum
+            ) else Modifier
+        )
+        if (wrapTitle) Text(
             song.title,
-            Modifier.fillMaxWidth().then(
-                if (openAlbum != null) Modifier.clickable(
-                    onClickLabel = if (songSheet != null) "Song info" else "Open album",
-                    onClick = openAlbum
-                ) else Modifier
-            ),
+            titleTap,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        ) else MarqueeText(
+            song.title,
+            titleTap,
             style = when {
                 poster && !compact -> MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.Black,
@@ -3105,6 +3127,9 @@ private fun Modifier.fitSquare(): Modifier = layout { measurable, constraints ->
         )
     }
 }
+
+/** The widest the upright player's column gets on a large screen. */
+private val UPRIGHT_MAX_WIDTH = 600.dp
 
 /** Below this window height the docked player drops the lyric line, volume and output name. */
 private val DOCKED_ROOMY_HEIGHT = 720.dp
