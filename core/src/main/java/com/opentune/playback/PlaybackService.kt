@@ -979,6 +979,8 @@ class PlaybackService : MediaLibraryService() {
                     Player.EVENT_MEDIA_ITEM_TRANSITION,
                     Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
                     Player.EVENT_IS_PLAYING_CHANGED,
+                    Player.EVENT_PLAY_WHEN_READY_CHANGED,
+                    Player.EVENT_PLAYBACK_STATE_CHANGED,
                     Player.EVENT_MEDIA_METADATA_CHANGED,
                 )
             ) {

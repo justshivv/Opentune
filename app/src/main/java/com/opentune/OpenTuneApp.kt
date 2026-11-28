@@ -43,9 +43,36 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         // First, so a crash anywhere after this is kept for Export diagnostics.
         com.opentune.data.CrashLog.install(this)
-        // The home-screen widget follows the shared player service.
-        com.opentune.data.AppHooks.onPlayerChanged = { context, player -> com.opentune.widget.NowPlayingWidget.refresh(context, player) }
-        com.opentune.data.AppHooks.onPlayerStopped = { context -> com.opentune.widget.NowPlayingWidget.stopped(context) }
+        // The home-screen widget and floating notch overlay follow the shared player service.
+        com.opentune.data.AppHooks.onPlayerChanged = { context, player ->
+            com.opentune.widget.NowPlayingWidget.refresh(context, player)
+            com.opentune.overlay.NotchOverlayService.onPlaybackChanged(context, player)
+        }
+        com.opentune.data.AppHooks.onPlayerStopped = { context ->
+            com.opentune.widget.NowPlayingWidget.stopped(context)
+            com.opentune.overlay.NotchOverlayService.onPlaybackStopped(context)
+        }
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            private var startedActivities = 0
+
+            override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) = Unit
+            override fun onActivityStarted(activity: android.app.Activity) {
+                if (!activity.isChangingConfigurations && startedActivities == 0) {
+                    com.opentune.overlay.NotchOverlayService.setAppForeground(this@OpenTuneApp, true)
+                }
+                startedActivities++
+            }
+            override fun onActivityResumed(activity: android.app.Activity) = Unit
+            override fun onActivityPaused(activity: android.app.Activity) = Unit
+            override fun onActivityStopped(activity: android.app.Activity) {
+                startedActivities = (startedActivities - 1).coerceAtLeast(0)
+                if (!activity.isChangingConfigurations && startedActivities == 0) {
+                    com.opentune.overlay.NotchOverlayService.setAppForeground(this@OpenTuneApp, false)
+                }
+            }
+            override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) = Unit
+            override fun onActivityDestroyed(activity: android.app.Activity) = Unit
+        })
         java.util.Locale.setDefault(com.opentune.ui.theme.AppLanguages.wrap(this).resources.configuration.locales[0])
         // The words on every screen, in the chosen language (the phone's own when none is chosen).
         com.opentune.i18n.Tr.use(this, com.opentune.ui.theme.AppLanguages.selected(this).tag)

@@ -99,7 +99,7 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "player", "Player", "Layout, background, cover art, Canvas, seek bar and what it shows", Icons.Rounded.Album,
         listOf(
-            "Layout" to listOf("Player layout", "Player background", "Player buttons", "Player beside the page"),
+            "Layout" to listOf("Player layout", "Player background", "Player buttons", "Player beside the page", "Floating Notch Player"),
             "Cover art" to listOf("Full-screen cover art", "Match background to cover", "Cover corners", "Moving cover art", "Glow under the cover", "Song change", "Album covers", "Double-tap to skip 10 seconds"),
             "Animated covers and Canvas" to listOf("Animated covers", "Animated covers on Wi-Fi only", "Moving covers on Home"),
             "Seek bar" to listOf("Wavy seek bar", "Lyric preview while seeking", "Seek bar thickness", "Seek bar handle", "Seek bar colour", "Seek bar time", "Song part marks"),

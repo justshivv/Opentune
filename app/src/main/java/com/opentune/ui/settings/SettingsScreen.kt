@@ -96,6 +96,7 @@ import androidx.compose.material.icons.rounded.NetworkCell
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.RadioButtonChecked
 import androidx.compose.material.icons.rounded.Schedule
@@ -532,6 +533,35 @@ private fun settingsSections(
     var cacheBytes by remember { mutableLongStateOf(0L) }
     var message by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { cacheBytes = withContext(Dispatchers.IO) { AudioCache.usedBytes(context) } }
+
+    var hasOverlayPermission by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    var awaitingOverlayPermission by rememberSaveable { mutableStateOf(false) }
+    val overlayPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val granted = Settings.canDrawOverlays(context)
+        hasOverlayPermission = granted
+        if (awaitingOverlayPermission) {
+            awaitingOverlayPermission = false
+            if (granted) {
+                AppSettings.updateUi { it.copy(floatingNotchPlayer = true) }
+                com.opentune.overlay.NotchOverlayService.sync(context)
+            }
+        }
+    }
+    LifecycleResumeEffect(Unit) {
+        val granted = Settings.canDrawOverlays(context)
+        hasOverlayPermission = granted
+        if (awaitingOverlayPermission) {
+            awaitingOverlayPermission = false
+            if (granted) {
+                AppSettings.updateUi { it.copy(floatingNotchPlayer = true) }
+                com.opentune.overlay.NotchOverlayService.sync(context)
+            }
+        } else if (!granted && AppSettings.ui.value.floatingNotchPlayer) {
+            AppSettings.updateUi { it.copy(floatingNotchPlayer = false) }
+            com.opentune.overlay.NotchOverlayService.sync(context)
+        }
+        onPauseOrDispose { }
+    }
 
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -1193,6 +1223,36 @@ private fun settingsSections(
                         summary = "On large screens, the player stays open on the right while music plays",
                         icon = Icons.Rounded.VerticalSplit,
                         enabled = ui.wideLayout,
+                    )
+                },
+                Entry("Floating Notch Player", "dynamic island notch pill overlay camera cutout background mini player") {
+                    ToggleRow(
+                        "Floating Notch Player",
+                        ui.floatingNotchPlayer && hasOverlayPermission,
+                        { enabled ->
+                            if (!enabled) {
+                                awaitingOverlayPermission = false
+                                AppSettings.updateUi { it.copy(floatingNotchPlayer = false) }
+                                com.opentune.overlay.NotchOverlayService.sync(context)
+                            } else if (Settings.canDrawOverlays(context)) {
+                                hasOverlayPermission = true
+                                AppSettings.updateUi { it.copy(floatingNotchPlayer = true) }
+                                com.opentune.overlay.NotchOverlayService.sync(context)
+                            } else {
+                                awaitingOverlayPermission = true
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    "package:${context.packageName}".toUri(),
+                                )
+                                runCatching { overlayPermissionLauncher.launch(intent) }
+                                    .onFailure {
+                                        awaitingOverlayPermission = false
+                                        context.launchSafely(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+                                    }
+                            }
+                        },
+                        summary = "Shows a compact pill around the camera cutout while playing in the background",
+                        icon = Icons.Rounded.PictureInPictureAlt,
                     )
                 },
                 Entry("Player buttons", "play pause next previous skip controls buttons design morph disc squircle glass") {
